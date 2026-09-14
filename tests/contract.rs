@@ -183,8 +183,9 @@ async fn image_honors_the_computer_contract() {
     assert!(text(&released).contains("\"released\":true"));
 
     // The viewer: the page is open, the socket wants the token, the first
-    // frame is the whole screen as PNG, and a person's keystroke lands in
-    // the page and holds the machine against the agent for a moment.
+    // frame is the whole screen as PNG, watching costs the teammate nothing,
+    // and a person who takes the screen holds it against the agent until
+    // they hand it back.
     let page = reqwest::get(format!("{base}/"))
         .await
         .expect("viewer page")
@@ -192,6 +193,10 @@ async fn image_honors_the_computer_contract() {
         .await
         .expect("viewer html");
     assert!(page.contains("<canvas"), "the viewer page is served at /");
+    assert!(
+        page.contains("Take control"),
+        "the viewer page offers the screen rather than taking it"
+    );
     let ws_base = base.replacen("http", "ws", 1);
     if !token.is_empty() {
         let refused = tokio_tungstenite::connect_async(format!("{ws_base}/ws")).await;
@@ -327,6 +332,30 @@ async fn image_honors_the_computer_contract() {
     );
     assert_eq!(&bytes[12..16], b"\x89PNG", "the frame is a PNG");
 
+    // A socket that has not taken the screen only watches: its input never
+    // reaches the hands, so the teammate keeps a machine someone is looking at.
+    socket
+        .send(tokio_tungstenite::tungstenite::Message::text(
+            json!({"t":"move","x":40,"y":40}).to_string(),
+        ))
+        .await
+        .expect("send move");
+    tokio::time::sleep(Duration::from_millis(300)).await;
+    let watched = call(&client, "input", json!({"action":"key","combo":"Escape"})).await;
+    assert!(
+        !watched.is_error.unwrap_or(false),
+        "watching leaves the machine to the agent: {}",
+        text(&watched)
+    );
+
+    // Take control, and the same messages are the person's hands.
+    socket
+        .send(tokio_tungstenite::tungstenite::Message::text(
+            json!({"t":"control","take":true}).to_string(),
+        ))
+        .await
+        .expect("take control");
+
     // The pointer sits in the browser window, so the server's software
     // cursor is inside every captured rectangle, and pages keep repainting.
     // The stream must keep flowing: a DamageNotify the cursor causes during
@@ -391,6 +420,22 @@ async fn image_honors_the_computer_contract() {
     let held = call(&client, "input", json!({"action":"key","combo":"Escape"})).await;
     assert!(held.is_error.unwrap_or(false), "{}", text(&held));
     assert!(text(&held).contains("person"), "{}", text(&held));
+
+    // Handing it back is the person's word too: the teammate has the machine
+    // again at once, rather than ten seconds after the last keystroke.
+    socket
+        .send(tokio_tungstenite::tungstenite::Message::text(
+            json!({"t":"control","take":false}).to_string(),
+        ))
+        .await
+        .expect("give it back");
+    tokio::time::sleep(Duration::from_millis(300)).await;
+    let handed = call(&client, "input", json!({"action":"key","combo":"Escape"})).await;
+    assert!(
+        !handed.is_error.unwrap_or(false),
+        "the screen is the agent's again: {}",
+        text(&handed)
+    );
     socket.close(None).await.ok();
 
     client.cancel().await.ok();

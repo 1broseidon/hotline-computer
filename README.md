@@ -45,6 +45,7 @@ the whole screen next. Input comes up as JSON and reaches the X server through
 XTEST:
 
 ```json
+{"t":"control","take":true}
 {"t":"move","x":640,"y":400}
 {"t":"button","b":1,"down":true}
 {"t":"wheel","dy":1}
@@ -53,10 +54,13 @@ XTEST:
 
 The socket takes the bearer as a `token` query, because a browser cannot send
 a header on a WebSocket; Toad opens `http://127.0.0.1:<port>/#<token>` and the
-page reads the fragment, which never leaves the browser. A person's input
-holds the machine as `person` for ten seconds at a time, so a teammate's
-mutating tools are refused while someone is driving and the desktop hands
-itself back when they stop.
+page reads the fragment, which never leaves the browser. The page opens
+view-only, with `Take control` at the foot of the screen: until that is
+pressed the socket shows the desktop and moves nothing, so watching a teammate
+work never interrupts it. From then on a person's input holds the machine as
+`person` for ten seconds at a time, so the teammate's mutating tools are
+refused while someone is driving and the desktop hands itself back when they
+stop — at once when they give it back or close the page.
 
 ## The tools
 
@@ -134,7 +138,7 @@ src/boot.rs      PID 1, Xvfb, dbus, then the agent
 src/desktop.rs   wallpaper, dock, window manager
 src/serve.rs     the HTTP door: /health, bearer auth, /mcp, the viewer routes
 src/viewer.rs    the viewer page and its socket
-src/viewer.html  the page: one canvas, pointer and keys
+src/viewer.html  the page: one canvas, Take control, pointer and keys
 src/screen.rs    DAMAGE-driven PNG rectangles for the viewer
 src/xtest.rs     the person's pointer and keys, injected with XTEST
 src/tools/       the eight tools
