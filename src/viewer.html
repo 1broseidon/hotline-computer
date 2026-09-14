@@ -10,20 +10,30 @@
   canvas { display: block; outline: none; cursor: default; image-rendering: auto; }
   #status { position: fixed; top: 10px; left: 10px; padding: 4px 9px; border-radius: 999px; background: rgba(22,22,22,.92); border: 1px solid #2c2c2c; pointer-events: none; transition: opacity .3s; }
   #status.quiet { opacity: 0; }
+  #control { position: fixed; bottom: 14px; left: 50%; transform: translateX(-50%); padding: 6px 14px; border-radius: 999px; background: rgba(22,22,22,.92); border: 1px solid #2c2c2c; color: #d6d6d6; font: inherit; cursor: pointer; transition: opacity .3s; }
+  #control:hover, #control:focus-visible { opacity: 1; color: #fff; border-color: #414141; }
+  /* While the screen is the person's, the button sits over a desktop they
+     are using, so it steps back to the edge of sight until they go for it. */
+  #control.driving { opacity: .35; }
 </style>
 </head>
 <body>
 <canvas id="screen" tabindex="0" width="1" height="1"></canvas>
 <div id="status">Connecting…</div>
+<button id="control" type="button">Take control</button>
 <script>
 (() => {
   const canvas = document.getElementById("screen");
   const status = document.getElementById("status");
+  const control = document.getElementById("control");
   const context = canvas.getContext("2d");
   const token = decodeURIComponent(location.hash.slice(1));
   let socket = null;
   let drawing = Promise.resolve();
   let quiet = null;
+  // The page opens watching. Nothing it does reaches the desktop until the
+  // person takes the screen, so opening it never takes it from the agent.
+  let driving = false;
 
   function say(text, fade) {
     status.textContent = text;
@@ -43,7 +53,9 @@
     const scheme = location.protocol === "https:" ? "wss" : "ws";
     socket = new WebSocket(`${scheme}://${location.host}/ws?token=${encodeURIComponent(token)}`);
     socket.binaryType = "arraybuffer";
-    socket.onopen = () => say("Connected", true);
+    // A fresh socket is a machine that has not been told who is driving, so
+    // a person who still holds the screen says so again.
+    socket.onopen = () => { say("Connected", true); if (driving) send({ t: "control", take: true }); };
     socket.onclose = () => { say("Reconnecting…"); setTimeout(connect, 1000); };
     socket.onmessage = (event) => {
       const data = event.data;
@@ -62,6 +74,16 @@
     if (socket && socket.readyState === WebSocket.OPEN) socket.send(JSON.stringify(message));
   }
 
+  function drive(taking) {
+    driving = taking;
+    send({ t: "control", take: taking });
+    control.textContent = taking ? "Give it back" : "Take control";
+    control.classList.toggle("driving", taking);
+    if (taking) canvas.focus(); else canvas.blur();
+    say(taking ? "The screen is yours" : "The screen is the agent's", true);
+  }
+  control.addEventListener("click", () => drive(!driving));
+
   function at(event) {
     const rect = canvas.getBoundingClientRect();
     return {
@@ -73,16 +95,19 @@
   // One pointer position per animation frame is plenty for a human hand.
   let pending = null;
   canvas.addEventListener("pointermove", (event) => {
+    if (!driving) return;
     pending = at(event);
     requestAnimationFrame(() => { if (pending) { send({ t: "move", ...pending }); pending = null; } });
   });
   const buttons = { 0: 1, 1: 2, 2: 3 };
   canvas.addEventListener("pointerdown", (event) => {
+    if (!driving) return;
     canvas.focus();
     send({ t: "move", ...at(event) });
     if (event.button in buttons) send({ t: "button", b: buttons[event.button], down: true });
   });
   canvas.addEventListener("pointerup", (event) => {
+    if (!driving) return;
     if (event.button in buttons) send({ t: "button", b: buttons[event.button], down: false });
   });
   canvas.addEventListener("contextmenu", (event) => event.preventDefault());
@@ -91,6 +116,7 @@
   // either way one notch is sent per fifty pixels' worth.
   let wheelX = 0, wheelY = 0;
   canvas.addEventListener("wheel", (event) => {
+    if (!driving) return;
     event.preventDefault();
     const unit = event.deltaMode === 1 ? 50 : 1;
     wheelX += event.deltaX * unit; wheelY += event.deltaY * unit;
@@ -100,16 +126,17 @@
 
   // The X server repeats a held key itself, so browser repeats are dropped.
   canvas.addEventListener("keydown", (event) => {
+    if (!driving) return;
     event.preventDefault();
     if (!event.repeat) send({ t: "key", key: event.key, down: true });
   });
   canvas.addEventListener("keyup", (event) => {
+    if (!driving) return;
     event.preventDefault();
     send({ t: "key", key: event.key, down: false });
   });
-  canvas.addEventListener("blur", () => say("Click the screen to type", true));
+  canvas.addEventListener("blur", () => { if (driving) say("Click the screen to type", true); });
 
-  canvas.focus();
   connect();
 })();
 </script>
