@@ -32,12 +32,21 @@
      using, so it steps back to the edge of sight until they go for it. */
   #bar.driving.idle { opacity: .4; }
   #bar.driving.idle:hover { opacity: 1; }
+  /* The hands, drawn where the machine says they are. The screen stream
+     carries no cursor, so this arrow is how a person watching sees the
+     agent reach for things; it slides rather than jumps, and a press rings. */
+  #pointer { position: fixed; left: 0; top: 0; width: 22px; height: 30px; pointer-events: none; opacity: 0; transition: transform .14s cubic-bezier(.2, .7, .2, 1), opacity .4s; will-change: transform; filter: drop-shadow(0 1px 2px rgba(0, 0, 0, .6)); z-index: 5; }
+  #pointer.shown { opacity: 1; }
+  .ring { position: fixed; left: 0; top: 0; width: 28px; height: 28px; margin: -14px 0 0 -14px; border-radius: 50%; border: 2px solid var(--you); pointer-events: none; z-index: 4; animation: ring .45s ease-out forwards; }
+  .ring.right { border-color: var(--warn); }
+  @keyframes ring { from { transform: scale(.3); opacity: .9; } to { transform: scale(1.4); opacity: 0; } }
   #toast { position: fixed; left: 50%; bottom: 70px; transform: translateX(-50%); padding: 5px 12px; border-radius: 999px; background: var(--fill); border: 1px solid var(--rule); color: var(--ink-2); font-size: 12px; pointer-events: none; transition: opacity .3s; }
   #toast.quiet { opacity: 0; }
 </style>
 </head>
 <body>
 <canvas id="screen" tabindex="0" width="1" height="1"></canvas>
+<svg id="pointer" viewBox="0 0 22 30" aria-hidden="true"><path d="M2 1.5 L2 22.5 L7.4 17.6 L11.2 26.5 L15.2 24.8 L11.5 16 L19 15.6 Z" fill="#f4f4f6" stroke="#141416" stroke-width="1.6" stroke-linejoin="round"/></svg>
 <div id="toast" class="quiet"></div>
 <div id="bar" class="lost">
   <span class="status"><span class="dot"></span><span id="status">Connecting…</span><span class="sub" id="sub"></span></span>
@@ -70,6 +79,35 @@
   // What the machine last said about itself: who holds it and its jobs.
   let machine = { holder: "none", running: 0, completed: 0, failed: 0 };
   let sticky = false;
+  // The hands' last known point in screen pixels, and when to stop showing them.
+  const pointer = document.getElementById("pointer");
+  let hands = null;
+  let handsIdle = null;
+
+  function placePointer() {
+    if (!hands) return;
+    const rect = canvas.getBoundingClientRect();
+    const px = rect.left + hands.x * rect.width / canvas.width;
+    const py = rect.top + hands.y * rect.height / canvas.height;
+    pointer.style.transform = `translate(${px.toFixed(1)}px, ${py.toFixed(1)}px)`;
+    return [px, py];
+  }
+
+  function showHands(message) {
+    hands = { x: message.x, y: message.y };
+    const at = placePointer();
+    // A person driving has their own pointer over the screen already.
+    pointer.classList.toggle("shown", !driving);
+    if (message.button && message.down && !driving && at) {
+      const ring = document.createElement("div");
+      ring.className = "ring" + (message.button === 3 ? " right" : "");
+      ring.style.left = at[0] + "px"; ring.style.top = at[1] + "px";
+      document.body.appendChild(ring);
+      ring.addEventListener("animationend", () => ring.remove());
+    }
+    clearTimeout(handsIdle);
+    handsIdle = setTimeout(() => pointer.classList.remove("shown"), 4000);
+  }
 
   function say(text, fade = true) {
     toast.textContent = text;
@@ -81,6 +119,7 @@
 
   function render() {
     const held = machine.holder === "person" && !driving;
+    if (driving) pointer.classList.remove("shown");
     bar.className = !connected ? "lost" : driving ? "driving" : held ? "held" : "";
     control.hidden = !connected || driving;
     control.disabled = held;
@@ -100,7 +139,7 @@
     canvas.style.width = Math.floor(canvas.width * scale) + "px";
     canvas.style.height = Math.floor(canvas.height * scale) + "px";
   }
-  addEventListener("resize", fit);
+  addEventListener("resize", () => { fit(); placePointer(); });
 
   function connect() {
     const scheme = location.protocol === "https:" ? "wss" : "ws";
@@ -114,6 +153,7 @@
       if (typeof event.data === 'string') {
         const message = JSON.parse(event.data);
         if (message.t === 'state') { machine = message; render(); }
+        if (message.t === 'pointer') showHands(message);
         if (message.t === 'paste') say('Pasted');
         if (message.t === 'error') {
           say(message.error, false);

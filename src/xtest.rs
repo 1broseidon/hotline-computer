@@ -38,6 +38,23 @@ pub struct Hands {
     keysyms: Vec<Keysym>,
     spare: Vec<Keycode>,
     remapped: HashMap<Keysym, Keycode>,
+    /// Where the pointer was last put, so a button event can say where.
+    at: (i16, i16),
+    /// Every pointer move and button, for viewers that draw the hands.
+    gestures: tokio::sync::broadcast::Sender<Gesture>,
+}
+
+/// A pointer move (`button` none) or a button going down or up, where the
+/// pointer is. The screen stream never contains a cursor, so this is how a
+/// person watching sees where the hands are.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, serde::Serialize)]
+pub struct Gesture {
+    pub x: i16,
+    pub y: i16,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub button: Option<u8>,
+    #[serde(skip_serializing_if = "std::ops::Not::not")]
+    pub down: bool,
 }
 
 impl Hands {
@@ -69,20 +86,42 @@ impl Hands {
             keysyms: mapping.keysyms,
             spare,
             remapped: HashMap::new(),
+            at: (0, 0),
+            gestures: tokio::sync::broadcast::channel(256).0,
         })
     }
 
-    pub fn move_to(&self, x: i16, y: i16) -> Result<(), String> {
-        self.fake(MOTION_NOTIFY_EVENT, 0, x, y)
+    /// The moves and buttons as they happen; a slow reader misses some.
+    pub fn gestures(&self) -> tokio::sync::broadcast::Sender<Gesture> {
+        self.gestures.clone()
     }
 
-    pub fn button(&self, button: u8, down: bool) -> Result<(), String> {
+    pub fn move_to(&mut self, x: i16, y: i16) -> Result<(), String> {
+        self.fake(MOTION_NOTIFY_EVENT, 0, x, y)?;
+        self.at = (x, y);
+        let _ = self.gestures.send(Gesture {
+            x,
+            y,
+            button: None,
+            down: false,
+        });
+        Ok(())
+    }
+
+    pub fn button(&mut self, button: u8, down: bool) -> Result<(), String> {
         let kind = if down {
             BUTTON_PRESS_EVENT
         } else {
             BUTTON_RELEASE_EVENT
         };
-        self.fake(kind, button, 0, 0)
+        self.fake(kind, button, 0, 0)?;
+        let _ = self.gestures.send(Gesture {
+            x: self.at.0,
+            y: self.at.1,
+            button: Some(button),
+            down,
+        });
+        Ok(())
     }
 
     pub fn key(&mut self, name: &str, down: bool) -> Result<(), String> {
@@ -99,7 +138,7 @@ impl Hands {
     }
 
     /// `count` clicks of `button` where the pointer is.
-    pub fn click(&self, button: u8, count: u32) -> Result<(), String> {
+    pub fn click(&mut self, button: u8, count: u32) -> Result<(), String> {
         for index in 0..count {
             if index > 0 {
                 std::thread::sleep(CLICK_GAP);

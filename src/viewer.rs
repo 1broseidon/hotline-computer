@@ -72,6 +72,8 @@ pub async fn socket(
 async fn drive(mut ws: WebSocket, app: App, display: Arc<Display>) {
     let holder = format!("{PERSON}-{}", VIEWER_ID.fetch_add(1, Ordering::Relaxed));
     let mut frames = display.screen.subscribe();
+    // The pointer is not in the frames, so the hands say where they are.
+    let mut gestures = display.gestures.subscribe();
     // A socket arrives watching, and says so when the person takes the
     // screen. One viewer driving leaves another one still only looking.
     let mut driving = false;
@@ -99,6 +101,16 @@ async fn drive(mut ws: WebSocket, app: App, display: Arc<Display>) {
                 Err(RecvError::Lagged(_)) => display.screen.request_full(),
                 Err(RecvError::Closed) => break,
             },
+            gesture = gestures.recv() => match gesture {
+                Ok(gesture) => {
+                    if ws.send(Message::Text(pointer_message(&gesture).into())).await.is_err() {
+                        break;
+                    }
+                }
+                // A viewer that fell behind the hands just picks up where they are now.
+                Err(RecvError::Lagged(_)) => {}
+                Err(RecvError::Closed) => break,
+            },
             message = ws.recv() => match message {
                 Some(Ok(Message::Text(text))) => {
                     match handle(&text, &display, &app, &holder, &mut driving).await {
@@ -113,6 +125,14 @@ async fn drive(mut ws: WebSocket, app: App, display: Arc<Display>) {
         }
     }
     let _ = app.access.release(&holder).await;
+}
+
+/// Where the hands are, for the page to draw an arrow: a move carries only
+/// the point; a button carries which one and whether it went down.
+fn pointer_message(gesture: &crate::xtest::Gesture) -> String {
+    let mut message = serde_json::to_value(gesture).unwrap_or_default();
+    message["t"] = json!("pointer");
+    message.to_string()
 }
 
 /// What the page shows in its control bar: who holds the machine, from this
@@ -321,6 +341,30 @@ mod tests {
         assert!(!reaches_the_hands(&paste, &app, "person-a", &mut driving).await);
         assert!(reaches_the_hands(&paste, &app, "person-b", &mut other).await);
         assert!(app.access.release("person-a").await.is_err());
+    }
+
+    #[test]
+    fn the_page_is_told_where_the_hands_are() {
+        use crate::xtest::Gesture;
+        let moved: serde_json::Value = serde_json::from_str(&pointer_message(&Gesture {
+            x: 640,
+            y: 360,
+            button: None,
+            down: false,
+        }))
+        .unwrap();
+        assert_eq!(moved, json!({"t":"pointer","x":640,"y":360}));
+        let pressed: serde_json::Value = serde_json::from_str(&pointer_message(&Gesture {
+            x: 640,
+            y: 360,
+            button: Some(1),
+            down: true,
+        }))
+        .unwrap();
+        assert_eq!(
+            pressed,
+            json!({"t":"pointer","x":640,"y":360,"button":1,"down":true})
+        );
     }
 
     #[tokio::test]
