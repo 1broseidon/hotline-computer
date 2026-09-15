@@ -27,4 +27,19 @@ alias bash=/bin/bash
 alias ll='ls -l'
 alias la='ls -la'
 
+# Rootless by design: nothing here runs as root, so apt and sudo can never
+# work and the image does not carry them. Software comes in this order:
+# what toad-computer prepares, then Nix by hand, then what is already here.
+_toad_rootless() {
+  printf '%s\n' \
+    "This computer runs nothing as root, so \`$1\` cannot install anything here." \
+    "  Prepare the workspace:  toad-computer prepare --packages <names>" \
+    "  Names to choose from:   toad-computer packages" \
+    "  One tool for now:       nix shell nixpkgs#<name>" >&2
+  return 127
+}
+apt() { _toad_rootless apt; }
+apt-get() { _toad_rootless apt-get; }
+sudo() { _toad_rootless sudo; }
+
 [ -r "$HOME/.bashrc" ] && . "$HOME/.bashrc"

@@ -28,6 +28,10 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libgl1-mesa-dri libegl-mesa0 libglx-mesa0 mesa-utils \
     libgtk-3-0t64 librsvg2-common \
     && rm -rf /var/lib/apt/lists/* \
+    # Rootless by design: nothing runs as root, so apt could never install
+    # anything. It goes, so nobody is invited to try; software comes from
+    # toad-computer, then Nix, then what the image already has.
+    && rm -f /usr/bin/apt /usr/bin/apt-* \
     && useradd --uid 1000 --create-home --shell /bin/bash agent \
     && rm -f /home/agent/.bashrc /home/agent/.profile /home/agent/.bash_logout \
     && install -d /etc/nix \
@@ -51,7 +55,8 @@ ENV TOAD_COMPUTER_ADDR=0.0.0.0:8787 \
     NIX_REMOTE=local \
     NIX_SSL_CERT_FILE=/etc/ssl/certs/ca-certificates.crt \
     LIBGL_ALWAYS_SOFTWARE=1 \
-    GDK_BACKEND=x11
+    GDK_BACKEND=x11 \
+    APPIMAGE_EXTRACT_AND_RUN=1
 RUN install -d /home/agent/src && nix-store --init
 EXPOSE 8787
 ENTRYPOINT ["/usr/bin/toad-computer", "boot"]

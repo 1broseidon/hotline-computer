@@ -1,6 +1,6 @@
 mod browser;
 mod capture;
-mod files;
+pub(crate) mod files;
 mod input;
 mod shell;
 mod state;

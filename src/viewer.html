@@ -40,6 +40,23 @@
   .ring { position: fixed; left: 0; top: 0; width: 28px; height: 28px; margin: -14px 0 0 -14px; border-radius: 50%; border: 2px solid var(--you); pointer-events: none; z-index: 4; animation: ring .45s ease-out forwards; }
   .ring.right { border-color: var(--warn); }
   @keyframes ring { from { transform: scale(.3); opacity: .9; } to { transform: scale(1.4); opacity: 0; } }
+  /* The Files panel: the home and what is under it, as the machine lists
+     it. A folder opens; a file is saved on this computer. */
+  #files { position: fixed; right: 18px; bottom: 70px; width: min(420px, calc(100vw - 36px)); max-height: min(60vh, 520px); display: flex; flex-direction: column; border-radius: 14px; background: var(--fill); border: 1px solid var(--rule); box-shadow: var(--shadow); backdrop-filter: blur(8px); overflow: hidden; z-index: 6; }
+  #files[hidden] { display: none; }
+  #files header { display: flex; align-items: center; gap: 4px; padding: 8px 8px 8px 14px; border-bottom: 1px solid var(--rule); }
+  #files header .path { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font: 12px ui-monospace, Menlo, monospace; color: var(--ink); }
+  #files header button { border: 0; font: inherit; width: 28px; height: 28px; border-radius: 999px; background: transparent; color: var(--ink-2); cursor: pointer; }
+  #files header button:hover:not([disabled]) { background: var(--raised); color: var(--ink); }
+  #files header button[disabled] { opacity: .3; cursor: default; }
+  #files ul { list-style: none; margin: 0; padding: 6px 0; overflow-y: auto; }
+  #files li { display: flex; align-items: center; gap: 10px; padding: 6px 14px; cursor: pointer; color: var(--ink); }
+  #files li:hover { background: var(--raised); }
+  #files li .name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  #files li.dir .name::after { content: "/"; color: var(--muted); }
+  #files li .size { font: 11px ui-monospace, Menlo, monospace; color: var(--muted); }
+  #files li.empty { color: var(--muted); cursor: default; }
+  #files li.empty:hover { background: transparent; }
   #toast { position: fixed; left: 50%; bottom: 70px; transform: translateX(-50%); padding: 5px 12px; border-radius: 999px; background: var(--fill); border: 1px solid var(--rule); color: var(--ink-2); font-size: 12px; pointer-events: none; transition: opacity .3s; }
   #toast.quiet { opacity: 0; }
 </style>
@@ -48,10 +65,15 @@
 <canvas id="screen" tabindex="0" width="1" height="1"></canvas>
 <svg id="pointer" viewBox="0 0 22 30" aria-hidden="true"><path d="M2.5 1.5 L2.5 23 L8.6 17.6 L19 15.4 Z" fill="#f4f4f6" stroke="#141416" stroke-width="1.6" stroke-linejoin="round"/></svg>
 <div id="toast" class="quiet"></div>
+<div id="files" hidden>
+  <header><span class="path" id="files-path"></span><button id="files-up" type="button" title="Up a folder">↑</button><button id="files-close" type="button" title="Close">×</button></header>
+  <ul id="files-list"></ul>
+</div>
 <div id="bar" class="lost">
   <span class="status"><span class="dot"></span><span id="status">Connecting…</span><span class="sub" id="sub"></span></span>
   <button id="control" type="button" class="primary" hidden>Take control</button>
   <button id="paste" type="button" class="quiet" hidden>Paste</button>
+  <button id="browse" type="button" class="quiet" hidden>Files</button>
   <button id="back" type="button" class="quiet" hidden>Give it back</button>
   <span class="hint" id="hint" hidden></span>
 </div>
@@ -65,6 +87,7 @@
   const control = document.getElementById("control");
   const paste = document.getElementById("paste");
   const back = document.getElementById("back");
+  const browse = document.getElementById("browse");
   const hint = document.getElementById("hint");
   const toast = document.getElementById("toast");
   const token = decodeURIComponent(location.hash.slice(1));
@@ -124,6 +147,7 @@
     control.hidden = !connected || driving;
     control.disabled = held;
     paste.hidden = back.hidden = hint.hidden = !(connected && driving);
+    browse.hidden = !connected;
     if (!connected) { status.textContent = "Reconnecting…"; sub.textContent = ""; return; }
     if (driving) { status.textContent = "You’re in control"; sub.textContent = ""; hint.textContent = (mac ? "⌥⌘V" : "Ctrl+Alt+V") + " pastes from your computer"; return; }
     if (held) { status.textContent = "Someone else has the screen"; sub.textContent = ""; return; }
@@ -230,6 +254,76 @@
     if (!driving) return;
     event.preventDefault();
     pasteText(event.clipboardData.getData('text/plain'));
+  });
+
+  // The Files panel: the home and what is under it, as the machine lists
+  // it. A folder opens, the arrow goes up as far as the home, and a file is
+  // saved on this computer by the page's own browser. Reading takes nothing
+  // from the agent, so watching is enough to look.
+  const files = document.getElementById("files");
+  const filesPath = document.getElementById("files-path");
+  const filesUp = document.getElementById("files-up");
+  const filesList = document.getElementById("files-list");
+  let folder = "";
+  let home = "";
+  function fileUrl(route, path) {
+    return `${route}?token=${encodeURIComponent(token)}&path=${encodeURIComponent(path)}`;
+  }
+  function sizeText(bytes) {
+    if (bytes < 1024) return bytes + " B";
+    const units = ["KiB", "MiB", "GiB"];
+    let value = bytes / 1024, unit = 0;
+    while (value >= 1024 && unit < units.length - 1) { value /= 1024; unit += 1; }
+    return (value < 10 ? value.toFixed(1) : Math.round(value)) + " " + units[unit];
+  }
+  async function showFolder(path) {
+    let listing;
+    try {
+      const response = await fetch(fileUrl("/files", path));
+      listing = await response.json();
+      if (!response.ok) throw new Error(listing.error || response.statusText);
+    } catch (error) { say(error.message || String(error), false); return; }
+    folder = listing.path; home = listing.home;
+    filesPath.textContent = folder === home ? "~" : "~" + folder.slice(home.length);
+    filesPath.title = folder;
+    filesUp.disabled = folder === home;
+    filesList.replaceChildren();
+    if (!listing.entries.length) {
+      const empty = document.createElement("li");
+      empty.className = "empty"; empty.textContent = "Nothing here";
+      filesList.appendChild(empty);
+    }
+    for (const entry of listing.entries) {
+      const item = document.createElement("li");
+      item.className = entry.is_dir ? "dir" : "file";
+      const name = document.createElement("span");
+      name.className = "name"; name.textContent = entry.name;
+      item.appendChild(name);
+      if (!entry.is_dir) {
+        const size = document.createElement("span");
+        size.className = "size"; size.textContent = sizeText(entry.size);
+        item.appendChild(size);
+      }
+      item.addEventListener("click", () => {
+        const path = folder.replace(/\/$/, "") + "/" + entry.name;
+        if (entry.is_dir) showFolder(path); else saveFile(path, entry.name);
+      });
+      filesList.appendChild(item);
+    }
+    files.hidden = false;
+  }
+  function saveFile(path, name) {
+    const link = document.createElement("a");
+    link.href = fileUrl("/files/download", path); link.download = name;
+    document.body.appendChild(link); link.click(); link.remove();
+    say("Saving " + name);
+  }
+  function closeFiles() { files.hidden = true; if (driving) canvas.focus(); }
+  browse.addEventListener("click", () => { if (files.hidden) showFolder(folder); else closeFiles(); });
+  document.getElementById("files-close").addEventListener("click", closeFiles);
+  filesUp.addEventListener("click", () => { if (folder !== home) showFolder(folder.replace(/\/[^/]*$/, "") || "/"); });
+  addEventListener("keydown", (event) => {
+    if (event.key === "Escape" && !files.hidden && document.activeElement !== canvas) closeFiles();
   });
 
   function at(event) {

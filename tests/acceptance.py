@@ -408,6 +408,16 @@ def nix_failure(c):
     c.output.joinpath('nix-failure.txt').write_text(output)
 
 
+def rootless(c):
+    # Nothing runs as root and the image carries no apt or sudo; an AppImage
+    # runs without FUSE.
+    output = execute(c, 'bash', ['-c', 'for tool in apt apt-get sudo; do command -v "$tool" && exit 1; done; id -u; printenv APPIMAGE_EXTRACT_AND_RUN'], label='Rootless by design')
+    assert output.split() == ['1000', '1'], output
+    # The person's shell answers apt with where software comes from instead.
+    output = execute(c, 'bash', ['-ic', 'apt install go; true'], label='apt in the shell')
+    assert 'toad-computer prepare' in output and 'toad-computer packages' in output and 'nix shell' in output, output
+
+
 def artifacts(c):
     script = '#!/bin/bash\nprintf "installer argument: %s; environment: %s\\n" "$1" "$INSTALL_FIXTURE"\n'
     c.call('files', {'action': 'put', 'path': '/home/agent/qa/install-fixture.sh', 'content': script})
@@ -806,7 +816,7 @@ def main():
     assert report['info']['executables']['chromium'] == '/usr/bin/chromium'
     guide = c.call('state', {'action': 'guide'})
     assert hashlib.sha256(guide['skill'].encode()).hexdigest() == guide['sha256']
-    cases = [('browser forms', browser), ('three-step browser wizard', wizard), ('public Selenium form', public_form), ('no save-password bubble', password_prompt), ('managed jobs and observer', jobs), ('desktop job menu', desktop_job_menu), ('clipboard between apps', clipboard_between_apps), ('tray counts match live jobs', tray_counts), ('Nix failure diagnostics', nix_failure), ('verified script execution', artifacts), ('artifact failure recovery', download_failures)]
+    cases = [('browser forms', browser), ('three-step browser wizard', wizard), ('public Selenium form', public_form), ('no save-password bubble', password_prompt), ('managed jobs and observer', jobs), ('desktop job menu', desktop_job_menu), ('clipboard between apps', clipboard_between_apps), ('tray counts match live jobs', tray_counts), ('Nix failure diagnostics', nix_failure), ('verified script execution', artifacts), ('artifact failure recovery', download_failures), ('rootless by design', rootless)]
     if options.suite == 'full':
         cases += [('package workspaces', workspaces), ('second repository tests', second_repository), ('Ketch installation and scraping', ketch), ('job durability and responsiveness', durability), ('native Toad build and screens', native), ('native controls and window identity', native_controls), ('legacy Xterm title', legacy_window)]
     elif options.suite == 'workspaces':

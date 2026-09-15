@@ -74,8 +74,8 @@ stop — at once when they give it back or close the page.
 
 `/health` and the viewer page never require authentication. When
 `TOAD_COMPUTER_TOKEN` is set, every method on `/mcp` requires
-`Authorization: Bearer <token>`, the viewer's socket requires the same token
-as its `token` query, and otherwise both return a JSON 401. `X-Computer-Holder` names the teammate using a lease or
+`Authorization: Bearer <token>`, the viewer's socket and its `/files` routes
+require the same token as their `token` query, and otherwise all return a JSON 401. `X-Computer-Holder` names the teammate using a lease or
 run slot; an absent header means `anonymous`.
 
 ## The desktop
@@ -131,6 +131,16 @@ the viewer's computer comes in on Ctrl+Alt+V (⌥⌘V on a Mac) or the
 reconnect starts view-only. A stale viewer cannot paste over a newer
 viewer's control. Paste is limited to 1 MiB.
 
+**Files**, watching or driving, opens a panel over the screen: the home and
+what is under it, as the machine lists it. A folder opens, the arrow goes up
+as far as the home, and a file is saved on the viewer's own computer by the
+page's browser. Behind it, `GET /files?path=` lists a folder as JSON
+(`path`, `home`, `entries` with `name`, `size`, `is_dir`, `modified`) and
+`GET /files/download?path=` streams a file as an attachment; both take the
+token as a query like `/ws`, an empty path means the home, and both stop at
+the home like the `files` tool. Inside the computer, the managed Chromium
+lists a folder at `file:///home/agent/`.
+
 ## Workspaces and the release guide
 
 Start an agent session with `state info` and `state guide`. The returned skill
@@ -185,8 +195,17 @@ package environment, edit its generated flake and prepare with
 The base image supplies the desktop, browser, graphics, and Nix. Framework
 libraries and compilers are project dependencies; WebKit and AppIndicator
 are no longer installed in the base image. Native projects can specify their
-runtime library paths in a flake. System-wide `.deb` installation belongs in
-an image build, since runtime jobs remain unprivileged.
+runtime library paths in a flake.
+
+The computer is rootless by design: nothing runs as root, nothing can
+elevate, and the image carries no `apt` or `sudo`, so nobody is invited to
+try. Software comes in this order: what the computer prepares
+(`state prepare` for a teammate, `toad-computer prepare` for a person), then
+Nix by hand (`nix shell nixpkgs#<name>` for one tool), then what the image
+already has. The person's shell answers `apt` and `sudo` with that order.
+A `.deb` or a system-wide install belongs in an image build. An AppImage
+runs without FUSE, which a container cannot offer: the image sets
+`APPIMAGE_EXTRACT_AND_RUN=1`.
 
 **0.5 development API change:** `prepare name=<preset>` is replaced by
 `packages` or `flake`. Old prepared environments remain usable while their
