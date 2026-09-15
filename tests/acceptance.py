@@ -306,10 +306,23 @@ def desktop_job_menu(c):
     mark_x, mark_y = centre(layout['mark'])
     c.call('input',{'action':'click','x':mark_x,'y':mark_y})
     c.screenshot('03e-toad-menu.png')
-    c.call('input',{'action':'key','combo':'c'})
+    c.call('input',{'action':'key','combo':'a'})
     c.screenshot('03f-about-this-computer.png')
     c.call('input',{'action':'key','combo':'Escape'})
     c.screenshot('03g-menus-closed.png')
+    # T opens the person's own shell: a small window at the bottom left.
+    c.call('input',{'action':'click','x':mark_x,'y':mark_y})
+    c.call('input',{'action':'key','combo':'t'})
+    deadline = time.monotonic()+10
+    while time.monotonic()<deadline:
+        shell = next((w for w in c.call('windows',{'action':'list'}) if 'toadshell' in w['class'].lower()), None)
+        if shell: break
+        time.sleep(.2)
+    assert shell, c.call('windows',{'action':'list'})
+    x, y, w, h = shell['bounds']
+    assert x == 8 and y + h == 1080 - 8, shell
+    c.screenshot('03h-person-shell.png', settle_ms=500)
+    c.call('windows',{'action':'close','window_id':shell['id']})
 
 
 def tray_counts(c):

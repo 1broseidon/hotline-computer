@@ -193,6 +193,11 @@ fn machine(config: Config, width: u16, height: u16) -> Result<(), String> {
                                 eprintln!("toad-computer: terminal: {error}");
                             }
                         }
+                        desktop::Request::OpenShell => {
+                            if let Err(error) = app.observer.open_shell().await {
+                                eprintln!("toad-computer: shell: {error}");
+                            }
+                        }
                         desktop::Request::OpenJob(job_id) => {
                             if let Err(error) = app.observer.select(Some(&job_id)).await {
                                 eprintln!("toad-computer: terminal: {error}");

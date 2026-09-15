@@ -62,6 +62,17 @@ fn main() {
         }
         return;
     }
+    if arguments.first().map(String::as_str) == Some("shell") {
+        let home = arguments
+            .get(1)
+            .map(std::path::PathBuf::from)
+            .unwrap_or_else(|| Config::from_env().home);
+        if let Err(error) = toad_computer::observer::shell(&home) {
+            eprintln!("{error}");
+            std::process::exit(1);
+        }
+        return;
+    }
     if arguments.first().map(String::as_str) == Some("artifact") {
         use std::os::unix::process::CommandExt;
         let Some(spec) = arguments.get(1) else {

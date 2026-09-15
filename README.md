@@ -80,11 +80,11 @@ run slot; an absent header means `anonymous`.
 
 ## The desktop
 
-The top bar is three answers. On the left, the Toad mark opens a menu:
-**A** the browser (opened, or focused if open), **B** the terminal observer,
-**C** an About card (version, channel, revision, architecture, nixpkgs
-revision, uptime); the letters pick while the menu is open and Escape closes
-it. In the middle, every open window is a pill with its own icon and title;
+The top bar is three answers. On the left, the Toad mark opens a menu, and
+each row's initial picks it while the menu is open: **B** the browser
+(opened, or focused if open), **T** a terminal of the person's own, **O** the
+observer of the teammate's jobs, **A** an About card (version, channel,
+revision, architecture, nixpkgs revision, uptime); Escape closes it. In the middle, every open window is a pill with its own icon and title;
 click one to focus it, right-click to close it. On the right, a jobs chip
 (`no jobs`, `2 running · 5 done`, `1 failed · 2 running`) that drops the
 jobs list from under itself, a lease chip that reads `agent at work`, `agent in control` or
@@ -92,9 +92,14 @@ jobs list from under itself, a lease chip that reads `agent at work`, `agent in 
 uses it, and a clock in the host's zone (`TZ`, which Toad passes; UTC
 otherwise). Everything on the bar is published as `_TOAD_BAR_LAYOUT` on the
 root window, so tests find its parts by rectangle rather than by pixel.
-Normal apps occupy the work area below the bar. The terminal opens in the
+Normal apps occupy the work area below the bar. The observer opens in the
 right third of the screen, and the app being watched keeps the left two
-thirds; `windows tile` uses the same split.
+thirds; `windows tile` uses the same split. The person's terminal is a
+small window in the bottom-left corner, 8 px in from the edge: an
+interactive bash in the mounted workspace with the environment the teammate
+prepared there, for signing in to something or unblocking a stuck step.
+What is typed there is not a job: it is not retained, and the teammate sees
+only what is on the screen.
 `windows` operations verify the resulting focus, geometry, or disappearance;
 a refused operation reports the remaining windows.
 

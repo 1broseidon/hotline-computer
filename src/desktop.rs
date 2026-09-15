@@ -44,6 +44,8 @@ pub enum Request {
     /// pages outlive a destroyed window, so the agent has to be told.
     BrowserClosed,
     OpenTerminal,
+    /// The person asked for a shell of their own.
+    OpenShell,
     OpenJob(String),
 }
 
@@ -82,6 +84,8 @@ const TRAY_ICON: i32 = 18;
 const APP_ICON: u16 = 16;
 const PILL_MAX: i32 = 220;
 const KEYSYM_ESCAPE: u32 = 0xff1b;
+/// How far the person's shell sits in from the screen's bottom-left corner.
+const SHELL_INSET: u16 = 8;
 
 pub fn run(
     display: &str,
@@ -850,6 +854,8 @@ impl Desktop {
                     canvas.round_rect(icon_x, icon_y, 16, 16, 4.0, BAR_HOVER);
                     let glyph = if client.is_some_and(|c| c.class.contains("toadterminal")) {
                         ">_".to_owned()
+                    } else if client.is_some_and(|c| c.class.contains("toadshell")) {
+                        "$".to_owned()
                     } else {
                         title
                             .chars()
@@ -920,7 +926,7 @@ impl Desktop {
     fn open_popup(&mut self, kind: Popup) -> Result<(), String> {
         self.close_popup()?;
         let (width, height) = match &kind {
-            Popup::Menu => (MENU_WIDTH, (PAD + 3 * ROW + 11 + 22 + PAD) as u16),
+            Popup::Menu => (MENU_WIDTH, (PAD + 4 * ROW + 11 + 22 + PAD) as u16),
             Popup::Jobs { visible, .. } => (
                 self.width.saturating_sub(16).min(640),
                 ((*visible as i32 + 1) * ROW + 2 * PAD) as u16,
@@ -1049,10 +1055,11 @@ impl Desktop {
         let mut canvas = Canvas::new(open.width, open.height, BAR_FILL);
         match &open.kind {
             Popup::Menu => {
-                let rows: [(&str, &str, &str); 3] = [
-                    ("Browser", "open or focus", "A"),
-                    ("Terminal", "observer", "B"),
-                    ("About this computer", "", "C"),
+                let rows: [(&str, &str, &str); 4] = [
+                    ("Browser", "open or focus", "B"),
+                    ("Terminal", "a shell of your own", "T"),
+                    ("Observe", "the teammate's jobs", "O"),
+                    ("About this computer", "", "A"),
                 ];
                 for (index, (label, note, key)) in rows.iter().enumerate() {
                     let y = menu_row_y(index);
@@ -1077,7 +1084,7 @@ impl Desktop {
                         INK_2,
                     );
                 }
-                canvas.fill_rect(PAD + 4, PAD + 2 * ROW + 5, width - 2 * PAD - 8, 1, RULE);
+                canvas.fill_rect(PAD + 4, PAD + 3 * ROW + 5, width - 2 * PAD - 8, 1, RULE);
                 let foot = format!(
                     "toad-computer {} · {}",
                     env!("CARGO_PKG_VERSION"),
@@ -1086,7 +1093,7 @@ impl Desktop {
                 canvas.text(
                     &mono,
                     PAD + 10,
-                    mono.baseline_in(PAD + 3 * ROW + 11, 22),
+                    mono.baseline_in(PAD + 4 * ROW + 11, 22),
                     &foot,
                     MUTED,
                 );
@@ -1202,9 +1209,13 @@ impl Desktop {
             }
             1 => {
                 self.close_popup()?;
+                self.dock_action(Request::OpenShell)
+            }
+            2 => {
+                self.close_popup()?;
                 self.dock_action(Request::OpenTerminal)
             }
-            2 => self.open_popup(Popup::About),
+            3 => self.open_popup(Popup::About),
             _ => Ok(()),
         }
     }
@@ -1227,7 +1238,7 @@ impl Desktop {
         }
         if matches!(open.kind, Popup::Menu)
             && let Some(index) =
-                "abc".find(|c| u32::from(c) == keysym || u32::from(c) - 32 == keysym)
+                MENU_KEYS.find(|c| u32::from(c) == keysym || u32::from(c) - 32 == keysym)
         {
             return self.menu_pick(index);
         }
@@ -1241,7 +1252,7 @@ impl Desktop {
         let y = i32::from(event.event_y);
         match &mut open.kind {
             Popup::Menu => {
-                let index = (0..3)
+                let index = (0..4)
                     .find(|index| (menu_row_y(*index)..menu_row_y(*index) + ROW).contains(&y));
                 match index {
                     Some(index) => self.menu_pick(index),
@@ -1566,7 +1577,7 @@ impl Desktop {
             .reply()
             .map_err(|error| error.to_string())?;
         let class = self.class_of(window)?;
-        let icon = if class.contains("toadterminal") {
+        let icon = if class.contains("toadterminal") || class.contains("toadshell") {
             None
         } else {
             self.icon_of(window)
@@ -1578,6 +1589,25 @@ impl Desktop {
                     .map_err(|error| error.to_string())?;
                 return Ok(());
             }
+            // The person's shell is a small window in the bottom-left corner,
+            // over whatever the teammate has open, a hair in from the edge.
+            Kind::Normal if class.contains("toadshell") => Client {
+                maximized: false,
+                saved: {
+                    let width = (self.width * 2 / 5).max(640).min(self.width);
+                    let height = (self.work_height() * 2 / 5)
+                        .max(320)
+                        .min(self.work_height());
+                    (
+                        SHELL_INSET as i16,
+                        (self.height - height - SHELL_INSET) as i16,
+                        width,
+                        height,
+                    )
+                },
+                class,
+                icon,
+            },
             Kind::Normal if class.contains("toadterminal") => Client {
                 maximized: false,
                 saved: (
@@ -2022,7 +2052,7 @@ impl Desktop {
                 let _ = self.requests.send(request);
                 Ok(())
             }
-            Request::OpenTerminal | Request::OpenJob(_) => {
+            Request::OpenTerminal | Request::OpenShell | Request::OpenJob(_) => {
                 let _ = self.requests.send(request);
                 Ok(())
             }
@@ -2057,12 +2087,15 @@ impl Desktop {
     }
 }
 
-/// The top of menu row `index`: two rows, a separator, then About.
+/// The letter that picks each menu row: the row's own initial.
+const MENU_KEYS: &str = "btoa";
+
+/// The top of menu row `index`: three rows, a separator, then About.
 fn menu_row_y(index: usize) -> i32 {
-    if index < 2 {
+    if index < 3 {
         PAD + index as i32 * ROW
     } else {
-        PAD + 2 * ROW + 11
+        PAD + 3 * ROW + 11
     }
 }
 
@@ -2278,7 +2311,8 @@ mod tests {
     #[test]
     fn menu_rows_leave_room_for_the_separator() {
         assert_eq!(menu_row_y(0), PAD);
-        assert_eq!(menu_row_y(1), PAD + ROW);
-        assert_eq!(menu_row_y(2), PAD + 2 * ROW + 11);
+        assert_eq!(menu_row_y(2), PAD + 2 * ROW);
+        assert_eq!(menu_row_y(3), PAD + 3 * ROW + 11);
+        assert_eq!(MENU_KEYS.len(), 4, "one letter per row");
     }
 }

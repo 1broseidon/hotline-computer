@@ -10,6 +10,20 @@ use std::sync::{
 };
 use tokio::sync::Mutex;
 
+/// The observer's window class, which the desktop places in the right third.
+pub const OBSERVER_CLASS: &str = "ToadTerminal";
+/// The person's shell, which the desktop keeps as a small window at the
+/// bottom left.
+pub const SHELL_CLASS: &str = "ToadShell";
+
+fn window_of_class(display: &str, class: &str) -> Result<Option<String>, String> {
+    let wanted = class.to_lowercase();
+    Ok(crate::x11::windows(display)?
+        .into_iter()
+        .find(|w| w.class.to_lowercase().contains(&wanted))
+        .map(|w| w.id))
+}
+
 #[derive(Clone)]
 pub struct Observer {
     home: PathBuf,
@@ -54,6 +68,67 @@ impl Observer {
         }
         self.opened.store(false, Ordering::Relaxed);
         let mut active = self.child.lock().await;
+        let socket = self.daemon(&mut active).await?;
+        if let Some(window) = window_of_class(&self.display, OBSERVER_CLASS)? {
+            if explicit {
+                crate::x11::activate(&self.display, &window)?;
+            }
+            self.opened.store(true, Ordering::Relaxed);
+            return Ok(());
+        }
+        let executable = std::env::current_exe().map_err(|e| e.to_string())?;
+        self.create_window(
+            &socket,
+            "Observer",
+            OBSERVER_CLASS,
+            &[
+                executable.as_os_str(),
+                "observe".as_ref(),
+                self.home.as_os_str(),
+            ],
+        )
+        .await?;
+        let window = self
+            .wait_for_window(&active, OBSERVER_CLASS)
+            .await
+            .map_err(|error| {
+                format!("{error}; the job is independent. Inspect ~/.toad/terminal.log")
+            })?;
+        if explicit {
+            crate::x11::activate(&self.display, &window)?;
+        }
+        self.opened.store(true, Ordering::Relaxed);
+        Ok(())
+    }
+
+    /// A shell for the person: an interactive bash in the workspace's
+    /// environment, in its own small window. What they run there is theirs,
+    /// not a job: it is not retained, and the teammate sees only the screen.
+    pub async fn open_shell(&self) -> Result<(), String> {
+        let mut active = self.child.lock().await;
+        let socket = self.daemon(&mut active).await?;
+        if let Some(window) = window_of_class(&self.display, SHELL_CLASS)? {
+            return crate::x11::activate(&self.display, &window);
+        }
+        let executable = std::env::current_exe().map_err(|e| e.to_string())?;
+        self.create_window(
+            &socket,
+            "Terminal",
+            SHELL_CLASS,
+            &[
+                executable.as_os_str(),
+                "shell".as_ref(),
+                self.home.as_os_str(),
+            ],
+        )
+        .await?;
+        let window = self.wait_for_window(&active, SHELL_CLASS).await?;
+        crate::x11::activate(&self.display, &window)
+    }
+
+    /// The Alacritty daemon every terminal window comes from, started if it
+    /// is not running; returns its socket once it answers.
+    async fn daemon(&self, active: &mut Option<TerminalProcess>) -> Result<PathBuf, String> {
         let directory = self.home.join(".toad");
         std::fs::create_dir_all(&directory).map_err(|e| e.to_string())?;
         let socket = directory.join("alacritty.sock");
@@ -106,33 +181,30 @@ impl Observer {
             }
             tokio::time::sleep(std::time::Duration::from_millis(10)).await;
         }
-        if let Some(window) = crate::x11::windows(&self.display)?
-            .iter()
-            .find(|w| w.class.to_lowercase().contains("toadterminal"))
-        {
-            if explicit {
-                crate::x11::activate(&self.display, &window.id)?;
-            }
-            self.opened.store(true, Ordering::Relaxed);
-            return Ok(());
-        }
-        let executable = std::env::current_exe().map_err(|e| e.to_string())?;
+        Ok(socket)
+    }
+
+    async fn create_window(
+        &self,
+        socket: &Path,
+        title: &str,
+        class: &str,
+        command: &[&std::ffi::OsStr],
+    ) -> Result<(), String> {
         let request = tokio::process::Command::new("alacritty")
             .args(["msg", "--socket"])
-            .arg(&socket)
+            .arg(socket)
             .args([
                 "create-window",
                 "--title",
-                "Toad Terminal",
+                title,
                 "--class",
-                "ToadTerminal",
+                class,
                 "--working-directory",
             ])
             .arg(&self.home)
             .arg("-e")
-            .arg(executable)
-            .arg("observe")
-            .arg(&self.home)
+            .args(command)
             .env("DISPLAY", &self.display)
             .stdin(Stdio::null())
             .kill_on_drop(true)
@@ -147,24 +219,25 @@ impl Observer {
                 String::from_utf8_lossy(&response.stderr)
             ));
         }
+        Ok(())
+    }
+
+    async fn wait_for_window(
+        &self,
+        active: &Option<TerminalProcess>,
+        class: &str,
+    ) -> Result<String, String> {
         let deadline = tokio::time::Instant::now() + std::time::Duration::from_secs(2);
         loop {
-            if let Some(window) = crate::x11::windows(&self.display)?
-                .iter()
-                .find(|w| w.class.to_lowercase().contains("toadterminal"))
-            {
-                if explicit {
-                    crate::x11::activate(&self.display, &window.id)?;
-                }
-                self.opened.store(true, Ordering::Relaxed);
-                return Ok(());
+            if let Some(window) = window_of_class(&self.display, class)? {
+                return Ok(window);
             }
             if active
                 .as_ref()
                 .is_some_and(|process| process.task.is_finished())
                 || tokio::time::Instant::now() >= deadline
             {
-                return Err("Alacritty did not open an observer window; the job is independent. Inspect ~/.toad/terminal.log".into());
+                return Err(format!("Alacritty did not open a {class} window"));
             }
             tokio::time::sleep(std::time::Duration::from_millis(10)).await;
         }
@@ -183,6 +256,35 @@ impl Observer {
             let _ = process.task.await;
         }
     }
+}
+
+/// `toad-computer shell <home>`: the person's interactive shell. It starts
+/// in the mounted workspace when there is one, with the environment the
+/// teammate prepared there, and then it is bash.
+pub fn shell(home: &Path) -> Result<(), String> {
+    use std::os::unix::process::CommandExt;
+    let workspace = home.join("workspace");
+    let cwd = if workspace.is_dir() {
+        workspace
+    } else {
+        home.to_path_buf()
+    };
+    let mut command = std::process::Command::new("bash");
+    command.current_dir(&cwd);
+    match crate::workspace::environment(home, &cwd) {
+        Ok(environment) => {
+            command.envs(environment);
+        }
+        Err(error) => eprintln!("workspace environment not applied: {error}"),
+    }
+    println!("{MUTED}`exit` to close{RESET}");
+    let error = command
+        .env("PS1", "\\[\\e[38;2;127;196;240m\\]\\w\\[\\e[0m\\] $ ")
+        .arg("--noprofile")
+        .arg("--norc")
+        .arg("-i")
+        .exec();
+    Err(format!("start bash: {error}"))
 }
 
 pub fn run(home: &Path) -> Result<(), String> {
@@ -298,7 +400,7 @@ fn banner(selection: Option<&str>) -> String {
         Some(_) => format!("{MUTED}Showing one job, chosen from the bar's jobs list.{RESET}\r\n"),
         None => String::new(),
     };
-    format!("\x1b[2J\x1b[H\x1b[?25l{INK}Toad Terminal{RESET}\r\n{showing}")
+    format!("\x1b[2J\x1b[H\x1b[?25l{INK}Observer{RESET}\r\n{showing}")
 }
 
 /// A job's opening: its name, then the facts the tools need, then the command.
