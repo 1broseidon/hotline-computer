@@ -1,0 +1,56 @@
+[
+  {
+    "target": "toad-computer MCP tools",
+    "kind": "MCP",
+    "scope": "service",
+    "caller_profile": [
+      "agent",
+      "script",
+      "human-operator"
+    ],
+    "risk_class": "R2",
+    "surface_pattern": "existing eight tools with action enums",
+    "obligations": [
+      "retained bounded output",
+      "cancellation and reaping",
+      "lease admission",
+      "versioned discovery",
+      "truthful status"
+    ],
+    "brief": "BRO-25 through BRO-37 authorized end-to-end implementation; preserve existing tool names and exec fields, enrich launch and add managed actions."
+  },
+  {
+    "target": "toad-computer release acceptance",
+    "kind": "MCP",
+    "scope": "service",
+    "caller_profile": [
+      "agent",
+      "script",
+      "human-operator"
+    ],
+    "verification": [
+      "24 Rust unit tests, fmt and clippy passed in checks image",
+      "Live MCP/viewer contract passed in 9.56s including controlled clipboard, competing viewers and reconnect",
+      "Python/Go/Node/Rust catalog fixtures passed, including C dependencies outside workspace",
+      "Verified Ketch 0.16.2 installation and deterministic HTTP scrape passed",
+      "70-job churn, bounded output, nonzero/missing commands, descendant cancellation and zombie checks passed",
+      "Pinned Toad f3c17b7 native build succeeded in 3m52s using cached dependencies",
+      "Native room, Settings and Computer screens passed through Toad MCP adapter; full-resolution screenshots inspected"
+    ],
+    "findings": [
+      "Nix dev environment restores NIX_BUILD_TOP, permits external dependency cache headers, and excludes optimization-dependent fortify flags",
+      "Recipe hashes invalidate cached environments when catalog changes",
+      "Output storage failure stops and reaps job",
+      "Capture allows painting before pixels",
+      "Window enumeration tolerates disappearing X11 clients",
+      "WebKit named AT-SPI references require a compatible traversal; connection remains registered between captures",
+      "Observer explicit show must wait for a closing process and confirm a visible replacement window"
+    ],
+    "remaining": [
+      "Final fresh runtime acceptance on both native architectures",
+      "Retest observer reopen fix and complete Toad adapter full suite",
+      "Publishing workflow change was rejected by automatic review; current added CI only tests, never publishes",
+      "Release tag/publish and official Toad default update remain gated on acceptance"
+    ]
+  }
+]

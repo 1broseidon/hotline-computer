@@ -18,7 +18,7 @@ run: stop
 	openssl rand -hex 24 > .token
 	docker run -d --name $(NAME) \
 	  --cap-drop=ALL --security-opt no-new-privileges \
-	  --pids-limit 512 --memory 2g --shm-size 1g \
+	  --pids-limit 1024 --memory 4g --shm-size 1g \
 	  -p 127.0.0.1:$(PORT):8787 \
 	  -e TOAD_COMPUTER_TOKEN="$$(cat .token)" \
 	  $(IMAGE)
@@ -33,3 +33,10 @@ contract:
 
 logs:
 	docker logs $(NAME)
+
+# Builds and tests the runtime on a fresh desktop.
+.PHONY: acceptance
+acceptance:
+	docker build --target checks -t toad-computer:checks .
+	docker build -t $(IMAGE) .
+	tests/run-image-acceptance.sh $(IMAGE) toad-computer:checks qa/latest

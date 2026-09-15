@@ -10,7 +10,10 @@
 //! teammate's mutating tools are refused while someone is driving, and
 //! nobody has to remember to give the desktop back.
 
-use std::sync::Arc;
+use std::sync::{
+    Arc,
+    atomic::{AtomicU64, Ordering},
+};
 
 use axum::Json;
 use axum::extract::ws::{Message, WebSocket, WebSocketUpgrade};
@@ -30,6 +33,7 @@ const PAGE: &str = include_str!("viewer.html");
 pub const PERSON: &str = "person";
 /// Seconds the machine stays the person's after their last input.
 const HOLD: u64 = 10;
+static VIEWER_ID: AtomicU64 = AtomicU64::new(1);
 
 pub async fn page() -> Html<&'static str> {
     Html(PAGE)
@@ -66,6 +70,7 @@ pub async fn socket(
 }
 
 async fn drive(mut ws: WebSocket, app: App, display: Arc<Display>) {
+    let holder = format!("{PERSON}-{}", VIEWER_ID.fetch_add(1, Ordering::Relaxed));
     let mut frames = display.screen.subscribe();
     // A socket arrives watching, and says so when the person takes the
     // screen. One viewer driving leaves another one still only looking.
@@ -83,8 +88,10 @@ async fn drive(mut ws: WebSocket, app: App, display: Arc<Display>) {
             },
             message = ws.recv() => match message {
                 Some(Ok(Message::Text(text))) => {
-                    if let Err(error) = handle(&text, &display, &app, &mut driving).await {
-                        eprintln!("toad-computer: viewer: {error}");
+                    match handle(&text, &display, &app, &holder, &mut driving).await {
+                        Ok(true) => { let _ = ws.send(Message::Text(json!({"t":"paste","ok":true}).to_string().into())).await; }
+                        Ok(false) => {},
+                        Err(error) => { let _ = ws.send(Message::Text(json!({"t":"error","error":error,"driving":driving}).to_string().into())).await; }
                     }
                 }
                 Some(Ok(Message::Close(_))) | Some(Err(_)) | None => break,
@@ -92,7 +99,7 @@ async fn drive(mut ws: WebSocket, app: App, display: Arc<Display>) {
             },
         }
     }
-    let _ = app.access.release(PERSON).await;
+    let _ = app.access.release(&holder).await;
 }
 
 #[derive(Deserialize)]
@@ -119,6 +126,9 @@ enum FromViewer {
         #[serde(default)]
         dy: i8,
     },
+    Paste {
+        text: String,
+    },
     Key {
         key: String,
         down: bool,
@@ -129,12 +139,40 @@ async fn handle(
     text: &str,
     display: &Display,
     app: &App,
+    holder: &str,
     driving: &mut bool,
-) -> Result<(), String> {
+) -> Result<bool, String> {
     let message: FromViewer =
-        serde_json::from_str(text).map_err(|error| format!("input: {error}"))?;
-    if !reaches_the_hands(&message, app, driving).await {
-        return Ok(());
+        serde_json::from_str(text).map_err(|_| "invalid viewer input".to_owned())?;
+    if !reaches_the_hands(&message, app, holder, driving).await {
+        if matches!(message, FromViewer::Paste { .. }) {
+            return Err("Take control before pasting".into());
+        }
+        return Ok(false);
+    }
+    let _guard = app.access.mutate(holder).await?;
+    if let FromViewer::Paste { text } = message {
+        if text.len() > 1_048_576 {
+            return Err("Paste exceeds 1 MiB".into());
+        }
+        if text.contains('\0') {
+            return Err("Clipboard text contains a NUL byte".into());
+        }
+        let display = app.display()?;
+        tokio::task::spawn_blocking(move || {
+            display.clipboard.write(&text)?;
+            let mut hands = display
+                .hands
+                .lock()
+                .map_err(|_| "the hands are poisoned".to_owned())?;
+            for key in ["Control", "Meta", "Shift", "Alt"] {
+                hands.key(key, false)?;
+            }
+            hands.combo("ctrl+v")
+        })
+        .await
+        .map_err(|_| "paste task failed".to_owned())??;
+        return Ok(true);
     }
     let mut hands = display
         .hands
@@ -155,8 +193,9 @@ async fn handle(
         }
         FromViewer::Key { key, down } => hands.key(&key, down),
         // Answered by `reaches_the_hands`, before the hands were taken.
-        FromViewer::Control { .. } => Ok(()),
-    }
+        FromViewer::Control { .. } | FromViewer::Paste { .. } => Ok(()),
+    }?;
+    Ok(false)
 }
 
 /// Whether this message moves the desktop, and who holds the machine once it
@@ -164,20 +203,28 @@ async fn handle(
 /// that and touch nothing themselves; everything else is only the hands, and
 /// only for a socket that has taken the screen — a viewer that is watching is
 /// watching whatever it sends.
-async fn reaches_the_hands(message: &FromViewer, app: &App, driving: &mut bool) -> bool {
+async fn reaches_the_hands(
+    message: &FromViewer,
+    app: &App,
+    holder: &str,
+    driving: &mut bool,
+) -> bool {
     if let FromViewer::Control { take } = message {
         *driving = *take;
         if *take {
-            app.access.seize(PERSON, HOLD).await;
+            app.access.seize(holder, HOLD).await;
         } else {
-            let _ = app.access.release(PERSON).await;
+            let _ = app.access.release(holder).await;
         }
         return false;
     }
     if !*driving {
         return false;
     }
-    app.access.seize(PERSON, HOLD).await;
+    if !app.access.renew(holder, HOLD).await {
+        *driving = false;
+        return false;
+    }
     true
 }
 
@@ -208,20 +255,28 @@ mod tests {
         // The page opens view-only, so nothing it sends moves the desktop and
         // the teammate keeps a machine someone is only looking at.
         let move_to = sent(r#"{"t":"move","x":10,"y":10}"#);
-        assert!(!reaches_the_hands(&move_to, &app, &mut driving).await);
+        assert!(!reaches_the_hands(&move_to, &app, PERSON, &mut driving).await);
         assert!(app.access.mutate("teammate").await.is_ok());
 
         // Taking it holds the machine at once, not at the first twitch.
         let take = sent(r#"{"t":"control","take":true}"#);
-        assert!(!reaches_the_hands(&take, &app, &mut driving).await);
+        assert!(!reaches_the_hands(&take, &app, PERSON, &mut driving).await);
         let refused = app.access.mutate("teammate").await.unwrap_err();
         assert!(refused.contains(PERSON), "{refused}");
-        assert!(reaches_the_hands(&move_to, &app, &mut driving).await);
+        assert!(reaches_the_hands(&move_to, &app, PERSON, &mut driving).await);
 
         // Handing it back frees the teammate now, not ten seconds from now.
         let give_back = sent(r#"{"t":"control","take":false}"#);
-        assert!(!reaches_the_hands(&give_back, &app, &mut driving).await);
+        assert!(!reaches_the_hands(&give_back, &app, PERSON, &mut driving).await);
         assert!(app.access.mutate("teammate").await.is_ok());
-        assert!(!reaches_the_hands(&move_to, &app, &mut driving).await);
+        assert!(!reaches_the_hands(&move_to, &app, PERSON, &mut driving).await);
+        let paste = sent(r#"{"t":"paste","text":"private clipboard"}"#);
+        assert!(!reaches_the_hands(&paste, &app, PERSON, &mut driving).await);
+        reaches_the_hands(&take, &app, "person-a", &mut driving).await;
+        let mut other = true;
+        app.access.seize("person-b", HOLD).await;
+        assert!(!reaches_the_hands(&paste, &app, "person-a", &mut driving).await);
+        assert!(reaches_the_hands(&paste, &app, "person-b", &mut other).await);
+        assert!(app.access.release("person-a").await.is_err());
     }
 }

@@ -123,6 +123,8 @@ fn machine(config: Config, width: u16, height: u16) -> Result<(), String> {
             "-noreset",
             "-dpi",
             "96",
+            "-fp",
+            "/usr/share/fonts/X11/misc,built-ins",
         ],
     )?;
     wait_for(&x_socket(&config.display)?, "the display", &mut xvfb)?;
@@ -153,8 +155,8 @@ fn machine(config: Config, width: u16, height: u16) -> Result<(), String> {
         .map_err(|error| format!("spawn desktop thread: {error}"))?;
     match desktop_ready.recv_timeout(START_TIMEOUT) {
         Ok(Ok(())) => {}
-        Ok(Err(error)) => eprintln!("toad-computer: no desktop: {error}"),
-        Err(_) => eprintln!("toad-computer: the desktop did not come up in time"),
+        Ok(Err(error)) => return Err(format!("desktop startup: {error}")),
+        Err(_) => return Err("the desktop did not come up in time".into()),
     }
 
     let xvfb_pid = xvfb.id();
@@ -164,6 +166,9 @@ fn machine(config: Config, width: u16, height: u16) -> Result<(), String> {
         .build()
         .map_err(|error| error.to_string())?;
     let result = runtime.block_on(async {
+        tokio::time::timeout(START_TIMEOUT, crate::a11y::connection(&app))
+            .await
+            .map_err(|_| "accessibility bus did not start".to_owned())??;
         let dock = {
             let app = app.clone();
             async move {
@@ -175,6 +180,11 @@ fn machine(config: Config, width: u16, height: u16) -> Result<(), String> {
                             }
                         }
                         desktop::Request::BrowserClosed => app.browser.forget().await,
+                        desktop::Request::OpenTerminal => {
+                            if let Err(error) = app.observer.show(true).await {
+                                eprintln!("toad-computer: terminal: {error}");
+                            }
+                        }
                     }
                 }
             }

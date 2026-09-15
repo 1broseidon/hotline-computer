@@ -15,6 +15,8 @@ pub struct Window {
     pub class: String,
     pub bounds: [i32; 4],
     pub focused: bool,
+    pub pid: Option<u32>,
+    pub maximized: bool,
 }
 
 pub struct Screenshot {
@@ -191,19 +193,18 @@ pub fn windows(display: &str) -> Result<Vec<Window>, String> {
             _ => continue,
         };
         let _ = attributes;
-        let title = property_string(&connection, id, name_atom, utf8)
-            .or_else(|_| {
-                property_string(
-                    &connection,
-                    id,
-                    AtomEnum::WM_NAME.into(),
-                    AtomEnum::STRING.into(),
-                )
-            })
-            .unwrap_or_default();
-        if title.is_empty() {
-            continue;
-        }
+        let title = property_string(&connection, id, name_atom, utf8).unwrap_or_default();
+        let title = if title.is_empty() {
+            property_string(
+                &connection,
+                id,
+                AtomEnum::WM_NAME.into(),
+                AtomEnum::STRING.into(),
+            )
+            .unwrap_or_default()
+        } else {
+            title
+        };
         let class = property_string(
             &connection,
             id,
@@ -214,16 +215,24 @@ pub fn windows(display: &str) -> Result<Vec<Window>, String> {
         .replace('\0', ".")
         .trim_matches('.')
         .to_owned();
-        let geometry = connection
-            .get_geometry(id)
-            .map_err(|error| error.to_string())?
-            .reply()
-            .map_err(|error| error.to_string())?;
-        let translated = connection
-            .translate_coordinates(id, root, 0, 0)
-            .map_err(|error| error.to_string())?
-            .reply()
-            .map_err(|error| error.to_string())?;
+        let Some(geometry) = live_reply(
+            connection
+                .get_geometry(id)
+                .map_err(|error| error.to_string())?
+                .reply(),
+        )?
+        else {
+            continue;
+        };
+        let Some(translated) = live_reply(
+            connection
+                .translate_coordinates(id, root, 0, 0)
+                .map_err(|error| error.to_string())?
+                .reply(),
+        )?
+        else {
+            continue;
+        };
         result.push(Window {
             id: format!("0x{id:08x}"),
             title,
@@ -235,9 +244,49 @@ pub fn windows(display: &str) -> Result<Vec<Window>, String> {
                 i32::from(geometry.height),
             ],
             focused: active == Some(id),
+            pid: cardinal_property(&connection, id, atom(&connection, b"_NET_WM_PID")?)
+                .first()
+                .copied(),
+            maximized: {
+                let Some(state) = live_reply(
+                    connection
+                        .get_property(
+                            false,
+                            id,
+                            atom(&connection, b"_NET_WM_STATE")?,
+                            AtomEnum::ATOM,
+                            0,
+                            64,
+                        )
+                        .map_err(|e| e.to_string())?
+                        .reply(),
+                )?
+                else {
+                    continue;
+                };
+                let values: Vec<_> = state.value32().map(Iterator::collect).unwrap_or_default();
+                values.contains(&atom(&connection, b"_NET_WM_STATE_MAXIMIZED_VERT")?)
+                    && values.contains(&atom(&connection, b"_NET_WM_STATE_MAXIMIZED_HORZ")?)
+            },
         });
     }
     Ok(result)
+}
+
+// Clients may disappear between enumerating the root list and reading properties.
+fn live_reply<T>(reply: Result<T, x11rb::errors::ReplyError>) -> Result<Option<T>, String> {
+    match reply {
+        Ok(value) => Ok(Some(value)),
+        Err(x11rb::errors::ReplyError::X11Error(error))
+            if matches!(
+                error.error_kind,
+                x11rb::protocol::ErrorKind::Window | x11rb::protocol::ErrorKind::Drawable
+            ) =>
+        {
+            Ok(None)
+        }
+        Err(error) => Err(error.to_string()),
+    }
 }
 
 /// Ask the window manager, which is this agent's desktop thread, to
@@ -385,4 +434,47 @@ fn property_string<C: Connection>(
         .map_err(|error| error.to_string())?
         .value;
     Ok(String::from_utf8_lossy(&value).into_owned())
+}
+
+fn cardinal_property(connection: &RustConnection, window: XWindow, property: u32) -> Vec<u32> {
+    connection
+        .get_property(false, window, property, AtomEnum::CARDINAL, 0, 16)
+        .ok()
+        .and_then(|cookie| cookie.reply().ok())
+        .and_then(|reply| reply.value32().map(Iterator::collect))
+        .unwrap_or_default()
+}
+
+pub fn workarea(display: &str) -> Result<[i32; 4], String> {
+    let (connection, root) = connect(display)?;
+    let values = cardinal_property(&connection, root, atom(&connection, b"_NET_WORKAREA")?);
+    if values.len() >= 4 && values[2] > 0 && values[3] > 0 {
+        return Ok([
+            values[0] as i32,
+            values[1] as i32,
+            values[2] as i32,
+            values[3] as i32,
+        ]);
+    }
+    let geometry = connection
+        .get_geometry(root)
+        .map_err(|e| e.to_string())?
+        .reply()
+        .map_err(|e| e.to_string())?;
+    Ok([0, 0, i32::from(geometry.width), i32::from(geometry.height)])
+}
+
+pub fn publish_jobs(display: &str, running: u32) -> Result<(), String> {
+    use x11rb::wrapper::ConnectionExt as _;
+    let (connection, root) = connect(display)?;
+    connection
+        .change_property32(
+            x11rb::protocol::xproto::PropMode::REPLACE,
+            root,
+            atom(&connection, b"_TOAD_JOBS_RUNNING")?,
+            AtomEnum::CARDINAL,
+            &[running],
+        )
+        .map_err(|e| e.to_string())?;
+    connection.flush().map_err(|e| e.to_string())
 }

@@ -28,7 +28,7 @@ pub fn descriptors(home: &str) -> Vec<Tool> {
             schema(json!({
                 "type":"object","properties":{
                     "mode":{"type":"string","enum":["tree","png"],"description":"tree (default): screenshot plus accessibility tree; png: save a raw PNG"},
-                    "path":{"type":"string","description":"png only: optional output path"}
+                    "path":{"type":"string","description":"png only: optional output path"},"settle_ms":{"type":"integer","minimum":0,"maximum":2000,"default":100,"description":"Allow application painting to catch up before grabbing pixels."}
                 },"additionalProperties":false
             })),
         ),
@@ -53,29 +53,34 @@ pub fn descriptors(home: &str) -> Vec<Tool> {
                 "type":"object","properties":{
                     "action":{"type":"string","enum":["navigate","text","links","eval","click_ref","fill","select","check","hover","tabs","tab_new","tab_select","tab_close","upload","dialog_accept","dialog_dismiss","downloads","back","forward","reload"]},
                     "url":{"type":"string"},"js":{"type":"string"},"ref":{"type":"string"},"button":{"type":"string"},
-                    "text":{"type":"string"},"value":{"type":"string"},"uncheck":{"type":"boolean"},"index":{"type":"integer","minimum":0},"path":{"type":"string"}
+                    "text":{"type":"string"},"value":{"type":"string"},"values":{"type":"array","items":{"type":"string"},"description":"Native select values; multiple selections require a multiple select."},"uncheck":{"type":"boolean"},"index":{"type":"integer","minimum":0},"path":{"type":"string"}
                 },"required":["action"],"additionalProperties":false
             })),
         ),
         Tool::new(
             "shell",
-            "Run commands. exec is synchronous — stdout, stderr, exit code, duration — and is the escape hatch for everything without a tool. launch starts a GUI app on the desktop and returns its PID.",
+            "Run managed commands without holding the desktop while they execute. exec waits up to 60s and retains stdout/stderr even on timeout. start/launch return a durable job ID immediately. list/status/read/wait inspect jobs; write sends stdin (optional EOF); cancel kills and reaps the process group. show opens or focuses the Alacritty observer; commands are visible without keyboard simulation. Output is retained across observer closure and reconnect. Use request_id to retry a start safely. pty=true provides a controlling terminal without keyboard simulation.",
             schema(json!({
                 "type":"object","properties":{
-                    "action":{"type":"string","enum":["exec","launch"],"default":"exec"},"command":{"type":"string"},
-                    "args":{"type":"array","items":{"type":"string"}},"cwd":{"type":"string","default":home},
-                    "timeout":{"type":"integer","minimum":1,"maximum":60,"default":30},"max_output":{"type":"integer","minimum":1,"maximum":1048576,"default":65536}
-                },"required":["command"],"additionalProperties":false
+                    "action":{"type":"string","enum":["exec","start","launch","list","status","read","wait","write","cancel","show"],"default":"exec"},
+                    "command":{"type":"string"},"args":{"type":"array","items":{"type":"string"}},"cwd":{"type":"string","default":home},
+                    "env":{"type":"object","additionalProperties":{"type":"string"}},"label":{"type":"string"},"request_id":{"type":"string"},"pty":{"type":"boolean","default":false},
+                    "timeout":{"type":"integer","minimum":1,"description":"Execution deadline in seconds. exec defaults to 30, maximum 60; async jobs have no default deadline."},
+                    "job_id":{"type":"string"},"text":{"type":"string"},"eof":{"type":"boolean"},"cursor":{"type":"integer","minimum":0},
+                    "wait_ms":{"type":"integer","minimum":0,"maximum":60000},"max_output":{"type":"integer","minimum":1,"maximum":1048576,"default":65536}
+                },"additionalProperties":false
             })),
         ),
         Tool::new(
             "files",
             format!(
-                "Move files across the machine boundary over MCP. get returns text, or base64 when bytes are not UTF-8; put accepts UTF-8 or encoding=base64; list shows a directory. Paths stay under {home}. Cap 50MB."
+                "Move files across the machine boundary over MCP. get returns text, or base64 when bytes are not UTF-8; put accepts UTF-8 or encoding=base64; list shows a directory. Paths stay under {home}. Cap 50MB for get/put. download fetches URL or a GitHub release asset into path with optional SHA-256 verification. extract expands an archive into a new destination. run downloads and/or executes a script with its interpreter. These actions return managed jobs with retained progress; artifact and expanded size cap 1 GiB."
             ),
             schema(json!({
                 "type":"object","properties":{
-                    "action":{"type":"string","enum":["get","put","list"]},"path":{"type":"string"},"content":{"type":"string"},"encoding":{"type":"string","enum":["utf8","text","base64"]}
+                    "action":{"type":"string","enum":["get","put","list","download","extract","run"]},"path":{"type":"string"},"content":{"type":"string"},
+                    "url":{"type":"string"},"repo":{"type":"string","description":"GitHub owner/repo"},"version":{"type":"string","description":"GitHub release tag or latest"},"asset":{"type":"string","description":"Exactly one asset must match; supports {arch}=arm64/amd64 and {os}=linux"},
+                    "sha256":{"type":"string"},"destination":{"type":"string"},"interpreter":{"type":"string","enum":["bash","sh","python3"]},"args":{"type":"array","items":{"type":"string"}},"cwd":{"type":"string"},"request_id":{"type":"string"},"encoding":{"type":"string","enum":["utf8","text","base64"]}
                 },"required":["action","path"],"additionalProperties":false
             })),
         ),
@@ -98,11 +103,11 @@ pub fn descriptors(home: &str) -> Vec<Tool> {
         ),
         Tool::new(
             "state",
-            "Durable machine state. control leases the desktop to this holder until release or expiry, and other holders' mutating tools are refused. Only the holder can release it. login_* saves and restores browser cookies and storage by name. snapshot_* archives and restores the home directory.",
+            "info identifies the actual running release; guide returns that release’s bundled skill and checksum; catalog lists pinned Python/Go/Node/Rust/Rust-Tauri environments. prepare attaches an environment to a workspace and returns a job for a cold build or ready=true for a cache hit. Shell cwd inherits the prepared environment. Durable machine state: control leases the desktop to this holder until release or expiry, and other holders' mutating tools are refused. Only the holder can release it. login_* saves and restores browser cookies and storage by name. snapshot_* archives and restores the home directory.",
             schema(json!({
                 "type":"object","properties":{
-                    "action":{"type":"string","enum":["control","release","login_save","login_load","login_list","login_delete","snapshot_save","snapshot_load","snapshot_list","snapshot_delete"]},
-                    "name":{"type":"string"},"duration":{"type":"integer","minimum":1,"maximum":600,"default":300}
+                    "action":{"type":"string","enum":["info","guide","catalog","prepare","control","release","login_save","login_load","login_list","login_delete","snapshot_save","snapshot_load","snapshot_list","snapshot_delete"]},
+                    "name":{"type":"string"},"workspace":{"type":"string","description":"Directory under computer home for state prepare"},"duration":{"type":"integer","minimum":1,"maximum":600,"default":300}
                 },"required":["action"],"additionalProperties":false
             })),
         ),
@@ -119,7 +124,7 @@ pub async fn call(app: &App, name: &str, arguments: Value, holder: &str) -> Tool
         "input" => input::call(app, arguments, holder).await,
         "browser" => browser::call(app, arguments, holder).await,
         "shell" => shell::call(app, arguments, holder).await,
-        "files" => files::call(app, arguments).await,
+        "files" => files::call(app, arguments, holder).await,
         "windows" => windows::call(app, arguments, holder).await,
         "wait" => wait::call(app, arguments).await,
         "state" => state::call(app, arguments, holder).await,

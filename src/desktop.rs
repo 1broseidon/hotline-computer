@@ -34,6 +34,7 @@ pub enum Request {
     /// The last browser window is gone. Chromium's process and its DevTools
     /// pages outlive a destroyed window, so the agent has to be told.
     BrowserClosed,
+    OpenTerminal,
 }
 
 const MARK: &[u8] = include_bytes!("../assets/wallpaper-mark.png");
@@ -42,7 +43,6 @@ const BROWSER_CLASS: &str = "chromium";
 const BACKGROUND: u32 = 0x000000;
 const DOCK_FILL: u32 = 0x161616;
 const DOCK_EDGE: u32 = 0x2c2c2c;
-const DOCK_MARGIN: u16 = 8;
 const DOCK_PAD: u16 = 8;
 const ICON: u16 = 32;
 const DOCK_HEIGHT: u16 = ICON + 2 * DOCK_PAD;
@@ -217,6 +217,11 @@ struct Desktop {
     clients: HashMap<Window, Client>,
     active: Option<Window>,
     requests: UnboundedSender<Request>,
+    tray: Vec<Window>,
+    tray_selection: Atom,
+    tray_opcode: Atom,
+    xembed: Atom,
+    jobs_running: Atom,
 }
 
 impl Desktop {
@@ -233,8 +238,11 @@ impl Desktop {
         connection
             .change_window_attributes(
                 screen.root,
-                &ChangeWindowAttributesAux::new()
-                    .event_mask(EventMask::SUBSTRUCTURE_REDIRECT | EventMask::SUBSTRUCTURE_NOTIFY),
+                &ChangeWindowAttributesAux::new().event_mask(
+                    EventMask::SUBSTRUCTURE_REDIRECT
+                        | EventMask::SUBSTRUCTURE_NOTIFY
+                        | EventMask::PROPERTY_CHANGE,
+                ),
             )
             .map_err(|error| error.to_string())?
             .check()
@@ -247,14 +255,51 @@ impl Desktop {
             .create_gc(gc, screen.root, &CreateGCAux::new().foreground(BACKGROUND))
             .map_err(|error| error.to_string())?;
 
-        let items = vec![DockItem {
-            icon: std::fs::read(BROWSER_ICON)
-                .ok()
-                .and_then(|bytes| decode_png(&bytes).ok()),
-            request: Request::OpenBrowser,
-        }];
-        let dock_width = DOCK_PAD + items.len() as u16 * (ICON + DOCK_PAD);
-        let dock_x = ((screen.width_in_pixels - dock_width) / 2) as i16;
+        let items = vec![
+            DockItem {
+                icon: std::fs::read(BROWSER_ICON)
+                    .ok()
+                    .and_then(|bytes| decode_png(&bytes).ok()),
+                request: Request::OpenBrowser,
+            },
+            DockItem {
+                icon: None,
+                request: Request::OpenTerminal,
+            },
+        ];
+        let dock_width = screen.width_in_pixels;
+        let dock_x = 0;
+        let intern = |name: &[u8]| {
+            connection
+                .intern_atom(false, name)
+                .map_err(|e| e.to_string())?
+                .reply()
+                .map(|r| r.atom)
+                .map_err(|e| e.to_string())
+        };
+        let tray_selection = intern(format!("_NET_SYSTEM_TRAY_S{screen_number}").as_bytes())?;
+        let tray_opcode = intern(b"_NET_SYSTEM_TRAY_OPCODE")?;
+        let xembed = intern(b"_XEMBED")?;
+        let jobs_running = intern(b"_TOAD_JOBS_RUNNING")?;
+        let font = connection.generate_id().map_err(|e| e.to_string())?;
+        if connection
+            .open_font(
+                font,
+                b"-misc-fixed-medium-r-normal--18-120-100-100-c-90-iso8859-1",
+            )
+            .map_err(|e| e.to_string())?
+            .check()
+            .is_err()
+        {
+            connection
+                .open_font(font, b"fixed")
+                .map_err(|e| e.to_string())?
+                .check()
+                .map_err(|e| e.to_string())?;
+        }
+        connection
+            .change_gc(gc, &ChangeGCAux::new().font(font))
+            .map_err(|e| e.to_string())?;
         let dock = connection
             .generate_id()
             .map_err(|error| error.to_string())?;
@@ -275,10 +320,16 @@ impl Desktop {
             clients: HashMap::new(),
             active: None,
             requests,
+            tray: Vec::new(),
+            tray_selection,
+            tray_opcode,
+            xembed,
+            jobs_running,
         };
         desktop.announce()?;
         desktop.paint_wallpaper()?;
         desktop.create_dock(screen.root_visual)?;
+        desktop.own_tray()?;
         desktop.adopt_existing()?;
         desktop
             .connection
@@ -287,13 +338,13 @@ impl Desktop {
         Ok(desktop)
     }
 
-    /// The bottom band the dock lives in; windows stop above it.
+    /// The top bar always retains its own work area.
     fn work_height(&self) -> u16 {
-        self.height - DOCK_HEIGHT - 2 * DOCK_MARGIN
+        self.height.saturating_sub(DOCK_HEIGHT)
     }
 
     fn dock_y(&self) -> i16 {
-        (self.height - DOCK_HEIGHT - DOCK_MARGIN) as i16
+        0
     }
 
     fn announce(&self) -> Result<(), String> {
@@ -363,7 +414,12 @@ impl Desktop {
             root,
             atoms.net_workarea,
             AtomEnum::CARDINAL,
-            &[0, 0, u32::from(self.width), u32::from(self.work_height())],
+            &[
+                0,
+                u32::from(DOCK_HEIGHT),
+                u32::from(self.width),
+                u32::from(self.work_height()),
+            ],
         )?;
         self.property32(root, atoms.net_client_list, AtomEnum::WINDOW, &[])?;
         self.property32(root, atoms.net_active_window, AtomEnum::WINDOW, &[])?;
@@ -395,7 +451,7 @@ impl Desktop {
         self.fill(pixmap, BACKGROUND, 0, 0, self.width, self.height)?;
         let mark = decode_png(MARK)?;
         let x = (self.width.saturating_sub(mark.width) / 2) as i16;
-        let y = (self.work_height().saturating_sub(mark.height) / 2) as i16;
+        let y = (DOCK_HEIGHT + self.work_height().saturating_sub(mark.height) / 2) as i16;
         self.put_image(pixmap, &mark, x, y, BACKGROUND)?;
         self.connection
             .change_window_attributes(
@@ -451,11 +507,205 @@ impl Desktop {
                 }],
             )
             .map_err(|error| error.to_string())?;
-        for (index, item) in self.items.iter().enumerate() {
-            if let Some(icon) = &item.icon {
-                let x = (DOCK_PAD + index as u16 * (ICON + DOCK_PAD)) as i16;
-                self.put_image(self.dock, icon, x, DOCK_PAD as i16, DOCK_FILL)?;
+        let mark = decode_png(MARK)?;
+        let mut small = Image {
+            width: ICON,
+            height: (u32::from(ICON) * u32::from(mark.height) / u32::from(mark.width)).max(1)
+                as u16,
+            rgba: Vec::with_capacity(usize::from(ICON * ICON) * 4),
+        };
+        for y in 0..small.height {
+            for x in 0..ICON {
+                let offset = (usize::from(y) * usize::from(mark.height)
+                    / usize::from(small.height)
+                    * usize::from(mark.width)
+                    + usize::from(x) * usize::from(mark.width) / usize::from(ICON))
+                    * 4;
+                small.rgba.extend_from_slice(&mark.rgba[offset..offset + 4]);
             }
+        }
+        self.put_image(
+            self.dock,
+            &small,
+            DOCK_PAD as i16,
+            ((DOCK_HEIGHT - small.height) / 2) as i16,
+            DOCK_FILL,
+        )?;
+        for (index, item) in self.items.iter().enumerate() {
+            let x = (DOCK_PAD + (index as u16 + 1) * (ICON + DOCK_PAD)) as i16;
+            if let Some(icon) = &item.icon {
+                self.put_image(self.dock, icon, x, DOCK_PAD as i16, DOCK_FILL)?;
+            } else {
+                self.label(x, 30, ">_", 0xe0e0e0)?;
+            }
+        }
+        let count = self
+            .connection
+            .get_property(
+                false,
+                self.root,
+                self.jobs_running,
+                AtomEnum::CARDINAL,
+                0,
+                1,
+            )
+            .map_err(|e| e.to_string())?
+            .reply()
+            .ok()
+            .and_then(|r| r.value32().and_then(|mut v| v.next()))
+            .unwrap_or(0);
+        self.label(
+            132,
+            30,
+            &format!("{count} job{}", if count == 1 { "" } else { "s" }),
+            if count > 0 { 0x98d8a0 } else { 0x999999 },
+        )?;
+        let available = self.width.saturating_sub(240 + self.tray.len() as u16 * 40);
+        for (index, window) in self
+            .order
+            .iter()
+            .take(usize::from(available / 160))
+            .enumerate()
+        {
+            let x = 240 + index as i16 * 160;
+            if self.active == Some(*window) {
+                self.fill(self.dock, 0x343434, x, 4, 154, DOCK_HEIGHT - 8)?;
+            }
+            let title = self
+                .connection
+                .get_property(
+                    false,
+                    *window,
+                    self.atoms.net_wm_name,
+                    self.atoms.utf8_string,
+                    0,
+                    128,
+                )
+                .map_err(|e| e.to_string())?
+                .reply()
+                .map(|r| String::from_utf8_lossy(&r.value).into_owned())
+                .unwrap_or_default();
+            let title = if title.is_empty() {
+                self.clients
+                    .get(window)
+                    .map(|c| c.class.replace('\0', " "))
+                    .unwrap_or_default()
+            } else {
+                title
+            };
+            self.label(x + 8, 30, &title, 0xd6d6d6)?;
+        }
+        self.layout_tray()?;
+        Ok(())
+    }
+
+    fn label(&self, x: i16, y: i16, text: &str, color: u32) -> Result<(), String> {
+        let text: Vec<_> = text
+            .chars()
+            .take(16)
+            .map(|c| {
+                if c.is_ascii_graphic() || c == ' ' {
+                    c as u8
+                } else {
+                    b'?'
+                }
+            })
+            .collect();
+        self.connection
+            .change_gc(
+                self.gc,
+                &ChangeGCAux::new().foreground(color).background(DOCK_FILL),
+            )
+            .map_err(|e| e.to_string())?;
+        self.connection
+            .image_text8(self.dock, self.gc, x, y, &text)
+            .map_err(|e| e.to_string())?;
+        Ok(())
+    }
+
+    fn own_tray(&self) -> Result<(), String> {
+        let orientation = self
+            .connection
+            .intern_atom(false, b"_NET_SYSTEM_TRAY_ORIENTATION")
+            .map_err(|e| e.to_string())?
+            .reply()
+            .map_err(|e| e.to_string())?
+            .atom;
+        self.property32(self.dock, orientation, AtomEnum::CARDINAL, &[0])?;
+        self.connection
+            .set_selection_owner(self.dock, self.tray_selection, CURRENT_TIME)
+            .map_err(|e| e.to_string())?
+            .check()
+            .map_err(|e| e.to_string())?;
+        let manager = self
+            .connection
+            .intern_atom(false, b"MANAGER")
+            .map_err(|e| e.to_string())?
+            .reply()
+            .map_err(|e| e.to_string())?
+            .atom;
+        self.connection
+            .send_event(
+                false,
+                self.root,
+                EventMask::STRUCTURE_NOTIFY,
+                ClientMessageEvent::new(
+                    32,
+                    self.root,
+                    manager,
+                    ClientMessageData::from([CURRENT_TIME, self.tray_selection, self.dock, 0, 0]),
+                ),
+            )
+            .map_err(|e| e.to_string())?;
+        Ok(())
+    }
+
+    fn embed_tray(&mut self, window: Window) -> Result<(), String> {
+        if window == NONE || self.tray.contains(&window) {
+            return Ok(());
+        }
+        self.connection
+            .change_save_set(x11rb::protocol::xproto::SetMode::INSERT, window)
+            .map_err(|e| e.to_string())?;
+        self.connection
+            .change_window_attributes(
+                window,
+                &ChangeWindowAttributesAux::new().event_mask(EventMask::STRUCTURE_NOTIFY),
+            )
+            .map_err(|e| e.to_string())?;
+        self.connection
+            .reparent_window(window, self.dock, 0, 8)
+            .map_err(|e| e.to_string())?;
+        self.connection
+            .send_event(
+                false,
+                window,
+                EventMask::NO_EVENT,
+                ClientMessageEvent::new(
+                    32,
+                    window,
+                    self.xembed,
+                    ClientMessageData::from([CURRENT_TIME, 0, 0, self.dock, 0]),
+                ),
+            )
+            .map_err(|e| e.to_string())?;
+        self.tray.push(window);
+        self.layout_tray()?;
+        self.connection
+            .map_window(window)
+            .map_err(|e| e.to_string())?;
+        self.draw_dock()
+    }
+
+    fn layout_tray(&self) -> Result<(), String> {
+        for (index, window) in self.tray.iter().enumerate() {
+            let x = i32::from(self.width) - 40 * (index as i32 + 1);
+            self.connection
+                .configure_window(
+                    *window,
+                    &ConfigureWindowAux::new().x(x).y(8).width(32).height(32),
+                )
+                .map_err(|e| e.to_string())?;
         }
         Ok(())
     }
@@ -549,9 +799,27 @@ impl Desktop {
             Event::MapRequest(event) => self.manage(event.window),
             Event::ConfigureRequest(event) => self.configure_request(event),
             Event::UnmapNotify(event) => self.forget(event.window),
+            Event::DestroyNotify(event) if self.tray.contains(&event.window) => {
+                self.tray.retain(|w| *w != event.window);
+                self.draw_dock()
+            }
             Event::DestroyNotify(event) => self.forget(event.window),
+            Event::PropertyNotify(event)
+                if event.window == self.root && event.atom == self.jobs_running =>
+            {
+                self.draw_dock()
+            }
+            Event::PropertyNotify(event)
+                if self.clients.contains_key(&event.window)
+                    && event.atom == self.atoms.net_wm_name =>
+            {
+                self.draw_dock()
+            }
             Event::ClientMessage(event) => {
                 let data = event.data.as_data32();
+                if event.type_ == self.tray_opcode && data[1] == 0 {
+                    return self.embed_tray(data[2]);
+                }
                 if event.type_ == self.atoms.net_wm_state {
                     self.change_state(event.window, data[0], [data[1], data[2]])
                 } else if event.type_ == self.atoms.net_active_window {
@@ -582,6 +850,12 @@ impl Desktop {
         else {
             return Ok(());
         };
+        if self.tray.contains(&window) {
+            self.connection
+                .map_window(window)
+                .map_err(|e| e.to_string())?;
+            return self.layout_tray();
+        }
         if attributes.override_redirect {
             return Ok(());
         }
@@ -605,6 +879,16 @@ impl Desktop {
                     .map_err(|error| error.to_string())?;
                 return Ok(());
             }
+            Kind::Normal if class.contains("toadterminal") => Client {
+                maximized: false,
+                saved: (
+                    (self.width * 3 / 5) as i16,
+                    DOCK_HEIGHT as i16,
+                    self.width - self.width * 3 / 5,
+                    self.work_height(),
+                ),
+                class,
+            },
             Kind::Normal => Client {
                 maximized: true,
                 saved: (geometry.x, geometry.y, geometry.width, geometry.height),
@@ -617,7 +901,7 @@ impl Desktop {
                     maximized: false,
                     saved: (
                         ((self.width - width) / 2) as i16,
-                        ((self.work_height() - height) / 2) as i16,
+                        (DOCK_HEIGHT + (self.work_height() - height) / 2) as i16,
                         width,
                         height,
                     ),
@@ -625,6 +909,29 @@ impl Desktop {
                 }
             }
         };
+        if client.class.contains("toadterminal") {
+            let width = self.width * 3 / 5;
+            let height = self.work_height();
+            let others: Vec<_> = self
+                .clients
+                .iter()
+                .filter(|(_, c)| c.maximized)
+                .map(|(id, _)| *id)
+                .collect();
+            for id in others {
+                if let Some(other) = self.clients.get_mut(&id) {
+                    other.maximized = false;
+                    other.saved = (0, DOCK_HEIGHT as i16, width, height);
+                }
+                self.apply_geometry(id)?;
+            }
+        }
+        self.connection
+            .change_window_attributes(
+                window,
+                &ChangeWindowAttributesAux::new().event_mask(EventMask::PROPERTY_CHANGE),
+            )
+            .map_err(|e| e.to_string())?;
         self.clients.insert(window, client);
         self.order.push(window);
         self.apply_geometry(window)?;
@@ -715,7 +1022,7 @@ impl Desktop {
             return Ok(());
         };
         let (x, y, width, height) = if client.maximized {
-            (0, 0, self.width, self.work_height())
+            (0, DOCK_HEIGHT as i16, self.width, self.work_height())
         } else {
             client.saved
         };
@@ -755,6 +1062,9 @@ impl Desktop {
     }
 
     fn configure_request(&mut self, event: ConfigureRequestEvent) -> Result<(), String> {
+        if self.tray.contains(&event.window) {
+            return self.layout_tray();
+        }
         match self.clients.get_mut(&event.window) {
             Some(client) if client.maximized => self.apply_geometry(event.window),
             Some(client) => {
@@ -850,7 +1160,7 @@ impl Desktop {
             &[window],
         )?;
         self.active = Some(window);
-        Ok(())
+        self.draw_dock()
     }
 
     fn forget(&mut self, window: Window) -> Result<(), String> {
@@ -879,6 +1189,7 @@ impl Desktop {
                 }
             }
         }
+        self.draw_dock()?;
         Ok(())
     }
 
@@ -942,8 +1253,25 @@ impl Desktop {
 
     fn button_press(&mut self, event: ButtonPressEvent) -> Result<(), String> {
         if event.event == self.dock {
+            if event.event_x >= 240 {
+                let index = (event.event_x as usize - 240) / 160;
+                if let Some(window) = self.order.get(index).copied() {
+                    if event.detail == 3 {
+                        self.close(window)?;
+                    } else {
+                        self.focus(window)?;
+                    }
+                }
+                return Ok(());
+            }
+            if event.event_x >= 120 {
+                return self.dock_action(Request::OpenTerminal);
+            }
             let slot = usize::from(u16::try_from(event.event_x).unwrap_or(0) / (ICON + DOCK_PAD));
-            if let Some(item) = self.items.get(slot) {
+            if slot == 0 {
+                return self.dock_action(Request::OpenBrowser);
+            }
+            if let Some(item) = self.items.get(slot - 1) {
                 self.dock_action(item.request)?;
             }
             return Ok(());
@@ -961,6 +1289,13 @@ impl Desktop {
         match request {
             Request::OpenBrowser => {
                 if let Some(window) = self.client_with_class(BROWSER_CLASS) {
+                    return self.focus(window);
+                }
+                let _ = self.requests.send(request);
+                Ok(())
+            }
+            Request::OpenTerminal => {
+                if let Some(window) = self.client_with_class("toadterminal") {
                     return self.focus(window);
                 }
                 let _ = self.requests.send(request);

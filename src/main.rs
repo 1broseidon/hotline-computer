@@ -40,6 +40,59 @@ fn parse() -> Result<(Command, Config), String> {
 }
 
 fn main() {
+    let arguments: Vec<_> = std::env::args().skip(1).collect();
+    if matches!(arguments.first().map(String::as_str), Some("--version")) {
+        println!("toad-computer {}", env!("CARGO_PKG_VERSION"));
+        return;
+    }
+    if arguments.is_empty()
+        || matches!(arguments.first().map(String::as_str), Some("--help" | "-h"))
+    {
+        println!("{}", usage());
+        return;
+    }
+    if arguments.first().map(String::as_str) == Some("observe") {
+        let home = arguments
+            .get(1)
+            .map(std::path::PathBuf::from)
+            .unwrap_or_else(|| Config::from_env().home);
+        if let Err(error) = toad_computer::observer::run(&home) {
+            eprintln!("{error}");
+            std::process::exit(1);
+        }
+        return;
+    }
+    if arguments.first().map(String::as_str) == Some("artifact") {
+        use std::os::unix::process::CommandExt;
+        let Some(spec) = arguments.get(1) else {
+            eprintln!("artifact requires JSON input");
+            std::process::exit(2);
+        };
+        let error = std::process::Command::new("python3")
+            .args(["-u", "-c", include_str!("../assets/artifact.py"), spec])
+            .exec();
+        eprintln!("artifact: {error}");
+        std::process::exit(1);
+    }
+    if arguments.first().map(String::as_str) == Some("prepare") {
+        if arguments.len() != 4 {
+            eprintln!("prepare requires PROFILE WORKSPACE HOME");
+            std::process::exit(2);
+        }
+        let runtime = tokio::runtime::Builder::new_multi_thread()
+            .enable_all()
+            .build()
+            .expect("runtime");
+        if let Err(error) = runtime.block_on(toad_computer::workspace::build(
+            std::path::Path::new(&arguments[3]),
+            &arguments[1],
+            std::path::Path::new(&arguments[2]),
+        )) {
+            eprintln!("{error}");
+            std::process::exit(1);
+        }
+        return;
+    }
     let (command, config) = match parse() {
         Ok(parsed) => parsed,
         Err(message) => {

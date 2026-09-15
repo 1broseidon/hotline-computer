@@ -3,4 +3,10 @@
 !Cargo.lock
 !src/
 !src/**
-!assets/wallpaper-mark.png
+!assets/
+!assets/**
+!tests/
+!tests/**
+
+!skills/
+!skills/**

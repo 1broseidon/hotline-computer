@@ -1,2 +1,5 @@
 /target
 /.token
+
+__pycache__/
+/qa/latest/

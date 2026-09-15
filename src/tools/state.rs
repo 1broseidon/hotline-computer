@@ -15,6 +15,7 @@ struct Input {
     #[serde(default)]
     name: String,
     duration: Option<u64>,
+    workspace: Option<PathBuf>,
 }
 
 #[derive(Serialize, Deserialize)]
@@ -31,6 +32,20 @@ struct SavedLogin {
 pub async fn call(app: &App, arguments: Value, holder: &str) -> ToolResult {
     let input: Input = serde_json::from_value(arguments).map_err(|error| error.to_string())?;
     match input.action.as_str() {
+        "guide" => json_text(crate::guide::manifest()),
+        "catalog" => json_text(crate::workspace::catalog()),
+        "prepare" => json_text(
+            crate::workspace::prepare(
+                app,
+                &input.name,
+                input.workspace.as_deref().ok_or("workspace is required")?,
+                holder,
+            )
+            .await?,
+        ),
+        "info" => json_text(
+            json!({"version":env!("CARGO_PKG_VERSION"),"architecture":std::env::consts::ARCH,"home":app.config.home,"display":app.config.display,"nixpkgs":crate::workspace::NIXPKGS,"catalog":crate::workspace::catalog(),"jobs":app.jobs.list().await?,"terminal":"Alacritty","graphics":"Mesa software rendering"}),
+        ),
         "control" => control(app, holder, input.duration).await,
         "release" => release(app, holder).await,
         "login_list" => login_list(app).await,
@@ -53,6 +68,10 @@ pub async fn call(app: &App, arguments: Value, holder: &str) -> ToolResult {
             "state",
             action,
             &[
+                "info",
+                "guide",
+                "catalog",
+                "prepare",
                 "control",
                 "release",
                 "login_save",

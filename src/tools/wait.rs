@@ -22,7 +22,7 @@ pub async fn call(app: &App, arguments: Value) -> ToolResult {
     let deadline = Instant::now() + Duration::from_secs(timeout);
     loop {
         let windows = x11::windows(&app.config.display).unwrap_or_default();
-        let tree = a11y::tree(&windows).await;
+        let tree = a11y::tree(app, &windows).await;
         let browser = app.browser.page_text_if_running().await.unwrap_or_default();
         if tree.contains(&input.text) || browser.contains(&input.text) {
             return Ok(text(format!("found {:?}", input.text)));

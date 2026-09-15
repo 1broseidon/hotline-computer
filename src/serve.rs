@@ -31,7 +31,7 @@ impl ServerHandler for ComputerTools {
     fn get_info(&self) -> ServerInfo {
         ServerInfo::new(ServerCapabilities::builder().enable_tools().build()).with_server_info(
             Implementation::new("toad-computer", env!("CARGO_PKG_VERSION")),
-        )
+        ).with_instructions("Read state action=info and state action=guide on connection. The running computer supplies its release-matched skill and pinned environment catalog. Use shell managed jobs for commands and builds; browser refs for web forms; capture/input for native apps.")
     }
 
     async fn list_tools(
@@ -70,6 +70,9 @@ pub async fn run(app: App) -> Result<(), String> {
     tokio::fs::create_dir_all(&app.config.home)
         .await
         .map_err(|error| format!("create {}: {error}", app.config.home.display()))?;
+    app.jobs.initialize().await?;
+    let jobs = app.jobs.clone();
+    let observer = app.observer.clone();
     let address = app.config.addr.clone();
     let expected_token = app.config.token.clone();
     let tools_app = app.clone();
@@ -102,7 +105,11 @@ pub async fn run(app: App) -> Result<(), String> {
         .map_err(|error| format!("bind {address}: {error}"))?;
     eprintln!("toad-computer listening on {address}");
     axum::serve(listener, router)
-        .with_graceful_shutdown(shutdown())
+        .with_graceful_shutdown(async move {
+            shutdown().await;
+            jobs.shutdown().await;
+            observer.shutdown().await;
+        })
         .await
         .map_err(|error| error.to_string())
 }

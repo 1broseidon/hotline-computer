@@ -20,6 +20,7 @@ struct Input {
     text: String,
     #[serde(default)]
     value: String,
+    values: Option<Vec<String>>,
     #[serde(default)]
     uncheck: bool,
     index: Option<usize>,
@@ -31,7 +32,7 @@ pub async fn call(app: &App, arguments: Value, holder: &str) -> ToolResult {
     let input: Input = serde_json::from_value(arguments).map_err(|error| error.to_string())?;
     let mutating = !matches!(
         input.action.as_str(),
-        "text" | "links" | "eval" | "tabs" | "downloads"
+        "text" | "links" | "tabs" | "downloads"
     );
     let _guard = if mutating {
         Some(app.access.mutate(holder).await?)
@@ -52,7 +53,14 @@ pub async fn call(app: &App, arguments: Value, holder: &str) -> ToolResult {
                 .await
         }
         "fill" => app.browser.fill(&input.r#ref, &input.text).await,
-        "select" => app.browser.select(&input.r#ref, &input.value).await,
+        "select" => {
+            app.browser
+                .select(
+                    &input.r#ref,
+                    &input.values.unwrap_or_else(|| vec![input.value]),
+                )
+                .await
+        }
         "check" => app.browser.check(&input.r#ref, !input.uncheck).await,
         "hover" => app.browser.hover(&input.r#ref).await,
         "tabs" => app.browser.tabs().await,

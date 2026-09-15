@@ -14,16 +14,21 @@ struct Input {
     #[serde(default)]
     mode: String,
     path: Option<String>,
+    settle_ms: Option<u64>,
 }
 
 pub async fn call(app: &App, arguments: Value) -> ToolResult {
     let input: Input = serde_json::from_value(arguments).map_err(|error| error.to_string())?;
+    tokio::time::sleep(std::time::Duration::from_millis(
+        input.settle_ms.unwrap_or(100).min(2000),
+    ))
+    .await;
     match input.mode.as_str() {
         "" | "tree" => {
             let windows = x11::windows(&app.config.display)?;
             let (png, tree) = tokio::join!(
                 async { x11::scaled_png(&app.config.display, 1568) },
-                a11y::tree(&windows)
+                a11y::tree(app, &windows)
             );
             let png = png?;
             Ok(vec![
