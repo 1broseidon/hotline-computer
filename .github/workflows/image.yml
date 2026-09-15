@@ -150,3 +150,35 @@ jobs:
           for digest in digests/*; do args+=("${IMAGE}@sha256:$(basename "$digest")"); done
           docker buildx imagetools create "${args[@]}"
       - run: docker buildx imagetools inspect "$(echo "${{ needs.version.outputs.tags }}" | cut -d, -f1)"
+
+  cold-pull:
+    needs: [version, publish]
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: amd64
+            runner: ubuntu-24.04
+          - arch: arm64
+            runner: ubuntu-24.04-arm
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+      - name: Measure the published image on an empty runner
+        env:
+          RELEASE_TAGS: ${{ needs.version.outputs.tags }}
+          BUILD_CHANNEL: ${{ github.ref_type == 'tag' && 'release' || 'development' }}
+        run: |
+          set -eu
+          # This job owns its fresh runner; never prune a user's Docker daemon.
+          docker image prune --all --force
+          python3 -m venv /tmp/pull-smoke-venv
+          /tmp/pull-smoke-venv/bin/pip install --disable-pip-version-check -r tests/requirements.txt
+          /tmp/pull-smoke-venv/bin/python tests/pull_smoke.py "${RELEASE_TAGS%%,*}" pull-smoke --revision "$GITHUB_SHA" --channel "$BUILD_CHANNEL"
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: cold-pull-${{ matrix.arch }}
+          path: pull-smoke/
+          if-no-files-found: error

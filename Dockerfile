@@ -49,6 +49,6 @@ ENV TOAD_COMPUTER_ADDR=0.0.0.0:8787 \
     NIX_SSL_CERT_FILE=/etc/ssl/certs/ca-certificates.crt \
     LIBGL_ALWAYS_SOFTWARE=1 \
     GDK_BACKEND=x11
-RUN nix-store --init
+RUN install -d /home/agent/src && nix-store --init
 EXPOSE 8787
 ENTRYPOINT ["/usr/bin/toad-computer", "boot"]

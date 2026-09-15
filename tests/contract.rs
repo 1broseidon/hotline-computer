@@ -177,7 +177,9 @@ async fn image_honors_the_computer_contract() {
         "a browser window is on the desktop again: {windows}"
     );
 
-    let path = "/home/agent/contract/probe.txt";
+    // Toad mounts a persistent scratch volume here; the image must seed its
+    // ownership so the non-root agent can follow the bundled clone recipe.
+    let path = "/home/agent/src/contract/probe.txt";
     let put = call(
         &client,
         "files",
