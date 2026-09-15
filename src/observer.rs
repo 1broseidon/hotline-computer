@@ -258,18 +258,26 @@ impl Observer {
     }
 }
 
+/// The rc file the person's shell reads instead of the system's and the
+/// home's: the prompt, history kept with the computer, and a hook for the
+/// operator's own `~/.bashrc`.
+pub const BASHRC: &str = include_str!("../assets/bashrc");
+
 /// `toad-computer shell <home>`: the person's interactive shell. It starts
 /// in the mounted workspace when there is one, with the environment the
-/// teammate prepared there, and then it is bash.
+/// teammate prepared there, and then it is bash with Toad's rc file.
 pub fn shell(home: &Path) -> Result<(), String> {
     use std::os::unix::process::CommandExt;
+    let rc = home.join(".toad/bashrc");
+    std::fs::create_dir_all(home.join(".toad")).map_err(|e| e.to_string())?;
+    std::fs::write(&rc, BASHRC).map_err(|e| format!("{}: {e}", rc.display()))?;
     let workspace = home.join("workspace");
     let cwd = if workspace.is_dir() {
         workspace
     } else {
         home.to_path_buf()
     };
-    let mut command = std::process::Command::new("bash");
+    let mut command = std::process::Command::new(interactive_bash());
     command.current_dir(&cwd);
     match crate::workspace::environment(home, &cwd) {
         Ok(environment) => {
@@ -279,12 +287,30 @@ pub fn shell(home: &Path) -> Result<(), String> {
     }
     println!("{MUTED}`exit` to close{RESET}");
     let error = command
-        .env("PS1", "\\[\\e[38;2;127;196;240m\\]\\w\\[\\e[0m\\] $ ")
         .arg("--noprofile")
-        .arg("--norc")
+        .arg("--rcfile")
+        .arg(&rc)
         .arg("-i")
         .exec();
     Err(format!("start bash: {error}"))
+}
+
+/// The bash a person types into: the system's, found on this process's own
+/// PATH. A prepared workspace puts Nixpkgs' bash first on its PATH, and that
+/// one is built without readline: no history, no completion, and a prompt
+/// whose `\[` and `\]` print as text. The workspace environment still applies
+/// inside; only the shell binary comes from outside it.
+fn interactive_bash() -> std::path::PathBuf {
+    let system = std::path::PathBuf::from("/bin/bash");
+    std::env::var_os("PATH")
+        .map(|path| {
+            std::env::split_paths(&path)
+                .filter(|dir| !dir.starts_with("/nix/store"))
+                .map(|dir| dir.join("bash"))
+                .find(|candidate| candidate.is_file())
+                .unwrap_or_else(|| system.clone())
+        })
+        .unwrap_or(system)
 }
 
 pub fn run(home: &Path) -> Result<(), String> {
@@ -473,6 +499,31 @@ fn quoted(value: &str) -> String {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn the_rc_file_sets_the_prompt_and_leaves_room_for_the_operators_own() {
+        let rc = super::BASHRC;
+        assert!(rc.contains("PS1='\\[\\e[38;2;127;196;240m\\]\\w\\[\\e[0m\\] $ '"));
+        assert!(rc.contains("export PS1"));
+        assert!(rc.contains("HISTFILE=\"$HOME/.toad/shell_history\""));
+        assert!(rc.contains("export SHELL=/bin/bash"));
+        assert!(
+            rc.trim_end()
+                .ends_with("[ -r \"$HOME/.bashrc\" ] && . \"$HOME/.bashrc\"")
+        );
+        // Nothing here prints: the terminal shows a prompt, not prose.
+        assert!(
+            !rc.lines()
+                .any(|line| line.trim_start().starts_with("echo "))
+        );
+    }
+
+    #[test]
+    fn the_persons_bash_is_never_the_store_one() {
+        let bash = super::interactive_bash();
+        assert!(!bash.starts_with("/nix/store"), "{}", bash.display());
+        assert!(bash.is_absolute());
+    }
+
     use super::*;
 
     fn record(label: &str, state: &str, exit_code: Option<i32>) -> Record {

@@ -610,6 +610,10 @@ pub async fn build(home: &Path, specification: &str, workspace: &Path) -> Result
         "SHELL",
         "DISPLAY",
         "DBUS_SESSION_BUS_ADDRESS",
+        // The terminal and shell options belong to whoever opens a shell.
+        "TERM",
+        "SHELLOPTS",
+        "BASHOPTS",
         "TOAD_COMPUTER_TOKEN",
         "_",
     ] {

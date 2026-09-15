@@ -29,6 +29,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libgtk-3-0t64 librsvg2-common \
     && rm -rf /var/lib/apt/lists/* \
     && useradd --uid 1000 --create-home --shell /bin/bash agent \
+    && rm -f /home/agent/.bashrc /home/agent/.profile /home/agent/.bash_logout \
     && install -d /etc/nix \
     && install -d -m 1777 /tmp/.X11-unix \
     && install -d -o agent -g agent /nix /nix/store /nix/var/nix /home/agent/.config/alacritty \
@@ -37,6 +38,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && chown -R agent:agent /home/agent
 COPY --chown=agent:agent assets/alacritty.toml /home/agent/.config/alacritty/alacritty.toml
 COPY assets/chromium-policy.json /etc/chromium/policies/managed/toad.json
+COPY assets/bashrc /etc/bash.bashrc
 COPY --from=build /usr/local/bin/toad-computer /usr/bin/toad-computer
 USER agent
 WORKDIR /home/agent
