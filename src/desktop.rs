@@ -84,8 +84,8 @@ const TRAY_ICON: i32 = 18;
 const APP_ICON: u16 = 16;
 const PILL_MAX: i32 = 220;
 const KEYSYM_ESCAPE: u32 = 0xff1b;
-/// How far the person's shell sits in from the screen's bottom-left corner.
-const SHELL_INSET: u16 = 8;
+/// The line between the observer and the person's shell in the right column.
+const STACK_GAP: u16 = 8;
 
 pub fn run(
     display: &str,
@@ -443,6 +443,53 @@ impl Desktop {
     /// The bar always retains its own work area.
     fn work_height(&self) -> u16 {
         self.height.saturating_sub(BAR_HEIGHT)
+    }
+
+    /// Where a window of the right column goes: the observer above, the
+    /// person's shell in the bottom third under a line, or either one alone
+    /// when the other is closed. `shell_open` says whether the shell is or
+    /// is about to be there.
+    fn column(&self, shell: bool, shell_open: bool) -> (i16, i16, u16, u16) {
+        let x = self.width * 2 / 3;
+        let width = self.width - x;
+        let work = self.work_height();
+        let shell_height = work / 3;
+        if shell {
+            (
+                x as i16,
+                (BAR_HEIGHT + work - shell_height + STACK_GAP) as i16,
+                width,
+                shell_height.saturating_sub(STACK_GAP).max(1),
+            )
+        } else if shell_open {
+            (x as i16, BAR_HEIGHT as i16, width, work - shell_height)
+        } else {
+            (x as i16, BAR_HEIGHT as i16, width, work)
+        }
+    }
+
+    /// Restacks the right column after the observer or the shell opens or
+    /// closes, so the observer takes the whole column when it is alone.
+    fn stack_column(&mut self) -> Result<(), String> {
+        let shell_open = self.client_with_class("toadshell").is_some();
+        let column: Vec<(Window, bool)> = self
+            .clients
+            .iter()
+            .filter(|(_, c)| c.class.contains("toadshell") || c.class.contains("toadterminal"))
+            .map(|(id, c)| (*id, c.class.contains("toadshell")))
+            .collect();
+        for (id, shell) in column {
+            let bounds = self.column(shell, shell_open);
+            let Some(client) = self.clients.get_mut(&id) else {
+                continue;
+            };
+            if client.maximized || client.saved != bounds {
+                client.maximized = false;
+                client.saved = bounds;
+                self.apply_geometry(id)?;
+            }
+        }
+        Ok(())
     }
 
     fn announce(&self) -> Result<(), String> {
@@ -1589,36 +1636,17 @@ impl Desktop {
                     .map_err(|error| error.to_string())?;
                 return Ok(());
             }
-            // The person's shell is a small window in the bottom-left corner,
-            // over whatever the teammate has open, a hair in from the edge.
-            Kind::Normal if class.contains("toadshell") => Client {
-                maximized: false,
-                saved: {
-                    let width = (self.width * 2 / 5).max(640).min(self.width);
-                    let height = (self.work_height() * 2 / 5)
-                        .max(320)
-                        .min(self.work_height());
-                    (
-                        SHELL_INSET as i16,
-                        (self.height - height - SHELL_INSET) as i16,
-                        width,
-                        height,
-                    )
-                },
-                class,
-                icon,
-            },
-            Kind::Normal if class.contains("toadterminal") => Client {
-                maximized: false,
-                saved: (
-                    (self.width * 2 / 3) as i16,
-                    BAR_HEIGHT as i16,
-                    self.width - self.width * 2 / 3,
-                    self.work_height(),
-                ),
-                class,
-                icon,
-            },
+            // The observer and the person's shell share the right column:
+            // the shell takes its bottom third when it is open, under a
+            // line, so whatever is on the left stays out of their way.
+            Kind::Normal if class.contains("toadshell") || class.contains("toadterminal") => {
+                Client {
+                    maximized: false,
+                    saved: self.column(class.contains("toadshell"), true),
+                    class,
+                    icon,
+                }
+            }
             Kind::Normal => Client {
                 maximized: true,
                 saved: (geometry.x, geometry.y, geometry.width, geometry.height),
@@ -1668,6 +1696,7 @@ impl Desktop {
         self.clients.insert(window, client);
         self.order.push(window);
         self.apply_geometry(window)?;
+        self.stack_column()?;
         self.property32(
             window,
             self.atoms.net_frame_extents,
@@ -1910,6 +1939,9 @@ impl Desktop {
         };
         self.order.retain(|client| *client != window);
         self.publish_client_list()?;
+        if client.class.contains("toadshell") || client.class.contains("toadterminal") {
+            self.stack_column()?;
+        }
         if client.class.contains(BROWSER_CLASS) && self.client_with_class(BROWSER_CLASS).is_none() {
             let _ = self.requests.send(Request::BrowserClosed);
         }

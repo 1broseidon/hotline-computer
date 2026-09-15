@@ -310,7 +310,8 @@ def desktop_job_menu(c):
     c.screenshot('03f-about-this-computer.png')
     c.call('input',{'action':'key','combo':'Escape'})
     c.screenshot('03g-menus-closed.png')
-    # T opens the person's own shell: a small window at the bottom left.
+    # T opens the person's own shell: the bottom third of the observer's
+    # column, under a line, so the app on the left is not covered.
     c.call('input',{'action':'click','x':mark_x,'y':mark_y})
     c.call('input',{'action':'key','combo':'t'})
     deadline = time.monotonic()+10
@@ -320,7 +321,11 @@ def desktop_job_menu(c):
         time.sleep(.2)
     assert shell, c.call('windows',{'action':'list'})
     x, y, w, h = shell['bounds']
-    assert x == 8 and y + h == 1080 - 8, shell
+    assert x == 1280 and w == 640 and y + h == 1080 and h == 340, shell
+    observer = next((w for w in c.call('windows',{'action':'list'}) if 'toadterminal' in w['class'].lower()), None)
+    if observer:
+        ox, oy, ow, oh = observer['bounds']
+        assert ox == 1280 and oy == 36 and oy + oh + 8 == y, (observer, shell)
     c.screenshot('03h-person-shell.png', settle_ms=500)
     c.call('windows',{'action':'close','window_id':shell['id']})
 

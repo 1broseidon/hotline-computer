@@ -94,12 +94,15 @@ otherwise). Everything on the bar is published as `_TOAD_BAR_LAYOUT` on the
 root window, so tests find its parts by rectangle rather than by pixel.
 Normal apps occupy the work area below the bar. The observer opens in the
 right third of the screen, and the app being watched keeps the left two
-thirds; `windows tile` uses the same split. The person's terminal is a
-small window in the bottom-left corner, 8 px in from the edge: an
-interactive bash in the mounted workspace with the environment the teammate
-prepared there, for signing in to something or unblocking a stuck step.
-What is typed there is not a job: it is not retained, and the teammate sees
-only what is on the screen.
+thirds; `windows tile` uses the same split. The person's terminal opens in
+the bottom third of that column, under an 8 px line, so it never covers
+the app on the left: an interactive bash in the mounted workspace with the
+environment the teammate prepared there, for signing in to something or
+unblocking a stuck step. What is typed there is not a job: it is not
+retained, and the teammate sees only what is on the screen. From there,
+`toad-computer prepare --packages go gopls` prepares the workspace by hand
+the way the teammate's job would, and `toad-computer packages` lists common
+Nixpkgs names to choose from.
 `windows` operations verify the resulting focus, geometry, or disappearance;
 a refused operation reports the remaining windows.
 

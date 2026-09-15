@@ -12,8 +12,8 @@ use tokio::sync::Mutex;
 
 /// The observer's window class, which the desktop places in the right third.
 pub const OBSERVER_CLASS: &str = "ToadTerminal";
-/// The person's shell, which the desktop keeps as a small window at the
-/// bottom left.
+/// The person's shell, which the desktop keeps in the bottom third of the
+/// observer's column.
 pub const SHELL_CLASS: &str = "ToadShell";
 
 fn window_of_class(display: &str, class: &str) -> Result<Option<String>, String> {
