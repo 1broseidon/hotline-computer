@@ -44,16 +44,10 @@ impl Image {
                         n += 1;
                     }
                 }
-                if a == 0 {
-                    rgba.extend_from_slice(&[0, 0, 0, 0]);
-                } else {
-                    rgba.extend_from_slice(&[
-                        (r / a) as u8,
-                        (g / a) as u8,
-                        (b / a) as u8,
-                        (a / n.max(1)) as u8,
-                    ]);
-                }
+                // A fully transparent cell has no colour to average; it stays clear.
+                let channel = |sum: u64| sum.checked_div(a).unwrap_or(0) as u8;
+                let alpha = (a / n.max(1)) as u8;
+                rgba.extend_from_slice(&[channel(r), channel(g), channel(b), alpha]);
             }
         }
         Some(Self {
