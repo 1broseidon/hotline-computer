@@ -86,6 +86,10 @@ def main():
         again = c.call('state', {'action': 'prepare', 'workspace': '/home/agent/qa/recovered'})
         assert again['ready'] and again['cached'], again
         assert 'recovered' in execute(c, 'python3', ['-c', 'import sqlite3; print("recovered")'], cwd='/home/agent/qa/recovered')
+        # The browser profile came along too, with the lock the old
+        # container's Chromium left in it; the browser must still open.
+        c.call('browser', {'action': 'navigate', 'url': 'data:text/html,<title>Recreated</title><p id=p>browser profile survived'})
+        assert 'survived' in str(c.call('browser', {'action': 'eval', 'js': "document.getElementById('p').textContent"}))
         c.call('shell', {'action': 'show'})
         c.screenshot('11-recreated-desktop.png')
     finally:
