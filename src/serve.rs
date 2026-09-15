@@ -92,6 +92,8 @@ pub async fn run(app: App) -> Result<(), String> {
         .route("/health", get(|| async { "ok" }))
         .route("/", get(viewer::page))
         .route("/ws", get(viewer::socket))
+        .route("/files", get(viewer::files))
+        .route("/files/download", get(viewer::download))
         .nest_service("/mcp", service)
         .layer(axum::middleware::from_fn(
             move |request: Request, next: Next| {
@@ -117,7 +119,13 @@ pub async fn run(app: App) -> Result<(), String> {
 /// `/health` is open; the viewer page is open and its socket checks the
 /// token itself, because a browser cannot send a bearer header on either.
 async fn authenticate(request: Request, next: Next, token: Option<&str>) -> Response {
-    if matches!(request.uri().path(), "/health" | "/" | "/ws") || token.is_none() {
+    // The page holds the token in its fragment, so what it opens itself
+    // presents the token as a query, and those routes check it themselves.
+    if matches!(
+        request.uri().path(),
+        "/health" | "/" | "/ws" | "/files" | "/files/download"
+    ) || token.is_none()
+    {
         return next.run(request).await;
     }
     let expected = format!("Bearer {}", token.expect("checked above"));

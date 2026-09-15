@@ -74,8 +74,8 @@ stop — at once when they give it back or close the page.
 
 `/health` and the viewer page never require authentication. When
 `TOAD_COMPUTER_TOKEN` is set, every method on `/mcp` requires
-`Authorization: Bearer <token>`, the viewer's socket requires the same token
-as its `token` query, and otherwise both return a JSON 401. `X-Computer-Holder` names the teammate using a lease or
+`Authorization: Bearer <token>`, the viewer's socket and its `/files` routes
+require the same token as their `token` query, and otherwise all return a JSON 401. `X-Computer-Holder` names the teammate using a lease or
 run slot; an absent header means `anonymous`.
 
 ## The desktop
@@ -130,6 +130,16 @@ the viewer's computer comes in on Ctrl+Alt+V (⌥⌘V on a Mac) or the
 **Paste** button, as plain text, only while that viewer owns control. A
 reconnect starts view-only. A stale viewer cannot paste over a newer
 viewer's control. Paste is limited to 1 MiB.
+
+**Files**, watching or driving, opens a panel over the screen: the home and
+what is under it, as the machine lists it. A folder opens, the arrow goes up
+as far as the home, and a file is saved on the viewer's own computer by the
+page's browser. Behind it, `GET /files?path=` lists a folder as JSON
+(`path`, `home`, `entries` with `name`, `size`, `is_dir`, `modified`) and
+`GET /files/download?path=` streams a file as an attachment; both take the
+token as a query like `/ws`, an empty path means the home, and both stop at
+the home like the `files` tool. Inside the computer, the managed Chromium
+lists a folder at `file:///home/agent/`.
 
 ## Workspaces and the release guide
 

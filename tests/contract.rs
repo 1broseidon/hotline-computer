@@ -223,6 +223,60 @@ async fn image_honors_the_computer_contract() {
         page.contains("Take control"),
         "the viewer page offers the screen rather than taking it"
     );
+    // The Files panel behind the page: the home listed with the token, a
+    // file saved as an attachment, nothing above the home, and no listing
+    // without the token.
+    let http = reqwest::Client::new();
+    let listed = http
+        .get(format!("{base}/files?token={token}"))
+        .send()
+        .await
+        .expect("files listing");
+    assert_eq!(listed.status(), 200);
+    let listing: serde_json::Value = listed.json().await.expect("listing json");
+    assert_eq!(listing["path"], listing["home"], "no path means the home");
+    assert!(listing["entries"].is_array(), "{listing}");
+    let put = call(
+        &client,
+        "files",
+        json!({"action":"put","path":"/home/agent/src/viewer-download.txt","content":"saved on the person's computer"}),
+    )
+    .await;
+    assert!(!put.is_error.unwrap_or(false), "{}", text(&put));
+    let saved = http
+        .get(format!(
+            "{base}/files/download?token={token}&path=/home/agent/src/viewer-download.txt"
+        ))
+        .send()
+        .await
+        .expect("download");
+    assert_eq!(saved.status(), 200);
+    assert!(
+        saved.headers()[reqwest::header::CONTENT_DISPOSITION]
+            .to_str()
+            .expect("ascii disposition")
+            .contains("attachment; filename=\"viewer-download.txt\""),
+        "{:?}",
+        saved.headers()
+    );
+    assert_eq!(
+        saved.text().await.expect("file body"),
+        "saved on the person's computer"
+    );
+    let above = http
+        .get(format!("{base}/files?token={token}&path=/etc"))
+        .send()
+        .await
+        .expect("listing outside the home");
+    assert_eq!(above.status(), 400, "only the home is listed");
+    if !token.is_empty() {
+        let refused = http
+            .get(format!("{base}/files"))
+            .send()
+            .await
+            .expect("listing without the token");
+        assert_eq!(refused.status(), 401, "the listing wants the token");
+    }
     let ws_base = base.replacen("http", "ws", 1);
     if !token.is_empty() {
         let refused = tokio_tungstenite::connect_async(format!("{ws_base}/ws")).await;

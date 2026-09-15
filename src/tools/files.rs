@@ -34,11 +34,11 @@ struct Input {
 }
 
 #[derive(Serialize)]
-struct Entry {
-    name: String,
-    size: u64,
-    is_dir: bool,
-    modified: u64,
+pub(crate) struct Entry {
+    pub name: String,
+    pub size: u64,
+    pub is_dir: bool,
+    pub modified: u64,
 }
 
 pub async fn call(app: &App, arguments: Value, holder: &str) -> ToolResult {
@@ -165,6 +165,13 @@ async fn put(app: &App, path: &Path, content: &str, encoding: &str) -> ToolResul
 }
 
 async fn list(app: &App, path: &Path) -> ToolResult {
+    let (_, entries) = entries(app, path).await?;
+    json_text(entries)
+}
+
+/// A folder under the home as it stands, and what is in it by name. The
+/// `files` tool and the viewer's Files panel show the same listing.
+pub(crate) async fn entries(app: &App, path: &Path) -> Result<(PathBuf, Vec<Entry>), String> {
     let path = existing_path(app, path).await?;
     let mut directory = tokio::fs::read_dir(&path)
         .await
@@ -188,10 +195,10 @@ async fn list(app: &App, path: &Path) -> ToolResult {
         });
     }
     entries.sort_by(|left, right| left.name.cmp(&right.name));
-    json_text(entries)
+    Ok((path, entries))
 }
 
-async fn existing_path(app: &App, requested: &Path) -> Result<PathBuf, String> {
+pub(crate) async fn existing_path(app: &App, requested: &Path) -> Result<PathBuf, String> {
     let home = tokio::fs::canonicalize(&app.config.home)
         .await
         .map_err(|error| format!("home: {error}"))?;
