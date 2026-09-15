@@ -69,10 +69,211 @@ fn recipe(packages: &[String], nixpkgs: &str) -> Result<String, String> {
     ))
 }
 
+/// Nixpkgs attribute names that come up often, grouped by what they are for.
+/// A catalog to read from, not a preset to pick: prepare takes whatever names
+/// the project actually needs. Every name here resolves on the pinned Nixpkgs.
+pub const PACKAGES: &[(&str, &[(&str, &str)])] = &[
+    (
+        "Languages",
+        &[
+            (
+                "python312",
+                "Python 3.12; uv or poetry for project environments",
+            ),
+            ("uv", "Python package and environment manager"),
+            ("poetry", "Python dependency manager"),
+            (
+                "nodejs",
+                "Node.js; pnpm or bun alongside as the project prefers",
+            ),
+            ("pnpm", "Node package manager"),
+            ("bun", "JavaScript runtime and package manager"),
+            ("deno", "JavaScript and TypeScript runtime"),
+            ("go", "Go toolchain; gopls for the language server"),
+            ("gopls", "Go language server"),
+            (
+                "rustc",
+                "Rust compiler; with cargo, clippy, rustfmt, rust-analyzer",
+            ),
+            ("cargo", "Rust build tool"),
+            ("clippy", "Rust lints"),
+            ("rustfmt", "Rust formatter"),
+            ("rust-analyzer", "Rust language server"),
+            ("jdk21", "OpenJDK 21; maven or gradle to build"),
+            ("maven", "Java build tool"),
+            ("gradle", "Java and Kotlin build tool"),
+            ("ruby", "Ruby"),
+            ("php", "PHP with common extensions"),
+            ("elixir", "Elixir and Erlang"),
+            ("zig", "Zig"),
+            ("dotnet-sdk_8", ".NET 8 SDK"),
+        ],
+    ),
+    (
+        "Native builds",
+        &[
+            ("gcc", "C and C++ compiler"),
+            ("clang", "LLVM C and C++ compiler"),
+            ("gnumake", "make"),
+            ("cmake", "CMake"),
+            ("ninja", "Ninja build"),
+            (
+                "pkg-config",
+                "how builds find C libraries; most native builds need it",
+            ),
+            ("openssl", "TLS library and headers"),
+            ("zlib", "compression library"),
+            ("sqlite", "SQLite library and shell"),
+            ("libffi", "foreign function interface library"),
+            ("perl", "Perl; the Rust openssl crate builds with it"),
+        ],
+    ),
+    (
+        "Desktop apps",
+        &[
+            ("gtk4", "GTK 4"),
+            ("gtk3", "GTK 3"),
+            ("glib", "GLib"),
+            (
+                "gobject-introspection",
+                "bindings for GTK from other languages",
+            ),
+            (
+                "webkitgtk_4_1",
+                "WebKitGTK, which Tauri and similar shells embed",
+            ),
+            ("libsoup_3", "HTTP library WebKitGTK uses"),
+        ],
+    ),
+    (
+        "Tools",
+        &[
+            ("jq", "JSON processor"),
+            ("ripgrep", "rg"),
+            ("fd", "file finder"),
+            ("gh", "GitHub CLI"),
+            ("curl", "curl"),
+            ("postgresql", "PostgreSQL server and client"),
+            ("redis", "Redis"),
+            ("ffmpeg", "audio and video"),
+            ("imagemagick", "images"),
+            ("pandoc", "document conversion"),
+            ("awscli2", "AWS CLI"),
+            ("kubectl", "Kubernetes CLI"),
+            ("playwright-driver", "browsers for Playwright tests"),
+        ],
+    ),
+];
+
 pub fn catalog() -> Value {
+    let packages: Vec<Value> = PACKAGES
+        .iter()
+        .map(|(group, names)| {
+            json!({"group":group,"packages":names.iter().map(|(name, note)| json!({"name":name,"note":note})).collect::<Vec<_>>()})
+        })
+        .collect();
     json!({"version":env!("CARGO_PKG_VERSION"),"nixpkgs":NIXPKGS,
         "sources":["packages","flake"],
-        "usage":"state prepare with workspace and either packages (Nixpkgs attribute names) or flake (local directory with optional #devShell). Omit both to reuse .toad/environment-spec.json, or the repository's flake.nix on first use. Wait for the returned job; shell cwd then inherits the prepared environment. No framework presets."})
+        "usage":"state prepare with workspace and either packages (Nixpkgs attribute names) or flake (local directory with optional #devShell). Omit both to reuse .toad/environment-spec.json, or the repository's flake.nix on first use. Wait for the returned job; shell cwd then inherits the prepared environment. No framework presets; packages lists common attribute names to choose from.",
+        "packages":packages})
+}
+
+/// The catalog as a person reads it in a terminal.
+pub fn catalog_text() -> String {
+    let mut text = format!("Nixpkgs attribute names, on nixpkgs {NIXPKGS}\n");
+    for (group, names) in PACKAGES {
+        text.push_str(&format!("\n{group}\n"));
+        for (name, note) in names.iter() {
+            text.push_str(&format!("  {name:<22} {note}\n"));
+        }
+    }
+    text.push_str(
+        "\nAnything else in Nixpkgs works too. Prepare with\n  toad-computer prepare --packages go gopls\nin the workspace, or --workspace DIR from elsewhere.\n",
+    );
+    text
+}
+
+/// What a person asked for at the terminal.
+#[derive(Debug, PartialEq)]
+pub enum Operator {
+    Prepare {
+        workspace: PathBuf,
+        packages: Option<Vec<String>>,
+        flake: Option<String>,
+    },
+    Catalog,
+    Help,
+}
+
+pub const OPERATOR_USAGE: &str = "Usage: toad-computer prepare [--workspace DIR] [--packages NAME... | --flake DIR[#shell]]\n       toad-computer packages\n\n  --packages  Nixpkgs attribute names; see toad-computer packages\n  --flake     a local flake directory, optionally #devShell\n  --workspace the directory to prepare; the current one otherwise\n  neither     reuse the saved definition, or the workspace's flake.nix\n\nWhat is prepared is what the teammate's jobs inherit there.";
+
+/// Reads the operator's spelling of prepare: flags, not the internal JSON.
+pub fn operator(arguments: &[String], cwd: &Path) -> Result<Operator, String> {
+    let mut workspace = cwd.to_path_buf();
+    let mut packages: Option<Vec<String>> = None;
+    let mut flake = None;
+    let mut index = 0;
+    while index < arguments.len() {
+        let flag = arguments[index].as_str();
+        index += 1;
+        match flag {
+            "--help" | "-h" => return Ok(Operator::Help),
+            "--list" | "--catalog" => return Ok(Operator::Catalog),
+            "--packages" | "-p" => {
+                let names = packages.get_or_insert_with(Vec::new);
+                while index < arguments.len() && !arguments[index].starts_with('-') {
+                    names.push(arguments[index].clone());
+                    index += 1;
+                }
+                if names.is_empty() {
+                    return Err(format!(
+                        "--packages needs at least one name\n{OPERATOR_USAGE}"
+                    ));
+                }
+            }
+            "--flake" | "-f" | "--workspace" | "-w" => {
+                let Some(value) = arguments.get(index) else {
+                    return Err(format!("{flag} needs a value\n{OPERATOR_USAGE}"));
+                };
+                index += 1;
+                if flag.starts_with("--f") || flag == "-f" {
+                    flake = Some(value.clone());
+                } else {
+                    workspace = PathBuf::from(value);
+                }
+            }
+            other => return Err(format!("unknown argument {other:?}\n{OPERATOR_USAGE}")),
+        }
+    }
+    if packages.is_some() && flake.is_some() {
+        return Err(format!(
+            "choose --packages or --flake, not both\n{OPERATOR_USAGE}"
+        ));
+    }
+    Ok(Operator::Prepare {
+        workspace,
+        packages,
+        flake,
+    })
+}
+
+/// Prepares a workspace from the terminal, in this process, the way the
+/// teammate's managed job would. The person waits and reads the output.
+pub async fn prepare_here(
+    home: &Path,
+    workspace: &Path,
+    packages: Option<Vec<String>>,
+    flake: Option<String>,
+) -> Result<(), String> {
+    let home = home.canonicalize().map_err(|e| e.to_string())?;
+    let workspace = resolve_workspace(&home, workspace)?;
+    let definition = definition(&home, &workspace, packages, flake)?;
+    write_json(
+        &workspace.join(".toad/environment-request.json"),
+        &definition,
+    )?;
+    let specification = serde_json::to_string(&definition).map_err(|e| e.to_string())?;
+    build(&home, &specification, &workspace).await
 }
 
 fn read_json<T: serde::de::DeserializeOwned>(path: &Path) -> Result<T, String> {
@@ -462,6 +663,65 @@ pub fn environment(home: &Path, cwd: &Path) -> Result<BTreeMap<String, String>, 
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn the_catalog_names_are_attribute_paths_and_read_well() {
+        for (_, names) in super::PACKAGES {
+            for (name, note) in names.iter() {
+                assert!(super::attribute(name), "{name}");
+                assert!(!note.is_empty() && note.len() < 80, "{name}: {note}");
+            }
+        }
+        let text = super::catalog_text();
+        assert!(text.contains("Languages\n") && text.contains("  go "));
+        assert_eq!(super::catalog()["packages"][0]["group"], "Languages");
+    }
+
+    #[test]
+    fn the_operator_spelling_takes_names_flags_and_a_workspace() {
+        use super::Operator;
+        let cwd = std::path::Path::new("/home/agent/workspace");
+        let args = |list: &[&str]| list.iter().map(|s| s.to_string()).collect::<Vec<_>>();
+        assert_eq!(
+            super::operator(&args(&["--packages", "go", "gopls"]), cwd).unwrap(),
+            Operator::Prepare {
+                workspace: cwd.to_path_buf(),
+                packages: Some(vec!["go".into(), "gopls".into()]),
+                flake: None
+            }
+        );
+        assert_eq!(
+            super::operator(
+                &args(&["-w", "/home/agent/src/app", "--flake", ".#dev"]),
+                cwd
+            )
+            .unwrap(),
+            Operator::Prepare {
+                workspace: "/home/agent/src/app".into(),
+                packages: None,
+                flake: Some(".#dev".into())
+            }
+        );
+        assert_eq!(
+            super::operator(&args(&[]), cwd).unwrap(),
+            Operator::Prepare {
+                workspace: cwd.to_path_buf(),
+                packages: None,
+                flake: None
+            }
+        );
+        assert_eq!(
+            super::operator(&args(&["--list"]), cwd).unwrap(),
+            Operator::Catalog
+        );
+        assert_eq!(
+            super::operator(&args(&["-h"]), cwd).unwrap(),
+            Operator::Help
+        );
+        assert!(super::operator(&args(&["--packages"]), cwd).is_err());
+        assert!(super::operator(&args(&["--packages", "go", "--flake", "."]), cwd).is_err());
+        assert!(super::operator(&args(&["go"]), cwd).is_err());
+    }
+
     use super::*;
 
     fn app(home: &Path) -> App {
