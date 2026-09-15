@@ -105,7 +105,9 @@ fn layout(
         if right.is_empty() {
             width
         } else {
-            (width / 2).max(primary_min).min(width - right_min)
+            // The observer column is a third of the screen, as when the
+            // terminal opens on its own; the app under test keeps two thirds.
+            (width * 2 / 3).max(primary_min).min(width - right_min)
         }
     } else {
         0

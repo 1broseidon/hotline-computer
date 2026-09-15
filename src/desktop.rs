@@ -1561,9 +1561,9 @@ impl Desktop {
             Kind::Normal if class.contains("toadterminal") => Client {
                 maximized: false,
                 saved: (
-                    (self.width * 3 / 5) as i16,
+                    (self.width * 2 / 3) as i16,
                     BAR_HEIGHT as i16,
-                    self.width - self.width * 3 / 5,
+                    self.width - self.width * 2 / 3,
                     self.work_height(),
                 ),
                 class,
@@ -1591,8 +1591,9 @@ impl Desktop {
                 }
             }
         };
+        // The terminal keeps the right third; the app being watched keeps the rest.
         if client.class.contains("toadterminal") {
-            let width = self.width * 3 / 5;
+            let width = self.width * 2 / 3;
             let height = self.work_height();
             let others: Vec<_> = self
                 .clients

@@ -92,8 +92,9 @@ jobs list, a lease chip that reads `agent at work`, `agent in control` or
 uses it, and a clock in the host's zone (`TZ`, which Toad passes; UTC
 otherwise). Everything on the bar is published as `_TOAD_BAR_LAYOUT` on the
 root window, so tests find its parts by rectangle rather than by pixel.
-Normal apps occupy the work area below the bar. The terminal opens on the
-right, alongside the current app.
+Normal apps occupy the work area below the bar. The terminal opens in the
+right third of the screen, and the app being watched keeps the left two
+thirds; `windows tile` uses the same split.
 `windows` operations verify the resulting focus, geometry, or disappearance;
 a refused operation reports the remaining windows.
 
