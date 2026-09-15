@@ -360,6 +360,18 @@ def clipboard_between_apps(c):
         time.sleep(.3)
     assert 'pasted-from-browser' in text, result
     c.screenshot('05-browser-to-terminal-paste.png')
+    # Text from outside the machine arrives the way the viewer sends it:
+    # onto the clipboard, then Ctrl+V, which the terminal must honour too.
+    outside = '/home/agent/qa/pasted-outside-' + c.run_id + '.txt'
+    c.call('input', {'action': 'paste', 'text': 'echo pasted-from-outside > ' + outside})
+    c.call('input', {'action': 'key', 'combo': 'Return'})
+    deadline = time.monotonic() + 10
+    while time.monotonic() < deadline:
+        result = c.rpc('tools/call', {'name': 'files', 'arguments': {'action': 'get', 'path': outside}})['result']
+        text = '\n'.join(item.get('text', '') for item in result.get('content', []))
+        if not result.get('isError') and 'pasted-from-outside' in text: break
+        time.sleep(.3)
+    assert 'pasted-from-outside' in text, result
     c.call('windows', {'action': 'close', 'window_id': shell['id']})
 
 

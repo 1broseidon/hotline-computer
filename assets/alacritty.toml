@@ -14,6 +14,11 @@ history = 20000
 [mouse]
 bindings = [{ mouse = "Right", action = "Paste" }]
 
+# Ctrl+V pastes here as it does in the browser: the viewer's paste presses
+# it after filling the clipboard. Ctrl+Shift+V and Ctrl+Shift+C still work.
+[keyboard]
+bindings = [{ key = "V", mods = "Control", action = "Paste" }]
+
 [selection]
 save_to_clipboard = true
 
