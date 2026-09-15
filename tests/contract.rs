@@ -332,10 +332,31 @@ async fn image_honors_the_computer_contract() {
     let windows = call(&client, "windows", json!({"action":"list"})).await;
     let window_list: Vec<serde_json::Value> =
         serde_json::from_str(&text(&windows)).expect("window JSON");
-    let width = window_list[0]["bounds"][2].as_i64().expect("width");
+    let bounds = |class: &str| {
+        let w = window_list
+            .iter()
+            .find(|w| {
+                w["class"]
+                    .as_str()
+                    .unwrap_or("")
+                    .to_lowercase()
+                    .contains(class)
+            })
+            .unwrap_or_else(|| panic!("a {class} window: {windows:?}"));
+        (
+            w["bounds"][0].as_i64().expect("x"),
+            w["bounds"][2].as_i64().expect("width"),
+        )
+    };
+    let (browser_x, browser_width) = bounds("chromium");
+    let (observer_x, _) = bounds("toadterminal");
     assert!(
-        (900..=1000).contains(&width),
-        "the window is the left half of a 1920 screen: {windows:?}"
+        browser_x == 0 && (1240..=1320).contains(&browser_width),
+        "the app takes the left two thirds of a 1920 screen: {windows:?}"
+    );
+    assert_eq!(
+        observer_x, browser_width,
+        "the observer takes the right third: {windows:?}"
     );
     let focused = call(
         &client,
@@ -368,11 +389,17 @@ async fn image_honors_the_computer_contract() {
     let (mut socket, _) = tokio_tungstenite::connect_async(format!("{ws_base}/ws?token={token}"))
         .await
         .expect("viewer socket");
-    let first = tokio::time::timeout(Duration::from_secs(5), socket.next())
-        .await
-        .expect("a frame within five seconds")
-        .expect("a frame")
-        .expect("a frame");
+    // The socket hears whose screen this is before it sees the screen.
+    let first = tokio::time::timeout(Duration::from_secs(5), async {
+        loop {
+            let message = socket.next().await.expect("a frame").expect("a frame");
+            if message.is_binary() {
+                return message;
+            }
+        }
+    })
+    .await
+    .expect("a frame within five seconds");
     let bytes = first.into_data();
     let header: Vec<u16> = (0..6)
         .map(|index| u16::from_le_bytes([bytes[index * 2], bytes[index * 2 + 1]]))
@@ -505,7 +532,12 @@ async fn viewer_reply(
                 .expect("viewer response")
                 .expect("viewer response");
             if message.is_text() {
-                return serde_json::from_str(message.to_text().unwrap()).unwrap();
+                let reply: serde_json::Value =
+                    serde_json::from_str(message.to_text().unwrap()).unwrap();
+                // The bar's state and the hands' pointer are not replies.
+                if reply["t"] != "state" && reply["t"] != "pointer" {
+                    return reply;
+                }
             }
         }
     })
