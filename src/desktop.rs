@@ -920,7 +920,7 @@ impl Desktop {
     fn open_popup(&mut self, kind: Popup) -> Result<(), String> {
         self.close_popup()?;
         let (width, height) = match &kind {
-            Popup::Menu => (MENU_WIDTH, (PAD + 4 * ROW + 11 + 22 + PAD) as u16),
+            Popup::Menu => (MENU_WIDTH, (PAD + 3 * ROW + 11 + 22 + PAD) as u16),
             Popup::Jobs { visible, .. } => (
                 self.width.saturating_sub(16).min(640),
                 ((*visible as i32 + 1) * ROW + 2 * PAD) as u16,
@@ -1049,17 +1049,10 @@ impl Desktop {
         let mut canvas = Canvas::new(open.width, open.height, BAR_FILL);
         match &open.kind {
             Popup::Menu => {
-                let (running, completed, _) = self.job_counts();
-                let jobs_note = if running > 0 {
-                    format!("{running} running · {completed} done")
-                } else {
-                    format!("{completed} done")
-                };
-                let rows: [(&str, &str, &str); 4] = [
+                let rows: [(&str, &str, &str); 3] = [
                     ("Browser", "open or focus", "A"),
                     ("Terminal", "observer", "B"),
-                    ("Jobs", &jobs_note, "C"),
-                    ("About this computer", "", "D"),
+                    ("About this computer", "", "C"),
                 ];
                 for (index, (label, note, key)) in rows.iter().enumerate() {
                     let y = menu_row_y(index);
@@ -1084,7 +1077,7 @@ impl Desktop {
                         INK_2,
                     );
                 }
-                canvas.fill_rect(PAD + 4, PAD + 3 * ROW + 5, width - 2 * PAD - 8, 1, RULE);
+                canvas.fill_rect(PAD + 4, PAD + 2 * ROW + 5, width - 2 * PAD - 8, 1, RULE);
                 let foot = format!(
                     "toad-computer {} · {}",
                     env!("CARGO_PKG_VERSION"),
@@ -1093,7 +1086,7 @@ impl Desktop {
                 canvas.text(
                     &mono,
                     PAD + 10,
-                    mono.baseline_in(PAD + 4 * ROW + 11, 22),
+                    mono.baseline_in(PAD + 3 * ROW + 11, 22),
                     &foot,
                     MUTED,
                 );
@@ -1211,8 +1204,7 @@ impl Desktop {
                 self.close_popup()?;
                 self.dock_action(Request::OpenTerminal)
             }
-            2 => self.open_jobs(),
-            3 => self.open_popup(Popup::About),
+            2 => self.open_popup(Popup::About),
             _ => Ok(()),
         }
     }
@@ -1235,7 +1227,7 @@ impl Desktop {
         }
         if matches!(open.kind, Popup::Menu)
             && let Some(index) =
-                "abcd".find(|c| u32::from(c) == keysym || u32::from(c) - 32 == keysym)
+                "abc".find(|c| u32::from(c) == keysym || u32::from(c) - 32 == keysym)
         {
             return self.menu_pick(index);
         }
@@ -1249,7 +1241,7 @@ impl Desktop {
         let y = i32::from(event.event_y);
         match &mut open.kind {
             Popup::Menu => {
-                let index = (0..4)
+                let index = (0..3)
                     .find(|index| (menu_row_y(*index)..menu_row_y(*index) + ROW).contains(&y));
                 match index {
                     Some(index) => self.menu_pick(index),
@@ -2065,12 +2057,12 @@ impl Desktop {
     }
 }
 
-/// The top of menu row `index`: three rows, a separator, then About.
+/// The top of menu row `index`: two rows, a separator, then About.
 fn menu_row_y(index: usize) -> i32 {
-    if index < 3 {
+    if index < 2 {
         PAD + index as i32 * ROW
     } else {
-        PAD + 3 * ROW + 11
+        PAD + 2 * ROW + 11
     }
 }
 
@@ -2286,7 +2278,7 @@ mod tests {
     #[test]
     fn menu_rows_leave_room_for_the_separator() {
         assert_eq!(menu_row_y(0), PAD);
-        assert_eq!(menu_row_y(2), PAD + 2 * ROW);
-        assert_eq!(menu_row_y(3), PAD + 3 * ROW + 11);
+        assert_eq!(menu_row_y(1), PAD + ROW);
+        assert_eq!(menu_row_y(2), PAD + 2 * ROW + 11);
     }
 }

@@ -306,14 +306,10 @@ def desktop_job_menu(c):
     mark_x, mark_y = centre(layout['mark'])
     c.call('input',{'action':'click','x':mark_x,'y':mark_y})
     c.screenshot('03e-toad-menu.png')
-    c.call('input',{'action':'key','combo':'d'})
+    c.call('input',{'action':'key','combo':'c'})
     c.screenshot('03f-about-this-computer.png')
     c.call('input',{'action':'key','combo':'Escape'})
-    c.call('input',{'action':'click','x':mark_x,'y':mark_y})
-    c.call('input',{'action':'key','combo':'c'})
-    c.screenshot('03g-jobs-from-menu.png')
-    c.call('input',{'action':'key','combo':'Escape'})
-    c.screenshot('03h-menus-closed.png')
+    c.screenshot('03g-menus-closed.png')
 
 
 def tray_counts(c):

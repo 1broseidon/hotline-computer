@@ -81,13 +81,13 @@ run slot; an absent header means `anonymous`.
 ## The desktop
 
 The top bar is three answers. On the left, the Toad mark opens a menu:
-**A** the browser (opened, or focused if open), **B** the terminal observer, **C** the jobs list,
-**D** an About card (version, channel, revision, architecture, nixpkgs
+**A** the browser (opened, or focused if open), **B** the terminal observer,
+**C** an About card (version, channel, revision, architecture, nixpkgs
 revision, uptime); the letters pick while the menu is open and Escape closes
 it. In the middle, every open window is a pill with its own icon and title;
 click one to focus it, right-click to close it. On the right, a jobs chip
-(`no jobs`, `2 running · 5 done`, `1 failed · 2 running`) that opens the same
-jobs list, a lease chip that reads `agent at work`, `agent in control` or
+(`no jobs`, `2 running · 5 done`, `1 failed · 2 running`) that drops the
+jobs list from under itself, a lease chip that reads `agent at work`, `agent in control` or
 `person in control`, an XEmbed application tray that appears when an app
 uses it, and a clock in the host's zone (`TZ`, which Toad passes; UTC
 otherwise). Everything on the bar is published as `_TOAD_BAR_LAYOUT` on the
