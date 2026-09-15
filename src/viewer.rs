@@ -15,7 +15,7 @@ use std::sync::{
     atomic::{AtomicU64, Ordering},
 };
 
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 use axum::Json;
 use axum::body::Body;
@@ -23,6 +23,7 @@ use axum::extract::ws::{Message, WebSocket, WebSocketUpgrade};
 use axum::extract::{Query, State};
 use axum::http::{StatusCode, header};
 use axum::response::{Html, IntoResponse, Response};
+use futures_util::TryStreamExt;
 use serde::Deserialize;
 use serde_json::json;
 use tokio::sync::broadcast::error::RecvError;
@@ -158,6 +159,64 @@ pub async fn download(State(app): State<App>, Query(request): Query<FileRequest>
         .header(header::CONTENT_DISPOSITION, attachment(&name))
         .body(Body::from_stream(tokio_util::io::ReaderStream::new(file)))
         .unwrap_or_else(|error| refused(error.to_string()))
+}
+
+/// A file from the person's computer, put where the Files panel is looking.
+/// The body is the file itself and the path names it, so nothing is parsed;
+/// it lands whole or not at all, written beside its place and moved over
+/// once complete. The same rule as the `files` tool: under the home only.
+pub async fn upload(
+    State(app): State<App>,
+    Query(request): Query<FileRequest>,
+    body: Body,
+) -> Response {
+    if !admitted(&app, &request.token) {
+        return unauthorized();
+    }
+    if request.path.is_empty() {
+        return refused("path names the file to write".to_owned());
+    }
+    let path = match crate::tools::files::writable_path(&app, Path::new(&request.path)).await {
+        Ok(path) => path,
+        Err(error) => return refused(error),
+    };
+    if tokio::fs::metadata(&path).await.is_ok_and(|m| m.is_dir()) {
+        return refused("path is a folder".to_owned());
+    }
+    let Some(name) = path
+        .file_name()
+        .map(|name| name.to_string_lossy().into_owned())
+    else {
+        return refused("path has no file name".to_owned());
+    };
+    let arriving = path.with_file_name(format!(".{name}.toad-upload"));
+    let written = async {
+        let mut file = tokio::fs::File::create(&arriving)
+            .await
+            .map_err(|error| format!("{}: {error}", arriving.display()))?;
+        let mut reader = tokio_util::io::StreamReader::new(
+            body.into_data_stream()
+                .map_err(|error| std::io::Error::other(error.to_string())),
+        );
+        let bytes = tokio::io::copy(&mut reader, &mut file)
+            .await
+            .map_err(|error| format!("receiving {name}: {error}"))?;
+        file.sync_all()
+            .await
+            .map_err(|error| format!("{}: {error}", arriving.display()))?;
+        tokio::fs::rename(&arriving, &path)
+            .await
+            .map_err(|error| format!("{}: {error}", path.display()))?;
+        Ok::<u64, String>(bytes)
+    }
+    .await;
+    match written {
+        Ok(bytes) => Json(json!({"path": path, "bytes": bytes})).into_response(),
+        Err(error) => {
+            let _ = tokio::fs::remove_file(&arriving).await;
+            refused(error)
+        }
+    }
 }
 
 /// `attachment; filename=…` spelled for every browser: the name in ASCII,
@@ -490,22 +549,71 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn a_file_from_the_persons_computer_lands_whole_under_the_home() {
+        let home = std::env::temp_dir().join(format!("toad-viewer-upload-{}", std::process::id()));
+        std::fs::create_dir_all(&home).unwrap();
+        let app = app_at(home.clone(), None);
+        let request = |path: &str| {
+            Query(FileRequest {
+                token: String::new(),
+                path: path.to_owned(),
+            })
+        };
+        let target = home.join("in/report.csv");
+        let sent = upload(
+            State(app.clone()),
+            request(&target.display().to_string()),
+            Body::from("a,b\n1,2\n"),
+        )
+        .await;
+        assert_eq!(sent.status(), StatusCode::OK);
+        let reply: serde_json::Value = serde_json::from_slice(&body_of(sent).await).unwrap();
+        assert_eq!(reply["bytes"], 8);
+        assert_eq!(std::fs::read_to_string(&target).unwrap(), "a,b\n1,2\n");
+        assert_eq!(
+            std::fs::read_dir(home.join("in")).unwrap().count(),
+            1,
+            "nothing is left beside the file"
+        );
+
+        let above = upload(
+            State(app.clone()),
+            request("/tmp/../etc/passwd"),
+            Body::empty(),
+        )
+        .await;
+        assert_eq!(above.status(), StatusCode::BAD_REQUEST);
+        let folder = upload(
+            State(app.clone()),
+            request(&home.join("in").display().to_string()),
+            Body::empty(),
+        )
+        .await;
+        assert_eq!(folder.status(), StatusCode::BAD_REQUEST);
+        let unnamed = upload(State(app), request(""), Body::empty()).await;
+        assert_eq!(unnamed.status(), StatusCode::BAD_REQUEST);
+        std::fs::remove_dir_all(home).unwrap();
+    }
+
+    #[tokio::test]
     async fn the_files_panel_wants_the_token() {
         let app = app_at(std::env::temp_dir(), Some("secret"));
-        let wrong = Query(FileRequest {
-            token: "guess".to_owned(),
-            path: String::new(),
-        });
+        let wrong = || {
+            Query(FileRequest {
+                token: "guess".to_owned(),
+                path: "/tmp/x".to_owned(),
+            })
+        };
         assert_eq!(
-            files(State(app.clone()), wrong).await.status(),
+            files(State(app.clone()), wrong()).await.status(),
             StatusCode::UNAUTHORIZED
         );
-        let wrong = Query(FileRequest {
-            token: "guess".to_owned(),
-            path: String::new(),
-        });
         assert_eq!(
-            download(State(app), wrong).await.status(),
+            download(State(app.clone()), wrong()).await.status(),
+            StatusCode::UNAUTHORIZED
+        );
+        assert_eq!(
+            upload(State(app), wrong(), Body::empty()).await.status(),
             StatusCode::UNAUTHORIZED
         );
     }

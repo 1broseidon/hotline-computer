@@ -92,7 +92,7 @@ pub async fn run(app: App) -> Result<(), String> {
         .route("/health", get(|| async { "ok" }))
         .route("/", get(viewer::page))
         .route("/ws", get(viewer::socket))
-        .route("/files", get(viewer::files))
+        .route("/files", get(viewer::files).post(viewer::upload))
         .route("/files/download", get(viewer::download))
         .nest_service("/mcp", service)
         .layer(axum::middleware::from_fn(

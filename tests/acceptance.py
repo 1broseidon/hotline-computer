@@ -416,6 +416,10 @@ def rootless(c):
     # The person's shell answers apt with where software comes from instead.
     output = execute(c, 'bash', ['-ic', 'apt install go; true'], label='apt in the shell')
     assert 'toad-computer prepare' in output and 'toad-computer packages' in output and 'nix shell' in output, output
+    # What the person installs for themselves runs by name.
+    # An interactive bash without a terminal warns first; the PATH is the last line.
+    path = execute(c, 'bash', ['-ic', 'echo "$PATH"'], label='the shell PATH').strip().splitlines()[-1].split(':')
+    assert path[:3] == ['/home/agent/.local/bin', '/home/agent/go/bin', '/home/agent/.cargo/bin'], path
 
 
 def artifacts(c):

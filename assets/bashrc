@@ -27,6 +27,14 @@ alias bash=/bin/bash
 alias ll='ls -l'
 alias la='ls -la'
 
+# What a person installs for themselves lands in the home's own bin
+# folders: `go install`, `pip install --user`, `cargo install`. They come
+# first, so the new binary runs by name.
+for dir in "$HOME/.cargo/bin" "$HOME/go/bin" "$HOME/.local/bin"; do
+  case ":$PATH:" in *":$dir:"*) ;; *) PATH="$dir:$PATH" ;; esac
+done
+export PATH
+
 # Rootless by design: nothing here runs as root, so apt and sudo can never
 # work and the image does not carry them. Software comes in this order:
 # what toad-computer prepares, then Nix by hand, then what is already here.
