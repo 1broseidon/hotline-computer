@@ -1,0 +1,126 @@
+[
+  {
+    "profile": "python",
+    "cached": false,
+    "concurrent": true,
+    "seconds": 0.48380516600445844
+  },
+  {
+    "profile": "python",
+    "cached": true,
+    "seconds": 0.045787458977429196
+  },
+  {
+    "profile": "python",
+    "cached": true,
+    "seconds": 0.04367912499583326
+  },
+  {
+    "profile": "python",
+    "cached": true,
+    "seconds": 0.044785209000110626
+  },
+  {
+    "profile": "python",
+    "cached": true,
+    "seconds": 0.048794500005897135
+  },
+  {
+    "profile": "python",
+    "cached": true,
+    "seconds": 0.048123083979589865
+  },
+  {
+    "profile": "go",
+    "cached": false,
+    "concurrent": true,
+    "seconds": 0.36525362500105985
+  },
+  {
+    "profile": "go",
+    "cached": true,
+    "seconds": 0.044323209003778175
+  },
+  {
+    "profile": "go",
+    "cached": true,
+    "seconds": 0.04574662499362603
+  },
+  {
+    "profile": "go",
+    "cached": true,
+    "seconds": 0.044156791002023965
+  },
+  {
+    "profile": "go",
+    "cached": true,
+    "seconds": 0.043630125001072884
+  },
+  {
+    "profile": "go",
+    "cached": true,
+    "seconds": 0.04384925001068041
+  },
+  {
+    "profile": "node",
+    "cached": false,
+    "concurrent": true,
+    "seconds": 0.35739120800280944
+  },
+  {
+    "profile": "node",
+    "cached": true,
+    "seconds": 0.04561758300405927
+  },
+  {
+    "profile": "node",
+    "cached": true,
+    "seconds": 0.04448554199188948
+  },
+  {
+    "profile": "node",
+    "cached": true,
+    "seconds": 0.04209029200137593
+  },
+  {
+    "profile": "node",
+    "cached": true,
+    "seconds": 0.043685958022251725
+  },
+  {
+    "profile": "node",
+    "cached": true,
+    "seconds": 0.04243891700753011
+  },
+  {
+    "profile": "rust",
+    "cached": false,
+    "concurrent": true,
+    "seconds": 0.4597147919994313
+  },
+  {
+    "profile": "rust",
+    "cached": true,
+    "seconds": 0.04341391599155031
+  },
+  {
+    "profile": "rust",
+    "cached": true,
+    "seconds": 0.04740566699183546
+  },
+  {
+    "profile": "rust",
+    "cached": true,
+    "seconds": 0.04481995801324956
+  },
+  {
+    "profile": "rust",
+    "cached": true,
+    "seconds": 0.044924332993105054
+  },
+  {
+    "profile": "rust",
+    "cached": true,
+    "seconds": 0.04616891700425185
+  }
+]

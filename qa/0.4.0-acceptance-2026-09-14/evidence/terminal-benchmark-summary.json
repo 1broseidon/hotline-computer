@@ -1,0 +1,20 @@
+{
+  "alacritty": {
+    "successful_trials": 5,
+    "startup_ms_median": 75.310137,
+    "idle_rss_mib_median": 132.578125,
+    "idle_pss_mib_median": 131.1875,
+    "write_ms_median": 148.161639,
+    "loaded_pss_mib_median": 180.453125,
+    "cpu_output_seconds_median": 0.48000000000000004
+  },
+  "ghostty": {
+    "successful_trials": 5,
+    "startup_ms_median": 247.24185,
+    "idle_rss_mib_median": 257.921875,
+    "idle_pss_mib_median": 253.974609375,
+    "write_ms_median": 308.377235,
+    "loaded_pss_mib_median": 266.2607421875,
+    "cpu_output_seconds_median": 1.7600000000000002
+  }
+}

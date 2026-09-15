@@ -1,0 +1,4 @@
+PASS: checksum matches release checksums.txt and API digest
+SHA256 61e0a7ef16350534c586d7e2755a490333334fc40bdeac01c092bf77bf030b8c
+ketch v0.16.2
+PASS: local scrape title, marker, Linux, macOS

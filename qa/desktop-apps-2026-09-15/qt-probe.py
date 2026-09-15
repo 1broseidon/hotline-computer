@@ -1,0 +1,16 @@
+from qa import *
+c=client();job=c.call('shell',{'action':'start','command':'featherpad','args':['/home/agent/workspace/featherpad-qa.txt'],'label':'Qt basic edit without accessibility scan'})
+record('qt-probe-job.json',job)
+time.sleep(3)
+windows=c.call('windows',{'action':'list'});w=next((w for w in windows if 'featherpad' in w['class'].lower()),None)
+record('qt-probe-before.json',{'windows':windows,'job':c.call('shell',{'action':'status','job_id':job['id']})})
+if w:
+ c.call('windows',{'action':'focus','window_id':w['id']})
+ c.screenshot('featherpad-probe-before.png')
+ c.call('input',{'action':'key','combo':'ctrl+a','settle_ms':100})
+ c.call('input',{'action':'paste','text':'FeatherPad Qt proof — café 🐸\nSaved by the GUI.\n','settle_ms':300})
+ c.call('input',{'action':'key','combo':'ctrl+s','settle_ms':500})
+ c.screenshot('featherpad-probe-after.png')
+ time.sleep(1)
+ record('qt-probe-after.json',{'windows':c.call('windows',{'action':'list'}),'job':c.call('shell',{'action':'status','job_id':job['id']}),'saved':c.call('files',{'action':'get','path':'/home/agent/workspace/featherpad-qa.txt'})})
+print(json.dumps({'window':w,'state':c.call('shell',{'action':'status','job_id':job['id']})['state']}))

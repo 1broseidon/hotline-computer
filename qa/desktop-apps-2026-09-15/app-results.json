@@ -1,0 +1,103 @@
+[
+  {
+    "name": "vscode",
+    "needs_no_sandbox": true,
+    "launch_seconds": 20.05890104098944,
+    "job": {
+      "args": [
+        "--new-window",
+        "--wait",
+        "--disable-extensions",
+        "--disable-workspace-trust",
+        "--force-renderer-accessibility",
+        "--user-data-dir=/home/agent/workspace/code-data",
+        "--extensions-dir=/home/agent/workspace/code-extensions",
+        "--no-sandbox",
+        "/home/agent/workspace/vscode-qa.txt"
+      ],
+      "command": "/usr/bin/code",
+      "cwd": "/home/agent/workspace",
+      "error": null,
+      "exit_code": null,
+      "fingerprint": "d9a0d478434bb9ac41afc44a4be9fd0fffab95f93f7111accf45708f7ee447e2",
+      "finished_at": null,
+      "holder": "release-acceptance",
+      "id": "000001a0a53bc89a-2d14b1cc",
+      "label": "vscode-no-sandbox desktop QA",
+      "output_bytes": 0,
+      "pid": 13496,
+      "pty": false,
+      "request_id": null,
+      "signal": null,
+      "started_at": 1789478553754,
+      "state": "running",
+      "truncated": false
+    },
+    "window": {
+      "id": "0x01800003",
+      "title": "Visual Studio Code",
+      "class": "code.code",
+      "bounds": [
+        0,
+        48,
+        1920,
+        1032
+      ],
+      "focused": true,
+      "pid": 13987,
+      "maximized": true,
+      "minimum_size": [
+        400,
+        270
+      ]
+    },
+    "saved": "vscode original QA text\n",
+    "passed": false
+  },
+  {
+    "name": "featherpad",
+    "launch_seconds": 1.996208917000331,
+    "job": {
+      "args": [
+        "/home/agent/workspace/featherpad-qa.txt"
+      ],
+      "command": "/usr/bin/featherpad",
+      "cwd": "/home/agent/workspace",
+      "error": null,
+      "exit_code": null,
+      "fingerprint": "fc68e9276ff3b60f106b7eda71d8449fc6e015a7ffa82bc2c548f5f107888fc2",
+      "finished_at": null,
+      "holder": "release-acceptance",
+      "id": "000001a0a53bf25c-8671dcc4",
+      "label": "featherpad desktop QA",
+      "output_bytes": 0,
+      "pid": 14749,
+      "pty": false,
+      "request_id": null,
+      "signal": null,
+      "started_at": 1789478564444,
+      "state": "running",
+      "truncated": false
+    },
+    "window": {
+      "id": "0x02400007",
+      "title": "FeatherPad",
+      "class": "featherpad.FeatherPad",
+      "bounds": [
+        0,
+        48,
+        1920,
+        1032
+      ],
+      "focused": true,
+      "pid": 14749,
+      "maximized": true,
+      "minimum_size": [
+        299,
+        217
+      ]
+    },
+    "saved": "featherpad original QA text\n",
+    "passed": false
+  }
+]

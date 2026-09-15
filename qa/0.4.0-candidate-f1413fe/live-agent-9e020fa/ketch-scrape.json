@@ -1,0 +1,1 @@
+{"url":"http://127.0.0.1:8765/index.html","title":"Toad QA deterministic fixture","markdown":"## Toad QA scrape acceptance\n\nSynthetic fixture marker TOAD-QA-20260914. This deterministic local page verifies extraction without a search service.\n\n- Linux accepted\n- macOS accepted"}

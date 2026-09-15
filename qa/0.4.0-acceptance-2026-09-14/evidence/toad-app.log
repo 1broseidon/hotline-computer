@@ -1,0 +1,8 @@
+
+thread 'main' (31724) panicked at /home/agent/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/libappindicator-sys-0.9.0/src/lib.rs:41:5:
+Failed to load ayatana-appindicator3 or appindicator3 dynamic library
+libayatana-appindicator3.so.1: cannot open shared object file: No such file or directory
+libappindicator3.so.1: cannot open shared object file: No such file or directory
+libayatana-appindicator3.so: cannot open shared object file: No such file or directory
+libappindicator3.so: cannot open shared object file: No such file or directory
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace

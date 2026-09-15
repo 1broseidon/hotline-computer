@@ -1,0 +1,26 @@
+0.4.0: Pulling from 1broseidon/toad-computer
+bf7af0229701: Pulling fs layer
+b9afeb27598b: Pulling fs layer
+2415be6a8887: Pulling fs layer
+4f4fb700ef54: Pulling fs layer
+db15255b49e3: Pulling fs layer
+4f4fb700ef54: Waiting
+db15255b49e3: Waiting
+bf7af0229701: Verifying Checksum
+bf7af0229701: Download complete
+4f4fb700ef54: Verifying Checksum
+4f4fb700ef54: Download complete
+2415be6a8887: Verifying Checksum
+2415be6a8887: Download complete
+db15255b49e3: Verifying Checksum
+db15255b49e3: Download complete
+bf7af0229701: Pull complete
+b9afeb27598b: Verifying Checksum
+b9afeb27598b: Download complete
+b9afeb27598b: Pull complete
+2415be6a8887: Pull complete
+4f4fb700ef54: Pull complete
+db15255b49e3: Pull complete
+Digest: sha256:acd49c6019dc35445d79170fb9201d91461efe056a989c51a54e1f3fc844ac82
+Status: Downloaded newer image for ghcr.io/1broseidon/toad-computer:0.4.0
+ghcr.io/1broseidon/toad-computer:0.4.0

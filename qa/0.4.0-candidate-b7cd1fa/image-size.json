@@ -1,0 +1,7 @@
+{
+  "image_id": "sha256:ee28283f4cfd4c958bbee3db5c3896d8e0c63b3061a9aae549fb38dcfe88e717",
+  "docker_uncompressed_size_bytes": 1351255885,
+  "gzip_docker_save_bytes": 491813583,
+  "measurement_seconds": 46.773283458984224,
+  "note": "Compressed Docker export size; registry cold-pull bytes and latency still require publication/native CI."
+}

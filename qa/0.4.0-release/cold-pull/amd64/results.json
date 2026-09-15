@@ -1,0 +1,15 @@
+{
+  "image": "ghcr.io/1broseidon/toad-computer:0.4.0",
+  "cold": true,
+  "passed": true,
+  "pull_seconds": 16.278333437999997,
+  "image_id": "sha256:3df830f1f25fc09c5e7c46d0cb3dcb307456bb50e7b5ce0d9a2d2ff0cf276ca5",
+  "repo_digests": [
+    "ghcr.io/1broseidon/toad-computer@sha256:acd49c6019dc35445d79170fb9201d91461efe056a989c51a54e1f3fc844ac82"
+  ],
+  "architecture": "amd64",
+  "uncompressed_bytes": 1331819548,
+  "compressed_layer_bytes": 510678739,
+  "container_start_seconds": 0.1953840879999973,
+  "ready_seconds": 0.34119113900000286
+}

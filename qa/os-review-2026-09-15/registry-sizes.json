@@ -1,0 +1,26 @@
+[
+  {
+    "version": "030",
+    "arch": "arm64",
+    "compressed_bytes": 231747886,
+    "digest": "sha256:a5b667bb49a28d55e29429fc86344dff355b2eb73ad602585a6c0172b4e0a035"
+  },
+  {
+    "version": "030",
+    "arch": "amd64",
+    "compressed_bytes": 236679472,
+    "digest": "sha256:d9ac28ed8b2ea0aaa670d94463868ace221fc75810ca57ed2f1138488b4d3a16"
+  },
+  {
+    "version": "040",
+    "arch": "amd64",
+    "compressed_bytes": 510678739,
+    "digest": "sha256:4f4b7cea853ea7c0ff440931252280ab57c6e334d720a87e10a9ff6fa977c8d1"
+  },
+  {
+    "version": "040",
+    "arch": "arm64",
+    "compressed_bytes": 508774691,
+    "digest": "sha256:8061cf94dbad097965ed299755842759df4597366a609dfbe23c0ab4c8fe76e3"
+  }
+]

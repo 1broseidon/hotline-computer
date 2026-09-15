@@ -1,0 +1,13 @@
+[0x00e00003 Toad Terminal 1152,48 768x1032]
+  [accessibility unavailable: no unambiguous application/window match]
+
+[0x01800007 Renamed QA window 0,48 960x1032]
+  [filler]  24,72 912x984 states=[enabled,sensitive,showing,vertical,visible]
+    [label] Primary acceptance window 24,72 912x17 states=[enabled,multi-line,sensitive,showing,visible]
+    [text] Native clipboard field 24,107 912x34 states=[editable,enabled,focusable,focused,sensitive,showing,single-line,visible] value="Editable native value"
+    [check box] Native checked state 24,159 912x21 states=[checked,enabled,focusable,sensitive,showing,visible]
+    [password text]  24,198 912x34 states=[editable,enabled,focusable,sensitive,showing,single-line,visible]
+
+[0x01800010 Native acceptance 960,48 960x1032]
+  [label] Secondary acceptance window 960,48 960x1032 states=[enabled,multi-line,sensitive,showing,visible]
+

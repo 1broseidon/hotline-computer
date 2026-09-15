@@ -1,0 +1,7 @@
+{
+  "passed": true,
+  "native_field_exact": true,
+  "browser_multiline_tabs_whitespace_exact": true,
+  "host_app_reopened_existing_container": true,
+  "automation_note": "CUA paste reported a clipboard-read timeout, but the page acknowledged Pasted and the guest value matched exactly. The action was not retried."
+}

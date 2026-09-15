@@ -1,0 +1,4 @@
+{
+  "metadata": "build-essential\t12.12\ncode\t1.137.0-1788902074\nfeatherpad\t1.6.1-1\nlibgtk-3-dev:arm64\t3.24.49-3\npkg-config:arm64\t1.8.1-4\n",
+  "sha256": "8bff558a659d351328f5a1e319802073b59dac42f95cc0f9b2ef1b0c27387431  /home/agent/workspace/code.deb\n8da944e82f78f3c4c6e6b054b7c562ab64ea37d4a3e7dc8576bed8a8160d3c2a  /home/agent/workspace/geany-2.1.tar.gz\n"
+}

@@ -1,0 +1,35 @@
+{
+  "job": {
+    "id": "000001a0a53b8d45-3193150f",
+    "pid": 10902,
+    "label": "vscode desktop QA",
+    "command": "/usr/bin/code",
+    "args": [
+      "--new-window",
+      "--wait",
+      "--disable-extensions",
+      "--disable-workspace-trust",
+      "--force-renderer-accessibility",
+      "--user-data-dir=/home/agent/workspace/code-data",
+      "--extensions-dir=/home/agent/workspace/code-extensions",
+      "/home/agent/workspace/vscode-qa.txt"
+    ],
+    "cwd": "/home/agent/workspace",
+    "holder": "release-acceptance",
+    "state": "exited",
+    "exit_code": 0,
+    "signal": null,
+    "started_at": 1789478538565,
+    "finished_at": 1789478539826,
+    "error": null,
+    "output_bytes": 0,
+    "truncated": false,
+    "pty": false,
+    "request_id": null,
+    "fingerprint": "f6cd860fa1014d12cc46bc7ac295c0af2437a68de8bfb245e34445b0ceddd995"
+  },
+  "output": "",
+  "cursor": 0,
+  "next_cursor": 0,
+  "eof": true
+}

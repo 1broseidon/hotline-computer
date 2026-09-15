@@ -1,0 +1,8 @@
+{
+  "passed": true,
+  "redirect_followed": true,
+  "path_and_argument_with_spaces": true,
+  "verified_sha256": "c366e93d89071feac9342cb654308331b353ba8021a14696f6eb552c42a3a57c",
+  "installer_exit_code": 19,
+  "output": "Downloaded 55 bytes of 55\n{\"path\": \"/home/agent/qa/path with spaces/install fixture.sh\", \"bytes\": 55, \"sha256\": \"c366e93d89071feac9342cb654308331b353ba8021a14696f6eb552c42a3a57c\", \"verified\": true, \"cached\": false}\nRunning /home/agent/qa/path with spaces/install fixture.sh with bash\ninstaller argv: argument with spaces\n"
+}

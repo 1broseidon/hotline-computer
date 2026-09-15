@@ -3,3 +3,9 @@
 
 __pycache__/
 /qa/latest/
+
+# Downloaded artifacts and cached upstream pages are not authored QA evidence.
+/qa/**/*.tar.gz
+/qa/*/upstream*.txt
+/qa/*/app-sources.txt
+/qa/linux-amd64/

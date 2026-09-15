@@ -1,0 +1,58 @@
+{
+  "wizard": {
+    "content": [
+      {
+        "type": "text",
+        "text": "page: Computer acceptance · Forms\nComputer acceptance · Forms\n\nSynthetic QA data only. Submissions stay on this computer.\n\nSimple form\nName\nEmail\nTopic\nChoose a topic\nBug report\nFeature request\nMessage\nKeep a copy\nSubmit simple form\nComplex application\n\nComplete\n\nApplication QA-040 accepted: {\"name\":\"Synthetic QA Applicant\",\"email\":\"toad-qa@example.com\",\"project\":\"Team\",\"organization\":\"Toad QA\",\"date\":\"2026-09-14\",\"file\":\"attachment.txt\",\"platforms\":[\"Linux\",\"macOS\"]}\n[e1] [h1] Computer acceptance · Forms\n[e2] [h2] Simple form\n[e3] [text] Name required value=\"\" invalid=\"Please fill out this field.\"\n[e4] [email] Email required value=\"\" invalid=\"Please fill out this field.\"\n[e5] [combobox] Topic Choose a topic Bug report Feature request value=\"\" multiple=false options=[{\"value\":\"\",\"label\":\"Choose a topic\",\"selected\":true,\"disabled\":false},{\"value\":\"Bug report\",\"label\":\"Bug report\",\"selected\":false,\"disabled\":false},{\"value\":\"Feature request\",\"label\":\"Feature request\",\"selected\":false,\"disabled\":false}]\n[e6] [textbox] Message required value=\"\" invalid=\"Please fill out this field.\"\n[e7] [checkbox] Keep a copy checked=false value=\"on\"\n[e8] [button] Submit simple form value=\"\"\n[e9] [h2] Complex application"
+      }
+    ],
+    "isError": false
+  },
+  "observerClosed": {
+    "content": [
+      {
+        "type": "text",
+        "text": "{\"id\":\"000001a0a3280067-d8c73acd\",\"pid\":484,\"label\":\"Toad local development build and native launch\",\"command\":\"bash\",\"args\":[\"-c\",\"set -o pipefail; date -u; cd ui && bun install --frozen-lockfile && bun run typecheck && cd .. && make dev\"],\"cwd\":\"/home/agent/qa/toad\",\"holder\":\"anonymous\",\"state\":\"running\",\"exit_code\":null,\"signal\":null,\"started_at\":1789443702887,\"finished_at\":null,\"error\":null,\"output_bytes\":245635,\"truncated\":false,\"pty\":false,\"request_id\":\"toad-dev-qa-1\",\"fingerprint\":\"7789f1765fd7c5dd4e39dcf0ad21a8abf5165b00624cdd81f1cecf7abdeeda39\"}"
+      }
+    ],
+    "isError": false
+  },
+  "artifactJobs": [
+    {
+      "content": [
+        {
+          "type": "text",
+          "text": "{\"job\":{\"id\":\"000001a0a32944f6-418f1157\",\"pid\":19323,\"label\":\"download /home/agent/qa/ketch.tar.gz\",\"command\":\"/usr/bin/toad-computer\",\"args\":[\"artifact\",\"{\\\"action\\\":\\\"download\\\",\\\"args\\\":[],\\\"asset\\\":\\\"ketch_0.16.2_{os}_{arch}.tar.gz\\\",\\\"destination\\\":null,\\\"interpreter\\\":null,\\\"path\\\":\\\"/home/agent/qa/ketch.tar.gz\\\",\\\"repo\\\":\\\"1broseidon/ketch\\\",\\\"sha256\\\":\\\"61e0a7ef16350534c586d7e2755a490333334fc40bdeac01c092bf77bf030b8c\\\",\\\"url\\\":null,\\\"version\\\":\\\"v0.16.2\\\"}\"],\"cwd\":\"/home/agent\",\"holder\":\"anonymous\",\"state\":\"exited\",\"exit_code\":0,\"signal\":null,\"started_at\":1789443785974,\"finished_at\":1789443786769,\"error\":null,\"output_bytes\":551,\"truncated\":false,\"pty\":false,\"request_id\":null,\"fingerprint\":\"6ab27cdd1a9b91e02bab6bff2ea002e28192a326cf436ca52692f0d5817edaad\",\"artifact_staging\":\"/home/agent/qa/.toad-artifact-000001a0a32944f6-418f1157\"},\"output\":\"{\\\"release\\\": \\\"v0.16.2\\\", \\\"asset\\\": \\\"ketch_0.16.2_linux_arm64.tar.gz\\\", \\\"architecture\\\": \\\"arm64\\\"}\\nDownloaded 1048576 bytes of 8059545\\nDownloaded 2097152 bytes of 8059545\\nDownloaded 3145728 bytes of 8059545\\nDownloaded 4194304 bytes of 8059545\\nDownloaded 5242880 bytes of 8059545\\nDownloaded 6291456 bytes of 8059545\\nDownloaded 7340032 bytes of 8059545\\nDownloaded 8059545 bytes of 8059545\\n{\\\"path\\\": \\\"/home/agent/qa/ketch.tar.gz\\\", \\\"bytes\\\": 8059545, \\\"sha256\\\": \\\"61e0a7ef16350534c586d7e2755a490333334fc40bdeac01c092bf77bf030b8c\\\", \\\"verified\\\": true, \\\"cached\\\": false}\\n\",\"cursor\":0,\"next_cursor\":551,\"eof\":true}"
+        }
+      ],
+      "isError": false
+    },
+    {
+      "content": [
+        {
+          "type": "text",
+          "text": "{\"job\":{\"id\":\"000001a0a329ed52-bc323744\",\"pid\":24159,\"label\":\"extract /home/agent/qa/ketch.tar.gz\",\"command\":\"/usr/bin/toad-computer\",\"args\":[\"artifact\",\"{\\\"action\\\":\\\"extract\\\",\\\"args\\\":[],\\\"asset\\\":null,\\\"destination\\\":\\\"/home/agent/qa/ketch-v0.16.2\\\",\\\"interpreter\\\":null,\\\"path\\\":\\\"/home/agent/qa/ketch.tar.gz\\\",\\\"repo\\\":null,\\\"sha256\\\":null,\\\"url\\\":null,\\\"version\\\":null}\"],\"cwd\":\"/home/agent\",\"holder\":\"anonymous\",\"state\":\"exited\",\"exit_code\":0,\"signal\":null,\"started_at\":1789443829074,\"finished_at\":1789443829337,\"error\":null,\"output_bytes\":69,\"truncated\":false,\"pty\":false,\"request_id\":null,\"fingerprint\":\"06262a35e400956fed65477deac8160254472dbd9f76adee3c1490baea2b9d74\",\"artifact_staging\":\"/home/agent/qa/.toad-artifact-000001a0a329ed52-bc323744\"},\"output\":\"{\\\"path\\\": \\\"/home/agent/qa/ketch-v0.16.2\\\", \\\"expanded_bytes\\\": 19399442}\\n\",\"cursor\":0,\"next_cursor\":69,\"eof\":true}"
+        }
+      ],
+      "isError": false
+    },
+    {
+      "content": [
+        {
+          "type": "text",
+          "text": "{\"job\":{\"id\":\"000001a0a3293570-a7d5c319\",\"pid\":18460,\"label\":\"download /home/agent/qa/live-agent-evidence/ketch-checksums.txt\",\"command\":\"/usr/bin/toad-computer\",\"args\":[\"artifact\",\"{\\\"action\\\":\\\"download\\\",\\\"args\\\":[],\\\"asset\\\":\\\"checksums.txt\\\",\\\"destination\\\":null,\\\"interpreter\\\":null,\\\"path\\\":\\\"/home/agent/qa/live-agent-evidence/ketch-checksums.txt\\\",\\\"repo\\\":\\\"1broseidon/ketch\\\",\\\"sha256\\\":\\\"fe7eaeefeb04b3de3d436fc01ae5c1f40b75c4157c10767b21dc518ca6877559\\\",\\\"url\\\":null,\\\"version\\\":\\\"v0.16.2\\\"}\"],\"cwd\":\"/home/agent\",\"holder\":\"anonymous\",\"state\":\"exited\",\"exit_code\":0,\"signal\":null,\"started_at\":1789443782001,\"finished_at\":1789443782937,\"error\":null,\"output_bytes\":296,\"truncated\":false,\"pty\":false,\"request_id\":null,\"fingerprint\":\"c09dbc407ce8216ef06281b44a1948f775ae5addbd79aad8c0480349763799cf\",\"artifact_staging\":\"/home/agent/qa/live-agent-evidence/.toad-artifact-000001a0a3293570-a7d5c319\"},\"output\":\"{\\\"release\\\": \\\"v0.16.2\\\", \\\"asset\\\": \\\"checksums.txt\\\", \\\"architecture\\\": \\\"arm64\\\"}\\nDownloaded 591 bytes of 591\\n{\\\"path\\\": \\\"/home/agent/qa/live-agent-evidence/ketch-checksums.txt\\\", \\\"bytes\\\": 591, \\\"sha256\\\": \\\"fe7eaeefeb04b3de3d436fc01ae5c1f40b75c4157c10767b21dc518ca6877559\\\", \\\"verified\\\": true, \\\"cached\\\": false}\\n\",\"cursor\":0,\"next_cursor\":296,\"eof\":true}"
+        }
+      ],
+      "isError": false
+    },
+    {
+      "content": [
+        {
+          "type": "text",
+          "text": "{\"job\":{\"id\":\"000001a0a3265927-c2b03bdd\",\"pid\":421,\"label\":\"Prepare rust-tauri workspace\",\"command\":\"/usr/bin/toad-computer\",\"args\":[\"prepare\",\"rust-tauri\",\"/home/agent/qa/toad\",\"/home/agent\"],\"cwd\":\"/home/agent\",\"holder\":\"anonymous\",\"state\":\"exited\",\"exit_code\":0,\"signal\":null,\"started_at\":1789443594535,\"finished_at\":1789443617029,\"error\":null,\"output_bytes\":589,\"truncated\":false,\"pty\":false,\"request_id\":null,\"fingerprint\":\"22ebba42b999346b368c46d3796c4806b29df062da62cc0b25854e778b0e369d\"},\"output\":\"Preparing rust-tauri from Nixpkgs ef34387ddd751e1ab8857adf4676492d32eb24ec; downloads and build progress follow.\\nunpacking 'github:NixOS/nixpkgs/ef34387ddd751e1ab8857adf4676492d32eb24ec' into the Git cache...\\nwarning: creating lock file '\\\"/home/agent/.cache/toad/environments/0.4.0-aarch64-rust-tauri/flake.lock\\\"': \\n• Added input 'nixpkgs':\\n    'github:NixOS/nixpkgs/ef34387ddd751e1ab8857adf4676492d32eb24ec?narHash=sha256-eiEK7cKZORNEvX0GeF3RtNEF/JXhgf2RqSp3230q13E%3D' (2026-09-13)\\nReady: /home/agent/qa/toad (rust-tauri). Shell commands in this directory now inherit the environment.\\n\",\"cursor\":0,\"next_cursor\":589,\"eof\":true}"
+        }
+      ],
+      "isError": false
+    }
+  ]
+}

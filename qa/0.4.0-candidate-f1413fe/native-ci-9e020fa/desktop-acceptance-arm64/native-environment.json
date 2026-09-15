@@ -1,0 +1,32 @@
+{
+  "profile": "rust-tauri",
+  "cached": false,
+  "seconds": 11.39383593399998,
+  "warm_samples": [
+    {
+      "profile": "rust-tauri",
+      "cached": true,
+      "seconds": 0.0018438160000187054
+    },
+    {
+      "profile": "rust-tauri",
+      "cached": true,
+      "seconds": 0.0017325809999420017
+    },
+    {
+      "profile": "rust-tauri",
+      "cached": true,
+      "seconds": 0.0017442539999592555
+    },
+    {
+      "profile": "rust-tauri",
+      "cached": true,
+      "seconds": 0.0016103450000173325
+    },
+    {
+      "profile": "rust-tauri",
+      "cached": true,
+      "seconds": 0.0016417460000184292
+    }
+  ]
+}

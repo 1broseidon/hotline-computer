@@ -1,0 +1,86 @@
+{
+  "architecture": "aarch64",
+  "build": {
+    "channel": "release",
+    "revision": "3f4ec78f729256ab789d546dd585d904b63dd0c4"
+  },
+  "capabilities": [
+    "capture",
+    "input",
+    "browser",
+    "shell",
+    "files",
+    "windows",
+    "wait",
+    "state"
+  ],
+  "catalog": {
+    "nixpkgs": "ef34387ddd751e1ab8857adf4676492d32eb24ec",
+    "profiles": [
+      {
+        "name": "python",
+        "tools": [
+          "python3.12",
+          "uv"
+        ]
+      },
+      {
+        "name": "go",
+        "tools": [
+          "go",
+          "gopls"
+        ]
+      },
+      {
+        "name": "node",
+        "tools": [
+          "node",
+          "bun",
+          "pnpm"
+        ]
+      },
+      {
+        "name": "rust",
+        "tools": [
+          "rustc",
+          "cargo",
+          "clang",
+          "pkg-config",
+          "openssl"
+        ]
+      },
+      {
+        "name": "rust-tauri",
+        "tools": [
+          "Rust",
+          "Tauri CLI",
+          "Node",
+          "Bun",
+          "GTK3",
+          "WebKitGTK 4.1",
+          "AppIndicator",
+          "Mesa"
+        ]
+      }
+    ],
+    "usage": "state prepare with name and workspace; wait for its job to exit successfully, then shell commands with cwd inside that workspace inherit its environment automatically.",
+    "version": "0.4.0"
+  },
+  "display": ":0",
+  "executables": {
+    "alacritty": "/usr/bin/alacritty",
+    "bash": "/usr/bin/bash",
+    "chromium": "/usr/bin/chromium",
+    "curl": "/usr/bin/curl",
+    "git": "/usr/bin/git",
+    "nix": "/usr/bin/nix",
+    "python3": "/usr/bin/python3"
+  },
+  "graphics": "Mesa software rendering",
+  "home": "/home/agent",
+  "jobs": [],
+  "nixpkgs": "ef34387ddd751e1ab8857adf4676492d32eb24ec",
+  "skill_sha256": "863b962bbf771c151e00cad4c43ffe5a8c4b2c2367d0b1cd1de49b7fafe3966e",
+  "terminal": "Alacritty",
+  "version": "0.4.0"
+}

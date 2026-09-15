@@ -1,0 +1,20 @@
+[
+  {
+    "id": "0x02000020",
+    "title": "Toad",
+    "class": "toad-desktop.Toad-desktop",
+    "bounds": [
+      0,
+      48,
+      1920,
+      1032
+    ],
+    "focused": true,
+    "pid": 2804,
+    "maximized": true,
+    "minimum_size": [
+      520,
+      420
+    ]
+  }
+]

@@ -1,0 +1,74 @@
+[
+  {
+    "label": "debian",
+    "image": "ghcr.io/1broseidon/toad-computer:0.4.0",
+    "cases": [
+      {
+        "name": "Ketch download and local scrape",
+        "passed": true,
+        "output": null,
+        "seconds": 1.476
+      },
+      {
+        "name": "four cached Nix toolchains",
+        "passed": true,
+        "output": {
+          "python": "42\n",
+          "node": "42\n",
+          "rust": "rustc 1.98.1 (48a229cea 2026-09-01) (built from a source tarball)\n",
+          "go": "go version go1.26.7 linux/arm64\n"
+        },
+        "seconds": 0.683
+      },
+      {
+        "name": "native Toad frontend build",
+        "passed": true,
+        "output": "$ tsc --noEmit && vite build\nvite v8.2.2 building client environment for production...\ntransforming...\n\u2713 326 modules transformed.\nrendering chunks...\ncomputing gzip size...\ndist/index.html                                                     0.37 kB \u2502 gzip:   0.25 kB\ndist/assets/ibm-plex-mono-vietnamese-500-normal-C8zxqsMH.woff       5.61 kB\ndist/assets/ibm-plex-mono-vietnamese-400-normal-DDuiU_S-.woff       5.62 kB\ndist/assets/ibm-plex-mono-cyrillic-ext-500-normal-BIfNGwUT.woff     5.77 kB\ndist/assets/ibm-plex-mono-cyrillic-ext-400-normal-DMdlQ8Kv.woff     5.82 kB\ndist/assets/ibm-plex-mono-vietnamese-400-normal-BulugwFq.woff2      5.86 kB\ndist/assets/ibm-plex-mono-vietnamese-500-normal-DZ4AoWbu.woff2      6.04 kB\ndist/assets/ibm-plex-sans-vietnamese-400-normal-fK1oJ5dG.woff       6.39 kB\ndist/assets/ibm-plex-sans-vietnamese-600-normal-DgdngZtN.woff       6.58 kB\ndist/assets/ibm-plex-sans-vietnamese-500-normal-BEb3_waV.woff       6.58 kB\ndist/assets/ibm-plex-mono-cyrillic-ext-400-normal-xuaO2J-f.woff2    6.91 kB\ndist/assets/ibm-plex-mono-cyrillic-ext-500-normal-BqneJy0T.woff2    6.97 kB\ndist/assets/ibm-plex-mono-cyrillic-400-normal-CEL4l2ZJ.woff         7.20 kB\ndist/assets/ibm-plex-mono-cyrillic-500-normal-Ael50iVv.woff         7.20 kB\ndist/assets/ibm-plex-sans-vietnamese-400-normal-DG4YqDda.woff2      8.20 kB\ndist/assets/ibm-plex-mono-cyrillic-400-normal-BSMlKf0J.woff2        8.35 kB\ndist/assets/ibm-plex-sans-vietnamese-500-normal-e4dixQRQ.woff2      8.41 kB\ndist/assets/ibm-plex-mono-cyrillic-500-normal-Bq9vWWag.woff2        8.46 kB\ndist/assets/ibm-plex-sans-vietnamese-600-normal-DpPYBSTl.woff2      8.46 kB\ndist/assets/ibm-plex-sans-greek-400-normal-D9ESIMu3.woff            8.76 kB\ndist/assets/ibm-plex-sans-greek-500-normal-CuWXN6rf.woff            9.14 kB\ndist/assets/ibm-plex-sans-greek-600-normal-D-CqTdkO.woff            9.22 kB\ndist/assets/ibm-plex-sans-greek-400-normal-_efipK4i.woff2           9.94 kB\ndist/assets/ibm-plex-sans-cyrillic-ext-400-normal-Dsrv2Tcn.woff    10.28 kB\ndist/assets/ibm-plex-sans-greek-600-normal-DzTrcv_p.woff2          10.36 kB\ndist/assets/ibm-plex-sans-greek-500-normal-JMMifIXV.woff2          10.37 kB\ndist/assets/ibm-plex-sans-cyrillic-ext-500-normal-DB5PtV2g.woff    10.59 kB\ndist/assets/ibm-plex-sans-cyrillic-ext-600-normal-Bz0x94Yp.woff    10.61 kB\ndist/assets/ibm-plex-mono-latin-ext-400-normal-D3D2R8hC.woff       11.76 kB\ndist/assets/ibm-plex-mono-latin-ext-500-normal-CZ70TYgx.woff       11.76 kB\ndist/assets/ibm-plex-sans-cyrillic-ext-400-normal-g30qAdWV.woff2   12.14 kB\ndist/assets/ibm-plex-sans-cyrillic-ext-600-normal-DUMzJB7m.woff2   12.30 kB\ndist/assets/ibm-plex-sans-cyrillic-ext-500-normal-Cs5J6C77.woff2   12.30 kB\ndist/assets/ibm-plex-mono-latin-400-normal-CvHOgSBP.woff           13.14 kB\ndist/assets/ibm-plex-mono-latin-500-normal-CB9ihrfo.woff           13.15 kB\ndist/assets/ibm-plex-mono-latin-ext-400-normal-BmRBH3aV.woff2      13.34 kB\ndist/assets/ibm-plex-mono-latin-ext-500-normal-CAhNIIs5.woff2      13.43 kB\ndist/assets/ibm-plex-sans-cyrillic-400-normal-BTotfTJu.woff        13.51 kB\ndist/assets/ibm-plex-sans-cyrillic-500-normal-ByOcLdNv.woff        13.85 kB\ndist/assets/ibm-plex-sans-cyrillic-600-normal-BGq0mW3O.woff        13.88 kB\ndist/assets/ibm-plex-sans-latin-ext-400-normal-RBey6euL.woff       14.36 kB\ndist/assets/ibm-plex-mono-latin-400-normal-DMJ8VG8y.woff2          14.70 kB\ndist/assets/ibm-plex-sans-latin-ext-500-normal-D0aIdm-b.woff       14.73 kB\ndist/assets/ibm-plex-sans-latin-ext-600-normal-DIrixKbi.woff       14.77 kB\ndist/assets/ibm-plex-sans-cyrillic-400-normal-DZqxrq2p.woff2       14.80 kB\ndist/assets/ibm-plex-mono-latin-500-normal-DSY6xOcd.woff2          14.88 kB\ndist/assets/ibm-plex-sans-cyrillic-500-normal-CocWQlwt.woff2       15.00 kB\ndist/assets/ibm-plex-sans-cyrillic-600-normal-71GNu3SW.woff2       15.04 kB\ndist/assets/ibm-plex-sans-latin-ext-400-normal-C5H60-Va.woff2      15.98 kB\ndist/assets/ibm-plex-sans-latin-ext-600-normal-DOrvGEcy.woff2      16.44 kB\ndist/assets/ibm-plex-sans-latin-ext-500-normal-DakdToA3.woff2      16.45 kB\ndist/assets/ibm-plex-sans-latin-400-normal-CYLoc0-x.woff           22.10 kB\ndist/assets/ibm-plex-sans-latin-400-normal-CDDApCn2.woff2          22.58 kB\ndist/assets/ibm-plex-sans-latin-600-normal-Cu4Hd6ag.woff           23.87 kB\ndist/assets/ibm-plex-sans-latin-500-normal-BgVn5rGT.woff           23.91 kB\ndist/assets/ibm-plex-sans-latin-500-normal-6ng42L7E.woff2          24.18 kB\ndist/assets/ibm-plex-sans-latin-600-normal-CuJfVYMP.woff2          24.25 kB\ndist/assets/index-BcLdg0c0.css                                     58.93 kB \u2502 gzip:  12.48 kB\ndist/assets/index-BOUcplFe.js                                     549.07 kB \u2502 gzip: 158.97 kB\n\n\u2713 built in 368ms\n[plugin builtin:vite-reporter] \n(!) Some chunks are larger than 500 kB after minification. Consider:\n- Using dynamic import() to code-split the application\n- Use build.rolldownOptions.output.codeSplitting to improve chunking: https://rolldown.rs/reference/OutputOptions.codeSplitting\n- Adjust chunk size limit for this warning via build.chunkSizeWarningLimit.\n",
+        "seconds": 0.879
+      },
+      {
+        "name": "prebuilt Nix Toad native screens",
+        "passed": true,
+        "output": null,
+        "seconds": 6.398
+      }
+    ],
+    "system_versions": "PRETTY_NAME=\"Debian GNU/Linux 13 (trixie)\"\nNAME=\"Debian GNU/Linux\"\nVERSION_ID=\"13\"\nVERSION=\"13 (trixie)\"\nVERSION_CODENAME=trixie\nDEBIAN_VERSION_FULL=13.6\nID=debian\nHOME_URL=\"https://www.debian.org/\"\nSUPPORT_URL=\"https://www.debian.org/support\"\nBUG_REPORT_URL=\"https://bugs.debian.org/\"\nChromium 152.0.7977.82 built on Debian GNU/Linux 13 (trixie)\nnix (Nix) 2.26.3\nalacritty 0.15.1\nldd (Debian GLIBC 2.41-12+deb13u3) 2.41\nCopyright (C) 2024 Free Software Foundation, Inc.\nThis is free software; see the source for copying conditions.  There is NO\nwarranty; not even for MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.\nWritten by Roland McGrath and Ulrich Drepper."
+  },
+  {
+    "label": "alpine",
+    "image": "toad-computer:os-review-alpine-current",
+    "cases": [
+      {
+        "name": "Ketch download and local scrape",
+        "passed": true,
+        "output": null,
+        "seconds": 1.181
+      },
+      {
+        "name": "four cached Nix toolchains",
+        "passed": true,
+        "output": {
+          "python": "42\n",
+          "node": "42\n",
+          "rust": "rustc 1.98.1 (48a229cea 2026-09-01) (built from a source tarball)\n",
+          "go": "go version go1.26.7 linux/arm64\n"
+        },
+        "seconds": 0.128
+      },
+      {
+        "name": "native Toad frontend build",
+        "passed": false,
+        "error": "{'job': {'id': '000001a0a5323201-004b6703', 'pid': 110, 'label': 'bun', 'command': 'bun', 'args': ['run', 'build'], 'cwd': '/home/agent/project/ui', 'holder': 'release-acceptance', 'state': 'failed', 'exit_code': 1, 'signal': None, 'started_at': 1789477925377, 'finished_at': 1789477925896, 'error': None, 'output_bytes': 3045, 'truncated': False, 'pty': False, 'request_id': None, 'fingerprint': '8f4b548dc0ffeced508cd2c83a6782a8bd2da18c4936268f25fd5ea368e81f9b'}, 'output': '$ tsc --noEmit && vite build\\nfile:///home/agent/project/ui/node_modules/rolldown/dist/shared/binding-CtPG-2KR.mjs:597\\n\\t\\t\\tconst error = /* @__PURE__ */ new Error(\"Cannot find native binding. npm has a bug related to optional dependencies (https://github.com/npm/cli/issues/4828). Please try `npm i` again after removing both package-lock.json and node_modules directory.\");\\n\\t\\t\\t                              ^\\n\\nError: Cannot find native binding. npm has a bug related to optional dependencies (https://github.com/npm/cli/issues/4828). Please try `npm i` again after removing both package-lock.json and node_modules directory.\\n    at file:///home/agent/project/ui/node_modules/rolldown/dist/shared/binding-CtPG-2KR.mjs:597:34\\n    at file:///home/agent/project/ui/node_modules/rolldown/dist/shared/binding-CtPG-2KR.mjs:9:49\\n    ... 2 lines matching cause stack trace ...\\n    at async node:internal/modules/esm/loader:647:26 {\\n  cause: Error: Cannot find module \\'@rolldown/binding-wasm32-wasi\\'\\n  Require stack:\\n  - /home/agent/project/ui/node_modules/rolldown/dist/shared/binding-CtPG-2KR.mjs\\n      at file:///home/agent/project/ui/node_modules/rolldown/dist/shared/binding-CtPG-2KR.mjs:494:18\\n      ... 6 lines matching cause stack trace ...\\n      at async node:internal/modules/esm/loader:647:26 {\\n    cause: Error: Cannot find module \\'./rolldown-binding.wasi.cjs\\'\\n    Require stack:\\n    - /home/agent/project/ui/node_modules/rolldown/dist/shared/binding-CtPG-2KR.mjs\\n        at file:///home/agent/project/ui/node_modules/rolldown/dist/shared/binding-CtPG-2KR.mjs:494:18\\n        ... 6 lines matching cause stack trace ...\\n        at async node:internal/modules/esm/loader:647:26 {\\n      cause: Error: /nix/store/m54cs0m994hc3n9lax7sg98sgy729qsa-glibc-2.42-84/lib/libc.so: invalid ELF header\\n          at file:///home/agent/project/ui/node_modules/rolldown/dist/shared/binding-CtPG-2KR.mjs:494:18\\n          ... 6 lines matching cause stack trace ...\\n          at async node:internal/modules/esm/loader:647:26 {\\n        cause: Error: Cannot find module \\'./rolldown-binding.linux-arm64-musl.node\\'\\n        Require stack:\\n        - /home/agent/project/ui/node_modules/rolldown/dist/shared/binding-CtPG-2KR.mjs\\n            at file:///home/agent/project/ui/node_modules/rolldown/dist/shared/binding-CtPG-2KR.mjs:494:18\\n            at Array.reduce (<anonymous>)\\n            at createLoadErrorChain (file:///home/agent/project/ui/node_modules/rolldown/dist/shared/binding-CtPG-2KR.mjs:487:17)\\n            at file:///home/agent/project/ui/node_modules/rolldown/dist/shared/binding-CtPG-2KR.mjs:598:18\\n            at file:///home/agent/project/ui/node_modules/rolldown/dist/shared/binding-CtPG-2KR.mjs:9:49\\n            at file:///home/agent/project/ui/node_modules/rolldown/dist/shared/parse-D0g29RgN.mjs:3:46\\n            at ModuleJob.run (node:internal/modules/esm/module_job:561:25)\\n            at async node:internal/modules/esm/loader:647:26 {\\n          cause: null\\n        }\\n      }\\n    }\\n  }\\n}\\n\\nNode.js v24.20.0\\nerror: script \"build\" exited with code 1\\n', 'cursor': 0, 'next_cursor': 3045, 'eof': True}",
+        "seconds": 0.524
+      },
+      {
+        "name": "prebuilt Nix Toad native screens",
+        "passed": false,
+        "error": "Toad did not map a native window",
+        "seconds": 30.165
+      }
+    ],
+    "system_versions": "NAME=\"Alpine Linux\"\nID=alpine\nVERSION_ID=3.24.1\nPRETTY_NAME=\"Alpine Linux v3.24\"\nHOME_URL=\"https://alpinelinux.org/\"\nBUG_REPORT_URL=\"https://gitlab.alpinelinux.org/alpine/aports/-/issues\"\nChromium 152.0.7977.82 Alpine Linux\nnix (Nix) 2.31.5\nalacritty 0.17.0\nmusl libc (aarch64)\nVersion 1.2.6\nDynamic Program Loader\nUsage: /lib/ld-musl-aarch64.so.1 [options] [--] pathname"
+  }
+]

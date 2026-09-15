@@ -1,0 +1,14 @@
+{
+  "passed": [
+    "package preparation and execution",
+    "package cache reuse",
+    "saved definition reuse",
+    "failed replacement retains prior environment",
+    "named repository flake and shell hook",
+    "subdirectory inheritance",
+    "changed hook re-evaluation with unchanged lock"
+  ],
+  "version": "0.5.0-dev",
+  "workspace": "/home/agent/src/generic-environment-smoke",
+  "first_cached": false
+}

@@ -1,0 +1,14 @@
+Filesystem      Size  Used Avail Use% Mounted on
+overlay          23G   21G  2.4G  90% /
+    PID    PPID %CPU %MEM COMMAND
+  55830   55826  111  0.0 ps
+  55828   55827  100  0.7 cc1
+  49534     484 99.3 11.2 rustc
+  55356   30573 98.7 17.9 rustc
+  50265     484 98.2  7.9 rustc
+  55826       6 30.0  0.0 bash
+  30573       6  5.9  3.1 .cargo-wrapped
+     47       6  1.7  0.5 alacritty
+     90       6  1.4  1.2 chromium
+      6       1  1.4  0.7 toad-computer
+    484       6  1.2  0.6 .cargo-wrapped
