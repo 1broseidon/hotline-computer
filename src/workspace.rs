@@ -24,7 +24,7 @@ fn packages(profile: &str) -> Result<&'static str, String> {
         "node" => Ok("nodejs bun pnpm"),
         "rust" => Ok("rustc cargo clang cmake perl pkg-config openssl"),
         "rust-tauri" => Ok(
-            "rustc cargo clang cmake perl pkg-config gnumake nodejs bun openssl gtk3 webkitgtk_4_1 libsoup_3 libayatana-appindicator librsvg glib-networking gsettings-desktop-schemas mesa libglvnd",
+            "rustc cargo clang cmake perl pkg-config gnumake cargo-tauri nodejs bun openssl gtk3 webkitgtk_4_1 libsoup_3 libayatana-appindicator librsvg glib-networking gsettings-desktop-schemas mesa libglvnd",
         ),
         _ => Err("unknown environment; choose python, go, node, rust, or rust-tauri".into()),
     }
@@ -48,7 +48,7 @@ pub fn catalog() -> Value {
     json!({"version":VERSION,"nixpkgs":NIXPKGS,"profiles":[
     {"name":"python","tools":["python3.12","uv"]},{"name":"go","tools":["go","gopls"]},
     {"name":"node","tools":["node","bun","pnpm"]},{"name":"rust","tools":["rustc","cargo","clang","pkg-config","openssl"]},
-    {"name":"rust-tauri","tools":["Rust","Node","Bun","GTK3","WebKitGTK 4.1","AppIndicator","Mesa"]}],
+    {"name":"rust-tauri","tools":["Rust","Tauri CLI","Node","Bun","GTK3","WebKitGTK 4.1","AppIndicator","Mesa"]}],
     "usage":"state prepare with name and workspace; wait for its job to exit successfully, then shell commands with cwd inside that workspace inherit its environment automatically."})
 }
 fn cache(home: &Path, profile: &str) -> PathBuf {

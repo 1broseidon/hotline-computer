@@ -53,7 +53,7 @@ pub fn descriptors(home: &str) -> Vec<Tool> {
                 "type":"object","properties":{
                     "action":{"type":"string","enum":["navigate","text","links","eval","click_ref","fill","select","check","hover","tabs","tab_new","tab_select","tab_close","upload","dialog_accept","dialog_dismiss","downloads","back","forward","reload"]},
                     "url":{"type":"string"},"js":{"type":"string"},"ref":{"type":"string"},"button":{"type":"string"},
-                    "text":{"type":"string"},"value":{"type":"string"},"values":{"type":"array","items":{"type":"string"},"description":"Native select values; multiple selections require a multiple select."},"uncheck":{"type":"boolean"},"index":{"type":"integer","minimum":0},"path":{"type":"string"}
+                    "text":{"type":"string","description":"Required for fill; an explicit empty string clears the field. Also used by dialog_accept."},"value":{"type":"string","description":"Single option value for select."},"values":{"type":"array","items":{"type":"string"},"description":"Native select values; multiple selections require a multiple select."},"uncheck":{"type":"boolean"},"index":{"type":"integer","minimum":0},"path":{"type":"string"}
                 },"required":["action"],"additionalProperties":false
             })),
         ),

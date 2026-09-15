@@ -376,6 +376,8 @@ pub fn place(
                 .width(width.max(1))
                 .height(height.max(1)),
         )
+        .map_err(|error| error.to_string())?
+        .check()
         .map_err(|error| error.to_string())?;
     connection.flush().map_err(|error| error.to_string())
 }

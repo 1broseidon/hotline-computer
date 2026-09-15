@@ -16,8 +16,7 @@ struct Input {
     r#ref: String,
     #[serde(default)]
     button: String,
-    #[serde(default)]
-    text: String,
+    text: Option<String>,
     #[serde(default)]
     value: String,
     values: Option<Vec<String>>,
@@ -52,7 +51,13 @@ pub async fn call(app: &App, arguments: Value, holder: &str) -> ToolResult {
                 )
                 .await
         }
-        "fill" => app.browser.fill(&input.r#ref, &input.text).await,
+        "fill" => {
+            let text = input
+                .text
+                .as_deref()
+                .ok_or("fill requires text; use text:\"\" to clear a field")?;
+            app.browser.fill(&input.r#ref, text).await
+        }
         "select" => {
             app.browser
                 .select(
@@ -78,7 +83,11 @@ pub async fn call(app: &App, arguments: Value, holder: &str) -> ToolResult {
                 app.browser.upload(&input.r#ref, input.path.as_ref()).await
             }
         }
-        "dialog_accept" => app.browser.dialog(true, &input.text).await,
+        "dialog_accept" => {
+            app.browser
+                .dialog(true, input.text.as_deref().unwrap_or(""))
+                .await
+        }
         "dialog_dismiss" => app.browser.dialog(false, "").await,
         "downloads" => downloads(app).await,
         "back" | "forward" | "reload" => app.browser.history(&input.action).await,

@@ -127,6 +127,12 @@ def browser(c):
     for key, text in [('name', 'Agent QA'), ('email', 'qa@example.test'), ('date', '2026-09-15'), ('notes', 'Unicode: café 🐸\nSecond line')]:
         result = c.call('browser', {'action': 'fill', 'ref': refs[key], 'text': text})
         assert result['value'] == text, result
+    for incorrect in [{'value': 'wrong argument'}, {}]:
+        failure = c.call('browser', {'action': 'fill', 'ref': refs['name'], **incorrect}, error=True)
+        assert 'fill requires text' in str(failure), failure
+        assert c.call('browser', {'action': 'eval', 'js': 'document.getElementById("name").value'}) == 'Agent QA'
+    assert c.call('browser', {'action': 'fill', 'ref': refs['name'], 'text': ''})['value'] == ''
+    c.call('browser', {'action': 'fill', 'ref': refs['name'], 'text': 'Agent QA'})
     result = c.call('browser', {'action': 'select', 'ref': refs['languages'], 'values': ['python', 'rust']})
     assert result['value'] == ['python', 'rust']
     c.call('browser', {'action': 'check', 'ref': refs['agree']})
@@ -492,6 +498,7 @@ def native(c):
     execute(c, 'git', ['clone', '--filter=blob:none', 'https://github.com/1broseidon/toad.git', root], timeout=300)
     execute(c, 'git', ['checkout', '--detach', TOAD_REVISION], cwd=root)
     timing = prepare(c, 'rust-tauri', root)
+    assert 'tauri-cli' in execute(c, 'cargo', ['tauri', '--version'], cwd=root)
     timing['warm_samples'] = [prepare(c, 'rust-tauri', root+'/second-'+str(n)) for n in range(5)]
     assert all(sample['cached'] for sample in timing['warm_samples'])
     c.output.joinpath('native-environment.json').write_text(json.dumps(timing, indent=2))

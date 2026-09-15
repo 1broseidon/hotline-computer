@@ -9,7 +9,7 @@ This guide ships with Toad Computer {{version}}, channel `{{channel}}`, revision
 
 ## Start with the task's shortest path
 
-- Browser tasks: `browser navigate`, then `browser text`. Use returned refs with `fill`, `select`, `check`, and `click_ref`. Take a fresh snapshot after navigation or a page change. `fill` accepts native date/time formats; `select` accepts `values` for multiple choices. An action result includes the retained value and HTML validity. Verify the submitted result, not just the field entry.
+- Browser tasks: `browser navigate`, then `browser text`. Use returned refs with `fill`, `select`, `check`, and `click_ref`. Take a fresh snapshot after navigation or a page change. `fill` requires `text` (for example, `{"action":"fill","ref":"e3","text":"QA"}`); an explicit empty string clears a field. Date/time inputs use native formats; `select` accepts `values` for multiple choices. An action result includes the retained value and HTML validity. Verify the submitted result, not just the field entry.
 - CLI installation or native app QA: use `shell` and the environment catalog below. The desktop is a Linux glibc container; its CPU architecture is reported by `state info`. Do not install host macOS artifacts into it.
 - Native screens: `capture` supplies a screenshot and window-scoped accessibility nodes. Use `input` for mouse/keyboard work and `windows` to focus or arrange apps. To place an app beside its observer, call `windows tile` with `primary_id` and `observer_id` from `windows list`; the result verifies work-area geometry and respects app minimum sizes. When accessibility is unavailable, use screenshot coordinates; never assume another window's tree belongs to this app.
 
@@ -20,10 +20,10 @@ A typical Rust/Tauri task uses this sequence (replace the repository and directo
 1. `shell {"command":"git","args":["clone","https://github.com/1broseidon/toad.git","/home/agent/src/toad"]}`
 2. `state {"action":"prepare","name":"rust-tauri","workspace":"/home/agent/src/toad"}`
 3. If preparation returns `ready:false`, use `shell wait` and `shell read` with the returned job ID until it succeeds. Nix download/build progress is retained in that job.
-4. Read the repository's build instructions with `files get` or a shell command. Run its actual build using `shell start` with `cwd` inside the prepared workspace. Commands inherit the catalog environment; no `nix develop` wrapper is needed.
+4. Read the repository's build instructions with `files get` or a shell command. Run its actual build using `shell start` with `cwd` inside the prepared workspace. Commands inherit the catalog environment. Use direct argv or `bash -c` for compound commands; a login shell (`bash -lc`) can reset the prepared PATH. No `nix develop` wrapper is needed.
 5. Launch the app with `shell launch`, keeping `cwd` in the workspace and using an isolated app data directory where supported. Read its startup output, list windows, and capture the screens under test.
 
-`state catalog` lists `python`, `go`, `node`, `rust`, and `rust-tauri`. Preparation is cached across workspaces. The catalog pins Nixpkgs {{nixpkgs}} and rejects stale environment metadata after a computer upgrade; rerun `state prepare` then. Repositories with their own Nix flake may use that flake through a managed shell job instead.
+`state catalog` lists `python`, `go`, `node`, `rust`, and `rust-tauri`. The `rust-tauri` profile includes the prebuilt `cargo tauri` CLI and native GTK/WebKit dependencies. Preparation is cached across workspaces. The catalog pins Nixpkgs {{nixpkgs}} and rejects stale environment metadata after a computer upgrade; rerun `state prepare` then. Repositories with their own Nix flake may use that flake through a managed shell job instead.
 
 ## Commands and artifacts
 
