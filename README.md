@@ -185,8 +185,17 @@ package environment, edit its generated flake and prepare with
 The base image supplies the desktop, browser, graphics, and Nix. Framework
 libraries and compilers are project dependencies; WebKit and AppIndicator
 are no longer installed in the base image. Native projects can specify their
-runtime library paths in a flake. System-wide `.deb` installation belongs in
-an image build, since runtime jobs remain unprivileged.
+runtime library paths in a flake.
+
+The computer is rootless by design: nothing runs as root, nothing can
+elevate, and the image carries no `apt` or `sudo`, so nobody is invited to
+try. Software comes in this order: what the computer prepares
+(`state prepare` for a teammate, `toad-computer prepare` for a person), then
+Nix by hand (`nix shell nixpkgs#<name>` for one tool), then what the image
+already has. The person's shell answers `apt` and `sudo` with that order.
+A `.deb` or a system-wide install belongs in an image build. An AppImage
+runs without FUSE, which a container cannot offer: the image sets
+`APPIMAGE_EXTRACT_AND_RUN=1`.
 
 **0.5 development API change:** `prepare name=<preset>` is replaced by
 `packages` or `flake`. Old prepared environments remain usable while their
