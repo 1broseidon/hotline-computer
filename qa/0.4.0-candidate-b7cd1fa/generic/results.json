@@ -1,0 +1,216 @@
+{
+  "info": {
+    "architecture": "aarch64",
+    "build": {
+      "channel": "development",
+      "revision": "b7cd1fa"
+    },
+    "capabilities": [
+      "capture",
+      "input",
+      "browser",
+      "shell",
+      "files",
+      "windows",
+      "wait",
+      "state"
+    ],
+    "catalog": {
+      "nixpkgs": "ef34387ddd751e1ab8857adf4676492d32eb24ec",
+      "profiles": [
+        {
+          "name": "python",
+          "tools": [
+            "python3.12",
+            "uv"
+          ]
+        },
+        {
+          "name": "go",
+          "tools": [
+            "go",
+            "gopls"
+          ]
+        },
+        {
+          "name": "node",
+          "tools": [
+            "node",
+            "bun",
+            "pnpm"
+          ]
+        },
+        {
+          "name": "rust",
+          "tools": [
+            "rustc",
+            "cargo",
+            "clang",
+            "pkg-config",
+            "openssl"
+          ]
+        },
+        {
+          "name": "rust-tauri",
+          "tools": [
+            "Rust",
+            "Node",
+            "Bun",
+            "GTK3",
+            "WebKitGTK 4.1",
+            "AppIndicator",
+            "Mesa"
+          ]
+        }
+      ],
+      "usage": "state prepare with name and workspace; wait for its job to exit successfully, then shell commands with cwd inside that workspace inherit its environment automatically.",
+      "version": "0.4.0"
+    },
+    "display": ":0",
+    "executables": {
+      "alacritty": "/usr/bin/alacritty",
+      "bash": "/usr/bin/bash",
+      "chromium": "/usr/bin/chromium",
+      "curl": "/usr/bin/curl",
+      "git": "/usr/bin/git",
+      "nix": "/usr/bin/nix",
+      "python3": "/usr/bin/python3"
+    },
+    "graphics": "Mesa software rendering",
+    "home": "/home/agent",
+    "jobs": [
+      {
+        "args": [
+          "-c",
+          "kill 77; sleep 2; echo closed"
+        ],
+        "command": "sh",
+        "cwd": "/home/agent",
+        "error": null,
+        "exit_code": 0,
+        "fingerprint": "6e390afa60835406532a9e398c0c05c174161312e688cbc043bb32e21e74af66",
+        "finished_at": 1789439216240,
+        "holder": "contract",
+        "id": "000001a0a2e38297-e6589f69",
+        "label": "sh",
+        "output_bytes": 7,
+        "pid": 218,
+        "pty": false,
+        "request_id": null,
+        "signal": null,
+        "started_at": 1789439214231,
+        "state": "exited",
+        "truncated": false
+      },
+      {
+        "args": [
+          "-c",
+          "echo computer-says-42"
+        ],
+        "command": "sh",
+        "cwd": "/home/agent",
+        "error": null,
+        "exit_code": 0,
+        "fingerprint": "995d2f4b2c81ac6495b8afc33e426aba33af1245b041a2b461b232d68f1f5c4b",
+        "finished_at": 1789439212317,
+        "holder": "contract",
+        "id": "000001a0a2e37b1a-93a776f1",
+        "label": "sh",
+        "output_bytes": 17,
+        "pid": 45,
+        "pty": false,
+        "request_id": null,
+        "signal": null,
+        "started_at": 1789439212314,
+        "state": "exited",
+        "truncated": false
+      }
+    ],
+    "nixpkgs": "ef34387ddd751e1ab8857adf4676492d32eb24ec",
+    "skill_sha256": "6a533dc21a499aac1a8af5965a650a6b2827d73ab144cc8bc6adb98b7d60b113",
+    "terminal": "Alacritty",
+    "version": "0.4.0"
+  },
+  "cases": [
+    {
+      "name": "browser forms",
+      "passed": true,
+      "seconds": 0.708
+    },
+    {
+      "name": "three-step browser wizard",
+      "passed": true,
+      "seconds": 2.321
+    },
+    {
+      "name": "public Selenium form",
+      "passed": true,
+      "seconds": 0.709
+    },
+    {
+      "name": "managed jobs and observer",
+      "passed": true,
+      "seconds": 2.759
+    },
+    {
+      "name": "desktop job menu",
+      "passed": true,
+      "seconds": 0.585
+    },
+    {
+      "name": "tray counts match live jobs",
+      "passed": true,
+      "seconds": 0.357
+    },
+    {
+      "name": "Nix failure diagnostics",
+      "passed": true,
+      "seconds": 0.036
+    },
+    {
+      "name": "verified script execution",
+      "passed": true,
+      "seconds": 0.187
+    },
+    {
+      "name": "artifact failure recovery",
+      "passed": true,
+      "seconds": 0.492
+    },
+    {
+      "name": "catalog workspaces",
+      "passed": true,
+      "seconds": 41.647
+    },
+    {
+      "name": "second repository tests",
+      "passed": true,
+      "seconds": 3.961
+    },
+    {
+      "name": "Ketch installation and scraping",
+      "passed": true,
+      "seconds": 1.289
+    },
+    {
+      "name": "job durability and responsiveness",
+      "passed": true,
+      "seconds": 0.378
+    },
+    {
+      "name": "native Toad build and screens",
+      "passed": true,
+      "seconds": 440.032
+    },
+    {
+      "name": "native controls and window identity",
+      "passed": true,
+      "seconds": 5.929
+    },
+    {
+      "name": "legacy Xterm title",
+      "passed": true,
+      "seconds": 2.401
+    }
+  ]
+}

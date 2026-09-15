@@ -1,0 +1,23 @@
+{
+  "initial_recovery_seconds": 5.69752575000166,
+  "additional_samples": [
+    {
+      "docker_start_seconds": 2.7682579169922974,
+      "port_lookup_seconds": 0.026380208000773564,
+      "health_wait_seconds": 0.5613976250169799,
+      "total_seconds": 3.356035750010051
+    },
+    {
+      "docker_start_seconds": 0.22895820799749345,
+      "port_lookup_seconds": 0.025994625000748783,
+      "health_wait_seconds": 0.0008798339986242354,
+      "total_seconds": 0.25583266699686646
+    },
+    {
+      "docker_start_seconds": 0.09704100000089966,
+      "port_lookup_seconds": 0.023987332999240607,
+      "health_wait_seconds": 0.05580891700810753,
+      "total_seconds": 0.1768372500082478
+    }
+  ]
+}

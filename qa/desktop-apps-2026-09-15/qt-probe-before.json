@@ -1,0 +1,80 @@
+{
+  "windows": [
+    {
+      "id": "0x00e00003",
+      "title": "Toad Terminal",
+      "class": "ToadTerminal.ToadTerminal",
+      "bounds": [
+        1152,
+        48,
+        768,
+        1032
+      ],
+      "focused": false,
+      "pid": 38,
+      "maximized": false,
+      "minimum_size": [
+        1,
+        1
+      ]
+    },
+    {
+      "id": "0x01800003",
+      "title": "vscode-qa.txt - Visual Studio Code",
+      "class": "code.code",
+      "bounds": [
+        0,
+        48,
+        1920,
+        1032
+      ],
+      "focused": false,
+      "pid": 13987,
+      "maximized": true,
+      "minimum_size": [
+        400,
+        270
+      ]
+    },
+    {
+      "id": "0x02400007",
+      "title": "/home/agent/workspace/featherpad-qa.txt",
+      "class": "featherpad.FeatherPad",
+      "bounds": [
+        0,
+        48,
+        1920,
+        1032
+      ],
+      "focused": true,
+      "pid": 23800,
+      "maximized": true,
+      "minimum_size": [
+        299,
+        217
+      ]
+    }
+  ],
+  "job": {
+    "id": "000001a0a53e93b6-17727720",
+    "pid": 23800,
+    "label": "Qt basic edit without accessibility scan",
+    "command": "featherpad",
+    "args": [
+      "/home/agent/workspace/featherpad-qa.txt"
+    ],
+    "cwd": "/home/agent",
+    "holder": "release-acceptance",
+    "state": "running",
+    "exit_code": null,
+    "signal": null,
+    "started_at": 1789478736822,
+    "finished_at": null,
+    "error": null,
+    "output_bytes": 0,
+    "truncated": false,
+    "pty": false,
+    "request_id": null,
+    "fingerprint": "5ac895fd7753653cbd7d9d830e554fce63bd87ae2755aef541d4f2683414f8cf"
+  }
+}

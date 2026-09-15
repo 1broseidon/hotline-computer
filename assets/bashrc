@@ -1,0 +1,30 @@
+# The person's shell on a Toad Computer.
+#
+# `toad-computer shell` writes this file to ~/.toad/bashrc and starts bash
+# with it as the rc file. The image also installs it as /etc/bash.bashrc,
+# so a shell started from inside, by hand or by `nix shell`, reads it too.
+# The image ships no ~/.bashrc. To add your own, create ~/.bashrc: it runs
+# at the end of this file, and what it does is up to you.
+
+# The working directory in the bar's blue, then a dollar. Not exported:
+# a bash started from here reads this file too, and `sh` would print the
+# escapes as text.
+PS1='\[\e[38;2;127;196;240m\]\w\[\e[0m\] $ '
+
+# What you type here is yours, not a job: history stays with the computer.
+HISTFILE="$HOME/.toad/shell_history"
+HISTSIZE=5000
+HISTFILESIZE=20000
+HISTCONTROL=ignoreboth
+shopt -s histappend checkwinsize
+
+# A prepared workspace puts Nixpkgs' bash first on PATH, and that one is
+# built without readline. A nested shell, typed or started by `nix shell`,
+# should be the system's.
+export SHELL=/bin/bash
+alias bash=/bin/bash
+
+alias ll='ls -l'
+alias la='ls -la'
+
+[ -r "$HOME/.bashrc" ] && . "$HOME/.bashrc"

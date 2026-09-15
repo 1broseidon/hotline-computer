@@ -1,0 +1,6 @@
+Preparing python from Nixpkgs ef34387ddd751e1ab8857adf4676492d32eb24ec; downloads and build progress follow.
+error:
+       … while fetching the input 'path:/home/agent/qa/nix-failure-f43db6cd607c/.cache/toad/environments/0.4.0-x86_64-python'
+
+       error: cannot connect to socket at '/home/agent/qa/missing-nix-daemon.sock': No such file or directory
+Nix preparation failed: exit status: 1

@@ -1,0 +1,79 @@
+bun install v1.4.2 (744846f84)
+
+Checked 152 installs across 220 packages (no changes) [114.00ms]
+
+AFTER REINSTALL
+UNMODIFIED_EXIT=1
+
+FORCE CORRECT GLIBC BINDING
+vite v8.2.2 building client environment for production...
+transforming...
+✓ 325 modules transformed.
+EXPLICIT_GNU_EXIT=1
+$ tsc --noEmit && vite build
+file:///tmp/os-review-ui/node_modules/rolldown/dist/shared/binding-CtPG-2KR.mjs:597
+			const error = /* @__PURE__ */ new Error("Cannot find native binding. npm has a bug related to optional dependencies (https://github.com/npm/cli/issues/4828). Please try `npm i` again after removing both package-lock.json and node_modules directory.");
+			                              ^
+
+Error: Cannot find native binding. npm has a bug related to optional dependencies (https://github.com/npm/cli/issues/4828). Please try `npm i` again after removing both package-lock.json and node_modules directory.
+    at file:///tmp/os-review-ui/node_modules/rolldown/dist/shared/binding-CtPG-2KR.mjs:597:34
+    at file:///tmp/os-review-ui/node_modules/rolldown/dist/shared/binding-CtPG-2KR.mjs:9:49
+    ... 2 lines matching cause stack trace ...
+    at async node:internal/modules/esm/loader:647:26 {
+  cause: Error: Cannot find module '@rolldown/binding-wasm32-wasi'
+  Require stack:
+  - /tmp/os-review-ui/node_modules/rolldown/dist/shared/binding-CtPG-2KR.mjs
+      at file:///tmp/os-review-ui/node_modules/rolldown/dist/shared/binding-CtPG-2KR.mjs:494:18
+      ... 6 lines matching cause stack trace ...
+      at async node:internal/modules/esm/loader:647:26 {
+    cause: Error: Cannot find module './rolldown-binding.wasi.cjs'
+    Require stack:
+    - /tmp/os-review-ui/node_modules/rolldown/dist/shared/binding-CtPG-2KR.mjs
+        at file:///tmp/os-review-ui/node_modules/rolldown/dist/shared/binding-CtPG-2KR.mjs:494:18
+        ... 6 lines matching cause stack trace ...
+        at async node:internal/modules/esm/loader:647:26 {
+      cause: Error: /nix/store/m54cs0m994hc3n9lax7sg98sgy729qsa-glibc-2.42-84/lib/libc.so: invalid ELF header
+          at file:///tmp/os-review-ui/node_modules/rolldown/dist/shared/binding-CtPG-2KR.mjs:494:18
+          ... 6 lines matching cause stack trace ...
+          at async node:internal/modules/esm/loader:647:26 {
+        cause: Error: Cannot find module './rolldown-binding.linux-arm64-musl.node'
+        Require stack:
+        - /tmp/os-review-ui/node_modules/rolldown/dist/shared/binding-CtPG-2KR.mjs
+            at file:///tmp/os-review-ui/node_modules/rolldown/dist/shared/binding-CtPG-2KR.mjs:494:18
+            at Array.reduce (<anonymous>)
+            at createLoadErrorChain (file:///tmp/os-review-ui/node_modules/rolldown/dist/shared/binding-CtPG-2KR.mjs:487:17)
+            at file:///tmp/os-review-ui/node_modules/rolldown/dist/shared/binding-CtPG-2KR.mjs:598:18
+            at file:///tmp/os-review-ui/node_modules/rolldown/dist/shared/binding-CtPG-2KR.mjs:9:49
+            at file:///tmp/os-review-ui/node_modules/rolldown/dist/shared/parse-D0g29RgN.mjs:3:46
+            at ModuleJob.run (node:internal/modules/esm/module_job:561:25)
+            at async node:internal/modules/esm/loader:647:26 {
+          cause: null
+        }
+      }
+    }
+  }
+}
+
+Node.js v24.20.0
+error: script "build" exited with code 1
+$ tsc --noEmit && vite build
+✗ Build failed in 111ms
+error during build:
+Build failed with 1 error:
+
+[plugin @tailwindcss/vite:generate:build] /tmp/os-review-ui/src/index.css
+TypeError: Y is not a constructor
+    at z.generate (file:///tmp/os-review-ui/node_modules/@tailwindcss/vite/dist/index.mjs:1:6500)
+    at async TransformPluginContextImpl.handler (file:///tmp/os-review-ui/node_modules/@tailwindcss/vite/dist/index.mjs:1:4667)
+    at async plugin (file:///tmp/os-review-ui/node_modules/rolldown/dist/shared/bindingify-input-options-4JJxbZl2.mjs:1539:16)
+    at async plugin.<computed> (file:///tmp/os-review-ui/node_modules/rolldown/dist/shared/bindingify-input-options-4JJxbZl2.mjs:2127:12)
+    at aggregateBindingErrorsIntoJsError (file:///tmp/os-review-ui/node_modules/rolldown/dist/shared/error-HDibX49O.mjs:48:18)
+    at unwrapBindingResult (file:///tmp/os-review-ui/node_modules/rolldown/dist/shared/error-HDibX49O.mjs:18:128)
+    at #build (file:///tmp/os-review-ui/node_modules/rolldown/dist/shared/rolldown-C9Hfg50O.mjs:133:34)
+    at async buildEnvironment (file:///tmp/os-review-ui/node_modules/vite/dist/node/chunks/node.js:33821:66)
+    at async Object.build (file:///tmp/os-review-ui/node_modules/vite/dist/node/chunks/node.js:34242:19)
+    at async Object.buildApp (file:///tmp/os-review-ui/node_modules/vite/dist/node/chunks/node.js:34239:153)
+    at async CAC.<anonymous> (file:///tmp/os-review-ui/node_modules/vite/dist/node/cli.js:776:3) {
+  errors: [Getter/Setter]
+}
+error: script "build" exited with code 1

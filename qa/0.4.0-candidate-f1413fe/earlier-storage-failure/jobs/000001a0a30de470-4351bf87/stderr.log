@@ -1,0 +1,4 @@
+unpacking 'github:NixOS/nixpkgs/ef34387ddd751e1ab8857adf4676492d32eb24ec' into the Git cache...
+warning: creating lock file '"/home/agent/.cache/toad/environments/0.4.0-aarch64-rust-tauri/flake.lock"': 
+• Added input 'nixpkgs':
+    'github:NixOS/nixpkgs/ef34387ddd751e1ab8857adf4676492d32eb24ec?narHash=sha256-eiEK7cKZORNEvX0GeF3RtNEF/JXhgf2RqSp3230q13E%3D' (2026-09-13)

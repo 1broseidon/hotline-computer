@@ -1,0 +1,26 @@
+info: ghostty version=1.3.1
+info: ghostty build optimize=ReleaseFast
+info: runtime=.gtk
+info: font_backend=.fontconfig_freetype
+info: dependency harfbuzz=13.2.1
+info: dependency fontconfig=21803
+info: renderer=renderer.generic.Renderer(renderer.OpenGL)
+info: libxev default backend=epoll
+info(os_locale): setlocale from env result=C
+info(gtk): GTK version build=4.22.4 runtime=4.22.4
+info(gtk): libadwaita version build=1.9.3 runtime=1.9.3
+warning: error reading optional config file, not loading err=error.FileIsEmpty path=/home/agent/.config/ghostty/config.ghostty
+info(config): default shell source=env value=/nix/store/z9nkwcylvgcrn4dvvd91jp8blv3mx38v-bash-interactive-5.3p15/bin/bash
+warning(gtk_ghostty_application): setting GDK_DEBUG=
+warning(gtk_ghostty_application): setting GDK_DISABLE=gles-api,vulkan
+warning(glib): WARNING: Adwaita: The resource style-dark.css is deprecated and shouldn't be used anymore. Use style.css with media queries instead.
+warning(glib): WARNING: Adwaita: The resource style-hc.css is deprecated and shouldn't be used anymore. Use style.css with media queries instead.
+warning(glib): WARNING: Adwaita: The resource style-hc-dark.css is deprecated and shouldn't be used anymore. Use style.css with media queries instead.
+info(opengl): loaded OpenGL 4.6
+info(io_exec): found Ghostty resources dir: /nix/store/zyzxk5gd5a1g3g5c07mcbd7qfxbfgrn6-ghostty-1.3.1/share/ghostty
+warning(io_exec): shell could not be detected, no automatic shell integration will be injected
+warning(gtk_ghostty_application): unimplemented action=.cell_size
+info(io_exec): started subcommand path=tail pid=31973
+warning(glib): WARNING: Gtk: Trying to snapshot GtkRevealer 0xaaaadfd0fb80 without a current allocation
+info(io_exec): pty fd closed, read thread exiting
+info(surface): surface closed addr=aaaae3fe7190

@@ -1,0 +1,29 @@
+{
+  "job": {
+    "id": "000001a0a53e0b12-ddd09abe",
+    "pid": 23762,
+    "label": "Diagnose Geany desktop launcher",
+    "command": "make",
+    "args": [
+      "V=1",
+      "geany.desktop"
+    ],
+    "cwd": "/home/agent/workspace/source/geany-2.1",
+    "holder": "release-acceptance",
+    "state": "exited",
+    "exit_code": 0,
+    "signal": null,
+    "started_at": 1789478701842,
+    "finished_at": 1789478701868,
+    "error": null,
+    "output_bytes": 65,
+    "truncated": false,
+    "pty": false,
+    "request_id": null,
+    "fingerprint": "99a9a416e3ecc3fe64fcfdee55e80f472d91a63a00f927e8d9b764e0f21282b3"
+  },
+  "output": ": --desktop --template geany.desktop.in -d ./po -o geany.desktop\n",
+  "cursor": 0,
+  "next_cursor": 65,
+  "eof": true
+}

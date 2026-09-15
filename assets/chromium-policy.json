@@ -1,0 +1,10 @@
+{
+  "_comment": "The managed Chromium is driven by the teammate and watched by a person. Nothing it is shown belongs in a password store or an autofill profile, and the bubbles that offer to keep such things would sit over the page.",
+  "PasswordManagerEnabled": false,
+  "PasswordLeakDetectionEnabled": false,
+  "AutofillAddressEnabled": false,
+  "AutofillCreditCardEnabled": false,
+  "BrowserSignin": 0,
+  "DefaultBrowserSettingEnabled": false,
+  "PromotionalTabsEnabled": false
+}

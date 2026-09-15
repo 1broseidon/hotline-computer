@@ -1,0 +1,10 @@
+{
+  "passed": true,
+  "failure_reported": "start Alacritty observer daemon: Permission denied (os error 13)",
+  "automatic_retry_opened_window": true,
+  "screen": [
+    640,
+    480
+  ],
+  "work_area_preserved": true
+}

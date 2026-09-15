@@ -1,0 +1,428 @@
+[
+  {
+    "terminal": "alacritty",
+    "trial": 0,
+    "warmup": true,
+    "pid": 32740,
+    "argv": [
+      "alacritty",
+      "--config-file",
+      "/home/agent/qa/alacritty.toml",
+      "--title",
+      "Toad QA benchmark: alacritty trial 0",
+      "-e",
+      "/nix/store/m366grr7iy3d47r7ns0p8ppx5z3ghlv6-python3-3.11.8/bin/python3",
+      "/home/agent/qa/terminal-benchmark.py",
+      "child",
+      "alacritty-0"
+    ],
+    "startup_ms": 83.456804,
+    "idle_kib": {
+      "Rss": 135620,
+      "Pss": 134196,
+      "Private_Clean": 77392,
+      "Private_Dirty": 56004
+    },
+    "cpu_before": 0.08,
+    "write_ms": 141.157369,
+    "bytes": 4900000,
+    "loaded_kib": {
+      "Rss": 186252,
+      "Pss": 184828,
+      "Private_Clean": 77392,
+      "Private_Dirty": 106636
+    },
+    "cpu_output_seconds": 0.46,
+    "exit_code": 0
+  },
+  {
+    "terminal": "ghostty",
+    "trial": 0,
+    "warmup": true,
+    "pid": 32772,
+    "argv": [
+      "ghostty",
+      "--gtk-single-instance=false",
+      "--font-size=12",
+      "--title=Toad QA benchmark: ghostty trial 0",
+      "-e",
+      "/nix/store/m366grr7iy3d47r7ns0p8ppx5z3ghlv6-python3-3.11.8/bin/python3",
+      "/home/agent/qa/terminal-benchmark.py",
+      "child",
+      "ghostty-0"
+    ],
+    "startup_ms": 259.653355,
+    "idle_kib": {
+      "Rss": 264308,
+      "Pss": 260293,
+      "Private_Clean": 107988,
+      "Private_Dirty": 149936
+    },
+    "cpu_before": 0.43,
+    "write_ms": 273.803438,
+    "bytes": 4900000,
+    "loaded_kib": {
+      "Rss": 277056,
+      "Pss": 273041,
+      "Private_Clean": 107988,
+      "Private_Dirty": 162684
+    },
+    "cpu_output_seconds": 1.52,
+    "exit_code": 0
+  },
+  {
+    "terminal": "ghostty",
+    "trial": 1,
+    "warmup": false,
+    "pid": 32810,
+    "argv": [
+      "ghostty",
+      "--gtk-single-instance=false",
+      "--font-size=12",
+      "--title=Toad QA benchmark: ghostty trial 1",
+      "-e",
+      "/nix/store/m366grr7iy3d47r7ns0p8ppx5z3ghlv6-python3-3.11.8/bin/python3",
+      "/home/agent/qa/terminal-benchmark.py",
+      "child",
+      "ghostty-1"
+    ],
+    "startup_ms": 249.03947,
+    "idle_kib": {
+      "Rss": 263948,
+      "Pss": 259951,
+      "Private_Clean": 108032,
+      "Private_Dirty": 149572
+    },
+    "cpu_before": 0.44,
+    "write_ms": 316.245439,
+    "bytes": 4900000,
+    "loaded_kib": {
+      "Rss": 276648,
+      "Pss": 272651,
+      "Private_Clean": 108032,
+      "Private_Dirty": 162272
+    },
+    "cpu_output_seconds": 1.96,
+    "exit_code": 0
+  },
+  {
+    "terminal": "alacritty",
+    "trial": 1,
+    "warmup": false,
+    "pid": 32855,
+    "argv": [
+      "alacritty",
+      "--config-file",
+      "/home/agent/qa/alacritty.toml",
+      "--title",
+      "Toad QA benchmark: alacritty trial 1",
+      "-e",
+      "/nix/store/m366grr7iy3d47r7ns0p8ppx5z3ghlv6-python3-3.11.8/bin/python3",
+      "/home/agent/qa/terminal-benchmark.py",
+      "child",
+      "alacritty-1"
+    ],
+    "startup_ms": 75.310137,
+    "idle_kib": {
+      "Rss": 135804,
+      "Pss": 134380,
+      "Private_Clean": 77380,
+      "Private_Dirty": 56200
+    },
+    "cpu_before": 0.06,
+    "write_ms": 140.147766,
+    "bytes": 4900000,
+    "loaded_kib": {
+      "Rss": 185520,
+      "Pss": 184096,
+      "Private_Clean": 77380,
+      "Private_Dirty": 105916
+    },
+    "cpu_output_seconds": 0.43,
+    "exit_code": 0
+  },
+  {
+    "terminal": "alacritty",
+    "trial": 2,
+    "warmup": false,
+    "pid": 32884,
+    "argv": [
+      "alacritty",
+      "--config-file",
+      "/home/agent/qa/alacritty.toml",
+      "--title",
+      "Toad QA benchmark: alacritty trial 2",
+      "-e",
+      "/nix/store/m366grr7iy3d47r7ns0p8ppx5z3ghlv6-python3-3.11.8/bin/python3",
+      "/home/agent/qa/terminal-benchmark.py",
+      "child",
+      "alacritty-2"
+    ],
+    "startup_ms": 77.929065,
+    "idle_kib": {
+      "Rss": 135760,
+      "Pss": 134336,
+      "Private_Clean": 77444,
+      "Private_Dirty": 56092
+    },
+    "cpu_before": 0.07,
+    "write_ms": 179.813791,
+    "bytes": 4900000,
+    "loaded_kib": {
+      "Rss": 186476,
+      "Pss": 185052,
+      "Private_Clean": 77444,
+      "Private_Dirty": 106808
+    },
+    "cpu_output_seconds": 0.5700000000000001,
+    "exit_code": 0
+  },
+  {
+    "terminal": "ghostty",
+    "trial": 2,
+    "warmup": false,
+    "pid": 32913,
+    "argv": [
+      "ghostty",
+      "--gtk-single-instance=false",
+      "--font-size=12",
+      "--title=Toad QA benchmark: ghostty trial 2",
+      "-e",
+      "/nix/store/m366grr7iy3d47r7ns0p8ppx5z3ghlv6-python3-3.11.8/bin/python3",
+      "/home/agent/qa/terminal-benchmark.py",
+      "child",
+      "ghostty-2"
+    ],
+    "startup_ms": 257.615938,
+    "idle_kib": {
+      "Rss": 265340,
+      "Pss": 261291,
+      "Private_Clean": 107996,
+      "Private_Dirty": 150896
+    },
+    "cpu_before": 0.43,
+    "write_ms": 247.261475,
+    "bytes": 4900000,
+    "loaded_kib": {
+      "Rss": 277576,
+      "Pss": 273527,
+      "Private_Clean": 107996,
+      "Private_Dirty": 163132
+    },
+    "cpu_output_seconds": 1.5,
+    "exit_code": 0
+  },
+  {
+    "terminal": "ghostty",
+    "trial": 3,
+    "warmup": false,
+    "pid": 32955,
+    "argv": [
+      "ghostty",
+      "--gtk-single-instance=false",
+      "--font-size=12",
+      "--title=Toad QA benchmark: ghostty trial 3",
+      "-e",
+      "/nix/store/m366grr7iy3d47r7ns0p8ppx5z3ghlv6-python3-3.11.8/bin/python3",
+      "/home/agent/qa/terminal-benchmark.py",
+      "child",
+      "ghostty-3"
+    ],
+    "startup_ms": 230.607631,
+    "idle_kib": {
+      "Rss": 264112,
+      "Pss": 260070,
+      "Private_Clean": 107964,
+      "Private_Dirty": 149708
+    },
+    "cpu_before": 0.42,
+    "write_ms": 308.377235,
+    "bytes": 4900000,
+    "loaded_kib": {
+      "Rss": 276880,
+      "Pss": 272838,
+      "Private_Clean": 107964,
+      "Private_Dirty": 162476
+    },
+    "cpu_output_seconds": 1.7600000000000002,
+    "exit_code": 0
+  },
+  {
+    "terminal": "alacritty",
+    "trial": 3,
+    "warmup": false,
+    "pid": 32999,
+    "argv": [
+      "alacritty",
+      "--config-file",
+      "/home/agent/qa/alacritty.toml",
+      "--title",
+      "Toad QA benchmark: alacritty trial 3",
+      "-e",
+      "/nix/store/m366grr7iy3d47r7ns0p8ppx5z3ghlv6-python3-3.11.8/bin/python3",
+      "/home/agent/qa/terminal-benchmark.py",
+      "child",
+      "alacritty-3"
+    ],
+    "startup_ms": 71.256095,
+    "idle_kib": {
+      "Rss": 135672,
+      "Pss": 134248,
+      "Private_Clean": 77380,
+      "Private_Dirty": 56068
+    },
+    "cpu_before": 0.06,
+    "write_ms": 148.161639,
+    "bytes": 4900000,
+    "loaded_kib": {
+      "Rss": 186296,
+      "Pss": 184872,
+      "Private_Clean": 77380,
+      "Private_Dirty": 106692
+    },
+    "cpu_output_seconds": 0.48000000000000004,
+    "exit_code": 0
+  },
+  {
+    "terminal": "alacritty",
+    "trial": 4,
+    "warmup": false,
+    "pid": 33028,
+    "argv": [
+      "alacritty",
+      "--config-file",
+      "/home/agent/qa/alacritty.toml",
+      "--title",
+      "Toad QA benchmark: alacritty trial 4",
+      "-e",
+      "/nix/store/m366grr7iy3d47r7ns0p8ppx5z3ghlv6-python3-3.11.8/bin/python3",
+      "/home/agent/qa/terminal-benchmark.py",
+      "child",
+      "alacritty-4"
+    ],
+    "startup_ms": 81.6131,
+    "idle_kib": {
+      "Rss": 135944,
+      "Pss": 134520,
+      "Private_Clean": 77356,
+      "Private_Dirty": 56364
+    },
+    "cpu_before": 0.06,
+    "write_ms": 211.107146,
+    "bytes": 4900000,
+    "loaded_kib": {
+      "Rss": 185688,
+      "Pss": 184264,
+      "Private_Clean": 77356,
+      "Private_Dirty": 106108
+    },
+    "cpu_output_seconds": 0.76,
+    "exit_code": 0
+  },
+  {
+    "terminal": "ghostty",
+    "trial": 4,
+    "warmup": false,
+    "pid": 33057,
+    "argv": [
+      "ghostty",
+      "--gtk-single-instance=false",
+      "--font-size=12",
+      "--title=Toad QA benchmark: ghostty trial 4",
+      "-e",
+      "/nix/store/m366grr7iy3d47r7ns0p8ppx5z3ghlv6-python3-3.11.8/bin/python3",
+      "/home/agent/qa/terminal-benchmark.py",
+      "child",
+      "ghostty-4"
+    ],
+    "startup_ms": 247.24185,
+    "idle_kib": {
+      "Rss": 264316,
+      "Pss": 260262,
+      "Private_Clean": 107984,
+      "Private_Dirty": 149868
+    },
+    "cpu_before": 0.42,
+    "write_ms": 265.109801,
+    "bytes": 4900000,
+    "loaded_kib": {
+      "Rss": 276592,
+      "Pss": 272538,
+      "Private_Clean": 107984,
+      "Private_Dirty": 162144
+    },
+    "cpu_output_seconds": 1.54,
+    "exit_code": 0
+  },
+  {
+    "terminal": "ghostty",
+    "trial": 5,
+    "warmup": false,
+    "pid": 33100,
+    "argv": [
+      "ghostty",
+      "--gtk-single-instance=false",
+      "--font-size=12",
+      "--title=Toad QA benchmark: ghostty trial 5",
+      "-e",
+      "/nix/store/m366grr7iy3d47r7ns0p8ppx5z3ghlv6-python3-3.11.8/bin/python3",
+      "/home/agent/qa/terminal-benchmark.py",
+      "child",
+      "ghostty-5"
+    ],
+    "startup_ms": 233.900574,
+    "idle_kib": {
+      "Rss": 263780,
+      "Pss": 259738,
+      "Private_Clean": 107964,
+      "Private_Dirty": 149376
+    },
+    "cpu_before": 0.41,
+    "write_ms": 393.31182,
+    "bytes": 4900000,
+    "loaded_kib": {
+      "Rss": 276500,
+      "Pss": 272458,
+      "Private_Clean": 107964,
+      "Private_Dirty": 162096
+    },
+    "cpu_output_seconds": 2.54,
+    "exit_code": 0
+  },
+  {
+    "terminal": "alacritty",
+    "trial": 5,
+    "warmup": false,
+    "pid": 33144,
+    "argv": [
+      "alacritty",
+      "--config-file",
+      "/home/agent/qa/alacritty.toml",
+      "--title",
+      "Toad QA benchmark: alacritty trial 5",
+      "-e",
+      "/nix/store/m366grr7iy3d47r7ns0p8ppx5z3ghlv6-python3-3.11.8/bin/python3",
+      "/home/agent/qa/terminal-benchmark.py",
+      "child",
+      "alacritty-5"
+    ],
+    "startup_ms": 67.509934,
+    "idle_kib": {
+      "Rss": 135592,
+      "Pss": 134168,
+      "Private_Clean": 77380,
+      "Private_Dirty": 55988
+    },
+    "cpu_before": 0.06,
+    "write_ms": 126.054058,
+    "bytes": 4900000,
+    "loaded_kib": {
+      "Rss": 186208,
+      "Pss": 184784,
+      "Private_Clean": 77380,
+      "Private_Dirty": 106604
+    },
+    "cpu_output_seconds": 0.39,
+    "exit_code": 0
+  }
+]

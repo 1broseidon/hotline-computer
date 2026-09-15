@@ -1,7 +1,7 @@
 [package]
 name = "toad-computer"
 description = "A small Linux desktop for a coding agent: one binary boots it, owns it, and serves it over MCP."
-version = "0.4.0"
+version = "0.5.0"
 edition = "2024"
 
 [dependencies]
@@ -32,6 +32,11 @@ png = "=0.18.1"
 # PID 1 duties: fork, block and wait on signals, reap what the kernel hands us.
 libc = "0.2"
 sha2 = "0.10"
+# The bar and its menus are drawn as pixels: antialiased text from the image's
+# DejaVu Sans rather than X core bitmap fonts.
+fontdue = "0.9.4"
+# The clock in the bar shows the host's local time; the desk passes TZ.
+chrono = { version = "0.4", default-features = false, features = ["clock"] }
 
 [dev-dependencies]
 tempfile = "3.27.0"

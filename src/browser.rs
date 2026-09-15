@@ -98,12 +98,25 @@ impl BrowserManager {
         }
     }
 
+    /// Chromium leaves symlinks in its profile naming the host and process
+    /// that hold it. A home kept across containers carries them to a new
+    /// container with a new hostname, where Chromium reads them as another
+    /// computer using the profile and refuses to start. This profile is only
+    /// ever this computer's browser, launched from here, so a lock found at
+    /// launch is always stale.
+    fn clear_profile_locks(profile: &std::path::Path) {
+        for name in ["SingletonLock", "SingletonSocket", "SingletonCookie"] {
+            let _ = std::fs::remove_file(profile.join(name));
+        }
+    }
+
     async fn launch(&self) -> Result<BrowserSession, String> {
         let executable = find_on_path("chromium").ok_or_else(|| NO_BROWSER.to_owned())?;
         let profile = self.config.home.join(".toad/browser");
         tokio::fs::create_dir_all(&profile)
             .await
             .map_err(|error| format!("create browser profile: {error}"))?;
+        Self::clear_profile_locks(&profile);
         let browser_config = BrowserConfig::builder()
             .chrome_executable(executable)
             .with_head()
@@ -607,4 +620,26 @@ fn find_on_path(name: &str) -> Option<PathBuf> {
             let candidate = Path::new(directory).join(name);
             candidate.is_file().then_some(candidate)
         })
+}
+
+#[cfg(test)]
+mod tests {
+    #[test]
+    fn stale_profile_locks_are_cleared_before_launch() {
+        let profile = std::env::temp_dir().join(format!("toad-profile-{}", std::process::id()));
+        std::fs::create_dir_all(&profile).unwrap();
+        for name in ["SingletonLock", "SingletonSocket", "SingletonCookie"] {
+            std::os::unix::fs::symlink("old-host-62", profile.join(name)).unwrap();
+        }
+        std::fs::write(profile.join("Local State"), "kept").unwrap();
+        super::BrowserManager::clear_profile_locks(&profile);
+        assert!(profile.join("SingletonLock").symlink_metadata().is_err());
+        assert!(profile.join("SingletonSocket").symlink_metadata().is_err());
+        assert!(profile.join("SingletonCookie").symlink_metadata().is_err());
+        assert_eq!(
+            std::fs::read_to_string(profile.join("Local State")).unwrap(),
+            "kept"
+        );
+        std::fs::remove_dir_all(profile).unwrap();
+    }
 }

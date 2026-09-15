@@ -10,6 +10,30 @@ use std::sync::{
 };
 use tokio::sync::Mutex;
 
+/// The observer's window class, which the desktop places in the right third.
+pub const OBSERVER_CLASS: &str = "ToadTerminal";
+/// The person's shell, which the desktop keeps in the bottom third of the
+/// observer's column.
+pub const SHELL_CLASS: &str = "ToadShell";
+/// Alacritty's configuration, kept with the image rather than in the home,
+/// so a home the teammate keeps across containers never shadows it.
+pub const ALACRITTY_CONFIG: &str = "/etc/toad-computer/alacritty.toml";
+/// Alacritty options for the person's window alone: a visible block cursor
+/// in the bar's foreground, where the observer paints its cursor away.
+pub const SHELL_OPTIONS: &[&str] = &[
+    "cursor.style.shape=\"Block\"",
+    "colors.cursor.cursor=\"#d6d6d9\"",
+    "colors.cursor.text=\"#141416\"",
+];
+
+fn window_of_class(display: &str, class: &str) -> Result<Option<String>, String> {
+    let wanted = class.to_lowercase();
+    Ok(crate::x11::windows(display)?
+        .into_iter()
+        .find(|w| w.class.to_lowercase().contains(&wanted))
+        .map(|w| w.id))
+}
+
 #[derive(Clone)]
 pub struct Observer {
     home: PathBuf,
@@ -54,6 +78,71 @@ impl Observer {
         }
         self.opened.store(false, Ordering::Relaxed);
         let mut active = self.child.lock().await;
+        let socket = self.daemon(&mut active).await?;
+        if let Some(window) = window_of_class(&self.display, OBSERVER_CLASS)? {
+            if explicit {
+                crate::x11::activate(&self.display, &window)?;
+            }
+            self.opened.store(true, Ordering::Relaxed);
+            return Ok(());
+        }
+        let executable = std::env::current_exe().map_err(|e| e.to_string())?;
+        self.create_window(
+            &socket,
+            "Observer",
+            OBSERVER_CLASS,
+            &[],
+            &[
+                executable.as_os_str(),
+                "observe".as_ref(),
+                self.home.as_os_str(),
+            ],
+        )
+        .await?;
+        let window = self
+            .wait_for_window(&active, OBSERVER_CLASS)
+            .await
+            .map_err(|error| {
+                format!("{error}; the job is independent. Inspect ~/.toad/terminal.log")
+            })?;
+        if explicit {
+            crate::x11::activate(&self.display, &window)?;
+        }
+        self.opened.store(true, Ordering::Relaxed);
+        Ok(())
+    }
+
+    /// A shell for the person: an interactive bash in the workspace's
+    /// environment, in its own small window. What they run there is theirs,
+    /// not a job: it is not retained, and the teammate sees only the screen.
+    pub async fn open_shell(&self) -> Result<(), String> {
+        let mut active = self.child.lock().await;
+        let socket = self.daemon(&mut active).await?;
+        if let Some(window) = window_of_class(&self.display, SHELL_CLASS)? {
+            return crate::x11::activate(&self.display, &window);
+        }
+        let executable = std::env::current_exe().map_err(|e| e.to_string())?;
+        // The shared config hides the cursor, since nobody types in the
+        // observer. The person's window gets one back.
+        self.create_window(
+            &socket,
+            "Terminal",
+            SHELL_CLASS,
+            SHELL_OPTIONS,
+            &[
+                executable.as_os_str(),
+                "shell".as_ref(),
+                self.home.as_os_str(),
+            ],
+        )
+        .await?;
+        let window = self.wait_for_window(&active, SHELL_CLASS).await?;
+        crate::x11::activate(&self.display, &window)
+    }
+
+    /// The Alacritty daemon every terminal window comes from, started if it
+    /// is not running; returns its socket once it answers.
+    async fn daemon(&self, active: &mut Option<TerminalProcess>) -> Result<PathBuf, String> {
         let directory = self.home.join(".toad");
         std::fs::create_dir_all(&directory).map_err(|e| e.to_string())?;
         let socket = directory.join("alacritty.sock");
@@ -71,10 +160,12 @@ impl Observer {
             }
             let log =
                 std::fs::File::create(directory.join("terminal.log")).map_err(|e| e.to_string())?;
-            let mut child = tokio::process::Command::new("alacritty")
-                .arg("--daemon")
-                .arg("--socket")
-                .arg(&socket)
+            let mut daemon = tokio::process::Command::new("alacritty");
+            daemon.arg("--daemon").arg("--socket").arg(&socket);
+            if Path::new(ALACRITTY_CONFIG).is_file() {
+                daemon.args(["--config-file", ALACRITTY_CONFIG]);
+            }
+            let mut child = daemon
                 .env("DISPLAY", &self.display)
                 .stdin(Stdio::null())
                 .stdout(Stdio::null())
@@ -106,33 +197,33 @@ impl Observer {
             }
             tokio::time::sleep(std::time::Duration::from_millis(10)).await;
         }
-        if let Some(window) = crate::x11::windows(&self.display)?
-            .iter()
-            .find(|w| w.class.to_lowercase().contains("toadterminal"))
-        {
-            if explicit {
-                crate::x11::activate(&self.display, &window.id)?;
-            }
-            self.opened.store(true, Ordering::Relaxed);
-            return Ok(());
+        Ok(socket)
+    }
+
+    async fn create_window(
+        &self,
+        socket: &Path,
+        title: &str,
+        class: &str,
+        options: &[&str],
+        command: &[&std::ffi::OsStr],
+    ) -> Result<(), String> {
+        let mut request = tokio::process::Command::new("alacritty");
+        request.args(["msg", "--socket"]).arg(socket).args([
+            "create-window",
+            "--title",
+            title,
+            "--class",
+            class,
+        ]);
+        for option in options {
+            request.args(["-o", option]);
         }
-        let executable = std::env::current_exe().map_err(|e| e.to_string())?;
-        let request = tokio::process::Command::new("alacritty")
-            .args(["msg", "--socket"])
-            .arg(&socket)
-            .args([
-                "create-window",
-                "--title",
-                "Toad Terminal",
-                "--class",
-                "ToadTerminal",
-                "--working-directory",
-            ])
+        let request = request
+            .arg("--working-directory")
             .arg(&self.home)
             .arg("-e")
-            .arg(executable)
-            .arg("observe")
-            .arg(&self.home)
+            .args(command)
             .env("DISPLAY", &self.display)
             .stdin(Stdio::null())
             .kill_on_drop(true)
@@ -147,24 +238,25 @@ impl Observer {
                 String::from_utf8_lossy(&response.stderr)
             ));
         }
+        Ok(())
+    }
+
+    async fn wait_for_window(
+        &self,
+        active: &Option<TerminalProcess>,
+        class: &str,
+    ) -> Result<String, String> {
         let deadline = tokio::time::Instant::now() + std::time::Duration::from_secs(2);
         loop {
-            if let Some(window) = crate::x11::windows(&self.display)?
-                .iter()
-                .find(|w| w.class.to_lowercase().contains("toadterminal"))
-            {
-                if explicit {
-                    crate::x11::activate(&self.display, &window.id)?;
-                }
-                self.opened.store(true, Ordering::Relaxed);
-                return Ok(());
+            if let Some(window) = window_of_class(&self.display, class)? {
+                return Ok(window);
             }
             if active
                 .as_ref()
                 .is_some_and(|process| process.task.is_finished())
                 || tokio::time::Instant::now() >= deadline
             {
-                return Err("Alacritty did not open an observer window; the job is independent. Inspect ~/.toad/terminal.log".into());
+                return Err(format!("Alacritty did not open a {class} window"));
             }
             tokio::time::sleep(std::time::Duration::from_millis(10)).await;
         }
@@ -183,6 +275,61 @@ impl Observer {
             let _ = process.task.await;
         }
     }
+}
+
+/// The rc file the person's shell reads instead of the system's and the
+/// home's: the prompt, history kept with the computer, and a hook for the
+/// operator's own `~/.bashrc`.
+pub const BASHRC: &str = include_str!("../assets/bashrc");
+
+/// `toad-computer shell <home>`: the person's interactive shell. It starts
+/// in the mounted workspace when there is one, with the environment the
+/// teammate prepared there, and then it is bash with Toad's rc file.
+pub fn shell(home: &Path) -> Result<(), String> {
+    use std::os::unix::process::CommandExt;
+    let rc = home.join(".toad/bashrc");
+    std::fs::create_dir_all(home.join(".toad")).map_err(|e| e.to_string())?;
+    std::fs::write(&rc, BASHRC).map_err(|e| format!("{}: {e}", rc.display()))?;
+    let workspace = home.join("workspace");
+    let cwd = if workspace.is_dir() {
+        workspace
+    } else {
+        home.to_path_buf()
+    };
+    let mut command = std::process::Command::new(interactive_bash());
+    command.current_dir(&cwd);
+    match crate::workspace::environment(home, &cwd) {
+        Ok(environment) => {
+            command.envs(environment);
+        }
+        Err(error) => eprintln!("workspace environment not applied: {error}"),
+    }
+    println!("{MUTED}`exit` to close{RESET}");
+    let error = command
+        .arg("--noprofile")
+        .arg("--rcfile")
+        .arg(&rc)
+        .arg("-i")
+        .exec();
+    Err(format!("start bash: {error}"))
+}
+
+/// The bash a person types into: the system's, found on this process's own
+/// PATH. A prepared workspace puts Nixpkgs' bash first on its PATH, and that
+/// one is built without readline: no history, no completion, and a prompt
+/// whose `\[` and `\]` print as text. The workspace environment still applies
+/// inside; only the shell binary comes from outside it.
+fn interactive_bash() -> std::path::PathBuf {
+    let system = std::path::PathBuf::from("/bin/bash");
+    std::env::var_os("PATH")
+        .map(|path| {
+            std::env::split_paths(&path)
+                .filter(|dir| !dir.starts_with("/nix/store"))
+                .map(|dir| dir.join("bash"))
+                .find(|candidate| candidate.is_file())
+                .unwrap_or_else(|| system.clone())
+        })
+        .unwrap_or(system)
 }
 
 pub fn run(home: &Path) -> Result<(), String> {
@@ -211,7 +358,9 @@ pub fn run(home: &Path) -> Result<(), String> {
             initialized = true;
             missing_reported = false;
             seen.clear();
-            writeln!(stdout, "\x1b[2J\x1b[H\x1b[1;32mToad Terminal\x1b[0m\r\nCommands run through tools. This window shows their output.\r\nClose or reopen it without stopping any job.\r\nView: {}\r\n", selection.as_deref().unwrap_or("all retained jobs")).map_err(|e| e.to_string())?;
+            stdout
+                .write_all(banner(selection.as_deref()).as_bytes())
+                .map_err(|e| e.to_string())?;
         }
         let mut paths: Vec<_> = std::fs::read_dir(&root)
             .into_iter()
@@ -227,7 +376,7 @@ pub fn run(home: &Path) -> Result<(), String> {
             if paths.is_empty() && !missing_reported {
                 writeln!(
                     stdout,
-                    "This job is no longer retained. Choose another job from the desktop bar.\r"
+                    "{MUTED}This job is no longer retained. Choose another from the bar's jobs list.{RESET}\r"
                 )
                 .map_err(|e| e.to_string())?;
                 missing_reported = true;
@@ -248,25 +397,12 @@ pub fn run(home: &Path) -> Result<(), String> {
             let output = path.join("output.log");
             let length = std::fs::metadata(&output).map(|m| m.len()).unwrap_or(0);
             let entry = seen.entry(record.id.clone()).or_insert_with(|| {
-                let _ = writeln!(
-                    stdout,
-                    "\r\n\x1b[1;36m[{}] {}\x1b[0m\r\n{}\r\n$ {} {}\r",
-                    record.id,
-                    record.label,
-                    record.cwd,
-                    quoted(&record.command),
-                    record
-                        .args
-                        .iter()
-                        .map(|s| quoted(s))
-                        .collect::<Vec<_>>()
-                        .join(" ")
-                );
+                let _ = stdout.write_all(header(&record).as_bytes());
                 let offset = length.saturating_sub(16384);
                 if offset > 0 {
                     let _ = writeln!(
                         stdout,
-                        "[Earlier output is retained; read it with shell read.]\r"
+                        "{MUTED}Earlier output is retained; the tools read it with shell read.{RESET}\r"
                     );
                 }
                 (offset, String::new())
@@ -285,30 +421,9 @@ pub fn run(home: &Path) -> Result<(), String> {
                 entry.0 += bytes.len() as u64;
             }
             if entry.1 != record.state && record.finished() {
-                writeln!(
-                    stdout,
-                    "\r\n\x1b[{}m[{}: {}, elapsed {:.1}s, exit {}, signal {}{}]\x1b[0m\r",
-                    if record.exit_code == Some(0) { 32 } else { 33 },
-                    record.id,
-                    record.state,
-                    record
-                        .finished_at
-                        .unwrap_or_else(crate::jobs::now)
-                        .saturating_sub(record.started_at) as f64
-                        / 1000.0,
-                    record
-                        .exit_code
-                        .map_or_else(|| "—".into(), |code| code.to_string()),
-                    record
-                        .signal
-                        .map_or_else(|| "—".into(), |signal| signal.to_string()),
-                    if record.truncated {
-                        ", output capped"
-                    } else {
-                        ""
-                    }
-                )
-                .map_err(|e| e.to_string())?;
+                stdout
+                    .write_all(footer(&record).as_bytes())
+                    .map_err(|e| e.to_string())?;
             }
             entry.1 = record.state;
         }
@@ -316,6 +431,79 @@ pub fn run(home: &Path) -> Result<(), String> {
         std::thread::sleep(std::time::Duration::from_millis(100));
     }
 }
+const RESET: &str = "\x1b[0m";
+const INK: &str = "\x1b[1;38;2;232;232;234m";
+const INK_2: &str = "\x1b[38;2;170;170;174m";
+const MUTED: &str = "\x1b[38;2;125;125;130m";
+const OK: &str = "\x1b[38;2;134;214;156m";
+const WARN: &str = "\x1b[38;2;240;194;122m";
+
+/// The top of the window: its name, and a note only when it is narrowed
+/// to one job, since then the rest are missing on purpose.
+fn banner(selection: Option<&str>) -> String {
+    let showing = match selection {
+        Some(_) => format!("{MUTED}Showing one job, chosen from the bar's jobs list.{RESET}\r\n"),
+        None => String::new(),
+    };
+    format!("\x1b[2J\x1b[H\x1b[?25l{INK}Observer{RESET}\r\n{showing}")
+}
+
+/// A job's opening: its name, then the facts the tools need, then the command.
+fn header(record: &Record) -> String {
+    let command = std::iter::once(quoted(&record.command))
+        .chain(record.args.iter().map(|s| quoted(s)))
+        .collect::<Vec<_>>()
+        .join(" ");
+    format!(
+        "\r\n{INK}▎ {}{RESET}\r\n{MUTED}  job {} · started {} · {}{RESET}\r\n{INK_2}  $ {}{RESET}\r\n",
+        record.label,
+        record.id,
+        clock(record.started_at),
+        record.cwd,
+        command
+    )
+}
+
+/// A job's close: how it ended, named again so a long output still reads.
+fn footer(record: &Record) -> String {
+    let ok = record.exit_code == Some(0);
+    let elapsed = record
+        .finished_at
+        .unwrap_or_else(crate::jobs::now)
+        .saturating_sub(record.started_at) as f64
+        / 1000.0;
+    let mut facts = vec![record.label.clone()];
+    if !ok || record.state != "exited" {
+        facts.push(record.state.replace('_', " "));
+    }
+    if let Some(code) = record.exit_code {
+        facts.push(format!("exit {code}"));
+    }
+    if let Some(signal) = record.signal {
+        facts.push(format!("signal {signal}"));
+    }
+    facts.push(format!("{elapsed:.1} s"));
+    if record.truncated {
+        facts.push("output capped".to_owned());
+    }
+    format!(
+        "\r\n{}{} {}{RESET}\r\n",
+        if ok { OK } else { WARN },
+        if ok { "✓" } else { "✗" },
+        facts.join(" · ")
+    )
+}
+
+fn clock(epoch_ms: u64) -> String {
+    chrono::DateTime::from_timestamp_millis(epoch_ms as i64)
+        .map(|at| {
+            at.with_timezone(&chrono::Local)
+                .format("%H:%M:%S")
+                .to_string()
+        })
+        .unwrap_or_else(|| "—".to_owned())
+}
+
 fn quoted(value: &str) -> String {
     if !value.is_empty()
         && value
@@ -325,5 +513,103 @@ fn quoted(value: &str) -> String {
         value.into()
     } else {
         format!("'{}'", value.replace('\'', "'\\''"))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    #[test]
+    fn the_rc_file_sets_the_prompt_and_leaves_room_for_the_operators_own() {
+        let rc = super::BASHRC;
+        assert!(rc.contains("PS1='\\[\\e[38;2;127;196;240m\\]\\w\\[\\e[0m\\] $ '"));
+        assert!(
+            !rc.contains("export PS1"),
+            "an exported prompt reaches sh as text"
+        );
+        assert!(rc.contains("HISTFILE=\"$HOME/.toad/shell_history\""));
+        assert!(rc.contains("export SHELL=/bin/bash"));
+        assert!(
+            rc.trim_end()
+                .ends_with("[ -r \"$HOME/.bashrc\" ] && . \"$HOME/.bashrc\"")
+        );
+        // Nothing here prints: the terminal shows a prompt, not prose.
+        assert!(
+            !rc.lines()
+                .any(|line| line.trim_start().starts_with("echo "))
+        );
+    }
+
+    #[test]
+    fn the_persons_bash_is_never_the_store_one() {
+        let bash = super::interactive_bash();
+        assert!(!bash.starts_with("/nix/store"), "{}", bash.display());
+        assert!(bash.is_absolute());
+    }
+
+    use super::*;
+
+    fn record(label: &str, state: &str, exit_code: Option<i32>) -> Record {
+        Record {
+            id: "0800001a0a5ee4cb4-f789fa4d".into(),
+            pid: None,
+            label: label.into(),
+            command: "bash".into(),
+            args: vec!["-c".into(), "cargo test".into()],
+            cwd: "/home/agent/src/app".into(),
+            holder: "teammate".into(),
+            state: state.into(),
+            exit_code,
+            signal: None,
+            started_at: 1_789_489_000_000,
+            finished_at: Some(1_789_489_002_500),
+            error: None,
+            output_bytes: 0,
+            truncated: false,
+            pty: false,
+            request_id: None,
+            fingerprint: String::new(),
+            artifact_staging: None,
+        }
+    }
+
+    #[test]
+    fn a_job_is_named_first_and_identified_underneath() {
+        let text = header(&record("Run the unit tests", "running", None));
+        let lines: Vec<&str> = text.lines().filter(|l| !l.is_empty()).collect();
+        assert!(lines[0].contains("▎ Run the unit tests"), "{text}");
+        assert!(
+            lines[1].contains("job 0800001a0a5ee4cb4-f789fa4d · started "),
+            "{text}"
+        );
+        assert!(lines[1].contains("· /home/agent/src/app"), "{text}");
+        assert!(lines[2].contains("$ bash -c 'cargo test'"), "{text}");
+    }
+
+    #[test]
+    fn the_ending_names_the_job_again_and_says_how_it_went() {
+        let ok = footer(&record("Run the unit tests", "exited", Some(0)));
+        assert!(ok.contains("✓ Run the unit tests · exit 0 · 2.5 s"), "{ok}");
+        assert!(ok.starts_with(&format!("\r\n{OK}")), "{ok}");
+        let failed = footer(&record("Run the unit tests", "failed", Some(101)));
+        assert!(
+            failed.contains("✗ Run the unit tests · failed · exit 101 · 2.5 s"),
+            "{failed}"
+        );
+        let cancelled = footer(&record("Serve the app", "cancelled", None));
+        assert!(
+            cancelled.contains("✗ Serve the app · cancelled · 2.5 s"),
+            "{cancelled}"
+        );
+    }
+
+    #[test]
+    fn the_banner_is_the_name_and_nothing_more_unless_narrowed() {
+        let all = banner(None);
+        assert!(
+            all.starts_with("\x1b[2J\x1b[H\x1b[?25l"),
+            "clears and hides the cursor"
+        );
+        assert_eq!(all.lines().filter(|l| !l.is_empty()).count(), 1, "{all:?}");
+        assert!(banner(Some("some-id")).contains("Showing one job"));
     }
 }

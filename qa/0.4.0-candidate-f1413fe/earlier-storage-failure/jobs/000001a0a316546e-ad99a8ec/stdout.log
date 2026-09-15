@@ -1,0 +1,5 @@
+total 60
+-rw-r--r-- 1 agent agent 25957 Sep 15 03:22 output.log
+-rw-r--r-- 1 agent agent   470 Sep 15 03:20 record.json
+-rw-r--r-- 1 agent agent 25957 Sep 15 03:22 stderr.log
+9.6M	/home/agent/qa/live-agent-evidence

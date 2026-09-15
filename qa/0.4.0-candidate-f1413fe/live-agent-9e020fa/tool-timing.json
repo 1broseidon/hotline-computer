@@ -1,0 +1,38 @@
+[
+  {
+    "wallMs": 3643,
+    "result": {
+      "content": [
+        {
+          "type": "text",
+          "text": "{\"duration_ms\":15,\"error\":null,\"exit_code\":0,\"job_id\":\"000001a0a32cb76b-ec879f5b\",\"observer_error\":null,\"signal\":null,\"state\":\"exited\",\"stderr\":\"\",\"stdout\":\"\",\"truncated\":false}"
+        }
+      ],
+      "isError": false
+    }
+  },
+  {
+    "wallMs": 3773,
+    "result": {
+      "content": [
+        {
+          "type": "text",
+          "text": "{\"duration_ms\":2,\"error\":null,\"exit_code\":0,\"job_id\":\"000001a0a32cc632-60f9cae2\",\"observer_error\":null,\"signal\":null,\"state\":\"exited\",\"stderr\":\"\",\"stdout\":\"\",\"truncated\":false}"
+        }
+      ],
+      "isError": false
+    }
+  },
+  {
+    "wallMs": 7245,
+    "result": {
+      "content": [
+        {
+          "type": "text",
+          "text": "{\"duration_ms\":4,\"error\":null,\"exit_code\":0,\"job_id\":\"000001a0a32ce249-07d2f129\",\"observer_error\":null,\"signal\":null,\"state\":\"exited\",\"stderr\":\"\",\"stdout\":\"\",\"truncated\":false}"
+        }
+      ],
+      "isError": false
+    }
+  }
+]

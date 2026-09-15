@@ -1,0 +1,9 @@
+/nix/store/db6sk165478iv0z0yjb4b1v5m5ll9kdc-cargo-1.98.1/bin/cargo
+/nix/store/xjvj5vi8qrhdy5miayc2gzdbxd968vsx-bun-1.4.2/bin/bun
+Filesystem      Size  Used Avail Use% Mounted on
+overlay          23G   21G  2.6G  89% /
+alacritty.sock
+browser
+jobs
+observer-view.json
+terminal.log

@@ -1,0 +1,8 @@
+{
+  "passed": true,
+  "expected": "Host clipboard QA café 🐸",
+  "observed": "[entry] Name 348,156 512x28 states=[editable,enabled,focusable,focused,sensitive,showing,single-line,visible,selectable-text] value=\"Host clipboard QA café 🐸\"",
+  "host_app_version": "0.11.1 integration",
+  "computer_revision": "9e020fa",
+  "note": "CUA reported clipboard-read timeout; viewer showed Pasted and exact native field value verified. No retry."
+}

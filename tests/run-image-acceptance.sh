@@ -11,20 +11,30 @@ chmod 600 "$credentials"
 printf 'TOAD_COMPUTER_TOKEN=%s\n' "$(openssl rand -hex 24)" > "$credentials"
 container=''
 scratch=''
+home=''
+store=''
 cleanup() {
   if [ -n "$container" ]; then
     docker logs "$container" > "$output/container.log" 2>&1 || true
     if [ "${TOAD_ACCEPTANCE_KEEP:-0}" != 1 ]; then docker rm -f "$container" >/dev/null || true; fi
   fi
-  if [ -n "$scratch" ] && [ "${TOAD_ACCEPTANCE_KEEP:-0}" != 1 ]; then docker volume rm "$scratch" >/dev/null || true; fi
+  for volume in "$scratch" "$home" "$store"; do
+    if [ -n "$volume" ] && [ "${TOAD_ACCEPTANCE_KEEP:-0}" != 1 ]; then docker volume rm "$volume" >/dev/null || true; fi
+  done
   rm -rf "$output/venv"
   rm -f "$credentials"
   if [ "${TOAD_ACCEPTANCE_KEEP:-0}" != 1 ]; then rm -f "$output/token"; fi
 }
 trap cleanup EXIT INT TERM
+# The desk gives a computer a scratch volume, a home volume and the shared
+# store volume; the home and the store are what a recreated container keeps.
 scratch=$(docker volume create)
+home=$(docker volume create)
+store=$(docker volume create)
 printf '%s\n' "$scratch" > "$output/scratch-volume.txt"
-container=$(docker run -d --cap-drop=ALL --security-opt no-new-privileges --pids-limit 1024 --memory 4g --shm-size 1g -p "127.0.0.1:${TOAD_ACCEPTANCE_PORT:-}:8787" --env-file "$credentials" --mount "type=volume,source=$scratch,target=/home/agent/src" "$image")
+printf '%s\n' "$home" > "$output/home-volume.txt"
+printf '%s\n' "$store" > "$output/store-volume.txt"
+container=$(docker run -d --cap-drop=ALL --security-opt no-new-privileges --pids-limit 1024 --memory 4g --shm-size 1g -p "127.0.0.1:${TOAD_ACCEPTANCE_PORT:-}:8787" --env-file "$credentials" --mount "type=volume,source=$home,target=/home/agent" --mount "type=volume,source=$scratch,target=/home/agent/src" --mount "type=volume,source=$store,target=/nix" "$image")
 printf '%s\n' "$container" > "$output/container-id.txt"
 docker inspect --format '{{.Image}}' "$container" > "$output/image-id.txt"
 port=$(docker port "$container" 8787/tcp | sed 's/.*://')

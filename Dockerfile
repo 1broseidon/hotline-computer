@@ -24,18 +24,21 @@ FROM debian:trixie-slim@sha256:d7e12182ce18b85b93007c1dedf31f2d29e01ccf3182cc401
 RUN apt-get update && apt-get install -y --no-install-recommends \
     bash git curl wget ca-certificates tar gzip bzip2 xz-utils unzip zip ripgrep jq file \
     nix-bin python3 xvfb xauth x11-xkb-utils dbus at-spi2-core chromium \
-    fonts-dejavu-core fonts-noto-color-emoji xfonts-base alacritty \
+    fonts-dejavu-core fonts-noto-color-emoji xfonts-base alacritty tzdata \
     libgl1-mesa-dri libegl-mesa0 libglx-mesa0 mesa-utils \
-    libgtk-3-0t64 libwebkit2gtk-4.1-0 libayatana-appindicator3-1 librsvg2-common \
+    libgtk-3-0t64 librsvg2-common \
     && rm -rf /var/lib/apt/lists/* \
     && useradd --uid 1000 --create-home --shell /bin/bash agent \
+    && rm -f /home/agent/.bashrc /home/agent/.profile /home/agent/.bash_logout \
     && install -d /etc/nix \
     && install -d -m 1777 /tmp/.X11-unix \
-    && install -d -o agent -g agent /nix /nix/store /nix/var/nix /home/agent/.config/alacritty \
+    && install -d -o agent -g agent /nix /nix/store /nix/var/nix \
     && printf 'experimental-features = nix-command flakes\nsandbox = false\nbuild-users-group =\n' > /etc/nix/nix.conf \
     && chown -R agent:agent /nix \
-    && printf '[window]\ndynamic_title = false\n[font]\nsize = 12.0\n' > /home/agent/.config/alacritty/alacritty.toml \
     && chown -R agent:agent /home/agent
+COPY assets/alacritty.toml /etc/toad-computer/alacritty.toml
+COPY assets/chromium-policy.json /etc/chromium/policies/managed/toad.json
+COPY assets/bashrc /etc/bash.bashrc
 COPY --from=build /usr/local/bin/toad-computer /usr/bin/toad-computer
 USER agent
 WORKDIR /home/agent

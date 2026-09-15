@@ -1,0 +1,981 @@
+#0 building with "orbstack" instance using docker driver
+
+#1 [internal] load build definition from Dockerfile.alpine
+#1 transferring dockerfile: 2.06kB done
+#1 DONE 0.0s
+
+#2 [internal] load metadata for docker.io/library/alpine:3.22@sha256:14358309a308569c32bdc37e2e0e9694be33a9d99e68afb0f5ff33cc1f695dce
+#2 DONE 0.0s
+
+#3 [internal] load metadata for docker.io/library/rust:1-alpine
+#3 DONE 0.8s
+
+#4 [internal] load .dockerignore
+#4 transferring context: 140B done
+#4 DONE 0.1s
+
+#5 [internal] load build context
+#5 DONE 0.0s
+
+#6 [runtime 1/5] FROM docker.io/library/alpine:3.22@sha256:14358309a308569c32bdc37e2e0e9694be33a9d99e68afb0f5ff33cc1f695dce
+#6 DONE 0.0s
+
+#7 [build 1/8] FROM docker.io/library/rust:1-alpine@sha256:1716b3aa042d735f4566d14dc54e8037de9d69556e2d5dd58131d93a613d173d
+#7 resolve docker.io/library/rust:1-alpine@sha256:1716b3aa042d735f4566d14dc54e8037de9d69556e2d5dd58131d93a613d173d
+#7 ...
+
+#5 [internal] load build context
+#5 transferring context: 443.81kB 0.0s done
+#5 DONE 0.1s
+
+#7 [build 1/8] FROM docker.io/library/rust:1-alpine@sha256:1716b3aa042d735f4566d14dc54e8037de9d69556e2d5dd58131d93a613d173d
+#7 resolve docker.io/library/rust:1-alpine@sha256:1716b3aa042d735f4566d14dc54e8037de9d69556e2d5dd58131d93a613d173d 0.0s done
+#7 sha256:1716b3aa042d735f4566d14dc54e8037de9d69556e2d5dd58131d93a613d173d 3.90kB / 3.90kB done
+#7 sha256:e2a251f8482ab6d9d9a3c1cdacfa0824440b5fdb826cd1a069c490ad1288f197 1.55kB / 1.55kB done
+#7 sha256:27b0fb119103a600403b4092381bf7cb9e1dba8b14aaf545bfacc1668e6a077f 2.94kB / 2.94kB done
+#7 sha256:5de55e5ef9c033997441461efe7ba23a986db059c0bb78b38f84ee0d72b99167 1.05MB / 4.18MB 0.2s
+#7 sha256:0ad29c5e24c1cd2e87bdf9a09949344c1f99250eedc257aab9bc9cb0815e8bbb 0B / 66.51MB 0.2s
+#7 sha256:21479c418769728737769e6321fcabb78a757ab833503bdc08603d41e19f172f 0B / 277.26MB 0.2s
+#7 sha256:5de55e5ef9c033997441461efe7ba23a986db059c0bb78b38f84ee0d72b99167 4.18MB / 4.18MB 0.2s done
+#7 extracting sha256:5de55e5ef9c033997441461efe7ba23a986db059c0bb78b38f84ee0d72b99167 0.1s done
+#7 sha256:0ad29c5e24c1cd2e87bdf9a09949344c1f99250eedc257aab9bc9cb0815e8bbb 15.73MB / 66.51MB 0.5s
+#7 sha256:0ad29c5e24c1cd2e87bdf9a09949344c1f99250eedc257aab9bc9cb0815e8bbb 20.97MB / 66.51MB 0.6s
+#7 sha256:21479c418769728737769e6321fcabb78a757ab833503bdc08603d41e19f172f 16.78MB / 277.26MB 0.6s
+#7 sha256:0ad29c5e24c1cd2e87bdf9a09949344c1f99250eedc257aab9bc9cb0815e8bbb 33.55MB / 66.51MB 0.8s
+#7 sha256:0ad29c5e24c1cd2e87bdf9a09949344c1f99250eedc257aab9bc9cb0815e8bbb 45.09MB / 66.51MB 1.0s
+#7 sha256:21479c418769728737769e6321fcabb78a757ab833503bdc08603d41e19f172f 39.85MB / 277.26MB 1.0s
+#7 sha256:0ad29c5e24c1cd2e87bdf9a09949344c1f99250eedc257aab9bc9cb0815e8bbb 50.33MB / 66.51MB 1.1s
+#7 sha256:0ad29c5e24c1cd2e87bdf9a09949344c1f99250eedc257aab9bc9cb0815e8bbb 62.91MB / 66.51MB 1.3s
+#7 sha256:21479c418769728737769e6321fcabb78a757ab833503bdc08603d41e19f172f 57.67MB / 277.26MB 1.3s
+#7 sha256:0ad29c5e24c1cd2e87bdf9a09949344c1f99250eedc257aab9bc9cb0815e8bbb 66.51MB / 66.51MB 1.4s
+#7 sha256:0ad29c5e24c1cd2e87bdf9a09949344c1f99250eedc257aab9bc9cb0815e8bbb 66.51MB / 66.51MB 1.5s done
+#7 extracting sha256:0ad29c5e24c1cd2e87bdf9a09949344c1f99250eedc257aab9bc9cb0815e8bbb
+#7 sha256:21479c418769728737769e6321fcabb78a757ab833503bdc08603d41e19f172f 78.64MB / 277.26MB 1.6s
+#7 sha256:21479c418769728737769e6321fcabb78a757ab833503bdc08603d41e19f172f 97.89MB / 277.26MB 1.8s
+#7 sha256:21479c418769728737769e6321fcabb78a757ab833503bdc08603d41e19f172f 119.54MB / 277.26MB 2.0s
+#7 sha256:21479c418769728737769e6321fcabb78a757ab833503bdc08603d41e19f172f 142.61MB / 277.26MB 2.2s
+#7 sha256:21479c418769728737769e6321fcabb78a757ab833503bdc08603d41e19f172f 166.72MB / 277.26MB 2.4s
+#7 extracting sha256:0ad29c5e24c1cd2e87bdf9a09949344c1f99250eedc257aab9bc9cb0815e8bbb 0.8s done
+#7 sha256:21479c418769728737769e6321fcabb78a757ab833503bdc08603d41e19f172f 189.79MB / 277.26MB 2.6s
+#7 sha256:21479c418769728737769e6321fcabb78a757ab833503bdc08603d41e19f172f 213.91MB / 277.26MB 2.8s
+#7 sha256:21479c418769728737769e6321fcabb78a757ab833503bdc08603d41e19f172f 236.98MB / 277.26MB 3.0s
+#7 sha256:21479c418769728737769e6321fcabb78a757ab833503bdc08603d41e19f172f 260.05MB / 277.26MB 3.2s
+#7 sha256:21479c418769728737769e6321fcabb78a757ab833503bdc08603d41e19f172f 277.26MB / 277.26MB 3.4s
+#7 sha256:21479c418769728737769e6321fcabb78a757ab833503bdc08603d41e19f172f 277.26MB / 277.26MB 4.1s done
+#7 extracting sha256:21479c418769728737769e6321fcabb78a757ab833503bdc08603d41e19f172f 0.1s
+#7 extracting sha256:21479c418769728737769e6321fcabb78a757ab833503bdc08603d41e19f172f 2.6s done
+#7 DONE 8.0s
+
+#8 [build 2/8] RUN apk add --no-cache build-base cmake perl pkgconf
+#8 0.709 ( 1/19) Installing libmagic (5.47-r2)
+#8 0.761 ( 2/19) Installing file (5.47-r2)
+#8 0.775 ( 3/19) Installing libstdc++-dev (15.2.0-r5)
+#8 0.898 ( 4/19) Installing g++ (15.2.0-r5)
+#8 1.089 ( 5/19) Installing make (4.4.1-r4)
+#8 1.107 ( 6/19) Installing fortify-headers (3.0.1-r2)
+#8 1.122 ( 7/19) Installing patch (2.8-r0)
+#8 1.138 ( 8/19) Installing build-base (0.5-r4)
+#8 1.138 ( 9/19) Installing acl-libs (2.3.2-r1)
+#8 1.153 (10/19) Installing libbz2 (1.0.8-r6)
+#8 1.168 (11/19) Installing libexpat (2.8.4-r0)
+#8 1.185 (12/19) Installing lz4-libs (1.10.0-r1)
+#8 1.204 (13/19) Installing xz-libs (5.8.4-r0)
+#8 1.221 (14/19) Installing libarchive (3.8.7-r0)
+#8 1.241 (15/19) Installing rhash-libs (1.4.6-r0)
+#8 1.258 (16/19) Installing libuv (1.52.1-r0)
+#8 1.275 (17/19) Installing cmake (4.2.3-r0)
+#8 1.901 (18/19) Installing perl (5.42.2-r0)
+#8 2.139 (19/19) Installing pkgconf (2.5.1-r0)
+#8 ...
+
+#9 [runtime 2/5] RUN apk add --no-cache     bash git curl wget ca-certificates tar gzip bzip2 xz unzip zip ripgrep jq file     nix python3 xvfb xauth xkeyboard-config dbus at-spi2-core chromium     font-dejavu font-noto-emoji font-misc-misc alacritty     mesa-dri-gallium mesa-egl mesa-gl mesa-utils     gtk+3.0 webkit2gtk-4.1 libayatana-appindicator librsvg     && adduser -D -u 1000 -h /home/agent -s /bin/bash agent     && install -d /etc/nix     && install -d -m 1777 /tmp/.X11-unix     && install -d -o agent -g agent /nix /nix/store /nix/var/nix /home/agent/.config/alacritty     && printf 'experimental-features = nix-command flakes\nsandbox = false\nbuild-users-group =\n' > /etc/nix/nix.conf     && chown -R agent:agent /nix     && printf '[window]\ndynamic_title = false\n[font]\nsize = 12.0\n' > /home/agent/.config/alacritty/alacritty.toml     && chown -R agent:agent /home/agent
+#9 0.280 fetch https://dl-cdn.alpinelinux.org/alpine/v3.22/main/aarch64/APKINDEX.tar.gz
+#9 1.700 fetch https://dl-cdn.alpinelinux.org/alpine/v3.22/community/aarch64/APKINDEX.tar.gz
+#9 3.209 (1/323) Installing ncurses-terminfo-base (6.5_p20250503-r0)
+#9 3.377 (2/323) Installing wayland-libs-egl (1.23.1-r3)
+#9 3.396 (3/323) Installing libxau (1.0.12-r0)
+#9 3.413 (4/323) Installing libmd (1.1.0-r0)
+#9 3.433 (5/323) Installing libbsd (0.12.2-r0)
+#9 3.449 (6/323) Installing libxdmcp (1.1.5-r1)
+#9 3.466 (7/323) Installing libxcb (1.17.0-r0)
+#9 3.492 (8/323) Installing libx11 (1.8.11-r0)
+#9 3.532 (9/323) Installing libxext (1.3.6-r2)
+#9 3.549 (10/323) Installing libxi (1.8.2-r0)
+#9 3.564 (11/323) Installing libxfixes (6.0.1-r4)
+#9 3.579 (12/323) Installing libxrender (0.9.12-r0)
+#9 3.595 (13/323) Installing libxcursor (1.2.3-r0)
+#9 3.609 (14/323) Installing xkeyboard-config (2.43-r0)
+#9 3.650 (15/323) Installing xz-libs (5.8.4-r0)
+#9 3.667 (16/323) Installing libxml2 (2.13.9-r1)
+#9 3.690 (17/323) Installing libxkbcommon (1.8.1-r2)
+#9 3.708 (18/323) Installing libxkbcommon-x11 (1.8.1-r2)
+#9 3.836 (19/323) Installing libexpat (2.8.4-r0)
+#9 3.852 (20/323) Installing brotli-libs (1.1.0-r2)
+#9 3.872 (21/323) Installing libbz2 (1.0.8-r6)
+#9 3.888 (22/323) Installing libpng (1.6.57-r0)
+#9 3.910 (23/323) Installing freetype (2.13.3-r0)
+#9 3.931 (24/323) Installing fontconfig (2.15.0-r3)
+#9 3.952 (25/323) Installing libgcc (14.2.0-r6)
+#9 3.967 (26/323) Installing alacritty (0.15.1-r0)
+#9 4.137 (27/323) Installing libxtst (1.2.5-r0)
+#9 4.153 (28/323) Installing dbus-libs (1.16.2-r1)
+#9 4.171 (29/323) Installing libffi (3.4.8-r0)
+#9 4.187 (30/323) Installing libintl (0.24.1-r0)
+#9 4.204 (31/323) Installing libeconf (0.6.3-r0)
+#9 4.218 (32/323) Installing libblkid (2.41.6-r1)
+#9 4.236 (33/323) Installing libmount (2.41.6-r1)
+#9 4.253 (34/323) Installing pcre2 (10.46-r0)
+#9 4.275 (35/323) Installing glib (2.84.4-r0)
+#9 4.318 (36/323) Installing at-spi2-core-libs (2.56.5-r0)
+#9 4.334 (37/323) Installing at-spi2-core (2.56.5-r0)
+#9 4.352 (38/323) Installing libncursesw (6.5_p20250503-r0)
+#9 4.376 (39/323) Installing readline (8.2.13-r1)
+#9 4.394 (40/323) Installing bash (5.2.37-r0)
+#9 4.422 Executing bash-5.2.37-r0.post-install
+#9 4.424 (41/323) Installing bzip2 (1.0.8-r6)
+#9 4.558 (42/323) Installing ca-certificates (20260611-r0)
+#9 4.582 (43/323) Installing libfontenc (1.1.8-r0)
+#9 4.597 (44/323) Installing mkfontscale (1.2.3-r1)
+#9 4.611 (45/323) Installing font-opensans (0_git20210927-r1)
+#9 4.647 (46/323) Installing gobject-introspection (1.84.0-r0)
+#9 4.664 (47/323) Installing pkgconf (2.4.3-r0)
+#9 4.680 (48/323) Installing hicolor-icon-theme (0.18-r0)
+#9 4.718 (49/323) Installing libstdc++ (14.2.0-r6)
+#9 4.755 (50/323) Installing shared-mime-info (2.4-r6)
+#9 4.778 (51/323) Installing libjpeg-turbo (3.1.0-r0)
+#9 4.796 (52/323) Installing libsharpyuv (1.5.0-r0)
+#9 4.814 (53/323) Installing libwebp (1.5.0-r0)
+#9 4.832 (54/323) Installing zstd-libs (1.5.7-r0)
+#9 4.853 (55/323) Installing tiff (4.7.1-r0)
+#9 4.870 (56/323) Installing gdk-pixbuf (2.42.12-r1)
+#9 4.893 (57/323) Installing gtk-update-icon-cache (3.24.50-r0)
+#9 5.028 (58/323) Installing libxcomposite (0.4.6-r5)
+#9 5.042 (59/323) Installing libxdamage (1.1.6-r5)
+#9 5.059 (60/323) Installing libxinerama (1.1.5-r4)
+#9 5.076 (61/323) Installing libxrandr (1.5.4-r1)
+#9 5.091 (62/323) Installing libatk-1.0 (2.56.5-r0)
+#9 5.108 (63/323) Installing libatk-bridge-2.0 (2.56.5-r0)
+#9 5.124 (64/323) Installing pixman (0.46.4-r0)
+#9 5.144 (65/323) Installing cairo (1.18.4-r0)
+#9 5.166 (66/323) Installing cairo-gobject (1.18.4-r0)
+#9 5.181 (67/323) Installing avahi-libs (0.8-r21)
+#9 5.197 (68/323) Installing gmp (6.3.0-r3)
+#9 5.219 (69/323) Installing nettle (3.10.2-r0)
+#9 5.239 (70/323) Installing libunistring (1.3-r0)
+#9 5.265 (71/323) Installing libidn2 (2.3.7-r0)
+#9 5.282 (72/323) Installing libtasn1 (4.21.0-r0)
+#9 5.298 (73/323) Installing p11-kit (0.26.2-r0)
+#9 5.320 (74/323) Installing gnutls (3.8.13-r0)
+#9 5.348 (75/323) Installing cups-libs (2.4.18-r0)
+#9 5.367 (76/323) Installing libepoxy (1.5.10-r1)
+#9 5.508 (77/323) Installing fribidi (1.0.16-r1)
+#9 5.531 (78/323) Installing graphite2 (1.3.14-r6)
+#9 5.548 (79/323) Installing harfbuzz (11.2.1-r0)
+#9 5.620 (80/323) Installing libxft (2.3.8-r3)
+#9 5.637 (81/323) Installing pango (1.56.3-r0)
+#9 5.664 (82/323) Installing wayland-libs-client (1.23.1-r3)
+#9 5.681 (83/323) Installing wayland-libs-cursor (1.23.1-r3)
+#9 5.696 (84/323) Installing gtk+3.0 (3.24.50-r0)
+#9 5.762 (85/323) Installing icu-data-full (76.1-r1)
+#9 6.147 (86/323) Installing llvm20-libs (20.1.8-r0)
+#9 6.790 (87/323) Installing spirv-tools (1.4.313.0-r0)
+#9 6.876 (88/323) Installing hwdata-pci (0.395-r0)
+#9 6.898 (89/323) Installing libpciaccess (0.18.1-r0)
+#9 6.913 (90/323) Installing libdrm (2.4.124-r0)
+#9 6.933 (91/323) Installing libelf (0.193-r0)
+#9 6.949 (92/323) Installing wayland-libs-server (1.23.1-r3)
+#9 6.963 (93/323) Installing libxshmfence (1.3.3-r0)
+#9 7.098 (94/323) Installing mesa (25.1.9-r0)
+#9 7.433 (95/323) Installing mesa-gbm (25.1.9-r0)
+#9 7.447 (96/323) Installing mesa-dri-gallium (25.1.9-r0)
+#9 7.594 (97/323) Installing eudev-libs (3.2.14-r5)
+#9 7.771 (98/323) Installing libmagic (5.46-r2)
+#9 7.771 (99/323) Installing file (5.46-r2)
+#9 7.771 (100/323) Installing xprop (1.2.8-r0)
+#9 7.783 (101/323) Installing libice (1.1.2-r0)
+#9 7.802 (102/323) Installing libuuid (2.41.6-r1)
+#9 7.819 (103/323) Installing libsm (1.2.5-r0)
+#9 7.842 (104/323) Installing libxt (1.3.1-r0)
+#9 7.863 (105/323) Installing libxmu (1.2.1-r0)
+#9 7.878 (106/323) Installing xset (1.2.5-r1)
+#9 7.895 (107/323) Installing xdg-utils (1.2.1-r1)
+#9 7.913 (108/323) Installing libogg (1.3.5-r5)
+#9 7.933 (109/323) Installing libflac (1.4.3-r1)
+#9 7.950 (110/323) Installing alsa-lib (1.2.14-r0)
+#9 7.980 (111/323) Installing libSvtAv1Enc (2.3.0-r0)
+#9 8.027 (112/323) Installing aom-libs (3.12.1-r0)
+#9 8.078 (113/323) Installing libva (2.22.0-r1)
+#9 8.097 (114/323) Installing libvdpau (1.5-r4)
+#9 8.115 (115/323) Installing ffmpeg-libavutil (6.1.2-r2)
+#9 8.136 (116/323) Installing libdav1d (1.5.1-r0)
+#9 8.161 (117/323) Installing openexr-libiex (3.3.11-r0)
+#9 8.177 (118/323) Installing openexr-libilmthread (3.3.11-r0)
+#9 8.193 (119/323) Installing imath (3.1.12-r0)
+#9 8.210 (120/323) Installing libdeflate (1.23-r0)
+#9 8.228 (121/323) Installing openexr-libopenexrcore (3.3.11-r0)
+#9 8.247 (122/323) Installing openexr-libopenexr (3.3.11-r0)
+#9 8.268 (123/323) Installing giflib (5.2.2-r2)
+#9 8.283 (124/323) Installing libhwy (1.0.7-r1)
+#9 8.297 (125/323) Installing lcms2 (2.19-r0)
+#9 8.314 (126/323) Installing libjxl (0.10.3-r2)
+#9 8.343 (127/323) Installing lame-libs (3.100-r5)
+#9 8.359 (128/323) Installing opus (1.5.2-r1)
+#9 8.377 (129/323) Installing rav1e-libs (0.7.1-r2)
+#9 8.400 (130/323) Installing libgomp (14.2.0-r6)
+#9 8.418 (131/323) Installing soxr (0.1.3-r7)
+#9 8.433 (132/323) Installing ffmpeg-libswresample (6.1.2-r2)
+#9 8.451 (133/323) Installing libtheora (1.1.1-r18)
+#9 8.471 (134/323) Installing libvorbis (1.3.7-r2)
+#9 8.490 (135/323) Installing libvpx (1.15.0-r0)
+#9 8.525 (136/323) Installing libwebpmux (1.5.0-r0)
+#9 8.542 (137/323) Installing x264-libs (0.164.3108-r0)
+#9 8.568 (138/323) Installing numactl (2.0.18-r0)
+#9 8.585 (139/323) Installing x265-libs (3.6-r0)
+#9 8.634 (140/323) Installing xvidcore (1.3.7-r2)
+#9 8.652 (141/323) Installing ffmpeg-libavcodec (6.1.2-r2)
+#9 8.737 (142/323) Installing libbluray (1.3.4-r1)
+#9 8.756 (143/323) Installing mpg123-libs (1.32.10-r0)
+#9 8.784 (144/323) Installing libopenmpt (0.7.15-r0)
+#9 8.809 (145/323) Installing cjson (1.7.19-r0)
+#9 8.823 (146/323) Installing mbedtls (3.6.7-r0)
+#9 8.845 (147/323) Installing librist (0.2.10-r1)
+#9 8.861 (148/323) Installing libsrt (1.5.3-r1)
+#9 8.882 (149/323) Installing libssh (0.11.2-r0)
+#9 8.909 (150/323) Installing libsodium (1.0.20-r1)
+#9 8.933 (151/323) Installing libzmq (4.3.5-r2)
+#9 8.958 (152/323) Installing ffmpeg-libavformat (6.1.2-r2)
+#9 9.004 (153/323) Installing crc32c (1.1.2-r2)
+#9 9.137 (154/323) Installing double-conversion (3.3.1-r0)
+#9 9.156 (155/323) Installing harfbuzz-subset (11.2.1-r0)
+#9 9.181 (156/323) Installing minizip (1.3.1-r0)
+#9 9.200 (157/323) Installing nspr (4.36-r0)
+#9 9.217 (158/323) Installing sqlite-libs (3.49.2-r1)
+#9 9.246 (159/323) Installing nss (3.114-r0)
+#9 9.413 (160/323) Installing openh264 (2.6.0-r0)
+#9 9.443 (161/323) Installing libpisp (1.2.0-r0)
+#9 9.465 (162/323) Installing libcamera-ipa (0.5.1-r0)
+#9 9.490 (163/323) Installing libunwind (1.8.1-r0)
+#9 9.507 (164/323) Installing yaml (0.2.5-r2)
+#9 9.522 (165/323) Installing libcamera (0.5.1-r0)
+#9 9.668 (166/323) Installing serd-libs (0.32.4-r0)
+#9 9.683 (167/323) Installing zix-libs (0.6.2-r0)
+#9 9.698 (168/323) Installing sord-libs (0.16.18-r0)
+#9 9.712 (169/323) Installing sratom (0.6.18-r0)
+#9 9.728 (170/323) Installing lilv-libs (0.24.26-r0)
+#9 9.744 (171/323) Installing speexdsp (1.2.1-r2)
+#9 9.760 (172/323) Installing libuv (1.51.0-r0)
+#9 9.778 (173/323) Installing roc-toolkit-libs (0.4.0-r1)
+#9 9.801 (174/323) Installing libsndfile (1.2.2-r2)
+#9 9.821 (175/323) Installing abseil-cpp-raw-logging-internal (20240722.1-r1)
+#9 9.836 (176/323) Installing abseil-cpp-strings-internal (20240722.1-r1)
+#9 9.852 (177/323) Installing abseil-cpp-strings (20240722.1-r1)
+#9 9.868 (178/323) Installing webrtc-audio-processing-2 (2.1-r0)
+#9 9.891 (179/323) Installing pipewire-libs (1.4.7-r0)
+#9 9.975 (180/323) Installing libasyncns (0.8-r4)
+#9 9.993 (181/323) Installing libltdl (2.5.4-r1)
+#9 10.01 (182/323) Installing orc (0.4.40-r1)
+#9 10.03 (183/323) Installing tdb-libs (1.4.12-r0)
+#9 10.04 (184/323) Installing libpulse (17.0-r5)
+#9 10.07 (185/323) Installing simdutf (7.2.1-r0)
+#9 10.09 (186/323) Installing libwebpdemux (1.5.0-r0)
+#9 10.11 (187/323) Installing libxslt (1.1.43-r3)
+#9 10.13 (188/323) Installing chromium (142.0.7444.59-r0)
+#9 ...
+
+#8 [build 2/8] RUN apk add --no-cache build-base cmake perl pkgconf
+#8 2.161 Executing busybox-1.37.0-r31.trigger
+#8 2.165 OK: 339.1 MiB in 50 packages
+#8 DONE 5.7s
+
+#10 [build 3/8] WORKDIR /src
+#10 DONE 0.2s
+
+#9 [runtime 2/5] RUN apk add --no-cache     bash git curl wget ca-certificates tar gzip bzip2 xz unzip zip ripgrep jq file     nix python3 xvfb xauth xkeyboard-config dbus at-spi2-core chromium     font-dejavu font-noto-emoji font-misc-misc alacritty     mesa-dri-gallium mesa-egl mesa-gl mesa-utils     gtk+3.0 webkit2gtk-4.1 libayatana-appindicator librsvg     && adduser -D -u 1000 -h /home/agent -s /bin/bash agent     && install -d /etc/nix     && install -d -m 1777 /tmp/.X11-unix     && install -d -o agent -g agent /nix /nix/store /nix/var/nix /home/agent/.config/alacritty     && printf 'experimental-features = nix-command flakes\nsandbox = false\nbuild-users-group =\n' > /etc/nix/nix.conf     && chown -R agent:agent /nix     && printf '[window]\ndynamic_title = false\n[font]\nsize = 12.0\n' > /home/agent/.config/alacritty/alacritty.toml     && chown -R agent:agent /home/agent
+#9 ...
+
+#11 [build 4/8] COPY Cargo.toml Cargo.lock ./
+#11 DONE 0.1s
+
+#12 [build 5/8] COPY src ./src
+#12 DONE 0.1s
+
+#9 [runtime 2/5] RUN apk add --no-cache     bash git curl wget ca-certificates tar gzip bzip2 xz unzip zip ripgrep jq file     nix python3 xvfb xauth xkeyboard-config dbus at-spi2-core chromium     font-dejavu font-noto-emoji font-misc-misc alacritty     mesa-dri-gallium mesa-egl mesa-gl mesa-utils     gtk+3.0 webkit2gtk-4.1 libayatana-appindicator librsvg     && adduser -D -u 1000 -h /home/agent -s /bin/bash agent     && install -d /etc/nix     && install -d -m 1777 /tmp/.X11-unix     && install -d -o agent -g agent /nix /nix/store /nix/var/nix /home/agent/.config/alacritty     && printf 'experimental-features = nix-command flakes\nsandbox = false\nbuild-users-group =\n' > /etc/nix/nix.conf     && chown -R agent:agent /nix     && printf '[window]\ndynamic_title = false\n[font]\nsize = 12.0\n' > /home/agent/.config/alacritty/alacritty.toml     && chown -R agent:agent /home/agent
+#9 14.05 (189/323) Installing c-ares (1.34.8-r0)
+#9 14.07 (190/323) Installing nghttp2-libs (1.69.0-r0)
+#9 14.08 (191/323) Installing libpsl (0.21.5-r3)
+#9 ...
+
+#13 [build 6/8] COPY assets ./assets
+#13 DONE 0.1s
+
+#14 [build 7/8] COPY skills ./skills
+#14 DONE 0.0s
+
+#9 [runtime 2/5] RUN apk add --no-cache     bash git curl wget ca-certificates tar gzip bzip2 xz unzip zip ripgrep jq file     nix python3 xvfb xauth xkeyboard-config dbus at-spi2-core chromium     font-dejavu font-noto-emoji font-misc-misc alacritty     mesa-dri-gallium mesa-egl mesa-gl mesa-utils     gtk+3.0 webkit2gtk-4.1 libayatana-appindicator librsvg     && adduser -D -u 1000 -h /home/agent -s /bin/bash agent     && install -d /etc/nix     && install -d -m 1777 /tmp/.X11-unix     && install -d -o agent -g agent /nix /nix/store /nix/var/nix /home/agent/.config/alacritty     && printf 'experimental-features = nix-command flakes\nsandbox = false\nbuild-users-group =\n' > /etc/nix/nix.conf     && chown -R agent:agent /nix     && printf '[window]\ndynamic_title = false\n[font]\nsize = 12.0\n' > /home/agent/.config/alacritty/alacritty.toml     && chown -R agent:agent /home/agent
+#9 14.10 (192/323) Installing libcurl (8.14.1-r3)
+#9 14.12 (193/323) Installing curl (8.14.1-r3)
+#9 14.14 (194/323) Installing dbus (1.16.2-r1)
+#9 14.15 Executing dbus-1.16.2-r1.pre-install
+#9 14.17 Executing dbus-1.16.2-r1.post-install
+#9 14.17 (195/323) Installing dbus-daemon-launch-helper (1.16.2-r1)
+#9 14.19 (196/323) Installing encodings (1.0.7-r1)
+#9 14.22 (197/323) Installing font-dejavu (2.37-r6)
+#9 14.88 (198/323) Installing font-alias (1.0.5-r0)
+#9 15.02 (199/323) Installing util-macros (1.20.1-r0)
+#9 15.04 (200/323) Installing font-misc-misc (1.1.3-r1)
+#9 15.22 (201/323) Installing font-noto-emoji (2.047-r0)
+#9 15.33 (202/323) Installing git (2.49.1-r0)
+#9 15.39 (203/323) Installing git-init-template (2.49.1-r0)
+#9 15.41 (204/323) Installing less (679-r0)
+#9 15.55 (205/323) Installing gzip (1.14-r2)
+#9 15.68 (206/323) Installing oniguruma (6.9.10-r0)
+#9 15.82 (207/323) Installing jq (1.8.2-r0)
+#9 15.84 (208/323) Installing ayatana-ido (0.10.4-r1)
+#9 15.98 (209/323) Installing libayatana-indicator (0.9.4-r1)
+#9 16.11 (210/323) Installing json-glib (1.10.8-r0)
+#9 16.25 (211/323) Installing libdbusmenu-glib (16.04.0-r6)
+#9 16.38 (212/323) Installing libdbusmenu-gtk3 (16.04.0-r6)
+#9 16.52 (213/323) Installing libayatana-appindicator (0.5.94-r0)
+#9 16.65 (214/323) Installing librsvg (2.60.0-r0)
+#9 16.93 (215/323) Installing mesa-egl (25.1.9-r0)
+#9 17.06 (216/323) Installing libxxf86vm (1.1.7-r0)
+#9 17.20 (217/323) Installing mesa-gl (25.1.9-r0)
+#9 17.34 (218/323) Installing mesa-utils (9.0.0-r6)
+#9 17.83 (219/323) Installing acl-libs (2.3.2-r1)
+#9 17.84 (220/323) Installing lz4-libs (1.10.0-r0)
+#9 17.86 (221/323) Installing libarchive (3.8.3-r0)
+#9 18.27 (222/323) Installing hwloc (2.12.0-r3)
+#9 18.40 (223/323) Installing onetbb (2022.1.0-r0)
+#9 18.66 (224/323) Installing blake3-libs (1.8.2-r1)
+#9 18.80 (225/323) Installing boost1.84-context (1.84.0-r3)
+#9 18.93 (226/323) Installing editline (1.17.1-r2)
+#9 19.07 (227/323) Installing gc (8.2.8-r1)
+#9 19.20 (228/323) Installing llhttp (9.2.1-r0)
+#9 19.34 (229/323) Installing libssh2 (1.11.1-r2)
+#9 19.35 (230/323) Installing libgit2 (1.9.0-r2)
+#9 19.49 (231/323) Installing gtest (1.16.0-r0)
+#9 19.62 (232/323) Installing gmock (1.16.0-r0)
+#9 19.76 (233/323) Installing lowdown-libs (2.0.2-r0)
+#9 ...
+
+#15 [build 8/8] RUN --mount=type=cache,target=/usr/local/cargo/registry --mount=type=cache,target=/src/target CARGO_BUILD_JOBS=2 cargo build --release --locked && cp target/release/toad-computer /usr/local/bin/toad-computer
+#15 0.297     Updating crates.io index
+#15 2.034  Downloading crates ...
+#15 2.124   Downloaded zerofrom v0.1.8
+#15 2.126   Downloaded utf-8 v0.7.6
+#15 2.129   Downloaded yoke-derive v0.8.2
+#15 2.134   Downloaded want v0.3.1
+#15 2.135   Downloaded zmij v1.0.23
+#15 2.148   Downloaded autocfg v1.5.1
+#15 2.149   Downloaded form_urlencoded v1.2.2
+#15 2.152   Downloaded adler2 v2.0.1
+#15 2.154   Downloaded zerofrom-derive v0.1.7
+#15 2.155   Downloaded version_check v0.9.5
+#15 2.156   Downloaded socket2 v0.6.5
+#15 2.157   Downloaded untrusted v0.9.0
+#15 2.158   Downloaded zbus-lockstep-macros v0.5.2
+#15 2.159   Downloaded darling_macro v0.24.1
+#15 2.159   Downloaded zbus-lockstep v0.5.2
+#15 2.161   Downloaded tinyvec_macros v0.1.1
+#15 2.163   Downloaded endi v1.1.1
+#15 2.164   Downloaded equivalent v1.0.2
+#15 2.164   Downloaded tokio-macros v2.7.2
+#15 2.165   Downloaded async-recursion v1.1.1
+#15 2.168   Downloaded dyn-clone v1.0.20
+#15 2.169   Downloaded stable_deref_trait v1.2.1
+#15 2.169   Downloaded zcheapstr v1.1.0
+#15 2.170   Downloaded atomic-waker v1.1.2
+#15 2.171   Downloaded cfg_aliases v0.2.2
+#15 2.173   Downloaded utf8_iter v1.0.4
+#15 2.173   Downloaded zvariant_derive v5.15.0
+#15 2.174   Downloaded crypto-common v0.1.7
+#15 2.175   Downloaded which v8.0.6
+#15 2.176   Downloaded shlex v2.0.1
+#15 2.177   Downloaded static_assertions v1.1.0
+#15 2.178   Downloaded strsim v0.11.1
+#15 2.179   Downloaded block-buffer v0.10.4
+#15 2.180   Downloaded enumflags2_derive v0.7.12
+#15 2.180   Downloaded fnv v1.0.7
+#15 2.181   Downloaded sha1 v0.10.7
+#15 2.182   Downloaded errno v0.3.14
+#15 2.183   Downloaded dunce v1.0.5
+#15 2.183   Downloaded chromiumoxide_types v0.9.1
+#15 2.184   Downloaded parking v2.2.1
+#15 2.184   Downloaded cfg-if v1.0.4
+#15 2.185   Downloaded cpufeatures v0.2.17
+#15 2.187   Downloaded potential_utf v0.1.6
+#15 2.189   Downloaded zbus_names v4.3.4
+#15 2.191   Downloaded cmake v0.1.58
+#15 2.194   Downloaded either v1.18.0
+#15 2.195   Downloaded serde_path_to_error v0.1.20
+#15 2.196   Downloaded slab v0.4.12
+#15 2.197   Downloaded sse-stream v0.2.5
+#15 2.198   Downloaded toml_datetime v1.1.1+spec-1.1.0
+#15 2.199   Downloaded zeroize v1.9.0
+#15 2.201   Downloaded async-process v2.5.0
+#15 2.202   Downloaded http-body v1.1.0
+#15 2.203   Downloaded async-broadcast v0.7.2
+#15 2.204   Downloaded async-executor v1.14.0
+#15 2.205   Downloaded atspi v0.30.0
+#15 2.205   Downloaded atspi-proxies v0.14.0
+#15 2.206   Downloaded async-signal v0.2.14
+#15 2.207   Downloaded async-task v4.7.1
+#15 2.208   Downloaded tower-service v0.3.3
+#15 2.209   Downloaded yoke v0.8.3
+#15 2.209   Downloaded axum-core v0.5.6
+#15 2.210   Downloaded find-msvc-tools v0.1.11
+#15 2.211   Downloaded digest v0.10.7
+#15 2.212   Downloaded displaydoc v0.2.7
+#15 2.213   Downloaded tower-layer v0.3.3
+#15 2.214   Downloaded try-lock v0.2.5
+#15 2.214   Downloaded gethostname v1.1.0
+#15 2.215   Downloaded generic-array v0.14.7
+#15 2.216   Downloaded writeable v0.6.4
+#15 2.217   Downloaded async-channel v2.5.0
+#15 2.218   Downloaded fastrand v2.5.0
+#15 2.221   Downloaded chromiumoxide_pdl v0.9.1
+#15 2.222   Downloaded event-listener-strategy v0.5.4
+#15 2.223   Downloaded async-trait v0.1.92
+#15 2.225   Downloaded piper v0.2.5
+#15 2.226   Downloaded itoa v1.0.18
+#15 2.227   Downloaded zvariant_utils v4.2.0
+#15 2.228   Downloaded zbus_xml v5.2.1
+#15 2.229   Downloaded futures-sink v0.3.34
+#15 2.229   Downloaded futures-io v0.3.34
+#15 2.230   Downloaded heck v0.5.0
+#15 2.231   Downloaded crossbeam-utils v0.8.22
+#15 2.232   Downloaded blocking v1.7.0
+#15 2.233   Downloaded zerovec-derive v0.11.6
+#15 2.234   Downloaded async-io v2.6.0
+#15 2.236   Downloaded concurrent-queue v2.5.0
+#15 2.237   Downloaded data-encoding v2.11.1
+#15 2.237   Downloaded event-listener v5.4.2
+#15 2.238   Downloaded futures-task v0.3.34
+#15 2.239   Downloaded mime v0.3.17
+#15 2.239   Downloaded async-tungstenite v0.32.1
+#15 2.241   Downloaded chacha20 v0.10.2
+#15 2.242   Downloaded enumflags2 v0.7.12
+#15 2.243   Downloaded fdeflate v0.3.7
+#15 2.244   Downloaded subtle v2.6.1
+#15 2.245   Downloaded crc32fast v1.5.1
+#15 2.246   Downloaded hex v0.4.3
+#15 2.247   Downloaded openssl-probe v0.2.1
+#15 2.248   Downloaded futures-macro v0.3.34
+#15 2.248   Downloaded uuid v1.26.0
+#15 2.250   Downloaded async-lock v3.4.2
+#15 2.252   Downloaded idna_adapter v1.2.2
+#15 2.254   Downloaded zbus_macros v5.19.0
+#15 2.256   Downloaded bitflags v2.13.1
+#15 2.261   Downloaded darling v0.24.1
+#15 2.264   Downloaded ref-cast v1.0.27
+#15 2.266   Downloaded unicode-ident v1.0.24
+#15 2.268   Downloaded base64 v0.22.1
+#15 2.273   Downloaded flate2 v1.1.10
+#15 2.276   Downloaded smallvec v1.16.0
+#15 2.277   Downloaded synstructure v0.13.2
+#15 2.277   Downloaded tinystr v0.8.4
+#15 2.278   Downloaded signal-hook-registry v1.4.8
+#15 2.279   Downloaded tokio-tungstenite v0.29.0
+#15 2.280   Downloaded thiserror-impl v2.0.20
+#15 2.281   Downloaded sha2 v0.10.9
+#15 2.282   Downloaded num-traits v0.2.19
+#15 2.284   Downloaded darling_core v0.24.1
+#15 2.288   Downloaded once_cell v1.21.4
+#15 2.290   Downloaded tungstenite v0.29.0
+#15 2.292   Downloaded base64 v0.23.1
+#15 2.295   Downloaded url v2.5.8
+#15 2.296   Downloaded ident_case v1.0.1
+#15 2.296   Downloaded serde_urlencoded v0.7.1
+#15 2.297   Downloaded zerotrie v0.2.5
+#15 2.299   Downloaded typenum v1.20.1
+#15 2.302   Downloaded chromiumoxide v0.9.1
+#15 2.305   Downloaded sync_wrapper v1.0.2
+#15 2.306   Downloaded lru-slab v0.1.2
+#15 2.306   Downloaded serde_repr v0.1.21
+#15 2.308   Downloaded bytes v1.12.1
+#15 2.309   Downloaded schemars_derive v1.2.2
+#15 2.310   Downloaded quinn v0.11.11
+#15 2.312   Downloaded zvariant v5.15.0
+#15 2.316   Downloaded rand_chacha v0.9.0
+#15 2.317   Downloaded ref-cast-impl v1.0.27
+#15 2.318   Downloaded percent-encoding v2.3.2
+#15 2.319   Downloaded rand_pcg v0.10.2
+#15 2.320   Downloaded simd-adler32 v0.3.10
+#15 2.322   Downloaded fs_extra v1.3.0
+#15 2.323   Downloaded polling v3.11.0
+#15 2.325   Downloaded rand v0.9.5
+#15 2.327   Downloaded serde_derive_internals v0.30.0
+#15 2.327   Downloaded cc v1.4.4
+#15 2.329   Downloaded ordered-stream v0.2.0
+#15 2.330   Downloaded pastey v0.2.3
+#15 2.330   Downloaded futures-executor v0.3.34
+#15 2.331   Downloaded futures-core v0.3.34
+#15 2.331   Downloaded atspi-common v0.14.0
+#15 2.335   Downloaded zerovec v0.11.8
+#15 2.341   Downloaded ppv-lite86 v0.2.21
+#15 2.341   Downloaded thiserror v2.0.20
+#15 2.345   Downloaded tokio-stream v0.1.19
+#15 2.347   Downloaded futures-timer v3.0.4
+#15 2.348   Downloaded http-body-util v0.1.5
+#15 2.349   Downloaded httpdate v1.0.3
+#15 2.349   Downloaded ipnet v2.12.1
+#15 2.350   Downloaded jobserver v0.1.35
+#15 2.351   Downloaded ryu v1.0.23
+#15 2.353   Downloaded aho-corasick v1.1.5
+#15 2.357   Downloaded axum v0.8.9
+#15 2.361   Downloaded regex v1.13.1
+#15 2.364   Downloaded futures-channel v0.3.34
+#15 2.365   Downloaded getrandom v0.2.17
+#15 2.367   Downloaded winnow v1.0.4
+#15 2.374   Downloaded reqwest v0.13.4
+#15 2.377   Downloaded zbus v5.19.0
+#15 2.382   Downloaded hyper-rustls v0.27.9
+#15 2.383   Downloaded toml_parser v1.1.3+spec-1.1.0
+#15 2.384   Downloaded iana-time-zone v0.1.65
+#15 2.386   Downloaded serde v1.0.229
+#15 2.388   Downloaded x11rb v0.14.0
+#15 2.392   Downloaded rustc-hash v2.1.3
+#15 2.393   Downloaded litemap v0.8.3
+#15 2.394   Downloaded matchit v0.8.4
+#15 2.395   Downloaded png v0.18.1
+#15 2.397   Downloaded chrono v0.4.45
+#15 2.402   Downloaded proc-macro-crate v3.5.0
+#15 2.403   Downloaded zlib-rs v0.6.7
+#15 2.407   Downloaded aws-lc-rs v1.18.1
+#15 2.413   Downloaded tinyvec v1.12.0
+#15 2.414   Downloaded tokio-rustls v0.26.4
+#15 2.415   Downloaded pkg-config v0.3.34
+#15 2.416   Downloaded rand_core v0.10.1
+#15 2.416   Downloaded tracing-core v0.1.36
+#15 2.418   Downloaded pin-project-lite v0.2.17
+#15 2.422   Downloaded quinn-udp v0.5.15
+#15 2.424   Downloaded rustls-pki-types v1.15.1
+#15 2.425   Downloaded tracing-attributes v0.1.31
+#15 2.426   Downloaded zerocopy v0.8.56
+#15 2.436   Downloaded getrandom v0.4.3
+#15 2.439   Downloaded icu_provider v2.3.1
+#15 2.441   Downloaded proc-macro2 v1.0.107
+#15 2.442   Downloaded httparse v1.10.1
+#15 2.444   Downloaded futures v0.3.34
+#15 2.446   Downloaded futures-lite v2.6.1
+#15 2.447   Downloaded quote v1.0.47
+#15 2.448   Downloaded log v0.4.34
+#15 2.449   Downloaded rand_core v0.9.5
+#15 2.449   Downloaded rmcp-macros v3.2.0
+#15 2.450   Downloaded rustls-platform-verifier v0.7.0
+#15 2.452   Downloaded rustls-native-certs v0.8.4
+#15 2.453   Downloaded serde_derive v1.0.229
+#15 2.454   Downloaded icu_normalizer_data v2.3.0
+#15 2.455   Downloaded tungstenite v0.28.0
+#15 2.457   Downloaded getrandom v0.3.4
+#15 2.458   Downloaded serde_core v1.0.229
+#15 2.460   Downloaded rustls-webpki v0.103.15
+#15 2.461   Downloaded icu_locale_core v2.3.0
+#15 2.464   Downloaded miniz_oxide v0.8.9
+#15 2.466   Downloaded miniz_oxide v0.9.1
+#15 2.467   Downloaded schemars v1.2.2
+#15 2.474   Downloaded toml_edit v0.25.13+spec-1.1.0
+#15 2.476   Downloaded rustix v1.1.4
+#15 2.487   Downloaded icu_collections v2.3.0
+#15 2.490   Downloaded x11rb-protocol v0.14.0
+#15 2.497   Downloaded regex-syntax v0.8.11
+#15 2.501   Downloaded tower v0.5.3
+#15 2.506   Downloaded indexmap v2.14.1
+#15 2.507   Downloaded hyper-util v0.1.20
+#15 2.510   Downloaded rustls v0.23.43
+#15 2.516   Downloaded chromiumoxide_cdp v0.9.1
+#15 2.526   Downloaded icu_properties v2.3.0
+#15 2.527   Downloaded regex-automata v0.4.18
+#15 2.535   Downloaded mio v1.2.2
+#15 2.539   Downloaded http v1.5.0
+#15 2.541   Downloaded memchr v2.8.3
+#15 2.544   Downloaded tokio-util v0.7.19
+#15 2.547   Downloaded idna v1.1.0
+#15 2.549   Downloaded serde_json v1.0.151
+#15 2.553   Downloaded rand v0.10.2
+#15 2.556   Downloaded tower-http v0.6.11
+#15 2.560   Downloaded ring v0.17.14
+#15 2.585   Downloaded hyper v1.11.1
+#15 2.588   Downloaded icu_properties_data v2.3.0
+#15 2.593   Downloaded futures-util v0.3.34
+#15 2.598   Downloaded hashbrown v0.17.1
+#15 2.600   Downloaded quinn-proto v0.11.17
+#15 2.606   Downloaded syn v3.0.4
+#15 2.611   Downloaded syn v2.0.119
+#15 2.617   Downloaded tracing v0.1.44
+#15 2.628   Downloaded icu_normalizer v2.3.0
+#15 2.633   Downloaded rmcp v3.2.0
+#15 2.645   Downloaded tokio v1.53.1
+#15 2.667   Downloaded libc v0.2.189
+#15 2.688   Downloaded aws-lc-sys v0.45.0
+#15 2.840   Downloaded linux-raw-sys v0.12.1
+#15 2.951    Compiling proc-macro2 v1.0.107
+#15 2.951    Compiling quote v1.0.47
+#15 3.178    Compiling unicode-ident v1.0.24
+#15 3.244    Compiling libc v0.2.189
+#15 3.807    Compiling syn v3.0.4
+#15 4.069    Compiling syn v2.0.119
+#15 ...
+
+#9 [runtime 2/5] RUN apk add --no-cache     bash git curl wget ca-certificates tar gzip bzip2 xz unzip zip ripgrep jq file     nix python3 xvfb xauth xkeyboard-config dbus at-spi2-core chromium     font-dejavu font-noto-emoji font-misc-misc alacritty     mesa-dri-gallium mesa-egl mesa-gl mesa-utils     gtk+3.0 webkit2gtk-4.1 libayatana-appindicator librsvg     && adduser -D -u 1000 -h /home/agent -s /bin/bash agent     && install -d /etc/nix     && install -d -m 1777 /tmp/.X11-unix     && install -d -o agent -g agent /nix /nix/store /nix/var/nix /home/agent/.config/alacritty     && printf 'experimental-features = nix-command flakes\nsandbox = false\nbuild-users-group =\n' > /etc/nix/nix.conf     && chown -R agent:agent /nix     && printf '[window]\ndynamic_title = false\n[font]\nsize = 12.0\n' > /home/agent/.config/alacritty/alacritty.toml     && chown -R agent:agent /home/agent
+#9 20.27 (234/323) Installing rapidcheck (0_git20231214-r0)
+#9 20.42 (235/323) Installing libseccomp (2.6.0-r0)
+#9 20.56 (236/323) Installing nix (2.28.3-r1)
+#9 20.69 Executing nix-2.28.3-r1.pre-install
+#9 21.60 (237/323) Installing gdbm (1.24-r0)
+#9 21.61 (238/323) Installing mpdecimal (4.0.1-r0)
+#9 21.63 (239/323) Installing libpanelw (6.5_p20250503-r0)
+#9 21.65 (240/323) Installing python3 (3.12.14-r0)
+#9 21.97 (241/323) Installing python3-pycache-pyc0 (3.12.14-r0)
+#9 23.27 (242/323) Installing pyc (3.12.14-r0)
+#9 23.27 (243/323) Installing python3-pyc (3.12.14-r0)
+#9 23.27 (244/323) Installing ripgrep (14.1.1-r0)
+#9 23.42 (245/323) Installing tar (1.35-r3)
+#9 23.55 (246/323) Installing unzip (6.0-r15)
+#9 23.57 (247/323) Installing libcap2 (2.78-r0)
+#9 23.59 (248/323) Installing bubblewrap (0.12.0-r0)
+#9 23.73 (249/323) Installing xdg-dbus-proxy (0.1.6-r0)
+#9 24.11 (250/323) Installing libgpg-error (1.55-r0)
+#9 24.13 (251/323) Installing libgcrypt (1.10.3-r1)
+#9 24.15 (252/323) Installing gcr-base (3.41.2-r1)
+#9 24.30 (253/323) Installing gcr (3.41.2-r1)
+#9 24.43 (254/323) Installing libcap-ng (0.8.5-r0)
+#9 24.57 (255/323) Installing gnome-keyring (48.0-r0)
+#9 25.11 (256/323) Installing skalibs-libs (2.14.4.0-r0)
+#9 25.12 (257/323) Installing utmps-libs (0.1.3.1-r0)
+#9 25.26 (258/323) Installing linux-pam (1.7.0-r4)
+#9 25.41 (259/323) Installing gnome-keyring-pam (48.0-r0)
+#9 25.64 (260/323) Installing libyuv (0.0.1887.20251502-r1)
+#9 25.78 (261/323) Installing libavif (1.3.0-r0)
+#9 25.93 (262/323) Installing enchant2-libs (2.8.10-r0)
+#9 26.06 (263/323) Installing flite (2.2-r5)
+#9 26.58 (264/323) Installing libxv (1.0.13-r0)
+#9 26.71 (265/323) Installing cdparanoia-libs (10.2-r14)
+#9 26.85 (266/323) Installing graphene (1.10.8-r5)
+#9 26.98 (267/323) Installing gstreamer (1.26.3-r0)
+#9 27.18 (268/323) Installing gstreamer-ptp-helper (1.26.3-r0)
+#9 27.33 (269/323) Installing gst-plugins-base (1.26.3-r0)
+#9 28.07 (270/323) Installing soundtouch (2.3.3-r0)
+#9 28.20 (271/323) Installing libunibreak (6.1-r0)
+#9 28.22 (272/323) Installing libass (0.17.3-r0)
+#9 28.26 (273/323) Installing libraw1394 (2.1.2-r5)
+#9 28.39 (274/323) Installing libusb (1.0.28-r0)
+#9 28.52 (275/323) Installing libdc1394 (2.2.7-r0)
+#9 28.66 (276/323) Installing libde265 (1.0.15-r1)
+#9 29.19 (277/323) Installing tslib (1.23-r0)
+#9 29.33 (278/323) Installing directfb (1.7.7-r8)
+#9 29.70 (279/323) Installing faac (1.31.1-r0)
+#9 29.84 (280/323) Installing fdk-aac (2.0.2-r4)
+#9 30.45 (281/323) Installing libfreeaptx (0.2.2-r0)
+#9 30.58 (282/323) Installing gsm (1.0.22-r3)
+#9 30.72 (283/323) Installing libgudev (238-r0)
+#9 30.85 (284/323) Installing libldac (2.0.2.3-r1)
+#9 30.98 (285/323) Installing libmodplug (0.8.9.0-r3)
+#9 31.11 (286/323) Installing neon (0.33.0-r0)
+#9 ...
+
+#15 [build 8/8] RUN --mount=type=cache,target=/usr/local/cargo/registry --mount=type=cache,target=/src/target CARGO_BUILD_JOBS=2 cargo build --release --locked && cp target/release/toad-computer /usr/local/bin/toad-computer
+#15 6.861    Compiling pin-project-lite v0.2.17
+#15 6.896    Compiling futures-core v0.3.34
+#15 6.958    Compiling serde_derive v1.0.229
+#15 7.185    Compiling serde_core v1.0.229
+#15 7.319    Compiling cfg-if v1.0.4
+#15 9.150    Compiling bytes v1.12.1
+#15 9.222    Compiling futures-io v0.3.34
+#15 9.420    Compiling itoa v1.0.18
+#15 9.545    Compiling serde v1.0.229
+#15 9.670    Compiling errno v0.3.14
+#15 9.734    Compiling memchr v2.8.3
+#15 10.18    Compiling slab v0.4.12
+#15 10.26    Compiling signal-hook-registry v1.4.8
+#15 10.88    Compiling synstructure v0.13.2
+#15 11.05    Compiling tokio-macros v2.7.2
+#15 11.19    Compiling socket2 v0.6.5
+#15 11.48    Compiling mio v1.2.2
+#15 11.93    Compiling winnow v1.0.4
+#15 11.99    Compiling tokio v1.53.1
+#15 12.64    Compiling zerofrom-derive v0.1.7
+#15 14.25    Compiling equivalent v1.0.2
+#15 14.27    Compiling hashbrown v0.17.1
+#15 14.74    Compiling indexmap v2.14.1
+#15 15.98    Compiling zerofrom v0.1.8
+#15 16.03    Compiling toml_parser v1.1.3+spec-1.1.0
+#15 16.40    Compiling yoke-derive v0.8.2
+#15 17.06    Compiling toml_datetime v1.1.1+spec-1.1.0
+#15 ...
+
+#9 [runtime 2/5] RUN apk add --no-cache     bash git curl wget ca-certificates tar gzip bzip2 xz unzip zip ripgrep jq file     nix python3 xvfb xauth xkeyboard-config dbus at-spi2-core chromium     font-dejavu font-noto-emoji font-misc-misc alacritty     mesa-dri-gallium mesa-egl mesa-gl mesa-utils     gtk+3.0 webkit2gtk-4.1 libayatana-appindicator librsvg     && adduser -D -u 1000 -h /home/agent -s /bin/bash agent     && install -d /etc/nix     && install -d -m 1777 /tmp/.X11-unix     && install -d -o agent -g agent /nix /nix/store /nix/var/nix /home/agent/.config/alacritty     && printf 'experimental-features = nix-command flakes\nsandbox = false\nbuild-users-group =\n' > /etc/nix/nix.conf     && chown -R agent:agent /nix     && printf '[window]\ndynamic_title = false\n[font]\nsize = 12.0\n' > /home/agent/.config/alacritty/alacritty.toml     && chown -R agent:agent /home/agent
+#9 31.24 (287/323) Installing libnice (0.1.22-r0)
+#9 31.54 (288/323) Installing openal-soft-libs (1.24.2-r0)
+#9 31.68 (289/323) Installing openjpeg (2.5.4-r0)
+#9 31.69 (290/323) Installing librtmp (2.4_git20190330-r5)
+#9 31.82 (291/323) Installing sbc (2.0-r2)
+#9 31.95 (292/323) Installing spandsp (0.0.6-r5)
+#9 32.09 (293/323) Installing libsrtp (2.6.0-r0)
+#9 32.23 (294/323) Installing vo-aacenc (0.1.3-r3)
+#9 32.37 (295/323) Installing vo-amrwbenc (0.1.3-r3)
+#9 32.50 (296/323) Installing vulkan-loader (1.4.313.0-r0)
+#9 32.52 (297/323) Installing libzbar (0.23.93-r1)
+#9 32.65 (298/323) Installing gst-plugins-bad (1.26.3-r0)
+#9 32.87 (299/323) Installing icu-libs (76.1-r1)
+#9 32.93 (300/323) Installing harfbuzz-icu (11.2.1-r0)
+#9 33.07 (301/323) Installing hyphen (2.8.8-r3)
+#9 33.20 (302/323) Installing libevdev (1.13.3-r0)
+#9 33.33 (303/323) Installing hidapi (0.14.0-r0)
+#9 33.47 (304/323) Installing libmanette (0.2.12-r0)
+#9 33.61 (305/323) Installing libsecret (0.21.7-r0)
+#9 33.89 (306/323) Installing gsettings-desktop-schemas (48.0-r0)
+#9 34.03 (307/323) Installing duktape-libs (2.7.0-r2)
+#9 34.16 (308/323) Installing libproxy (0.5.10-r0)
+#9 34.29 (309/323) Installing glib-networking (2.80.1-r1)
+#9 34.42 (310/323) Installing libsoup3 (3.6.5-r0)
+#9 34.56 (311/323) Installing libwoff2common (1.0.2-r4)
+#9 34.69 (312/323) Installing libwoff2enc (1.0.2-r4)
+#9 34.84 (313/323) Installing webkit2gtk-4.1 (2.48.1-r1)
+#9 36.24 (314/323) Installing wget (1.25.0-r1)
+#9 36.26 (315/323) Installing xauth (1.1.3-r0)
+#9 36.39 (316/323) Installing font-cursor-misc (1.0.4-r1)
+#9 36.76 (317/323) Installing libxkbfile (1.1.3-r0)
+#9 36.90 (318/323) Installing xkbcomp (1.5.0-r0)
+#9 37.04 (319/323) Installing xorg-server-common (21.1.19-r0)
+#9 37.16 (320/323) Installing libxfont2 (2.0.7-r0)
+#9 37.30 (321/323) Installing xvfb (21.1.19-r0)
+#9 37.46 (322/323) Installing xz (5.8.4-r0)
+#9 37.47 (323/323) Installing zip (3.0-r13)
+#9 37.78 Executing busybox-1.37.0-r20.trigger
+#9 37.79 Executing fontconfig-2.15.0-r3.trigger
+#9 37.93 Executing glib-2.84.4-r0.trigger
+#9 37.95 Executing ca-certificates-20260611-r0.trigger
+#9 37.96 Executing mkfontscale-1.2.3-r1.trigger
+#9 38.06 Executing shared-mime-info-2.4-r6.trigger
+#9 38.27 Executing gdk-pixbuf-2.42.12-r1.trigger
+#9 38.28 Executing gtk-update-icon-cache-3.24.50-r0.trigger
+#9 38.29 Executing gtk+3.0-3.24.50-r0.trigger
+#9 38.30 Executing dbus-1.16.2-r1.trigger
+#9 38.31 OK: 1004 MiB in 339 packages
+#9 DONE 39.9s
+
+#15 [build 8/8] RUN --mount=type=cache,target=/usr/local/cargo/registry --mount=type=cache,target=/src/target CARGO_BUILD_JOBS=2 cargo build --release --locked && cp target/release/toad-computer /usr/local/bin/toad-computer
+#15 17.17    Compiling once_cell v1.21.4
+#15 17.30    Compiling stable_deref_trait v1.2.1
+#15 17.32    Compiling futures-sink v0.3.34
+#15 17.36    Compiling yoke v0.8.3
+#15 17.46    Compiling toml_edit v0.25.13+spec-1.1.0
+#15 18.22    Compiling jobserver v0.1.35
+#15 18.41    Compiling http v1.5.0
+#15 19.57    Compiling enumflags2_derive v0.7.12
+#15 19.87    Compiling bitflags v2.13.1
+#15 20.05    Compiling shlex v2.0.1
+#15 20.12    Compiling find-msvc-tools v0.1.11
+#15 20.22    Compiling cc v1.4.4
+#15 21.16    Compiling proc-macro-crate v3.5.0
+#15 21.44    Compiling futures-channel v0.3.34
+#15 21.58    Compiling zvariant_utils v4.2.0
+#15 21.95    Compiling zerovec-derive v0.11.6
+#15 22.33    Compiling zmij v1.0.23
+#15 22.47    Compiling autocfg v1.5.1
+#15 22.61    Compiling parking v2.2.1
+#15 22.65    Compiling zerovec v0.11.8
+#15 23.02    Compiling zvariant_derive v5.15.0
+#15 23.28    Compiling cmake v0.1.58
+#15 23.46    Compiling futures-macro v0.3.34
+#15 23.93    Compiling displaydoc v0.2.7
+#15 24.15    Compiling fs_extra v1.3.0
+#15 24.33    Compiling futures-task v0.3.34
+#15 24.41    Compiling pkg-config v0.3.34
+#15 24.43    Compiling dunce v1.0.5
+#15 24.46    Compiling atomic-waker v1.1.2
+#15 24.50    Compiling version_check v0.9.5
+#15 24.67    Compiling generic-array v0.14.7
+#15 24.72    Compiling aws-lc-sys v0.45.0
+#15 24.75    Compiling futures-util v0.3.34
+#15 25.91    Compiling crossbeam-utils v0.8.22
+#15 26.01    Compiling httparse v1.10.1
+#15 26.72    Compiling smallvec v1.16.0
+#15 26.82    Compiling rustix v1.1.4
+#15 26.96    Compiling typenum v1.20.1
+#15 28.06    Compiling tinystr v0.8.4
+#15 28.16    Compiling http-body v1.1.0
+#15 28.23    Compiling tracing-core v0.1.36
+#15 28.74    Compiling tracing-attributes v0.1.31
+#15 29.38    Compiling writeable v0.6.4
+#15 29.49    Compiling zeroize v1.9.0
+#15 29.56    Compiling getrandom v0.3.4
+#15 29.67    Compiling litemap v0.8.3
+#15 29.75    Compiling fastrand v2.5.0
+#15 29.87    Compiling aws-lc-rs v1.18.1
+#15 29.96    Compiling linux-raw-sys v0.12.1
+#15 30.63    Compiling zerocopy v0.8.56
+#15 35.00    Compiling icu_locale_core v2.3.0
+#15 37.57    Compiling tracing v0.1.44
+#15 38.25    Compiling concurrent-queue v2.5.0
+#15 38.42    Compiling zerotrie v0.2.5
+#15 38.70    Compiling potential_utf v0.1.6
+#15 38.78    Compiling event-listener v5.4.2
+#15 38.93    Compiling enumflags2 v0.7.12
+#15 39.02    Compiling zcheapstr v1.1.0
+#15 39.09    Compiling icu_normalizer_data v2.3.0
+#15 39.34    Compiling utf8_iter v1.0.4
+#15 39.41    Compiling endi v1.1.1
+#15 39.47    Compiling percent-encoding v2.3.2
+#15 39.63    Compiling icu_properties_data v2.3.0
+#15 39.71    Compiling serde_json v1.0.151
+#15 39.79    Compiling zvariant v5.15.0
+#15 41.27    Compiling icu_collections v2.3.0
+#15 41.93    Compiling event-listener-strategy v0.5.4
+#15 41.98    Compiling icu_provider v2.3.1
+#15 44.96    Compiling futures-lite v2.6.1
+#15 45.43    Compiling rustls-pki-types v1.15.1
+#15 45.89    Compiling crypto-common v0.1.7
+#15 45.94    Compiling block-buffer v0.10.4
+#15 66.15    Compiling thiserror v2.0.20
+#15 66.29    Compiling getrandom v0.4.3
+#15 66.38    Compiling log v0.4.34
+#15 66.47    Compiling rand_core v0.10.1
+#15 66.54    Compiling tower-service v0.3.3
+#15 72.71    Compiling digest v0.10.7
+#15 72.81    Compiling ppv-lite86 v0.2.21
+#15 72.93    Compiling rand_core v0.9.5
+#15 74.78    Compiling zbus_names v4.3.4
+#15 75.17    Compiling async-io v2.6.0
+#15 75.42    Compiling thiserror-impl v2.0.20
+#15 76.16    Compiling cpufeatures v0.2.17
+#15 76.19    Compiling rustls v0.23.43
+#15 76.31    Compiling untrusted v0.9.0
+#15 76.36    Compiling try-lock v0.2.5
+#15 76.39    Compiling want v0.3.1
+#15 79.30    Compiling icu_properties v2.3.0
+#15 80.23    Compiling icu_normalizer v2.3.0
+#15 80.95    Compiling rand_chacha v0.9.0
+#15 82.03    Compiling form_urlencoded v1.2.2
+#15 82.15    Compiling polling v3.11.0
+#15 82.37    Compiling sync_wrapper v1.0.2
+#15 82.40    Compiling httpdate v1.0.3
+#15 82.58    Compiling subtle v2.6.1
+#15 82.64    Compiling tower-layer v0.3.3
+#15 82.73    Compiling async-task v4.7.1
+#15 82.84    Compiling hyper v1.11.1
+#15 86.28    Compiling rand v0.9.5
+#15 86.64    Compiling idna_adapter v1.2.2
+#15 87.36    Compiling sha1 v0.10.7
+#15 87.54    Compiling async-channel v2.5.0
+#15 87.63    Compiling http-body-util v0.1.5
+#15 87.77    Compiling data-encoding v2.11.1
+#15 89.37    Compiling base64 v0.22.1
+#15 89.76    Compiling ipnet v2.12.1
+#15 90.52    Compiling hyper-util v0.1.20
+#15 92.25    Compiling idna v1.1.0
+#15 93.68    Compiling async-signal v0.2.14
+#15 93.86    Compiling tower v0.5.3
+#15 94.27    Compiling rustls-webpki v0.103.15
+#15 96.88    Compiling uuid v1.26.0
+#15 97.53    Compiling zbus_xml v5.2.1
+#15 98.80    Compiling async-lock v3.4.2
+#15 100.2    Compiling piper v0.2.5
+#15 100.7    Compiling num-traits v0.2.19
+#15 100.9    Compiling aho-corasick v1.1.5
+#15 104.0    Compiling async-trait v0.1.92
+#15 104.5    Compiling strsim v0.11.1
+#15 104.6    Compiling simd-adler32 v0.3.10
+#15 104.7    Compiling openssl-probe v0.2.1
+#15 104.8    Compiling ident_case v1.0.1
+#15 104.9    Compiling regex-syntax v0.8.11
+#15 109.7    Compiling regex-automata v0.4.18
+#15 114.5    Compiling darling_core v0.24.1
+#15 116.7    Compiling rustls-native-certs v0.8.4
+#15 117.3    Compiling tokio-rustls v0.26.4
+#15 117.5    Compiling blocking v1.7.0
+#15 117.8    Compiling async-process v2.5.0
+#15 119.1    Compiling zbus-lockstep v0.5.2
+#15 119.4    Compiling url v2.5.8
+#15 122.0    Compiling async-executor v1.14.0
+#15 122.4    Compiling zbus_macros v5.19.0
+#15 122.8    Compiling async-broadcast v0.7.2
+#15 123.0    Compiling async-recursion v1.1.1
+#15 123.4    Compiling ordered-stream v0.2.0
+#15 123.6    Compiling serde_repr v0.1.21
+#15 123.8    Compiling crc32fast v1.5.1
+#15 123.9    Compiling adler2 v2.0.1
+#15 124.0    Compiling hex v0.4.3
+#15 124.1    Compiling ref-cast v1.0.27
+#15 124.3    Compiling zbus v5.19.0
+#15 124.6    Compiling tower-http v0.6.11
+#15 124.9    Compiling zbus-lockstep-macros v0.5.2
+#15 125.8    Compiling hyper-rustls v0.27.9
+#15 126.0    Compiling rustls-platform-verifier v0.7.0
+#15 126.5    Compiling darling_macro v0.24.1
+#15 126.8    Compiling regex v1.13.1
+#15 127.8    Compiling chromiumoxide_types v0.9.1
+#15 128.0    Compiling futures-executor v0.3.34
+#15 128.3    Compiling tokio-util v0.7.19
+#15 129.1    Compiling ref-cast-impl v1.0.27
+#15 129.4    Compiling serde_derive_internals v0.30.0
+#15 129.9    Compiling utf-8 v0.7.6
+#15 130.0    Compiling heck v0.5.0
+#15 130.7    Compiling static_assertions v1.1.0
+#15 131.0    Compiling either v1.18.0
+#15 131.2    Compiling chromiumoxide_pdl v0.9.1
+#15 135.4    Compiling atspi-common v0.14.0
+#15 146.4    Compiling tungstenite v0.28.0
+#15 148.1    Compiling schemars_derive v1.2.2
+#15 148.5    Compiling reqwest v0.13.4
+#15 148.9    Compiling futures v0.3.34
+#15 149.0    Compiling darling v0.24.1
+#15 149.0    Compiling chrono v0.4.45
+#15 150.7    Compiling miniz_oxide v0.9.1
+#15 151.8    Compiling tungstenite v0.29.0
+#15 153.9    Compiling chacha20 v0.10.2
+#15 154.0    Compiling rmcp v3.2.0
+#15 154.1    Compiling ryu v1.0.23
+#15 154.2    Compiling mime v0.3.17
+#15 154.9    Compiling dyn-clone v1.0.20
+#15 154.9    Compiling schemars v1.2.2
+#15 158.3    Compiling axum-core v0.5.6
+#15 158.7    Compiling serde_urlencoded v0.7.1
+#15 158.9    Compiling rand v0.10.2
+#15 159.3    Compiling tokio-tungstenite v0.29.0
+#15 159.4    Compiling flate2 v1.1.10
+#15 159.5    Compiling rmcp-macros v3.2.0
+#15 159.7    Compiling async-tungstenite v0.32.1
+#15 160.0    Compiling atspi-proxies v0.14.0
+#15 160.1    Compiling chromiumoxide_cdp v0.9.1
+#15 161.3    Compiling miniz_oxide v0.8.9
+#15 162.3    Compiling fdeflate v0.3.7
+#15 162.9    Compiling sse-stream v0.2.5
+#15 163.1    Compiling gethostname v1.1.0
+#15 163.2    Compiling tokio-stream v0.1.19
+#15 163.5    Compiling serde_path_to_error v0.1.20
+#15 163.7    Compiling which v8.0.6
+#15 164.0    Compiling x11rb-protocol v0.14.0
+#15 176.0    Compiling futures-timer v3.0.4
+#15 176.5    Compiling pastey v0.2.3
+#15 176.8    Compiling fnv v1.0.7
+#15 176.8    Compiling matchit v0.8.4
+#15 177.2    Compiling base64 v0.23.1
+#15 233.0    Compiling chromiumoxide v0.9.1
+#15 236.5    Compiling axum v0.8.9
+#15 242.3    Compiling x11rb v0.14.0
+#15 244.1    Compiling png v0.18.1
+#15 246.1    Compiling atspi v0.30.0
+#15 246.6    Compiling sha2 v0.10.9
+#15 247.5    Compiling toad-computer v0.4.0 (/src)
+#15 396.3     Finished `release` profile [optimized] target(s) in 6m 36s
+#15 DONE 397.2s
+
+#16 [runtime 3/5] COPY --from=build /usr/local/bin/toad-computer /usr/bin/toad-computer
+#16 DONE 0.2s
+
+#17 [runtime 4/5] WORKDIR /home/agent
+#17 DONE 0.1s
+
+#18 [runtime 5/5] RUN install -d /home/agent/src && nix-store --init
+#18 DONE 0.6s
+
+#19 exporting to image
+#19 exporting layers
+#19 exporting layers 7.6s done
+#19 writing image sha256:8b9c00126858b866887ea0ccfe9b5596e8ac873e72e170930b9d614fb962a525 done
+#19 naming to docker.io/library/toad-computer:os-review-alpine done
+#19 DONE 7.6s
+
+View build details: docker-desktop://dashboard/build/orbstack/orbstack/lh01wxgdztx6dlzz8kq072ykp

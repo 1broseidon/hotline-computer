@@ -1,0 +1,16 @@
+{"name": "browser forms", "passed": true, "seconds": 3.345}
+{"name": "three-step browser wizard", "passed": true, "seconds": 3.163}
+{"name": "public Selenium form", "passed": true, "seconds": 0.885}
+{"name": "managed jobs and observer", "passed": true, "seconds": 5.024}
+{"name": "desktop job menu", "passed": true, "seconds": 0.91}
+{"name": "tray counts match live jobs", "passed": true, "seconds": 0.571}
+{"name": "Nix failure diagnostics", "passed": true, "seconds": 0.182}
+{"name": "verified script execution", "passed": true, "seconds": 0.669}
+{"name": "artifact failure recovery", "passed": true, "seconds": 1.335}
+{"name": "catalog workspaces", "passed": true, "seconds": 6.978}
+{"name": "second repository tests", "passed": true, "seconds": 4.873}
+{"name": "Ketch installation and scraping", "passed": true, "seconds": 1.799}
+{"name": "job durability and responsiveness", "passed": true, "seconds": 4.327}
+{"name": "native Toad build and screens", "passed": true, "seconds": 92.529}
+{"name": "native controls and window identity", "passed": true, "seconds": 6.01}
+{"name": "legacy Xterm title", "passed": true, "seconds": 2.072}

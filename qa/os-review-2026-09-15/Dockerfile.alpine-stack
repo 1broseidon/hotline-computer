@@ -1,0 +1,26 @@
+# Review candidate only: unchanged Computer 0.4.0 source and Alpine-native runtime packages.
+FROM rust:1-alpine AS build
+RUN apk add --no-cache build-base cmake perl pkgconf
+WORKDIR /src
+COPY Cargo.toml Cargo.lock ./
+COPY src ./src
+COPY assets ./assets
+COPY skills ./skills
+ENV TOAD_BUILD_REVISION=f1413fe TOAD_BUILD_CHANNEL=review-alpine
+RUN --mount=type=cache,target=/usr/local/cargo/registry --mount=type=cache,target=/src/target CARGO_BUILD_JOBS=2 cargo build --release --locked && cp target/release/toad-computer /usr/local/bin/toad-computer
+
+FROM alpine@sha256:e7a1a92a5bfeee40966aea60f0796b0e7917cc35591542701834f03a68fa3d18 AS runtime
+RUN apk add --no-cache \
+    bash git curl wget ca-certificates tar gzip bzip2 xz unzip zip ripgrep jq file \
+    nix python3 xvfb xauth xkeyboard-config dbus at-spi2-core chromium \
+    font-dejavu font-noto-emoji font-misc-misc alacritty \
+    mesa-dri-gallium mesa-egl mesa-gl mesa-utils \
+    gtk+3.0 webkit2gtk-4.1 libayatana-appindicator librsvg \
+    && adduser -D -u 1000 -h /home/agent -s /bin/bash agent \
+    && install -d /etc/nix \
+    && install -d -m 1777 /tmp/.X11-unix \
+    && install -d -o agent -g agent /nix /nix/store /nix/var/nix /home/agent/.config/alacritty \
+    && printf 'experimental-features = nix-command flakes\nsandbox = false\nbuild-users-group =\n' > /etc/nix/nix.conf \
+    && chown -R agent:agent /nix \
+    && printf '[window]\ndynamic_title = false\n[font]\nsize = 12.0\n' > /home/agent/.config/alacritty/alacritty.toml \
+    && chown -R agent:agent /home/agent

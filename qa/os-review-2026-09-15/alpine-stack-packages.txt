@@ -1,0 +1,31 @@
+3.24.1
+alacritty: cross-platform, GPU-accelerated terminal emulator
+alacritty: https://github.com/alacritty/alacritty
+alacritty: 4202 KiB
+chromium: Chromium web browser
+chromium: https://www.chromium.org/Home
+chromium: 288 MiB
+mesa-dri-gallium: Mesa gallium DRI drivers
+mesa-dri-gallium: https://www.mesa3d.org
+mesa-dri-gallium: 129 KiB
+nix: The purely functional package manager
+nix: https://nixos.org/nix/
+nix: 23 MiB
+webkit2gtk-4.1: Portable web rendering engine WebKit for GTK+ - GTK+3 libsoup3 version
+webkit2gtk-4.1: https://webkitgtk.org/
+webkit2gtk-4.1: 109 MiB
+alacritty-0.17.0-r0 installed size:
+4202 KiB
+
+chromium-152.0.7977.82-r0 installed size:
+288 MiB
+
+mesa-dri-gallium-26.1.6-r0 installed size:
+129 KiB
+
+nix-2.31.5-r0 installed size:
+23 MiB
+
+webkit2gtk-4.1-2.48.7-r0 installed size:
+109 MiB
+

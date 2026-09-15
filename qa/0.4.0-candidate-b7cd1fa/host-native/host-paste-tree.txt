@@ -1,0 +1,10 @@
+[0x00e00003 Toad Terminal 1152,48 768x1032]
+  [accessibility unavailable: no unambiguous application/window match]
+
+[0x01800008 Native acceptance 0,48 1920x1032]
+  [filler]  24,72 1872x984 states=[enabled,sensitive,showing,vertical,visible]
+    [label] Primary acceptance window 24,72 1872x17 states=[enabled,multi-line,sensitive,showing,visible]
+    [text] Native clipboard field 24,107 1872x34 states=[editable,enabled,focusable,focused,sensitive,showing,single-line,visible] value="Host → Toad native clipboard: café 🐸"
+    [check box] Native checked state 24,159 1872x21 states=[checked,enabled,focusable,sensitive,showing,visible]
+    [password text]  24,198 1872x34 states=[editable,enabled,focusable,sensitive,showing,single-line,visible]
+

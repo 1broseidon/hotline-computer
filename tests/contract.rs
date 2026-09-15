@@ -332,10 +332,31 @@ async fn image_honors_the_computer_contract() {
     let windows = call(&client, "windows", json!({"action":"list"})).await;
     let window_list: Vec<serde_json::Value> =
         serde_json::from_str(&text(&windows)).expect("window JSON");
-    let width = window_list[0]["bounds"][2].as_i64().expect("width");
+    let bounds = |class: &str| {
+        let w = window_list
+            .iter()
+            .find(|w| {
+                w["class"]
+                    .as_str()
+                    .unwrap_or("")
+                    .to_lowercase()
+                    .contains(class)
+            })
+            .unwrap_or_else(|| panic!("a {class} window: {windows:?}"));
+        (
+            w["bounds"][0].as_i64().expect("x"),
+            w["bounds"][2].as_i64().expect("width"),
+        )
+    };
+    let (browser_x, browser_width) = bounds("chromium");
+    let (observer_x, _) = bounds("toadterminal");
     assert!(
-        (900..=1000).contains(&width),
-        "the window is the left half of a 1920 screen: {windows:?}"
+        browser_x == 0 && (1240..=1320).contains(&browser_width),
+        "the app takes the left two thirds of a 1920 screen: {windows:?}"
+    );
+    assert_eq!(
+        observer_x, browser_width,
+        "the observer takes the right third: {windows:?}"
     );
     let focused = call(
         &client,
@@ -368,11 +389,17 @@ async fn image_honors_the_computer_contract() {
     let (mut socket, _) = tokio_tungstenite::connect_async(format!("{ws_base}/ws?token={token}"))
         .await
         .expect("viewer socket");
-    let first = tokio::time::timeout(Duration::from_secs(5), socket.next())
-        .await
-        .expect("a frame within five seconds")
-        .expect("a frame")
-        .expect("a frame");
+    // The socket hears whose screen this is before it sees the screen.
+    let first = tokio::time::timeout(Duration::from_secs(5), async {
+        loop {
+            let message = socket.next().await.expect("a frame").expect("a frame");
+            if message.is_binary() {
+                return message;
+            }
+        }
+    })
+    .await
+    .expect("a frame within five seconds");
     let bytes = first.into_data();
     let header: Vec<u16> = (0..6)
         .map(|index| u16::from_le_bytes([bytes[index * 2], bytes[index * 2 + 1]]))
@@ -469,6 +496,37 @@ async fn image_honors_the_computer_contract() {
         text(&typed),
         "\"host clipboard café 🐸\\nsecond line + newer viewer\""
     );
+    // A viewer that goes away with a modifier down must not leave it down:
+    // a person's host shortcut can take the page's focus between the two.
+    let (mut vanishing, _) =
+        tokio_tungstenite::connect_async(format!("{ws_base}/ws?token={token}"))
+            .await
+            .unwrap();
+    for message in [
+        json!({"t":"control","take":true}),
+        json!({"t":"key","key":"Alt","down":true}),
+    ] {
+        vanishing
+            .send(tokio_tungstenite::tungstenite::Message::text(
+                message.to_string(),
+            ))
+            .await
+            .unwrap();
+    }
+    tokio::time::sleep(Duration::from_millis(300)).await;
+    vanishing.close(None).await.unwrap();
+    tokio::time::sleep(Duration::from_millis(500)).await;
+    let keymap = call(
+        &client,
+        "shell",
+        json!({"command":"python3","args":["-c",KEYMAP_QUERY]}),
+    )
+    .await;
+    assert!(
+        text(&keymap).contains("held keys: none"),
+        "the hands let go when a viewer vanishes: {}",
+        text(&keymap)
+    );
     let (mut reconnected, _) =
         tokio_tungstenite::connect_async(format!("{ws_base}/ws?token={token}"))
             .await
@@ -492,6 +550,18 @@ async fn image_honors_the_computer_contract() {
     mallory.cancel().await.ok();
 }
 
+/// Asks the X server which keys it considers down.
+const KEYMAP_QUERY: &str = r#"
+import ctypes
+x = ctypes.CDLL('libX11.so.6')
+x.XOpenDisplay.restype = ctypes.c_void_p
+d = x.XOpenDisplay(None)
+keys = (ctypes.c_char * 32)()
+x.XQueryKeymap(ctypes.c_void_p(d), keys)
+held = [byte * 8 + bit for byte in range(32) for bit in range(8) if keys[byte][0] & (1 << bit)]
+print('held keys:', held or 'none')
+"#;
+
 async fn viewer_reply(
     socket: &mut tokio_tungstenite::WebSocketStream<
         tokio_tungstenite::MaybeTlsStream<tokio::net::TcpStream>,
@@ -505,7 +575,12 @@ async fn viewer_reply(
                 .expect("viewer response")
                 .expect("viewer response");
             if message.is_text() {
-                return serde_json::from_str(message.to_text().unwrap()).unwrap();
+                let reply: serde_json::Value =
+                    serde_json::from_str(message.to_text().unwrap()).unwrap();
+                // The bar's state and the hands' pointer are not replies.
+                if reply["t"] != "state" && reply["t"] != "pointer" {
+                    return reply;
+                }
             }
         }
     })

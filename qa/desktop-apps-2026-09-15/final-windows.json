@@ -1,0 +1,56 @@
+[
+  {
+    "id": "0x00e00003",
+    "title": "Toad Terminal",
+    "class": "ToadTerminal.ToadTerminal",
+    "bounds": [
+      1152,
+      48,
+      768,
+      1032
+    ],
+    "focused": false,
+    "pid": 38,
+    "maximized": false,
+    "minimum_size": [
+      1,
+      1
+    ]
+  },
+  {
+    "id": "0x01800003",
+    "title": "vscode-qa.txt - Visual Studio Code",
+    "class": "code.code",
+    "bounds": [
+      0,
+      48,
+      1920,
+      1032
+    ],
+    "focused": false,
+    "pid": 13987,
+    "maximized": true,
+    "minimum_size": [
+      400,
+      270
+    ]
+  },
+  {
+    "id": "0x02400007",
+    "title": "geany-qa.txt - /home/agent/workspace - Geany (new instance)",
+    "class": "geany.Geany",
+    "bounds": [
+      0,
+      48,
+      1920,
+      1032
+    ],
+    "focused": true,
+    "pid": 25266,
+    "maximized": true,
+    "minimum_size": [
+      476,
+      105
+    ]
+  }
+]

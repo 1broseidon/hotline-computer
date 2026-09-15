@@ -1,0 +1,22 @@
+{
+  "args": [
+    "/home/agent/workspace/featherpad-qa.txt"
+  ],
+  "command": "featherpad",
+  "cwd": "/home/agent",
+  "error": null,
+  "exit_code": null,
+  "fingerprint": "5ac895fd7753653cbd7d9d830e554fce63bd87ae2755aef541d4f2683414f8cf",
+  "finished_at": null,
+  "holder": "release-acceptance",
+  "id": "000001a0a53e93b6-17727720",
+  "label": "Qt basic edit without accessibility scan",
+  "output_bytes": 0,
+  "pid": 23800,
+  "pty": false,
+  "request_id": null,
+  "signal": null,
+  "started_at": 1789478736822,
+  "state": "running",
+  "truncated": false
+}

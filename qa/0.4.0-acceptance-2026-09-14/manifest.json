@@ -1,0 +1,187 @@
+[
+  {
+    "path": "README.md",
+    "bytes": 17010,
+    "sha256": "9c77cba3bae53ada2e23988699d520140afbea1c80bcb7c7ccedeb85176bb5fb"
+  },
+  {
+    "path": "evidence/01-simple-form.png",
+    "bytes": 105359,
+    "sha256": "8f160b572a0ece5b41f90a039f58abfe620cb2015a5417554523af3cee821c6d"
+  },
+  {
+    "path": "evidence/02-complex-review.png",
+    "bytes": 105519,
+    "sha256": "4170bdfcf4f5e88d459f27cef6fdae29d8f51150fc20df30ba70f0abb8f47d1f"
+  },
+  {
+    "path": "evidence/03-complex-submitted.png",
+    "bytes": 115081,
+    "sha256": "94c9af2e0e95d1587ee8dba7910475cfee817d6df9793575dd5deca3883e494e"
+  },
+  {
+    "path": "evidence/04-public-form-filled.png",
+    "bytes": 97478,
+    "sha256": "cbcc527cf67c530713282db24fd65a309c9ca7a3188456cccd4bd2e5c3e192e9"
+  },
+  {
+    "path": "evidence/05-public-form-received.png",
+    "bytes": 59910,
+    "sha256": "c2433cb0b899e0a4bcd1ac7d6dc7459fa46757592769ecdb69ddf6941324f138"
+  },
+  {
+    "path": "evidence/10-toad-after-focus.png",
+    "bytes": 26287,
+    "sha256": "91f727775055a53acd309084d0a11e8d7340c7c1cdd684f723f56f0793c02464"
+  },
+  {
+    "path": "evidence/12-toad-settings-settled.png",
+    "bytes": 53505,
+    "sha256": "7c21e1424d1d296227ad9f4e0adb9b30bf8028b18e83a6c3e5f3342337d2016e"
+  },
+  {
+    "path": "evidence/14-toad-computer.png",
+    "bytes": 45231,
+    "sha256": "ab44be0cb66024d056c8c20bca2027e4394fe3e3dc0a6ac5c19dca93ca8f5b41"
+  },
+  {
+    "path": "evidence/14-toad-providers.png",
+    "bytes": 37077,
+    "sha256": "2824cb58998c07641fbb9606ffe6a977c0c723c8f6d5f17a6cc68f18ec1a7b4d"
+  },
+  {
+    "path": "evidence/14-toad-updates.png",
+    "bytes": 32745,
+    "sha256": "0cefeb8a2fa20a12620d6c8ea17118b84e6c7bb0c5c97ab6121b076b260cff4f"
+  },
+  {
+    "path": "evidence/15-toad-new-teammate.png",
+    "bytes": 60935,
+    "sha256": "fac341990efe4649c0cf7916b033607f315a3abb396786bc1afd5fea6d079312"
+  },
+  {
+    "path": "evidence/17-terminal-reopened.png",
+    "bytes": 228304,
+    "sha256": "1d24f7c489b0d28d4e9105fc362287ba40b4d112189becafd95563590c9aec49"
+  },
+  {
+    "path": "evidence/18-alacritty-reopened.png",
+    "bytes": 218789,
+    "sha256": "1566ef5e01b5946d338c88ce51bf3396e2d513b2694888fd63a1c135dffd8aa3"
+  },
+  {
+    "path": "evidence/20-ghostty-close-button.png",
+    "bytes": 85069,
+    "sha256": "0e1ee0cdce0739cbe9f59b83165759f1116ddf54763970eb2686a8a76b5982e9"
+  },
+  {
+    "path": "evidence/alacritty-mesa.log",
+    "bytes": 1026,
+    "sha256": "5d5c37d6e943e88b31a4a706da0ff16ae7a97d4848590cb371c0e704e3332948"
+  },
+  {
+    "path": "evidence/alacritty.log",
+    "bytes": 9511,
+    "sha256": "16c94a5ac9769483749a0a3284ef9e34df025e2e035ddda461a04160ab9efffc"
+  },
+  {
+    "path": "evidence/ghostty-mesa.log",
+    "bytes": 1822,
+    "sha256": "e1203c728351411c22da3256fa1d68016ec98e0f8bd429eb1811f42e8d58d016"
+  },
+  {
+    "path": "evidence/ghostty.log",
+    "bytes": 24376,
+    "sha256": "163d88b7f6ce55008e30b7bb2159d26121747a29fffb4d12e75f087ab51697cd"
+  },
+  {
+    "path": "evidence/mcp-trace.jsonl",
+    "bytes": 157436,
+    "sha256": "7a07bf810a72e4e671b533f878a53a352149abcbbbfb059bcca77800862f25eb"
+  },
+  {
+    "path": "evidence/terminal-benchmark-results.json",
+    "bytes": 10033,
+    "sha256": "e248a2352e4ca64cfc63f3d8ac6876727bcbb8827f5647e597aca3040564ccaf"
+  },
+  {
+    "path": "evidence/terminal-benchmark-summary.json",
+    "bytes": 590,
+    "sha256": "8f7c8867e490f699bb623d6ba76a8dd18e53ec22e7d3f74456da3503a10e56a2"
+  },
+  {
+    "path": "evidence/terminal-integration-result.json",
+    "bytes": 3447,
+    "sha256": "36b3103fbb8c8f3ee639dbcade4396e83cf0ada82f9a302c7c53f50ab28a7dd4"
+  },
+  {
+    "path": "evidence/terminal-job.log",
+    "bytes": 33367,
+    "sha256": "e7371bb71d6c86612cc1f50cf9114cf04287b0536162f1c4117fcc1c617640c5"
+  },
+  {
+    "path": "evidence/toad-app-runtime.log",
+    "bytes": 155,
+    "sha256": "484da0e3f31b6911510eaa9fdcf36b0d93d3ba6d49fbff72c0b714a905002934"
+  },
+  {
+    "path": "evidence/toad-app.log",
+    "bytes": 627,
+    "sha256": "07db014758cc1a459f7055f7d823acb98279ff9c6c6d08b2887fc832607f4075"
+  },
+  {
+    "path": "evidence/toad-build.log",
+    "bytes": 49720,
+    "sha256": "060a340171c1d24e0d5931a11df5d0b0657c55d411925a164d177d090c802a94"
+  },
+  {
+    "path": "recipes/alacritty.toml",
+    "bytes": 191,
+    "sha256": "274a08dee3190847e87847a4e8ac936b3b0cde2e2f7c82b6e4248f9fb67ef70b"
+  },
+  {
+    "path": "recipes/build-toad.sh",
+    "bytes": 392,
+    "sha256": "28033c4d3518bd929cea42f7819cd283390a667c096b044445dc1e1ef9c71b6e"
+  },
+  {
+    "path": "recipes/forms.html",
+    "bytes": 4143,
+    "sha256": "a947ecbfd6aee10ecff1638d6c8363b6fdd7d52f6596020bacbceb896a2198d9"
+  },
+  {
+    "path": "recipes/js-only.html",
+    "bytes": 373,
+    "sha256": "d26b55c714c019ea381e467a1814ede4eeb5aae0eb6f2bd7c54e6d587b94a769"
+  },
+  {
+    "path": "recipes/mcp-client.py",
+    "bytes": 2348,
+    "sha256": "f84d98e226217e9e9eb5c25210a17e23a342b0f96b1a3d3dbeb001e87388f001"
+  },
+  {
+    "path": "recipes/terminal-benchmark.py",
+    "bytes": 3902,
+    "sha256": "eb0dafa1d0e88c950231d187755f6be88d38799fa72e06c8074ee338f6e53b4a"
+  },
+  {
+    "path": "recipes/terminal-graphics.nix",
+    "bytes": 442,
+    "sha256": "ca99cbfa09af0d8cc9da16a2eec1daa68ed426c16cee0fd525cf6c574fcb4714"
+  },
+  {
+    "path": "recipes/terminal-integration.py",
+    "bytes": 4290,
+    "sha256": "1b5beba2da38bc7d9c2414bde030c2a7a4b91941af4199cfda4d49b6897abeed"
+  },
+  {
+    "path": "recipes/toad-native-shell.nix",
+    "bytes": 515,
+    "sha256": "60975578e653fbcf7f901249c3517ab1e055d4b57ca936bdea467a956050e854"
+  },
+  {
+    "path": "recipes/toad-runtime.nix",
+    "bytes": 526,
+    "sha256": "7e8853db698efe3379372efe51e14b75f4e8e48e43fbed4c1f327dbd48fa94ad"
+  }
+]

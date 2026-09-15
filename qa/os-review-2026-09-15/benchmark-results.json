@@ -1,0 +1,320 @@
+[
+  {
+    "image": "ghcr.io/1broseidon/toad-computer:0.4.0",
+    "label": "debian-040",
+    "index": 0,
+    "container_id": "f87b9fdec91a32ab9f21160e4df21165f3eabf9db833e03f3289ccc93403fd82",
+    "measurements": [
+      {
+        "name": "simple_form",
+        "seconds": 0.8808789589966182,
+        "value": null
+      },
+      {
+        "name": "wizard",
+        "seconds": 2.2793466669972986,
+        "value": null
+      },
+      {
+        "name": "observer",
+        "seconds": 0.004797665984369814,
+        "value": {
+          "job_id": "000001a0a5325fd6-52544132",
+          "observer": "Alacritty",
+          "ok": true,
+          "pid": 203
+        }
+      }
+    ],
+    "start_to_health_s": 0.23313937499187887,
+    "info": {
+      "architecture": "aarch64",
+      "build": {
+        "channel": "release",
+        "revision": "3f4ec78f729256ab789d546dd585d904b63dd0c4"
+      },
+      "capabilities": [
+        "capture",
+        "input",
+        "browser",
+        "shell",
+        "files",
+        "windows",
+        "wait",
+        "state"
+      ],
+      "catalog": {
+        "nixpkgs": "ef34387ddd751e1ab8857adf4676492d32eb24ec",
+        "profiles": [
+          {
+            "name": "python",
+            "tools": [
+              "python3.12",
+              "uv"
+            ]
+          },
+          {
+            "name": "go",
+            "tools": [
+              "go",
+              "gopls"
+            ]
+          },
+          {
+            "name": "node",
+            "tools": [
+              "node",
+              "bun",
+              "pnpm"
+            ]
+          },
+          {
+            "name": "rust",
+            "tools": [
+              "rustc",
+              "cargo",
+              "clang",
+              "pkg-config",
+              "openssl"
+            ]
+          },
+          {
+            "name": "rust-tauri",
+            "tools": [
+              "Rust",
+              "Tauri CLI",
+              "Node",
+              "Bun",
+              "GTK3",
+              "WebKitGTK 4.1",
+              "AppIndicator",
+              "Mesa"
+            ]
+          }
+        ],
+        "usage": "state prepare with name and workspace; wait for its job to exit successfully, then shell commands with cwd inside that workspace inherit its environment automatically.",
+        "version": "0.4.0"
+      },
+      "display": ":0",
+      "executables": {
+        "alacritty": "/usr/bin/alacritty",
+        "bash": "/usr/bin/bash",
+        "chromium": "/usr/bin/chromium",
+        "curl": "/usr/bin/curl",
+        "git": "/usr/bin/git",
+        "nix": "/usr/bin/nix",
+        "python3": "/usr/bin/python3"
+      },
+      "graphics": "Mesa software rendering",
+      "home": "/home/agent",
+      "jobs": [],
+      "nixpkgs": "ef34387ddd751e1ab8857adf4676492d32eb24ec",
+      "skill_sha256": "863b962bbf771c151e00cad4c43ffe5a8c4b2c2367d0b1cd1de49b7fafe3966e",
+      "terminal": "Alacritty",
+      "version": "0.4.0"
+    },
+    "idle": {
+      "before": {
+        "memory_current": 40448000,
+        "anon": 38010880,
+        "shmem": 0,
+        "inactive_file": 1376256,
+        "cpu_usec": 168270
+      },
+      "after": {
+        "memory_current": 40366080,
+        "anon": 37982208,
+        "shmem": 0,
+        "inactive_file": 1376256,
+        "cpu_usec": 220759
+      },
+      "cpu_core_percent": 2.62445
+    },
+    "first_browser_navigation_s": 1.9266262500023004,
+    "job_ack_ms": [
+      105.67608301062137,
+      4.0503329946659505,
+      6.856874999357387,
+      5.0934579921886325,
+      5.438916006824002
+    ],
+    "browser_observer_idle": {
+      "before": {
+        "memory_current": 809721856,
+        "anon": 445628416,
+        "shmem": 12681216,
+        "inactive_file": 7782400,
+        "cpu_usec": 5380577
+      },
+      "after": {
+        "memory_current": 807960576,
+        "anon": 445583360,
+        "shmem": 12681216,
+        "inactive_file": 7790592,
+        "cpu_usec": 5462449
+      },
+      "cpu_core_percent": 4.0936
+    },
+    "glx": "name of display: :0\ndisplay: :0  screen: 0\ndirect rendering: Yes\nExtended renderer info (GLX_MESA_query_renderer):\n    Vendor: Mesa (0xffffffff)\n    Device: llvmpipe (LLVM 19.1.7, 128 bits) (0xffffffff)\n    Version: 25.0.7\n    Accelerated: no\n    Video memory: 5993MB\n    Unified memory: yes\n    Preferred profile: core (0x1)\n    Max core profile version: 4.5\n    Max compat profile version: 4.5\n    Max GLES1 profile version: 1.1\n    Max GLES[23] profile version: 3.2\nMemory info (GL_ATI_meminfo):\n    VBO free memory - total: 63 MB, largest block: 63 MB\n    VBO free aux. memory - total: 3729 MB, largest block: 3729 MB\n    Texture free memory - total: 63 MB, largest block: 63 MB\n    Texture free aux. memory - total: 3729 MB, largest block: 3729 MB\n    Renderbuffer free memory - total: 63 MB, largest block: 63 MB\n    Renderbuffer free aux. memory - total: 3729 MB, largest block: 3729 MB\nMemory info (GL_NVX_gpu_memory_info):\n    Dedicated video memory: 4294576662 MB\n    Total available memory: 4294582655 MB\n    Currently available dedicated video memory: 63 MB\nOpenGL vendor string: Mesa\nOpenGL renderer string: llvmpipe (LLVM 19.1.7, 128 bits)\nOpenGL core profile version string: 4.5 (Core Profile) Mesa 25.0.7-2+deb13u1\nOpenGL core profile shading language version string: 4.50\nOpenGL core profile context flags: (none)\nOpenGL core profile profile mask: core profile\n\nOpenGL version string: 4.5 (Compatibility Profile) Mesa 25.0.7-2+deb13u1\nOpenGL shading language version string: 4.50\nOpenGL context flags: (none)\nOpenGL profile mask: compatibility profile\n\nOpenGL ES profile version string: OpenGL ES 3.2 Mesa 25.0.7-2+deb13u1\nOpenGL ES profile shading language version string: OpenGL ES GLSL ES 3.20",
+    "processes": "PID                 COMMAND\n615761              toad-computer\n615781              toad-computer\n615782              Xvfb\n615785              dbus-daemon\n615793              at-spi-bus-laun\n615800              dconf-service\n615804              dbus-daemon\n615806              at-spi2-registr\n615845              chromium\n615859              chrome_crashpad\n615861              chrome_crashpad\n615864              chromium\n615865              chromium\n615883              chromium\n615885              chromium\n615903              chromium\n615927              chromium\n615976              chromium\n615987              chromium\n616001              alacritty\n616030              toad-computer"
+  },
+  {
+    "image": "toad-computer:os-review-alpine-current",
+    "label": "alpine-current",
+    "index": 0,
+    "container_id": "1b1b22871e77572b1db9bc514b4f49118df5d0633ea5f15460b204f2e2e4f260",
+    "measurements": [
+      {
+        "name": "simple_form",
+        "seconds": 1.0255159169901162,
+        "value": null
+      },
+      {
+        "name": "wizard",
+        "seconds": 2.3124322920048144,
+        "value": null
+      },
+      {
+        "name": "observer",
+        "seconds": 0.0012479999859351665,
+        "value": {
+          "job_id": "000001a0a5329476-94b93989",
+          "observer": "Alacritty",
+          "ok": true,
+          "pid": 205
+        }
+      }
+    ],
+    "start_to_health_s": 0.19865854099043645,
+    "info": {
+      "architecture": "aarch64",
+      "build": {
+        "channel": "review-alpine",
+        "revision": "f1413fe"
+      },
+      "capabilities": [
+        "capture",
+        "input",
+        "browser",
+        "shell",
+        "files",
+        "windows",
+        "wait",
+        "state"
+      ],
+      "catalog": {
+        "nixpkgs": "ef34387ddd751e1ab8857adf4676492d32eb24ec",
+        "profiles": [
+          {
+            "name": "python",
+            "tools": [
+              "python3.12",
+              "uv"
+            ]
+          },
+          {
+            "name": "go",
+            "tools": [
+              "go",
+              "gopls"
+            ]
+          },
+          {
+            "name": "node",
+            "tools": [
+              "node",
+              "bun",
+              "pnpm"
+            ]
+          },
+          {
+            "name": "rust",
+            "tools": [
+              "rustc",
+              "cargo",
+              "clang",
+              "pkg-config",
+              "openssl"
+            ]
+          },
+          {
+            "name": "rust-tauri",
+            "tools": [
+              "Rust",
+              "Tauri CLI",
+              "Node",
+              "Bun",
+              "GTK3",
+              "WebKitGTK 4.1",
+              "AppIndicator",
+              "Mesa"
+            ]
+          }
+        ],
+        "usage": "state prepare with name and workspace; wait for its job to exit successfully, then shell commands with cwd inside that workspace inherit its environment automatically.",
+        "version": "0.4.0"
+      },
+      "display": ":0",
+      "executables": {
+        "alacritty": "/usr/bin/alacritty",
+        "bash": "/bin/bash",
+        "chromium": "/usr/bin/chromium",
+        "curl": "/usr/bin/curl",
+        "git": "/usr/bin/git",
+        "nix": "/usr/bin/nix",
+        "python3": "/usr/bin/python3"
+      },
+      "graphics": "Mesa software rendering",
+      "home": "/home/agent",
+      "jobs": [],
+      "nixpkgs": "ef34387ddd751e1ab8857adf4676492d32eb24ec",
+      "skill_sha256": "ecb820cec178d0995e3159063e4faf82ea89c6f8adb13a401e5346eb2afd2f7c",
+      "terminal": "Alacritty",
+      "version": "0.4.0"
+    },
+    "idle": {
+      "before": {
+        "memory_current": 34000896,
+        "anon": 32387072,
+        "shmem": 0,
+        "inactive_file": 8192,
+        "cpu_usec": 109989
+      },
+      "after": {
+        "memory_current": 33894400,
+        "anon": 32419840,
+        "shmem": 0,
+        "inactive_file": 8192,
+        "cpu_usec": 159132
+      },
+      "cpu_core_percent": 2.45715
+    },
+    "first_browser_navigation_s": 2.8122919580200687,
+    "job_ack_ms": [
+      108.67049999069422,
+      4.938250000122935,
+      1.9488329999148846,
+      3.1717079982627183,
+      3.9570840017404407
+    ],
+    "browser_observer_idle": {
+      "before": {
+        "memory_current": 853876736,
+        "anon": 360013824,
+        "shmem": 112373760,
+        "inactive_file": 6492160,
+        "cpu_usec": 7415391
+      },
+      "after": {
+        "memory_current": 851656704,
+        "anon": 360046592,
+        "shmem": 110260224,
+        "inactive_file": 6496256,
+        "cpu_usec": 7495583
+      },
+      "cpu_core_percent": 4.0096
+    },
+    "glx": "name of display: :0\ndisplay: :0  screen: 0\ndirect rendering: Yes\nExtended renderer info (GLX_MESA_query_renderer):\n    Vendor: Mesa (0xffffffff)\n    Device: llvmpipe (LLVM 22.1.3, 128 bits) (0xffffffff)\n    Version: 26.1.6\n    Accelerated: no\n    Video memory: 5993MB\n    Unified memory: yes\n    Preferred profile: core (0x1)\n    Max core profile version: 4.6\n    Max compat profile version: 4.6\n    Max GLES1 profile version: 1.1\n    Max GLES[23] profile version: 3.2\nMemory info (GL_ATI_meminfo):\n    VBO free memory - total: 0 MB, largest block: 0 MB\n    VBO free aux. memory - total: 3710 MB, largest block: 3710 MB\n    Texture free memory - total: 0 MB, largest block: 0 MB\n    Texture free aux. memory - total: 3710 MB, largest block: 3710 MB\n    Renderbuffer free memory - total: 0 MB, largest block: 0 MB\n    Renderbuffer free aux. memory - total: 3710 MB, largest block: 3710 MB\nMemory info (GL_NVX_gpu_memory_info):\n    Dedicated video memory: 0 MB\n    Total available memory: 5993 MB\n    Currently available dedicated video memory: 0 MB\nOpenGL vendor string: Mesa\nOpenGL renderer string: llvmpipe (LLVM 22.1.3, 128 bits)\nOpenGL core profile version string: 4.6 (Core Profile) Mesa 26.1.6\nOpenGL core profile shading language version string: 4.60\nOpenGL core profile context flags: (none)\nOpenGL core profile profile mask: core profile\n\nOpenGL version string: 4.6 (Compatibility Profile) Mesa 26.1.6\nOpenGL shading language version string: 4.60\nOpenGL context flags: (none)\nOpenGL profile mask: compatibility profile\n\nOpenGL ES profile version string: OpenGL ES 3.2 Mesa 26.1.6\nOpenGL ES profile shading language version string: OpenGL ES GLSL ES 3.20",
+    "processes": "PID                 COMMAND\n616167              toad-computer\n616187              toad-computer\n616188              Xvfb\n616190              dbus-daemon\n616198              at-spi-bus-laun\n616203              dbus-daemon\n616205              at-spi2-registr\n616241              chromium\n616245              chrome_crashpad\n616247              chrome_crashpad\n616250              chromium\n616251              chromium\n616270              chromium\n616273              chromium\n616287              chromium\n616311              chromium\n616366              chromium\n616391              chromium\n616406              alacritty\n616435              toad-computer"
+  }
+]

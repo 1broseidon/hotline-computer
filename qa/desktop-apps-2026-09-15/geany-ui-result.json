@@ -1,0 +1,46 @@
+{
+  "passed": true,
+  "saved": "Geany C/C++ source build proof \u2014 caf\u00e9 \ud83d\udc38\nEdited and saved through the GTK desktop UI.\n",
+  "launch_seconds": 0.22476958300103433,
+  "window": {
+    "id": "0x02400007",
+    "title": "geany-qa.txt - /home/agent/workspace - Geany (new instance)",
+    "class": "geany.Geany",
+    "bounds": [
+      0,
+      48,
+      1920,
+      1032
+    ],
+    "focused": true,
+    "pid": 25266,
+    "maximized": true,
+    "minimum_size": [
+      476,
+      105
+    ]
+  },
+  "job": {
+    "args": [
+      "--new-instance",
+      "/home/agent/workspace/geany-qa.txt"
+    ],
+    "command": "/home/agent/.local/bin/geany",
+    "cwd": "/home/agent",
+    "error": null,
+    "exit_code": null,
+    "fingerprint": "5e0dec294939397209eaf1740b1014b3b21ba46665f186615f06d75977c7680c",
+    "finished_at": null,
+    "holder": "release-acceptance",
+    "id": "000001a0a53fad15-f20abc71",
+    "label": "Geany C/C++ source-built app",
+    "output_bytes": 0,
+    "pid": 25266,
+    "pty": false,
+    "request_id": null,
+    "signal": null,
+    "started_at": 1789478808853,
+    "state": "running",
+    "truncated": false
+  }
+}

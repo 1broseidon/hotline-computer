@@ -1,0 +1,36 @@
+{
+  "label": "alpine",
+  "image": "toad-computer:os-review-alpine-current",
+  "cases": [
+    {
+      "name": "Ketch download and local scrape",
+      "passed": true,
+      "output": null,
+      "seconds": 1.181
+    },
+    {
+      "name": "four cached Nix toolchains",
+      "passed": true,
+      "output": {
+        "python": "42\n",
+        "node": "42\n",
+        "rust": "rustc 1.98.1 (48a229cea 2026-09-01) (built from a source tarball)\n",
+        "go": "go version go1.26.7 linux/arm64\n"
+      },
+      "seconds": 0.128
+    },
+    {
+      "name": "native Toad frontend build",
+      "passed": false,
+      "error": "{'job': {'id': '000001a0a5323201-004b6703', 'pid': 110, 'label': 'bun', 'command': 'bun', 'args': ['run', 'build'], 'cwd': '/home/agent/project/ui', 'holder': 'release-acceptance', 'state': 'failed', 'exit_code': 1, 'signal': None, 'started_at': 1789477925377, 'finished_at': 1789477925896, 'error': None, 'output_bytes': 3045, 'truncated': False, 'pty': False, 'request_id': None, 'fingerprint': '8f4b548dc0ffeced508cd2c83a6782a8bd2da18c4936268f25fd5ea368e81f9b'}, 'output': '$ tsc --noEmit && vite build\\nfile:///home/agent/project/ui/node_modules/rolldown/dist/shared/binding-CtPG-2KR.mjs:597\\n\\t\\t\\tconst error = /* @__PURE__ */ new Error(\"Cannot find native binding. npm has a bug related to optional dependencies (https://github.com/npm/cli/issues/4828). Please try `npm i` again after removing both package-lock.json and node_modules directory.\");\\n\\t\\t\\t                              ^\\n\\nError: Cannot find native binding. npm has a bug related to optional dependencies (https://github.com/npm/cli/issues/4828). Please try `npm i` again after removing both package-lock.json and node_modules directory.\\n    at file:///home/agent/project/ui/node_modules/rolldown/dist/shared/binding-CtPG-2KR.mjs:597:34\\n    at file:///home/agent/project/ui/node_modules/rolldown/dist/shared/binding-CtPG-2KR.mjs:9:49\\n    ... 2 lines matching cause stack trace ...\\n    at async node:internal/modules/esm/loader:647:26 {\\n  cause: Error: Cannot find module \\'@rolldown/binding-wasm32-wasi\\'\\n  Require stack:\\n  - /home/agent/project/ui/node_modules/rolldown/dist/shared/binding-CtPG-2KR.mjs\\n      at file:///home/agent/project/ui/node_modules/rolldown/dist/shared/binding-CtPG-2KR.mjs:494:18\\n      ... 6 lines matching cause stack trace ...\\n      at async node:internal/modules/esm/loader:647:26 {\\n    cause: Error: Cannot find module \\'./rolldown-binding.wasi.cjs\\'\\n    Require stack:\\n    - /home/agent/project/ui/node_modules/rolldown/dist/shared/binding-CtPG-2KR.mjs\\n        at file:///home/agent/project/ui/node_modules/rolldown/dist/shared/binding-CtPG-2KR.mjs:494:18\\n        ... 6 lines matching cause stack trace ...\\n        at async node:internal/modules/esm/loader:647:26 {\\n      cause: Error: /nix/store/m54cs0m994hc3n9lax7sg98sgy729qsa-glibc-2.42-84/lib/libc.so: invalid ELF header\\n          at file:///home/agent/project/ui/node_modules/rolldown/dist/shared/binding-CtPG-2KR.mjs:494:18\\n          ... 6 lines matching cause stack trace ...\\n          at async node:internal/modules/esm/loader:647:26 {\\n        cause: Error: Cannot find module \\'./rolldown-binding.linux-arm64-musl.node\\'\\n        Require stack:\\n        - /home/agent/project/ui/node_modules/rolldown/dist/shared/binding-CtPG-2KR.mjs\\n            at file:///home/agent/project/ui/node_modules/rolldown/dist/shared/binding-CtPG-2KR.mjs:494:18\\n            at Array.reduce (<anonymous>)\\n            at createLoadErrorChain (file:///home/agent/project/ui/node_modules/rolldown/dist/shared/binding-CtPG-2KR.mjs:487:17)\\n            at file:///home/agent/project/ui/node_modules/rolldown/dist/shared/binding-CtPG-2KR.mjs:598:18\\n            at file:///home/agent/project/ui/node_modules/rolldown/dist/shared/binding-CtPG-2KR.mjs:9:49\\n            at file:///home/agent/project/ui/node_modules/rolldown/dist/shared/parse-D0g29RgN.mjs:3:46\\n            at ModuleJob.run (node:internal/modules/esm/module_job:561:25)\\n            at async node:internal/modules/esm/loader:647:26 {\\n          cause: null\\n        }\\n      }\\n    }\\n  }\\n}\\n\\nNode.js v24.20.0\\nerror: script \"build\" exited with code 1\\n', 'cursor': 0, 'next_cursor': 3045, 'eof': True}",
+      "seconds": 0.524
+    },
+    {
+      "name": "prebuilt Nix Toad native screens",
+      "passed": false,
+      "error": "Toad did not map a native window",
+      "seconds": 30.165
+    }
+  ],
+  "system_versions": "NAME=\"Alpine Linux\"\nID=alpine\nVERSION_ID=3.24.1\nPRETTY_NAME=\"Alpine Linux v3.24\"\nHOME_URL=\"https://alpinelinux.org/\"\nBUG_REPORT_URL=\"https://gitlab.alpinelinux.org/alpine/aports/-/issues\"\nChromium 152.0.7977.82 Alpine Linux\nnix (Nix) 2.31.5\nalacritty 0.17.0\nmusl libc (aarch64)\nVersion 1.2.6\nDynamic Program Loader\nUsage: /lib/ld-musl-aarch64.so.1 [options] [--] pathname"
+}

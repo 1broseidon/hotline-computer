@@ -1,0 +1,1 @@
+{"roundtrip_ms":3951,"result":{"content":[{"type":"text","text":"{\"duration_ms\":450,\"error\":null,\"exit_code\":0,\"job_id\":\"000001a0a3168dcb-17b85c90\",\"observer_error\":null,\"signal\":null,\"state\":\"exited\",\"stderr\":\"\",\"stdout\":\"ketch v0.16.2\\n\",\"truncated\":false}"}],"isError":false}}

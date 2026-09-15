@@ -1,0 +1,28 @@
+{
+  "job": {
+    "id": "000001a0a53774b6-0e373386",
+    "pid": 38,
+    "label": "Check agent package installation",
+    "command": "apt-get",
+    "args": [
+      "update"
+    ],
+    "cwd": "/home/agent",
+    "holder": "release-acceptance",
+    "state": "failed",
+    "exit_code": 100,
+    "signal": null,
+    "started_at": 1789478270135,
+    "finished_at": 1789478270238,
+    "error": null,
+    "output_bytes": 116,
+    "truncated": false,
+    "pty": false,
+    "request_id": null,
+    "fingerprint": "5d5cc4c09e762ca56e5e4a3d7970686b56565cd1f2f841adc56eafba32415bbd"
+  },
+  "output": "Reading package lists...\nE: List directory /var/lib/apt/lists/partial is missing. - Acquire (13: Permission denied)\n",
+  "cursor": 0,
+  "next_cursor": 116,
+  "eof": true
+}

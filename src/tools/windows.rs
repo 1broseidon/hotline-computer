@@ -72,6 +72,9 @@ fn required_id(input: &Input) -> Result<&str, String> {
         .ok_or_else(|| "window_id is required".to_owned())
 }
 
+/// The line between the observer and the person's shell, as on the desktop.
+const STACK_GAP: i32 = 8;
+
 fn layout(
     windows: &[x11::Window],
     area: [i32; 4],
@@ -105,7 +108,9 @@ fn layout(
         if right.is_empty() {
             width
         } else {
-            (width / 2).max(primary_min).min(width - right_min)
+            // The observer column is a third of the screen, as when the
+            // terminal opens on its own; the app under test keeps two thirds.
+            (width * 2 / 3).max(primary_min).min(width - right_min)
         }
     } else {
         0
@@ -114,10 +119,17 @@ fn layout(
     if let Some(index) = primary {
         expected.push((windows[index].id.clone(), [left, top, split, height]));
     }
+    // The person's shell keeps the bottom third of the column under a line,
+    // as the desktop places it; the rest of the column is shared above it.
+    let (shells, column): (Vec<_>, Vec<_>) = right
+        .iter()
+        .partition(|(_, w)| w.class.to_ascii_lowercase().contains("toadshell"));
+    let shell_height = if shells.is_empty() { 0 } else { height / 3 };
+    let column_height = height - shell_height;
     let mut y = top;
-    let mut available = height - right.iter().map(|(_, w)| w.minimum_size[1]).sum::<i32>();
-    for (position, (_, window)) in right.iter().enumerate() {
-        let extra = available / (right.len() - position) as i32;
+    let mut available = column_height - column.iter().map(|(_, w)| w.minimum_size[1]).sum::<i32>();
+    for (position, (_, window)) in column.iter().enumerate() {
+        let extra = available / (column.len() - position) as i32;
         available -= extra;
         let row_height = window.minimum_size[1] + extra;
         expected.push((
@@ -125,6 +137,17 @@ fn layout(
             [left + split, y, width - split, row_height],
         ));
         y += row_height;
+    }
+    for (_, window) in shells {
+        expected.push((
+            window.id.clone(),
+            [
+                left + split,
+                top + column_height + STACK_GAP,
+                width - split,
+                shell_height - STACK_GAP,
+            ],
+        ));
     }
     Ok(expected)
 }
@@ -237,6 +260,20 @@ mod tests {
         .unwrap();
         assert_eq!(result[0].1, [0, 48, 1280, 1032]);
         assert_eq!(result[1].1, [1280, 48, 640, 1032]);
+    }
+    #[test]
+    fn the_persons_shell_takes_the_bottom_third_of_the_column_under_a_line() {
+        let mut shell = window("shell", [1, 1]);
+        shell.class = "ToadShell.ToadShell".into();
+        let result = layout(
+            &[window("app", [500, 87]), window("observer", [1, 1]), shell],
+            [0, 36, 1920, 1044],
+            Some(0),
+        )
+        .unwrap();
+        assert_eq!(result[0].1, [0, 36, 1280, 1044]);
+        assert_eq!(result[1].1, [1280, 36, 640, 696]);
+        assert_eq!(result[2].1, [1280, 740, 640, 340]);
     }
     #[test]
     fn impossible_layouts_fail_before_moving_any_windows() {

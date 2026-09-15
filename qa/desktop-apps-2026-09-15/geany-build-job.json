@@ -1,0 +1,24 @@
+{
+  "args": [
+    "artifact",
+    "{\"action\":\"run\",\"args\":[],\"asset\":null,\"destination\":null,\"interpreter\":null,\"path\":\"/home/agent/workspace/build-geany.sh\",\"repo\":null,\"sha256\":null,\"url\":null,\"version\":null}"
+  ],
+  "artifact_staging": "/home/agent/workspace/.toad-artifact-000001a0a53b58c6-aaf40efd",
+  "command": "/usr/bin/toad-computer",
+  "cwd": "/home/agent/workspace/source/geany-2.1",
+  "error": null,
+  "exit_code": null,
+  "fingerprint": "f30460083fd8cf723f93814a8284f555b9e5d2f45ab8f585c68120061127311b",
+  "finished_at": null,
+  "holder": "release-acceptance",
+  "id": "000001a0a53b58c6-aaf40efd",
+  "label": "run /home/agent/workspace/build-geany.sh",
+  "output_bytes": 0,
+  "pid": 71,
+  "pty": false,
+  "request_id": null,
+  "signal": null,
+  "started_at": 1789478525126,
+  "state": "running",
+  "truncated": false
+}

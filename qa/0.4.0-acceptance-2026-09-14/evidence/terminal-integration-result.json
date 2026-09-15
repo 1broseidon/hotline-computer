@@ -1,0 +1,123 @@
+{
+  "attachments": [
+    {
+      "terminal": "alacritty",
+      "phase": "initial",
+      "ipc_exit": 0,
+      "stderr": "",
+      "argv": [
+        "alacritty",
+        "msg",
+        "--socket",
+        "/home/agent/qa/terminal-integration/alacritty.sock",
+        "create-window",
+        "--working-directory",
+        "/home/agent/qa/terminal-integration",
+        "--title",
+        "Toad Job | Alacritty | initial",
+        "-e",
+        "/usr/bin/env",
+        "TOAD_QA_CONTEXT=explicit-job-env",
+        "/nix/store/m366grr7iy3d47r7ns0p8ppx5z3ghlv6-python3-3.11.8/bin/python3",
+        "/home/agent/qa/terminal-integration.py",
+        "observer",
+        "alacritty-initial"
+      ],
+      "pid": 33296,
+      "cwd": "/home/agent/qa/terminal-integration",
+      "env": "explicit-job-env",
+      "attach_ms": 92.95918000862002
+    },
+    {
+      "terminal": "ghostty",
+      "phase": "initial",
+      "ipc_exit": 0,
+      "stderr": "",
+      "argv": [
+        "ghostty",
+        "+new-window",
+        "--class=com.toad.QAGhostty",
+        "--working-directory=/home/agent/qa/terminal-integration",
+        "--title=Toad Job | Ghostty | initial",
+        "-e",
+        "/usr/bin/env",
+        "TOAD_QA_CONTEXT=explicit-job-env",
+        "/nix/store/m366grr7iy3d47r7ns0p8ppx5z3ghlv6-python3-3.11.8/bin/python3",
+        "/home/agent/qa/terminal-integration.py",
+        "observer",
+        "ghostty-initial"
+      ],
+      "pid": 33318,
+      "cwd": "/home/agent/qa/terminal-integration",
+      "env": "explicit-job-env",
+      "attach_ms": 191.82340300176293
+    },
+    {
+      "terminal": "alacritty",
+      "phase": "reopened",
+      "ipc_exit": 0,
+      "stderr": "",
+      "argv": [
+        "alacritty",
+        "msg",
+        "--socket",
+        "/home/agent/qa/terminal-integration/alacritty.sock",
+        "create-window",
+        "--working-directory",
+        "/home/agent/qa/terminal-integration",
+        "--title",
+        "Toad Job | Alacritty | reopened",
+        "-e",
+        "/usr/bin/env",
+        "TOAD_QA_CONTEXT=explicit-job-env",
+        "/nix/store/m366grr7iy3d47r7ns0p8ppx5z3ghlv6-python3-3.11.8/bin/python3",
+        "/home/agent/qa/terminal-integration.py",
+        "observer",
+        "alacritty-reopened"
+      ],
+      "pid": 33325,
+      "cwd": "/home/agent/qa/terminal-integration",
+      "env": "explicit-job-env",
+      "attach_ms": 105.4516069998499
+    },
+    {
+      "terminal": "ghostty",
+      "phase": "reopened",
+      "ipc_exit": 0,
+      "stderr": "",
+      "argv": [
+        "ghostty",
+        "+new-window",
+        "--class=com.toad.QAGhostty",
+        "--working-directory=/home/agent/qa/terminal-integration",
+        "--title=Toad Job | Ghostty | reopened",
+        "-e",
+        "/usr/bin/env",
+        "TOAD_QA_CONTEXT=explicit-job-env",
+        "/nix/store/m366grr7iy3d47r7ns0p8ppx5z3ghlv6-python3-3.11.8/bin/python3",
+        "/home/agent/qa/terminal-integration.py",
+        "observer",
+        "ghostty-reopened"
+      ],
+      "pid": 33343,
+      "cwd": "/home/agent/qa/terminal-integration",
+      "env": "explicit-job-env",
+      "attach_ms": 181.82076199445873
+    }
+  ],
+  "daemon_pids": {
+    "alacritty": 33240,
+    "ghostty": 33241
+  },
+  "producer_pid": 33239,
+  "alive_after_windows_closed": {
+    "alacritty": true,
+    "ghostty": true
+  },
+  "producer_alive_after_close": true,
+  "job_exit": 42,
+  "alive_after_job_exit": {
+    "alacritty": true,
+    "ghostty": true
+  }
+}

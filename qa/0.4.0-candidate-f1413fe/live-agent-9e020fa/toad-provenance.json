@@ -1,0 +1,9 @@
+{
+  "commit": "f3c17b78d85b4cc235455862d9c9241579157b39",
+  "trackedChanges": "",
+  "dataDirectoryEnvironment": [
+    "TOAD_DATA_DIR=/home/agent/qa/toad/.toad-dev"
+  ],
+  "binary": "/home/agent/qa/toad/target/debug/toad-desktop",
+  "status": "?? .toad/\n"
+}

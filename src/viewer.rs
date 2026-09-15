@@ -72,11 +72,26 @@ pub async fn socket(
 async fn drive(mut ws: WebSocket, app: App, display: Arc<Display>) {
     let holder = format!("{PERSON}-{}", VIEWER_ID.fetch_add(1, Ordering::Relaxed));
     let mut frames = display.screen.subscribe();
+    // The pointer is not in the frames, so the hands say where they are.
+    let mut gestures = display.gestures.subscribe();
     // A socket arrives watching, and says so when the person takes the
     // screen. One viewer driving leaves another one still only looking.
     let mut driving = false;
+    // The control bar says whose screen this is and what the machine is
+    // doing; it hears once a second, and only when something changed.
+    let mut ticker = tokio::time::interval(std::time::Duration::from_secs(1));
+    let mut told = String::new();
     loop {
         tokio::select! {
+            _ = ticker.tick() => {
+                let state = state_message(&app, &holder, driving).await;
+                if state != told {
+                    if ws.send(Message::Text(state.clone().into())).await.is_err() {
+                        break;
+                    }
+                    told = state;
+                }
+            },
             frame = frames.recv() => match frame {
                 Ok(frame) => {
                     if ws.send(Message::Binary(frame.encode().into())).await.is_err() {
@@ -84,6 +99,16 @@ async fn drive(mut ws: WebSocket, app: App, display: Arc<Display>) {
                     }
                 }
                 Err(RecvError::Lagged(_)) => display.screen.request_full(),
+                Err(RecvError::Closed) => break,
+            },
+            gesture = gestures.recv() => match gesture {
+                Ok(gesture) => {
+                    if ws.send(Message::Text(pointer_message(&gesture).into())).await.is_err() {
+                        break;
+                    }
+                }
+                // A viewer that fell behind the hands just picks up where they are now.
+                Err(RecvError::Lagged(_)) => {}
                 Err(RecvError::Closed) => break,
             },
             message = ws.recv() => match message {
@@ -99,7 +124,45 @@ async fn drive(mut ws: WebSocket, app: App, display: Arc<Display>) {
             },
         }
     }
+    if driving {
+        let_go(&display);
+    }
     let _ = app.access.release(&holder).await;
+}
+
+/// A viewer that stops driving, by choice or by vanishing, may have sent a
+/// key down whose up never came. The hands let go of whatever they hold.
+fn let_go(display: &Display) {
+    if let Ok(mut hands) = display.hands.lock() {
+        let _ = hands.release_all();
+    }
+}
+
+/// Where the hands are, for the page to draw an arrow: a move carries only
+/// the point; a button carries which one and whether it went down.
+fn pointer_message(gesture: &crate::xtest::Gesture) -> String {
+    let mut message = serde_json::to_value(gesture).unwrap_or_default();
+    message["t"] = json!("pointer");
+    message.to_string()
+}
+
+/// What the page shows in its control bar: who holds the machine, from this
+/// socket's point of view, and the job counts the desktop's bar shows.
+async fn state_message(app: &App, holder: &str, driving: bool) -> String {
+    let who = match app.access.holder().await {
+        Some((current, _)) if current == holder => "you",
+        Some((current, _)) if current.starts_with(PERSON) => "person",
+        Some(_) => "agent",
+        None => "none",
+    };
+    let jobs = app.jobs.list().await.unwrap_or_default();
+    let running = jobs.iter().filter(|job| job.state == "running").count();
+    let completed = jobs
+        .iter()
+        .filter(|job| job.state == "exited" && job.exit_code == Some(0))
+        .count();
+    json!({"t":"state","holder":who,"driving":driving,"running":running,"completed":completed,"failed":jobs.len() - running - completed})
+        .to_string()
 }
 
 #[derive(Deserialize)]
@@ -147,6 +210,9 @@ async fn handle(
     if !reaches_the_hands(&message, app, holder, driving).await {
         if matches!(message, FromViewer::Paste { .. }) {
             return Err("Take control before pasting".into());
+        }
+        if matches!(message, FromViewer::Control { take: false }) {
+            let_go(display);
         }
         return Ok(false);
     }
@@ -289,5 +355,51 @@ mod tests {
         assert!(!reaches_the_hands(&paste, &app, "person-a", &mut driving).await);
         assert!(reaches_the_hands(&paste, &app, "person-b", &mut other).await);
         assert!(app.access.release("person-a").await.is_err());
+    }
+
+    #[test]
+    fn the_page_is_told_where_the_hands_are() {
+        use crate::xtest::Gesture;
+        let moved: serde_json::Value = serde_json::from_str(&pointer_message(&Gesture {
+            x: 640,
+            y: 360,
+            button: None,
+            down: false,
+        }))
+        .unwrap();
+        assert_eq!(moved, json!({"t":"pointer","x":640,"y":360}));
+        let pressed: serde_json::Value = serde_json::from_str(&pointer_message(&Gesture {
+            x: 640,
+            y: 360,
+            button: Some(1),
+            down: true,
+        }))
+        .unwrap();
+        assert_eq!(
+            pressed,
+            json!({"t":"pointer","x":640,"y":360,"button":1,"down":true})
+        );
+    }
+
+    #[tokio::test]
+    async fn the_control_bar_is_told_whose_screen_it_is() {
+        let app = app();
+        let state: serde_json::Value =
+            serde_json::from_str(&state_message(&app, "person-1", false).await).unwrap();
+        assert_eq!(state["holder"], "none");
+        assert_eq!(state["running"], 0);
+        app.access.seize("person-1", HOLD).await;
+        let state: serde_json::Value =
+            serde_json::from_str(&state_message(&app, "person-1", true).await).unwrap();
+        assert_eq!(state["holder"], "you");
+        assert_eq!(state["driving"], true);
+        let state: serde_json::Value =
+            serde_json::from_str(&state_message(&app, "person-2", false).await).unwrap();
+        assert_eq!(state["holder"], "person");
+        app.access.release("person-1").await.unwrap();
+        app.access.control("teammate", Some(60)).await.unwrap();
+        let state: serde_json::Value =
+            serde_json::from_str(&state_message(&app, "person-2", false).await).unwrap();
+        assert_eq!(state["holder"], "agent");
     }
 }

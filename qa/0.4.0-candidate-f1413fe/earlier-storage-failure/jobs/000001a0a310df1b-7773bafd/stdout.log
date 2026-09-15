@@ -1,0 +1,10 @@
+{"release": "v0.16.2", "asset": "ketch_0.16.2_linux_arm64.tar.gz", "architecture": "arm64"}
+Downloaded 1048576 bytes of 8059545
+Downloaded 2097152 bytes of 8059545
+Downloaded 3145728 bytes of 8059545
+Downloaded 4194304 bytes of 8059545
+Downloaded 5242880 bytes of 8059545
+Downloaded 6291456 bytes of 8059545
+Downloaded 7340032 bytes of 8059545
+Downloaded 8059545 bytes of 8059545
+{"path": "/home/agent/qa/live-agent-evidence/ketch.tar.gz", "bytes": 8059545, "sha256": "61e0a7ef16350534c586d7e2755a490333334fc40bdeac01c092bf77bf030b8c", "verified": true, "cached": false}

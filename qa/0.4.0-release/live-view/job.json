@@ -1,0 +1,20 @@
+{
+  "args": [],
+  "command": "/home/agent/qa/native-target/debug/toad-desktop",
+  "cwd": "/home/agent/qa/toad-aab272380a0f",
+  "error": null,
+  "exit_code": null,
+  "fingerprint": "55f56de7c1382d9bff5bb4e8906e9a964cf6c8b7987be1e1a215df3eb1f305f3",
+  "finished_at": null,
+  "holder": "anonymous",
+  "id": "000001a0a35cacdb-dc9d18be",
+  "label": "Toad Computer 0.4.0 native QA",
+  "output_bytes": 0,
+  "pid": 72,
+  "pty": false,
+  "request_id": null,
+  "signal": null,
+  "started_at": 1789447154907,
+  "state": "running",
+  "truncated": false
+}

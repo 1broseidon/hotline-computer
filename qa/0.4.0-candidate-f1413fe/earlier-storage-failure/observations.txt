@@ -1,0 +1,6 @@
+Running Computer 0.4.0 development b7cd1fa, aarch64; guide sha256 6a533dc21a499aac1a8af5965a650a6b2827d73ab144cc8bc6adb98b7d60b113.
+Selenium synthetic submission confirmed Form submitted / Received. fill(value=...) silently blanked entries; corrected with text= and verified values before successful resubmission.
+Local simple form submitted; wizard QA-040 accepted Team / Toad QA / 2026-09-14 / attachment.txt / Linux+macOS, with Back to contact and Review exercised.
+Observer closed and reopened while job 000001a0a3113128-15cf143c remained running, same pid 484 and start time 1789442208040.
+Ketch archive matched release checksums (61e0a7ef16350534c586d7e2755a490333334fc40bdeac01c092bf77bf030b8c); artifact verified=true; --version ketch v0.16.2. Local scrape returned expected title and synthetic content, exit 0, 46 ms command execution.
+Prepared environment took 27.344 seconds. Login bash -lc reset PATH; bash -c preserves prepared environment. rust-tauri lacked required cargo tauri; installing per repo instructions. recoil absent in computer (127); no host execution used.

@@ -1,0 +1,10 @@
+FROM ghcr.io/1broseidon/toad-computer:0.4.0
+USER root
+ENV DEBIAN_FRONTEND=noninteractive
+COPY code.deb /tmp/code.deb
+RUN printf 'code code/add-microsoft-repo boolean false\n' | debconf-set-selections \
+    && apt-get update \
+    && apt-get install -y --no-install-recommends /tmp/code.deb featherpad build-essential libgtk-3-dev pkg-config \
+    && rm -f /tmp/code.deb \
+    && rm -rf /var/lib/apt/lists/*
+USER agent

@@ -1,0 +1,2 @@
+{"label": "debian-040", "index": 0, "start_to_health_s": 0.23313937499187887, "first_browser_navigation_s": 1.9266262500023004}
+{"label": "alpine-current", "index": 0, "start_to_health_s": 0.19865854099043645, "first_browser_navigation_s": 2.8122919580200687}

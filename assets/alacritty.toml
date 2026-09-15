@@ -1,0 +1,61 @@
+# The observer's terminal. It shows the teammate's jobs; nobody types in it.
+# Its colours are the bar's, so the desktop reads as one thing.
+
+[window]
+dynamic_title = false
+decorations = "None"
+padding = { x = 22, y = 16 }
+
+[scrolling]
+history = 20000
+
+# Text copied in another app pastes on a right click, and text selected
+# here goes to the clipboard, so the terminal and the browser share one.
+[mouse]
+bindings = [{ mouse = "Right", action = "Paste" }]
+
+# Ctrl+V pastes here as it does in the browser: the viewer's paste presses
+# it after filling the clipboard. Ctrl+Shift+V and Ctrl+Shift+C still work.
+[keyboard]
+bindings = [{ key = "V", mods = "Control", action = "Paste" }]
+
+[selection]
+save_to_clipboard = true
+
+[font]
+size = 12.0
+normal = { family = "DejaVu Sans Mono", style = "Book" }
+bold = { family = "DejaVu Sans Mono", style = "Bold" }
+
+# The cursor is painted in the background colour: the observer accepts no
+# input, so a cursor would only suggest that it does.
+[cursor]
+style = { shape = "Underline", blinking = "Never" }
+
+[colors.primary]
+background = "#141416"
+foreground = "#d6d6d9"
+
+[colors.cursor]
+text = "#141416"
+cursor = "#141416"
+
+[colors.normal]
+black = "#1c1c1f"
+red = "#f08a8a"
+green = "#86d69c"
+yellow = "#f0c27a"
+blue = "#7fc4f0"
+magenta = "#c9a6f0"
+cyan = "#8fdbd6"
+white = "#e8e8ea"
+
+[colors.bright]
+black = "#7d7d82"
+red = "#f6a3a3"
+green = "#a4e3b5"
+yellow = "#f5d39c"
+blue = "#a2d4f5"
+magenta = "#d9c0f5"
+cyan = "#b0e6e2"
+white = "#ffffff"

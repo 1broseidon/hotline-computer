@@ -1,0 +1,50 @@
+{
+  "vscode": {
+    "args": [
+      "artifact",
+      "{\"action\":\"download\",\"args\":[],\"asset\":null,\"destination\":null,\"interpreter\":null,\"path\":\"/home/agent/workspace/code.deb\",\"repo\":null,\"sha256\":\"8bff558a659d351328f5a1e319802073b59dac42f95cc0f9b2ef1b0c27387431\",\"url\":\"https://vscode.download.prss.microsoft.com/dbazure/download/stable/645f29cc3176500b4b5762ba887cf2a7f0ffdf2c/code_1.137.0-1788902074_arm64.deb\",\"version\":null}"
+    ],
+    "artifact_staging": "/home/agent/workspace/.toad-artifact-000001a0a537775a-06ee095c",
+    "command": "/usr/bin/toad-computer",
+    "cwd": "/home/agent",
+    "error": null,
+    "exit_code": null,
+    "fingerprint": "8ab0ae522aed4c0f04b340170bcfda9c49c679ddfb34023e87c7084717054156",
+    "finished_at": null,
+    "holder": "release-acceptance",
+    "id": "000001a0a537775a-06ee095c",
+    "label": "download /home/agent/workspace/code.deb",
+    "output_bytes": 0,
+    "pid": 72,
+    "pty": false,
+    "request_id": null,
+    "signal": null,
+    "started_at": 1789478270810,
+    "state": "running",
+    "truncated": false
+  },
+  "geany": {
+    "args": [
+      "artifact",
+      "{\"action\":\"download\",\"args\":[],\"asset\":null,\"destination\":null,\"interpreter\":null,\"path\":\"/home/agent/workspace/geany-2.1.tar.gz\",\"repo\":null,\"sha256\":null,\"url\":\"https://download.geany.org/geany-2.1.tar.gz\",\"version\":null}"
+    ],
+    "artifact_staging": "/home/agent/workspace/.toad-artifact-000001a0a537775e-22dae531",
+    "command": "/usr/bin/toad-computer",
+    "cwd": "/home/agent",
+    "error": null,
+    "exit_code": null,
+    "fingerprint": "9d20657ffb4e930b55c6ee1c67b7ae9158148faaa6d5148fd17569b11b007f49",
+    "finished_at": null,
+    "holder": "release-acceptance",
+    "id": "000001a0a537775e-22dae531",
+    "label": "download /home/agent/workspace/geany-2.1.tar.gz",
+    "output_bytes": 0,
+    "pid": 74,
+    "pty": false,
+    "request_id": null,
+    "signal": null,
+    "started_at": 1789478270814,
+    "state": "running",
+    "truncated": false
+  }
+}

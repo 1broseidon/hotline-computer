@@ -64,7 +64,9 @@ pub fn descriptors(home: &str) -> Vec<Tool> {
                 "type":"object","properties":{
                     "action":{"type":"string","enum":["exec","start","launch","list","status","read","wait","write","cancel","show"],"default":"exec"},
                     "command":{"type":"string"},"args":{"type":"array","items":{"type":"string"}},"cwd":{"type":"string","default":home},
-                    "env":{"type":"object","additionalProperties":{"type":"string"}},"label":{"type":"string"},"request_id":{"type":"string"},"pty":{"type":"boolean","default":false},
+                    "env":{"type":"object","additionalProperties":{"type":"string"}},
+                    "label":{"type":"string","description":"The job's name as a person reads it in the desktop's jobs list and terminal: a short task in plain words, such as 'Run the unit tests' or 'Install Python 3.12', not the command. Without one the job is named by its command line."},
+                    "request_id":{"type":"string"},"pty":{"type":"boolean","default":false},
                     "timeout":{"type":"integer","minimum":1,"description":"Execution deadline in seconds. exec defaults to 30, maximum 60; async jobs have no default deadline."},
                     "job_id":{"type":"string"},"text":{"type":"string"},"eof":{"type":"boolean"},"cursor":{"type":"integer","minimum":0},
                     "wait_ms":{"type":"integer","minimum":0,"maximum":60000},"max_output":{"type":"integer","minimum":1,"maximum":1048576,"default":65536}
@@ -103,11 +105,15 @@ pub fn descriptors(home: &str) -> Vec<Tool> {
         ),
         Tool::new(
             "state",
-            "info identifies the actual running release; guide returns that release’s bundled skill and checksum; catalog lists pinned Python/Go/Node/Rust/Rust-Tauri environments. prepare attaches an environment to a workspace and returns a job for a cold build or ready=true for a cache hit. Shell cwd inherits the prepared environment. Durable machine state: control leases the desktop to this holder until release or expiry, and other holders' mutating tools are refused. Only the holder can release it. login_* saves and restores browser cookies and storage by name. snapshot_* archives and restores the home directory.",
+            "info identifies the running release; guide returns its bundled skill and checksum; catalog describes generic Nix preparation, the default Nixpkgs pin, and common package names by purpose. prepare accepts packages or a local flake, or reuses the saved workspace definition when both are omitted. Returns a managed job or ready=true for a package cache hit. Shell cwd inherits the prepared environment. Repository shell hooks run during preparation; their exported variables are retained. control leases the desktop to this holder until release or expiry; other holders' mutations are refused. Only the holder can release it. login_* manages browser cookies/storage by name. snapshot_* archives/restores home.",
             schema(json!({
                 "type":"object","properties":{
                     "action":{"type":"string","enum":["info","guide","catalog","prepare","control","release","login_save","login_load","login_list","login_delete","snapshot_save","snapshot_load","snapshot_list","snapshot_delete"]},
-                    "name":{"type":"string"},"workspace":{"type":"string","description":"Directory under computer home for state prepare"},"duration":{"type":"integer","minimum":1,"maximum":600,"default":300}
+                    "name":{"type":"string","description":"Login or snapshot name; not an environment preset"},
+                    "workspace":{"type":"string","description":"Directory under computer home for state prepare"},
+                    "packages":{"type":"array","items":{"type":"string"},"minItems":1,"maxItems":128,"description":"Nixpkgs attributes selected for this project; mutually exclusive with flake"},
+                    "flake":{"type":"string","description":"Local flake directory relative to workspace or absolute under computer home, optionally #devShell; e.g. . or .#dev. Mutually exclusive with packages"},
+                    "duration":{"type":"integer","minimum":1,"maximum":600,"default":300}
                 },"required":["action"],"additionalProperties":false
             })),
         ),

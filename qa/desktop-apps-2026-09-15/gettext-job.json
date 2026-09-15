@@ -1,0 +1,24 @@
+{
+  "args": [
+    "artifact",
+    "{\"action\":\"run\",\"args\":[],\"asset\":null,\"destination\":null,\"interpreter\":null,\"path\":\"/home/agent/workspace/get-gettext.sh\",\"repo\":null,\"sha256\":null,\"url\":null,\"version\":null}"
+  ],
+  "artifact_staging": "/home/agent/workspace/.toad-artifact-000001a0a53e0b34-7d5d036a",
+  "command": "/usr/bin/toad-computer",
+  "cwd": "/home/agent/workspace",
+  "error": null,
+  "exit_code": null,
+  "fingerprint": "5cecdd2d69aface68338268df7a9bc16e662c93e611ed43acb62148a8c0cdc25",
+  "finished_at": null,
+  "holder": "release-acceptance",
+  "id": "000001a0a53e0b34-7d5d036a",
+  "label": "run /home/agent/workspace/get-gettext.sh",
+  "output_bytes": 0,
+  "pid": 23764,
+  "pty": false,
+  "request_id": null,
+  "signal": null,
+  "started_at": 1789478701876,
+  "state": "running",
+  "truncated": false
+}

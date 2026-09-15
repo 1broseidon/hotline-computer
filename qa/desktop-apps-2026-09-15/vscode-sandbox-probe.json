@@ -1,0 +1,31 @@
+{
+  "job": {
+    "id": "000001a0a53fb708-137c695f",
+    "pid": 25272,
+    "label": "VS Code default sandbox probe",
+    "command": "/usr/share/code/code",
+    "args": [
+      "--user-data-dir=/home/agent/workspace/code-sandbox-probe",
+      "--disable-extensions",
+      "--enable-logging=stderr",
+      "/home/agent/workspace/vscode-qa.txt"
+    ],
+    "cwd": "/home/agent",
+    "holder": "release-acceptance",
+    "state": "failed",
+    "exit_code": null,
+    "signal": 5,
+    "started_at": 1789478811400,
+    "finished_at": 1789478811493,
+    "error": null,
+    "output_bytes": 443,
+    "truncated": false,
+    "pty": false,
+    "request_id": null,
+    "fingerprint": "95083a007241bbf62b4bd055cc526656fd9d4483fce098a6aeffaeeeda516b63"
+  },
+  "output": "The setuid sandbox is not running as root. Common causes:\n  * An unprivileged process using ptrace on it, like a debugger.\n  * A parent process set prctl(PR_SET_NO_NEW_PRIVS, ...)\nFailed to move to new namespace: PID namespaces supported, Network namespace supported, but failed: errno = Operation not permitted\n[25272:0915/132651.491245:FATAL:content/browser/zygote_host/zygote_host_impl_linux.cc:207] Check failed: . : Invalid argument (22)\n",
+  "cursor": 0,
+  "next_cursor": 443,
+  "eof": true
+}

@@ -1,0 +1,30 @@
+{
+  "job": {
+    "id": "000001a0a53e0b34-7d5d036a",
+    "pid": 23764,
+    "label": "run /home/agent/workspace/get-gettext.sh",
+    "command": "/usr/bin/toad-computer",
+    "args": [
+      "artifact",
+      "{\"action\":\"run\",\"args\":[],\"asset\":null,\"destination\":null,\"interpreter\":null,\"path\":\"/home/agent/workspace/get-gettext.sh\",\"repo\":null,\"sha256\":null,\"url\":null,\"version\":null}"
+    ],
+    "cwd": "/home/agent/workspace",
+    "holder": "release-acceptance",
+    "state": "exited",
+    "exit_code": 0,
+    "signal": null,
+    "started_at": 1789478701876,
+    "finished_at": 1789478703842,
+    "error": null,
+    "output_bytes": 1077,
+    "truncated": false,
+    "pty": false,
+    "request_id": null,
+    "fingerprint": "5cecdd2d69aface68338268df7a9bc16e662c93e611ed43acb62148a8c0cdc25",
+    "artifact_staging": "/home/agent/workspace/.toad-artifact-000001a0a53e0b34-7d5d036a"
+  },
+  "output": "Running /home/agent/workspace/get-gettext.sh with bash\nGet:1 http://deb.debian.org/debian trixie InRelease [140 kB]\nGet:2 http://deb.debian.org/debian trixie-updates InRelease [47.3 kB]\nGet:3 http://deb.debian.org/debian-security trixie-security InRelease [43.4 kB]\nGet:4 http://deb.debian.org/debian trixie/main arm64 Packages [9614 kB]\nGet:5 http://deb.debian.org/debian trixie-updates/main arm64 Packages [4424 B]\nGet:6 http://deb.debian.org/debian-security trixie-security/main arm64 Packages [262 kB]\nrm: cannot remove '/var/cache/apt/archives/partial/*.deb': Permission denied\nFetched 10.1 MB in 1s (12.2 MB/s)\nReading package lists...\nGet:1 http://deb.debian.org/debian trixie/main arm64 gettext arm64 0.23.1-2 [1611 kB]\nFetched 1611 kB in 0s (20.2 MB/s)\n\tlinux-vdso.so.1 (0x0000ffffbed78000)\n\tlibgettextsrc-0.23.1.so => not found\n\tlibgettextlib-0.23.1.so => not found\n\tlibunistring.so.5 => /lib/aarch64-linux-gnu/libunistring.so.5 (0x0000ffffbeaf0000)\n\tlibc.so.6 => /lib/aarch64-linux-gnu/libc.so.6 (0x0000ffffbe930000)\n\t/lib/ld-linux-aarch64.so.1 (0x0000ffffbed30000)\n",
+  "cursor": 0,
+  "next_cursor": 1077,
+  "eof": true
+}

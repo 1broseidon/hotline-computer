@@ -11,13 +11,17 @@ pub struct Display {
     pub screen: Screen,
     pub hands: Mutex<Hands>,
     pub clipboard: Clipboard,
+    /// What the hands do with the pointer, for viewers that draw it.
+    pub gestures: tokio::sync::broadcast::Sender<crate::xtest::Gesture>,
 }
 
 impl Display {
     pub fn open(display: &str) -> Result<Self, String> {
+        let hands = Hands::new(display)?;
         Ok(Self {
             screen: Screen::start(display)?,
-            hands: Mutex::new(Hands::new(display)?),
+            gestures: hands.gestures(),
+            hands: Mutex::new(hands),
             clipboard: Clipboard::start(display)?,
         })
     }

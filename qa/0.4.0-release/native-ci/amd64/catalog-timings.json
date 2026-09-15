@@ -1,0 +1,126 @@
+[
+  {
+    "profile": "python",
+    "cached": false,
+    "concurrent": true,
+    "seconds": 37.14411642599998
+  },
+  {
+    "profile": "python",
+    "cached": true,
+    "seconds": 0.0012854370002060023
+  },
+  {
+    "profile": "python",
+    "cached": true,
+    "seconds": 0.0012319279999246646
+  },
+  {
+    "profile": "python",
+    "cached": true,
+    "seconds": 0.0011986030001480685
+  },
+  {
+    "profile": "python",
+    "cached": true,
+    "seconds": 0.001185970000051384
+  },
+  {
+    "profile": "python",
+    "cached": true,
+    "seconds": 0.0011676670001179446
+  },
+  {
+    "profile": "go",
+    "cached": false,
+    "concurrent": true,
+    "seconds": 3.1969634399999904
+  },
+  {
+    "profile": "go",
+    "cached": true,
+    "seconds": 0.0012877540000317822
+  },
+  {
+    "profile": "go",
+    "cached": true,
+    "seconds": 0.0012407669998992787
+  },
+  {
+    "profile": "go",
+    "cached": true,
+    "seconds": 0.0011224059999221936
+  },
+  {
+    "profile": "go",
+    "cached": true,
+    "seconds": 0.0012647519999973156
+  },
+  {
+    "profile": "go",
+    "cached": true,
+    "seconds": 0.0011460409998562682
+  },
+  {
+    "profile": "node",
+    "cached": false,
+    "concurrent": true,
+    "seconds": 2.8860450859999673
+  },
+  {
+    "profile": "node",
+    "cached": true,
+    "seconds": 0.0013303790001373272
+  },
+  {
+    "profile": "node",
+    "cached": true,
+    "seconds": 0.0011850140001570253
+  },
+  {
+    "profile": "node",
+    "cached": true,
+    "seconds": 0.0013330819999737287
+  },
+  {
+    "profile": "node",
+    "cached": true,
+    "seconds": 0.0012811960000362888
+  },
+  {
+    "profile": "node",
+    "cached": true,
+    "seconds": 0.0011892239999724552
+  },
+  {
+    "profile": "rust",
+    "cached": false,
+    "concurrent": true,
+    "seconds": 10.872026302999984
+  },
+  {
+    "profile": "rust",
+    "cached": true,
+    "seconds": 0.0013637309998557612
+  },
+  {
+    "profile": "rust",
+    "cached": true,
+    "seconds": 0.0012275100000351813
+  },
+  {
+    "profile": "rust",
+    "cached": true,
+    "seconds": 0.0011791739998443518
+  },
+  {
+    "profile": "rust",
+    "cached": true,
+    "seconds": 0.0011590250001063396
+  },
+  {
+    "profile": "rust",
+    "cached": true,
+    "seconds": 0.0012171599998964666
+  }
+]

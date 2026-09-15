@@ -1,0 +1,66 @@
+#0 building with "orbstack" instance using docker driver
+
+#1 [internal] load build definition from Dockerfile
+#1 transferring dockerfile: 2.99kB done
+#1 DONE 0.0s
+
+#2 [internal] load metadata for docker.io/library/debian:trixie-slim@sha256:d7e12182ce18b85b93007c1dedf31f2d29e01ccf3182cc4017c709b6259bc132
+#2 DONE 0.0s
+
+#3 [internal] load metadata for docker.io/library/rust:1-trixie
+#3 DONE 0.4s
+
+#4 [internal] load .dockerignore
+#4 transferring context: 140B done
+#4 DONE 0.0s
+
+#5 [build 1/8] FROM docker.io/library/rust:1-trixie@sha256:bf5a9aa29062a6cb03c49bd59a46eb55e3cc770caf598a221a7866e500be3082
+#5 DONE 0.0s
+
+#6 [runtime 1/5] FROM docker.io/library/debian:trixie-slim@sha256:d7e12182ce18b85b93007c1dedf31f2d29e01ccf3182cc4017c709b6259bc132
+#6 DONE 0.0s
+
+#7 [internal] load build context
+#7 transferring context: 1.49kB done
+#7 DONE 0.0s
+
+#8 [build 4/8] COPY Cargo.toml Cargo.lock ./
+#8 CACHED
+
+#9 [build 2/8] RUN apt-get update && apt-get install -y --no-install-recommends cmake perl pkg-config && rm -rf /var/lib/apt/lists/*
+#9 CACHED
+
+#10 [build 3/8] WORKDIR /src
+#10 CACHED
+
+#11 [build 6/8] COPY assets ./assets
+#11 CACHED
+
+#12 [build 7/8] COPY skills ./skills
+#12 CACHED
+
+#13 [build 5/8] COPY src ./src
+#13 CACHED
+
+#14 [build 8/8] RUN --mount=type=cache,target=/usr/local/cargo/registry --mount=type=cache,target=/src/target cargo build --release --locked && cp target/release/toad-computer /usr/local/bin/toad-computer
+#14 CACHED
+
+#15 [runtime 2/5] RUN apt-get update && apt-get install -y --no-install-recommends     bash git curl wget ca-certificates tar gzip bzip2 xz-utils unzip zip ripgrep jq file     nix-bin python3 xvfb xauth x11-xkb-utils dbus at-spi2-core chromium     fonts-dejavu-core fonts-noto-color-emoji xfonts-base alacritty     libgl1-mesa-dri libegl-mesa0 libglx-mesa0 mesa-utils     libgtk-3-0t64 librsvg2-common     && rm -rf /var/lib/apt/lists/*     && useradd --uid 1000 --create-home --shell /bin/bash agent     && install -d /etc/nix     && install -d -m 1777 /tmp/.X11-unix     && install -d -o agent -g agent /nix /nix/store /nix/var/nix /home/agent/.config/alacritty     && printf 'experimental-features = nix-command flakes\nsandbox = false\nbuild-users-group =\n' > /etc/nix/nix.conf     && chown -R agent:agent /nix     && printf '[window]\ndynamic_title = false\n[font]\nsize = 12.0\n' > /home/agent/.config/alacritty/alacritty.toml     && chown -R agent:agent /home/agent
+#15 CACHED
+
+#16 [runtime 3/5] COPY --from=build /usr/local/bin/toad-computer /usr/bin/toad-computer
+#16 DONE 0.1s
+
+#17 [runtime 4/5] WORKDIR /home/agent
+#17 DONE 0.0s
+
+#18 [runtime 5/5] RUN install -d /home/agent/src && nix-store --init
+#18 DONE 0.6s
+
+#19 exporting to image
+#19 exporting layers 0.1s done
+#19 writing image sha256:b21c506459cc21a4680af5a5798e91c0f7efd83424e2036b66c7567f312b5e95 done
+#19 naming to docker.io/library/toad-computer:0.5.0-dev done
+#19 DONE 0.1s
+
+View build details: docker-desktop://dashboard/build/orbstack/orbstack/ahfp9yfiqd1f45jokjx8dkusf

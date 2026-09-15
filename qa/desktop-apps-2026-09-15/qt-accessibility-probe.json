@@ -1,0 +1,46 @@
+{
+  "before": {
+    "id": "000001a0a53e93b6-17727720",
+    "pid": 23800,
+    "label": "Qt basic edit without accessibility scan",
+    "command": "featherpad",
+    "args": [
+      "/home/agent/workspace/featherpad-qa.txt"
+    ],
+    "cwd": "/home/agent",
+    "holder": "release-acceptance",
+    "state": "running",
+    "exit_code": null,
+    "signal": null,
+    "started_at": 1789478736822,
+    "finished_at": null,
+    "error": null,
+    "output_bytes": 0,
+    "truncated": false,
+    "pty": false,
+    "request_id": null,
+    "fingerprint": "5ac895fd7753653cbd7d9d830e554fce63bd87ae2755aef541d4f2683414f8cf"
+  },
+  "after": {
+    "id": "000001a0a53e93b6-17727720",
+    "pid": 23800,
+    "label": "Qt basic edit without accessibility scan",
+    "command": "featherpad",
+    "args": [
+      "/home/agent/workspace/featherpad-qa.txt"
+    ],
+    "cwd": "/home/agent",
+    "holder": "release-acceptance",
+    "state": "failed",
+    "exit_code": null,
+    "signal": 11,
+    "started_at": 1789478736822,
+    "finished_at": 1789478776550,
+    "error": null,
+    "output_bytes": 0,
+    "truncated": false,
+    "pty": false,
+    "request_id": null,
+    "fingerprint": "5ac895fd7753653cbd7d9d830e554fce63bd87ae2755aef541d4f2683414f8cf"
+  }
+}

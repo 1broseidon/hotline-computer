@@ -1,0 +1,22 @@
+bun install v1.4.2 (744846f84)
+
++ @tailwindcss/vite@4.3.3
++ @types/react@19.2.18
++ @types/react-dom@19.2.5
++ @vitejs/plugin-react@6.1.1
++ tailwindcss@4.3.3
++ typescript@7.0.2
++ vite@8.2.2
++ @fontsource/ibm-plex-mono@5.3.0
++ @fontsource/ibm-plex-sans@5.3.0
++ @tauri-apps/api@2.11.1
++ @tauri-apps/plugin-clipboard-manager@2.3.3
++ @tauri-apps/plugin-dialog@2.7.3
++ @tauri-apps/plugin-notification@2.4.0
++ @tauri-apps/plugin-opener@2.5.5
++ react@19.2.8
++ react-dom@19.2.8
++ react-markdown@10.1.0
++ remark-gfm@4.0.1
+
+152 packages installed [1280.00ms]
