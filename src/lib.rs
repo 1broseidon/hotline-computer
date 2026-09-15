@@ -8,6 +8,7 @@ pub mod guide;
 pub mod jobs;
 pub mod lease;
 pub mod observer;
+pub mod paint;
 pub mod screen;
 pub mod serve;
 pub mod tools;
@@ -65,7 +66,7 @@ impl App {
     pub fn new(config: Config) -> Self {
         let config = Arc::new(config);
         Self {
-            access: MachineAccess::new(),
+            access: MachineAccess::new().on_display(&config.display),
             a11y: Arc::new(tokio::sync::OnceCell::new()),
             jobs: jobs::Jobs::new(&config.home, &config.display),
             observer: observer::Observer::new(&config.home, &config.display),

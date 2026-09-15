@@ -24,7 +24,7 @@ FROM debian:trixie-slim@sha256:d7e12182ce18b85b93007c1dedf31f2d29e01ccf3182cc401
 RUN apt-get update && apt-get install -y --no-install-recommends \
     bash git curl wget ca-certificates tar gzip bzip2 xz-utils unzip zip ripgrep jq file \
     nix-bin python3 xvfb xauth x11-xkb-utils dbus at-spi2-core chromium \
-    fonts-dejavu-core fonts-noto-color-emoji xfonts-base alacritty \
+    fonts-dejavu-core fonts-noto-color-emoji xfonts-base alacritty tzdata \
     libgl1-mesa-dri libegl-mesa0 libglx-mesa0 mesa-utils \
     libgtk-3-0t64 librsvg2-common \
     && rm -rf /var/lib/apt/lists/* \

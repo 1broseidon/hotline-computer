@@ -21,6 +21,7 @@ run: stop
 	  --pids-limit 1024 --memory 4g --shm-size 1g \
 	  -p 127.0.0.1:$(PORT):8787 \
 	  -e TOAD_COMPUTER_TOKEN="$$(cat .token)" \
+	  -e TZ="$$(cat /etc/timezone 2>/dev/null || echo UTC)" \
 	  $(IMAGE)
 
 stop:

@@ -5,45 +5,94 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Toad Computer</title>
 <style>
+  :root {
+    --fill: rgba(28, 28, 31, .92); --raised: #343439; --rule: #38383d;
+    --ink: #e8e8ea; --ink-2: #aaaaae; --muted: #7d7d82;
+    --you: #7fc4f0; --warn: #f0c27a; --shadow: 0 8px 24px rgba(0, 0, 0, .55);
+  }
   html, body { margin: 0; height: 100%; background: #000; overflow: hidden; }
-  body { display: flex; align-items: center; justify-content: center; font: 13px system-ui, sans-serif; color: #9a9a9a; }
+  body { display: flex; align-items: center; justify-content: center; font: 13px system-ui, -apple-system, "Segoe UI", sans-serif; color: var(--ink-2); }
   canvas { display: block; outline: none; cursor: default; image-rendering: auto; }
-  #status { position: fixed; top: 10px; left: 10px; padding: 4px 9px; border-radius: 999px; background: rgba(22,22,22,.92); border: 1px solid #2c2c2c; pointer-events: none; transition: opacity .3s; }
-  #status.quiet { opacity: 0; }
-  #control { position: fixed; bottom: 14px; left: 50%; transform: translateX(-50%); padding: 6px 14px; border-radius: 999px; background: rgba(22,22,22,.92); border: 1px solid #2c2c2c; color: #d6d6d6; font: inherit; cursor: pointer; transition: opacity .3s; }
-  #control:hover, #control:focus-visible { opacity: 1; color: #fff; border-color: #414141; }
-  /* While the screen is the person's, the button sits over a desktop they
-     are using, so it steps back to the edge of sight until they go for it. */
-  #control.driving { opacity: .35; }
-  #paste { position:fixed; bottom:14px; right:14px; padding:6px 14px; border-radius:6px; background:#161616; color:#ddd; border:1px solid #414141; font:inherit; cursor:pointer; }
-  #paste:disabled { opacity:.35; cursor:default; }
+  /* One bar says whose screen this is and offers only what that allows. */
+  #bar { position: fixed; left: 50%; bottom: 18px; transform: translateX(-50%); display: inline-flex; align-items: center; gap: 4px; height: 40px; padding: 4px 6px 4px 12px; border-radius: 999px; background: var(--fill); border: 1px solid var(--rule); box-shadow: var(--shadow); white-space: nowrap; backdrop-filter: blur(8px); transition: opacity .3s; }
+  #bar .status { display: inline-flex; align-items: center; gap: 8px; padding-right: 10px; margin-right: 4px; border-right: 1px solid var(--rule); color: var(--ink-2); }
+  #bar .status .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--muted); }
+  #bar .sub { color: var(--muted); }
+  #bar.driving .status { color: var(--you); }
+  #bar.driving .status .dot { background: var(--you); box-shadow: 0 0 0 3px rgba(127, 196, 240, .2); }
+  #bar.held .status .dot { background: var(--warn); }
+  #bar.lost .status .dot { background: transparent; border: 1.5px solid var(--muted); }
+  #bar button { border: 0; font: inherit; height: 30px; padding: 0 12px; border-radius: 999px; background: transparent; color: var(--ink); cursor: pointer; }
+  #bar button.primary { background: var(--ink); color: #0d0d0f; font-weight: 600; }
+  #bar button.quiet { color: var(--ink-2); }
+  #bar button.quiet:hover, #bar button.quiet:focus-visible { background: var(--raised); color: var(--ink); }
+  #bar button[disabled] { opacity: .4; cursor: default; }
+  #bar .hint { font: 11px ui-monospace, Menlo, monospace; color: var(--muted); padding: 0 8px 0 4px; }
+  /* While the screen is the person's, the bar sits over a desktop they are
+     using, so it steps back to the edge of sight until they go for it. */
+  #bar.driving.idle { opacity: .4; }
+  #bar.driving.idle:hover { opacity: 1; }
+  #toast { position: fixed; left: 50%; bottom: 70px; transform: translateX(-50%); padding: 5px 12px; border-radius: 999px; background: var(--fill); border: 1px solid var(--rule); color: var(--ink-2); font-size: 12px; pointer-events: none; transition: opacity .3s; }
+  #toast.quiet { opacity: 0; }
 </style>
 </head>
 <body>
 <canvas id="screen" tabindex="0" width="1" height="1"></canvas>
-<div id="status">Connecting…</div>
-<button id="control" type="button">Take control</button>
-<button id="paste" type="button" disabled>Paste clipboard</button>
+<div id="toast" class="quiet"></div>
+<div id="bar" class="lost">
+  <span class="status"><span class="dot"></span><span id="status">Connecting…</span><span class="sub" id="sub"></span></span>
+  <button id="control" type="button" class="primary" hidden>Take control</button>
+  <button id="paste" type="button" class="quiet" hidden>Paste</button>
+  <button id="back" type="button" class="quiet" hidden>Give it back</button>
+  <span class="hint" id="hint" hidden></span>
+</div>
 <script>
 (() => {
   const canvas = document.getElementById("screen");
+  const context = canvas.getContext("2d");
+  const bar = document.getElementById("bar");
   const status = document.getElementById("status");
+  const sub = document.getElementById("sub");
   const control = document.getElementById("control");
   const paste = document.getElementById("paste");
-  const context = canvas.getContext("2d");
+  const back = document.getElementById("back");
+  const hint = document.getElementById("hint");
+  const toast = document.getElementById("toast");
   const token = decodeURIComponent(location.hash.slice(1));
+  const mac = /Mac|iPhone|iPad/.test(navigator.platform);
   let socket = null;
   let drawing = Promise.resolve();
   let quiet = null;
+  let connected = false;
   // The page opens watching. Nothing it does reaches the desktop until the
   // person takes the screen, so opening it never takes it from the agent.
   let driving = false;
+  // What the machine last said about itself: who holds it and its jobs.
+  let machine = { holder: "none", running: 0, completed: 0, failed: 0 };
+  let sticky = false;
 
-  function say(text, fade) {
-    status.textContent = text;
-    status.classList.remove("quiet");
+  function say(text, fade = true) {
+    toast.textContent = text;
+    toast.classList.remove("quiet");
     clearTimeout(quiet);
-    if (fade) quiet = setTimeout(() => status.classList.add("quiet"), 1200);
+    sticky = !fade;
+    if (fade) quiet = setTimeout(() => toast.classList.add("quiet"), 1200);
+  }
+
+  function render() {
+    const held = machine.holder === "person" && !driving;
+    bar.className = !connected ? "lost" : driving ? "driving" : held ? "held" : "";
+    control.hidden = !connected || driving;
+    control.disabled = held;
+    paste.hidden = back.hidden = hint.hidden = !(connected && driving);
+    if (!connected) { status.textContent = "Reconnecting…"; sub.textContent = ""; return; }
+    if (driving) { status.textContent = "You’re in control"; sub.textContent = ""; hint.textContent = (mac ? "⌘V" : "Ctrl+V") + " pastes"; return; }
+    if (held) { status.textContent = "Someone else has the screen"; sub.textContent = ""; return; }
+    status.textContent = "Watching";
+    const jobs = machine.running ? `${machine.running} ${machine.running === 1 ? "job" : "jobs"}` : "";
+    const failed = machine.failed ? `${machine.failed} failed` : "";
+    const doing = machine.holder === "agent" ? "agent in control" : "agent at work";
+    sub.textContent = "· " + [doing, jobs, failed].filter(Boolean).join(", ");
   }
 
   function fit() {
@@ -59,15 +108,16 @@
     socket.binaryType = "arraybuffer";
     // A fresh socket is a machine that has not been told who is driving, so
     // a person who still holds the screen says so again.
-    socket.onopen = () => { say("Connected", true); if (driving) send({ t: "control", take: true }); };
-    socket.onclose = () => { driving = false; paste.disabled = true; control.textContent = "Take control"; control.classList.remove("driving"); say("Reconnecting…"); setTimeout(connect, 1000); };
+    socket.onopen = () => { connected = true; render(); if (driving) send({ t: "control", take: true }); };
+    socket.onclose = () => { connected = false; driving = false; render(); setTimeout(connect, 1000); };
     socket.onmessage = (event) => {
       if (typeof event.data === 'string') {
         const message = JSON.parse(event.data);
-        if (message.t === 'paste') say('Pasted', true);
+        if (message.t === 'state') { machine = message; render(); }
+        if (message.t === 'paste') say('Pasted');
         if (message.t === 'error') {
           say(message.error, false);
-          if (!message.driving) { driving=false; paste.disabled=true; control.textContent='Take control'; control.classList.remove('driving'); }
+          if (!message.driving) { driving = false; render(); }
         }
         return;
       }
@@ -89,14 +139,23 @@
 
   function drive(taking) {
     driving = taking;
-    paste.disabled = !taking;
     send({ t: "control", take: taking });
-    control.textContent = taking ? "Give it back" : "Take control";
-    control.classList.toggle("driving", taking);
+    render();
     if (taking) canvas.focus(); else canvas.blur();
-    say(taking ? "The screen is yours" : "The screen is the agent's", true);
+    say(taking ? "The screen is yours" : "The screen is the agent’s");
+    wake();
   }
-  control.addEventListener("click", () => drive(!driving));
+  control.addEventListener("click", () => { if (!control.disabled) drive(true); });
+  back.addEventListener("click", () => drive(false));
+
+  // Driving and idle for two seconds, the bar steps back until the pointer moves.
+  let idle = null;
+  function wake() {
+    bar.classList.remove("idle");
+    clearTimeout(idle);
+    if (driving) idle = setTimeout(() => bar.classList.add("idle"), 2000);
+  }
+  addEventListener("pointermove", wake);
 
   function pasteText(text) {
     if (!driving || !socket || socket.readyState !== WebSocket.OPEN) return;
@@ -107,7 +166,7 @@
   paste.addEventListener('click', async () => {
     if (!driving) return;
     try { pasteText(await navigator.clipboard.readText()); }
-    catch { say('Clipboard access unavailable. Click the desktop and press ⌘V or Ctrl+V.', false); canvas.focus(); }
+    catch { say('Clipboard access unavailable. Click the desktop and press ' + (mac ? '⌘V' : 'Ctrl+V') + '.', false); canvas.focus(); }
   });
   canvas.addEventListener('paste', event => {
     if (!driving) return;
@@ -168,8 +227,9 @@
     event.preventDefault();
     send({ t: "key", key: event.key, down: false });
   });
-  canvas.addEventListener("blur", () => { if (driving) say("Click the screen to type", true); });
+  canvas.addEventListener("blur", () => { if (driving) say("Click the screen to type"); });
 
+  render();
   connect();
 })();
 </script>

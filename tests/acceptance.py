@@ -246,19 +246,53 @@ def jobs(c):
     c.call('shell', {'action':'show'})
 
 
+def bar_layout(c):
+    """Where the bar drew its parts, as the desktop publishes it on the root window."""
+    code = """import ast,json,subprocess
+line=subprocess.check_output(['xprop','-root','_TOAD_BAR_LAYOUT'],text=True).strip()
+print(json.dumps(json.loads(ast.literal_eval(line.split(' = ',1)[1]))))
+"""
+    return json.loads(execute(c,'python3',['-c',code],label='Bar layout lookup').strip().splitlines()[-1])
+
+
+def centre(rect):
+    x,y,w,h = rect
+    return x+w//2, y+h//2
+
+
 def desktop_job_menu(c):
+    # The layout lookup is itself a job, so it runs before the job under test
+    # to keep that one newest, and so at the top of the list.
+    layout = bar_layout(c)
     job = c.call('shell',{'action':'start','command':'sh','args':['-c','echo "A failed job stays inspectable"; exit 7'],'label':'Inspect a completed failure'})
     job = c.call('shell',{'action':'wait','job_id':job['id'],'wait_ms':5000})
     assert job['state']=='failed' and job['exit_code']==7,job
-    c.call('input',{'action':'click','x':170,'y':24})
+    assert layout['height']==36 and layout['jobs'][2]>0, layout
+    jobs_x, jobs_y = centre(layout['jobs'])
+    popup = layout['popup']
+    def row(index):
+        # Row 0 opens the terminal; the newest job is row 1.
+        return popup['x']+120, popup['y']+popup['pad']+popup['row']*index+popup['row']//2
+    c.call('input',{'action':'click','x':jobs_x,'y':jobs_y})
     c.screenshot('03c-desktop-job-menu.png')
-    c.call('input',{'action':'click','x':260,'y':93})
+    c.call('input',{'action':'click','x':row(1)[0],'y':row(1)[1]})
     assert c.call('files',{'action':'get','path':'/home/agent/.toad/observer-view.json'}) == job['id']
     c.screenshot('03d-selected-failed-job.png',settle_ms=200)
-    c.call('input',{'action':'click','x':170,'y':24})
-    c.call('input',{'action':'click','x':260,'y':63})
+    c.call('input',{'action':'click','x':jobs_x,'y':jobs_y})
+    c.call('input',{'action':'click','x':row(0)[0],'y':row(0)[1]})
     assert c.call('files',{'action':'get','path':'/home/agent/.toad/observer-view.json'}) is None
-
+    # The toad menu: the mark opens it, a letter picks, Escape closes.
+    mark_x, mark_y = centre(layout['mark'])
+    c.call('input',{'action':'click','x':mark_x,'y':mark_y})
+    c.screenshot('03e-toad-menu.png')
+    c.call('input',{'action':'key','combo':'d'})
+    c.screenshot('03f-about-this-computer.png')
+    c.call('input',{'action':'key','combo':'Escape'})
+    c.call('input',{'action':'click','x':mark_x,'y':mark_y})
+    c.call('input',{'action':'key','combo':'c'})
+    c.screenshot('03g-jobs-from-menu.png')
+    c.call('input',{'action':'key','combo':'Escape'})
+    c.screenshot('03h-menus-closed.png')
 
 
 def tray_counts(c):
@@ -651,7 +685,10 @@ def native_controls(c):
         capture = str(c.call('capture',{}))
         assert 'value="Native café 🐸"' in capture,capture
         c.screenshot('11-native-controls.png')
-        c.call('input',{'action':'right_click','x':1896,'y':24})
+        tray = bar_layout(c)['tray']
+        assert len(tray)==1, tray
+        slot = tray[0]
+        c.call('input',{'action':'right_click','x':slot[0]+slot[2]//2,'y':slot[1]+slot[3]//2})
         c.screenshot('12-tray-menu.png')
         c.call('input',{'action':'key','combo':'Down'})
         c.call('input',{'action':'key','combo':'Return'})
@@ -668,7 +705,8 @@ def native_controls(c):
         c.done(app)
         c.screenshot('12c-tray-disappeared.png')
         with Image.open(c.output/'12b-tray-action.png') as before, Image.open(c.output/'12c-tray-disappeared.png') as after:
-            assert ImageChops.difference(before.convert('RGB').crop((1880,8,1912,40)),after.convert('RGB').crop((1880,8,1912,40))).getbbox(), 'tray icon remained after application exit'
+            box = (slot[0]-4,slot[1]-4,slot[0]+slot[2]+4,slot[1]+slot[3]+4)
+            assert ImageChops.difference(before.convert('RGB').crop(box),after.convert('RGB').crop(box)).getbbox(), 'tray icon remained after application exit'
     finally:
         if c.call('shell',{'action':'status','job_id':app['id']})['state']=='running':
             c.call('shell',{'action':'cancel','job_id':app['id']})

@@ -11,7 +11,7 @@ over streamable HTTP at `/mcp`, with `/health` open, is a valid computer.
 ## What is in the box
 
 ```
-toad-computer  PID 1, supervisor, window manager, dock, MCP server
+toad-computer  PID 1, supervisor, window manager, bar, MCP server
 ├── Xvfb       the X server; pixels in RAM, no GPU
 ├── dbus       the session bus the accessibility tree rides on
 └── chromium   the visible browser, driven over its DevTools protocol
@@ -80,10 +80,20 @@ run slot; an absent header means `anonymous`.
 
 ## The desktop
 
-The top bar holds the Toad mark, browser and terminal buttons, running-job
-count, window buttons, and an XEmbed application tray. Click a window button
-to focus it; right-click to close it. Normal apps occupy the work area below
-the bar. The terminal opens on the right, alongside the current app.
+The top bar is three answers. On the left, the Toad mark opens a menu:
+**A** the browser (opened, or focused if open), **B** the terminal observer, **C** the jobs list,
+**D** an About card (version, channel, revision, architecture, nixpkgs
+revision, uptime); the letters pick while the menu is open and Escape closes
+it. In the middle, every open window is a pill with its own icon and title;
+click one to focus it, right-click to close it. On the right, a jobs chip
+(`no jobs`, `2 running · 5 done`, `1 failed · 2 running`) that opens the same
+jobs list, a lease chip that reads `agent at work`, `agent in control` or
+`person in control`, an XEmbed application tray that appears when an app
+uses it, and a clock in the host's zone (`TZ`, which Toad passes; UTC
+otherwise). Everything on the bar is published as `_TOAD_BAR_LAYOUT` on the
+root window, so tests find its parts by rectangle rather than by pixel.
+Normal apps occupy the work area below the bar. The terminal opens on the
+right, alongside the current app.
 `windows` operations verify the resulting focus, geometry, or disappearance;
 a refused operation reports the remaining windows.
 
@@ -94,9 +104,14 @@ terminal window. Closing or reopening it does not stop jobs. Jobs retain
 and deadlines kill the process group and reap the child. After a computer
 restart, unfinished jobs become `interrupted`; they are not resumed.
 
-The viewer's **Paste clipboard** button and Cmd/Ctrl+V send plain text only
-while that viewer owns control. A reconnect starts view-only. A stale viewer
-cannot paste over a newer viewer's control. Paste is limited to 1 MiB.
+The viewer's control bar sits at the foot of the page. Watching, it reads the
+machine's state (whose it is, how many jobs, how many failed) beside **Take
+control**; if another person holds the screen the button waits. Driving, it
+shows **Paste** and **Give it back** and fades while the pointer is still, so
+it never sits over the screen being driven. The **Paste** button and
+Cmd/Ctrl+V send plain text only while that viewer owns control. A reconnect
+starts view-only. A stale viewer cannot paste over a newer viewer's control.
+Paste is limited to 1 MiB.
 
 ## Workspaces and the release guide
 
@@ -197,6 +212,7 @@ docker run -d --name toad-computer-next \
   --pids-limit 1024 --memory 4g --shm-size 1g \
   -p 127.0.0.1:8787:8787 \
   -e TOAD_COMPUTER_TOKEN="$(cat .token)" \
+  -e TZ="$(cat /etc/timezone)" \
   toad-computer:next
 ```
 

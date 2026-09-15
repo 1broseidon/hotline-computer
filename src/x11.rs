@@ -522,3 +522,27 @@ pub fn publish_jobs(display: &str, jobs: &[crate::jobs::Summary]) -> Result<(), 
         .check()
         .map_err(|e| e.to_string())
 }
+
+/// The bar shows who holds the machine: `_TOAD_HOLDER` carries the holder and
+/// when the lease lapses, or nothing when nobody holds it.
+pub fn publish_holder(display: &str, lease: Option<(&str, u64)>) -> Result<(), String> {
+    use x11rb::wrapper::ConnectionExt as _;
+    let (connection, root) = connect(display)?;
+    let value = match lease {
+        Some((holder, expires_ms)) => {
+            serde_json::json!({"holder": holder, "expires_ms": expires_ms}).to_string()
+        }
+        None => String::new(),
+    };
+    connection
+        .change_property8(
+            x11rb::protocol::xproto::PropMode::REPLACE,
+            root,
+            atom(&connection, b"_TOAD_HOLDER")?,
+            atom(&connection, b"UTF8_STRING")?,
+            value.as_bytes(),
+        )
+        .map_err(|e| e.to_string())?
+        .check()
+        .map_err(|e| e.to_string())
+}
