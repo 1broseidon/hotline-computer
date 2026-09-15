@@ -291,20 +291,14 @@ const MUTED: &str = "\x1b[38;2;125;125;130m";
 const OK: &str = "\x1b[38;2;134;214;156m";
 const WARN: &str = "\x1b[38;2;240;194;122m";
 
-/// The top of the window: what it is for, and what the reader is looking at.
+/// The top of the window: its name, and a note only when it is narrowed
+/// to one job, since then the rest are missing on purpose.
 fn banner(selection: Option<&str>) -> String {
     let showing = match selection {
-        Some(_) => "one job, chosen from the bar's jobs list",
-        None => "every retained job, newest last",
+        Some(_) => format!("{MUTED}Showing one job, chosen from the bar's jobs list.{RESET}\r\n"),
+        None => String::new(),
     };
-    format!(
-        "\x1b[2J\x1b[H\x1b[?25l{INK}Toad Terminal{RESET}\r\n\
-         {MUTED}What the teammate runs through its tools, as it runs.\r\n\
-         Each block is one job, named by the teammate; the grey id\r\n\
-         underneath is how the tools refer to it. Nothing typed here\r\n\
-         reaches a job, and closing this window stops nothing.{RESET}\r\n\
-         \r\n{MUTED}Showing{RESET} {INK_2}{showing}{RESET}\r\n"
-    )
+    format!("\x1b[2J\x1b[H\x1b[?25l{INK}Toad Terminal{RESET}\r\n{showing}")
 }
 
 /// A job's opening: its name, then the facts the tools need, then the command.
@@ -434,12 +428,13 @@ mod tests {
     }
 
     #[test]
-    fn the_banner_says_what_is_being_shown() {
-        assert!(banner(None).contains("every retained job"));
-        assert!(banner(Some("some-id")).contains("one job"));
+    fn the_banner_is_the_name_and_nothing_more_unless_narrowed() {
+        let all = banner(None);
         assert!(
-            banner(None).starts_with("\x1b[2J\x1b[H\x1b[?25l"),
+            all.starts_with("\x1b[2J\x1b[H\x1b[?25l"),
             "clears and hides the cursor"
         );
+        assert_eq!(all.lines().filter(|l| !l.is_empty()).count(), 1, "{all:?}");
+        assert!(banner(Some("some-id")).contains("Showing one job"));
     }
 }
