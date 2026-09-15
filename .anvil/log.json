@@ -23,34 +23,27 @@
     "target": "toad-computer release acceptance",
     "kind": "MCP",
     "scope": "service",
-    "caller_profile": [
-      "agent",
-      "script",
-      "human-operator"
-    ],
+    "source": {
+      "computer": "b7cd1fa",
+      "toad": "cc1a19f",
+      "image": "sha256:ee28283f4cfd4c958bbee3db5c3896d8e0c63b3061a9aae549fb38dcfe88e717"
+    },
     "verification": [
-      "24 Rust unit tests, fmt and clippy passed in checks image",
-      "Live MCP/viewer contract passed in 9.56s including controlled clipboard, competing viewers and reconnect",
-      "Python/Go/Node/Rust catalog fixtures passed, including C dependencies outside workspace",
-      "Verified Ketch 0.16.2 installation and deterministic HTTP scrape passed",
-      "70-job churn, bounded output, nonzero/missing commands, descendant cancellation and zombie checks passed",
-      "Pinned Toad f3c17b7 native build succeeded in 3m52s using cached dependencies",
-      "Native room, Settings and Computer screens passed through Toad MCP adapter; full-resolution screenshots inspected"
-    ],
-    "findings": [
-      "Nix dev environment restores NIX_BUILD_TOP, permits external dependency cache headers, and excludes optimization-dependent fortify flags",
-      "Recipe hashes invalidate cached environments when catalog changes",
-      "Output storage failure stops and reaps job",
-      "Capture allows painting before pixels",
-      "Window enumeration tolerates disappearing X11 clients",
-      "WebKit named AT-SPI references require a compatible traversal; connection remains registered between captures",
-      "Observer explicit show must wait for a closing process and confirm a visible replacement window"
+      "27 Rust unit tests, fmt and clippy passed",
+      "Live MCP/viewer contract passed in 11.87 seconds",
+      "All 16 generic and 16 production Toad-adapter cases passed",
+      "Empty Nix store; five catalog profiles; browser wizard; verified Ketch; Click tests; native Toad screens",
+      "70-job churn per client, bounded output, cancellation and zombie checks passed",
+      "Observer startup fault and automatic retry passed on a separate 640x480 desktop",
+      "Native host clipboard, multiline/tabs/whitespace, renamed/disappearing windows, redirected installer with spaces and exit 19 passed",
+      "Hard restart retained output, marked interruption and reused environment; measured 5.698 seconds, follow-ups 3.356/0.256/0.177",
+      "Toad make check passed; isolated native QA app installed and reopened surviving computer"
     ],
     "remaining": [
-      "Final fresh runtime acceptance on both native architectures",
-      "Retest observer reopen fix and complete Toad adapter full suite",
-      "Publishing workflow change was rejected by automatic review; current added CI only tests, never publishes",
-      "Release tag/publish and official Toad default update remain gated on acceptance"
-    ]
+      "Native x86_64 CI requires public source push approval",
+      "Independent Toad model-session guide evaluation is not represented by adapter tests",
+      "Cold registry pull, release/tag and official default rollout remain gated"
+    ],
+    "evidence": "qa/0.4.0-candidate-b7cd1fa/README.md"
   }
 ]
