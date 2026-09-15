@@ -71,6 +71,9 @@ const MONO: &str = "/usr/share/fonts/truetype/dejavu/DejaVuSansMono.ttf";
 /// Where menus drop from: under the mark, a hair below the bar.
 const POPUP_X: i16 = 8;
 const POPUP_Y: i16 = 40;
+/// The jobs list hangs from its chip instead, so it is where the eye
+/// already is; its right edge lines up with the chip's.
+const EDGE: i32 = 8;
 const ROW: i32 = 30;
 const PAD: i32 = 6;
 const MENU_WIDTH: u16 = 252;
@@ -892,7 +895,13 @@ impl Desktop {
             "lease": self.layout.lease.json(),
             "tray": self.layout.tray.iter().map(Rect::json).collect::<Vec<_>>(),
             "clock": self.layout.clock.json(),
-            "popup": {"x": POPUP_X, "y": POPUP_Y, "row": ROW, "pad": PAD},
+            "popup": {
+                "x": POPUP_X,
+                "y": POPUP_Y,
+                "jobs_x": self.jobs_popup_x(self.width.saturating_sub(16).min(640)),
+                "row": ROW,
+                "pad": PAD,
+            },
         });
         self.property_text(self.root, self.atoms.layout, &layout.to_string())
     }
@@ -918,13 +927,17 @@ impl Desktop {
             ),
             Popup::About => (ABOUT_WIDTH, (PAD + 8 + 22 + 6 * 18 + 8 + PAD) as u16),
         };
+        let x = match &kind {
+            Popup::Jobs { .. } => self.jobs_popup_x(width),
+            _ => POPUP_X,
+        };
         let window = self.connection.generate_id().map_err(|e| e.to_string())?;
         self.connection
             .create_window(
                 self.depth,
                 window,
                 self.root,
-                POPUP_X,
+                x,
                 POPUP_Y,
                 width,
                 height,
@@ -969,6 +982,21 @@ impl Desktop {
         });
         self.draw_popup()?;
         self.draw_bar()
+    }
+
+    /// Where a jobs list of `width` sits: under the jobs chip, right edges
+    /// aligned, kept on the screen.
+    fn jobs_popup_x(&self, width: u16) -> i16 {
+        let chip = self.layout.jobs;
+        let right = if chip.w > 0 {
+            chip.x + chip.w
+        } else {
+            i32::from(self.width) - EDGE
+        };
+        (right - i32::from(width) - 2).clamp(
+            EDGE,
+            (i32::from(self.width) - i32::from(width) - EDGE - 2).max(EDGE),
+        ) as i16
     }
 
     fn close_popup(&mut self) -> Result<(), String> {

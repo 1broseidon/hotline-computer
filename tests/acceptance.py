@@ -293,7 +293,7 @@ def desktop_job_menu(c):
     popup = layout['popup']
     def row(index):
         # Row 0 opens the terminal; the newest job is row 1.
-        return popup['x']+120, popup['y']+popup['pad']+popup['row']*index+popup['row']//2
+        return popup['jobs_x']+120, popup['y']+popup['pad']+popup['row']*index+popup['row']//2
     c.call('input',{'action':'click','x':jobs_x,'y':jobs_y})
     c.screenshot('03c-desktop-job-menu.png')
     c.call('input',{'action':'click','x':row(1)[0],'y':row(1)[1]})
