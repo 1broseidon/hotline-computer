@@ -97,8 +97,12 @@ right, alongside the current app.
 `windows` operations verify the resulting focus, geometry, or disappearance;
 a refused operation reports the remaining windows.
 
-The observer displays commands and retained output without typing into a
-terminal window. Closing or reopening it does not stop jobs. Jobs retain
+The observer is an Alacritty window in the bar's colours that displays
+commands and retained output without typing into a terminal. Each job is a
+block headed by its name, the `label` the teammate gave it (or its command
+line when it gave none), with the job id, start time and directory in grey
+underneath and a ✓ or ✗ line naming it again when it ends. Closing or
+reopening it does not stop jobs. Jobs retain
 4 MiB of output each, report truncation, and keep the newest 64 records;
 16 jobs may run concurrently. Pipe and PTY stdin are supported. Cancellation
 and deadlines kill the process group and reap the child. After a computer

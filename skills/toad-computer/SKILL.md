@@ -33,7 +33,7 @@ Development dependencies install as the normal container user. Installing a `.de
 
 ## Commands and artifacts
 
-`exec` waits up to 60 seconds. Use `start` for builds, servers, installers, or other long work; it returns a job ID promptly. `launch` uses the same job lifecycle for GUI apps. Supply an argv array, `cwd`, and optional `env`. Use `request_id` when a start might be retried. A reused ID with different arguments is rejected.
+`exec` waits up to 60 seconds. Use `start` for builds, servers, installers, or other long work; it returns a job ID promptly. `launch` uses the same job lifecycle for GUI apps. Supply an argv array, `cwd`, and optional `env`. Give every job a `label`: a short task in plain words (`Run the unit tests`, `Build the desktop app`, `Install Python 3.12`), because that is how a person watching the desktop's jobs list and terminal tells the jobs apart; the tools keep using the job ID. Use `request_id` when a start might be retried. A reused ID with different arguments is rejected.
 
 - `shell read` accepts a byte `cursor` and returns `next_cursor`, output, state, and EOF. Keep the cursor when following output.
 - `shell wait` waits up to `wait_ms` (maximum 60000) without locking the desktop.

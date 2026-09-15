@@ -34,8 +34,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && install -d -o agent -g agent /nix /nix/store /nix/var/nix /home/agent/.config/alacritty \
     && printf 'experimental-features = nix-command flakes\nsandbox = false\nbuild-users-group =\n' > /etc/nix/nix.conf \
     && chown -R agent:agent /nix \
-    && printf '[window]\ndynamic_title = false\n[font]\nsize = 12.0\n' > /home/agent/.config/alacritty/alacritty.toml \
     && chown -R agent:agent /home/agent
+COPY --chown=agent:agent assets/alacritty.toml /home/agent/.config/alacritty/alacritty.toml
 COPY --from=build /usr/local/bin/toad-computer /usr/bin/toad-computer
 USER agent
 WORKDIR /home/agent

@@ -64,7 +64,9 @@ pub fn descriptors(home: &str) -> Vec<Tool> {
                 "type":"object","properties":{
                     "action":{"type":"string","enum":["exec","start","launch","list","status","read","wait","write","cancel","show"],"default":"exec"},
                     "command":{"type":"string"},"args":{"type":"array","items":{"type":"string"}},"cwd":{"type":"string","default":home},
-                    "env":{"type":"object","additionalProperties":{"type":"string"}},"label":{"type":"string"},"request_id":{"type":"string"},"pty":{"type":"boolean","default":false},
+                    "env":{"type":"object","additionalProperties":{"type":"string"}},
+                    "label":{"type":"string","description":"The job's name as a person reads it in the desktop's jobs list and terminal: a short task in plain words, such as 'Run the unit tests' or 'Install Python 3.12', not the command. Without one the job is named by its command line."},
+                    "request_id":{"type":"string"},"pty":{"type":"boolean","default":false},
                     "timeout":{"type":"integer","minimum":1,"description":"Execution deadline in seconds. exec defaults to 30, maximum 60; async jobs have no default deadline."},
                     "job_id":{"type":"string"},"text":{"type":"string"},"eof":{"type":"boolean"},"cursor":{"type":"integer","minimum":0},
                     "wait_ms":{"type":"integer","minimum":0,"maximum":60000},"max_output":{"type":"integer","minimum":1,"maximum":1048576,"default":65536}

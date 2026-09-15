@@ -211,7 +211,9 @@ pub fn run(home: &Path) -> Result<(), String> {
             initialized = true;
             missing_reported = false;
             seen.clear();
-            writeln!(stdout, "\x1b[2J\x1b[H\x1b[1;32mToad Terminal\x1b[0m\r\nCommands run through tools. This window shows their output.\r\nClose or reopen it without stopping any job.\r\nView: {}\r\n", selection.as_deref().unwrap_or("all retained jobs")).map_err(|e| e.to_string())?;
+            stdout
+                .write_all(banner(selection.as_deref()).as_bytes())
+                .map_err(|e| e.to_string())?;
         }
         let mut paths: Vec<_> = std::fs::read_dir(&root)
             .into_iter()
@@ -227,7 +229,7 @@ pub fn run(home: &Path) -> Result<(), String> {
             if paths.is_empty() && !missing_reported {
                 writeln!(
                     stdout,
-                    "This job is no longer retained. Choose another job from the desktop bar.\r"
+                    "{MUTED}This job is no longer retained. Choose another from the bar's jobs list.{RESET}\r"
                 )
                 .map_err(|e| e.to_string())?;
                 missing_reported = true;
@@ -248,25 +250,12 @@ pub fn run(home: &Path) -> Result<(), String> {
             let output = path.join("output.log");
             let length = std::fs::metadata(&output).map(|m| m.len()).unwrap_or(0);
             let entry = seen.entry(record.id.clone()).or_insert_with(|| {
-                let _ = writeln!(
-                    stdout,
-                    "\r\n\x1b[1;36m[{}] {}\x1b[0m\r\n{}\r\n$ {} {}\r",
-                    record.id,
-                    record.label,
-                    record.cwd,
-                    quoted(&record.command),
-                    record
-                        .args
-                        .iter()
-                        .map(|s| quoted(s))
-                        .collect::<Vec<_>>()
-                        .join(" ")
-                );
+                let _ = stdout.write_all(header(&record).as_bytes());
                 let offset = length.saturating_sub(16384);
                 if offset > 0 {
                     let _ = writeln!(
                         stdout,
-                        "[Earlier output is retained; read it with shell read.]\r"
+                        "{MUTED}Earlier output is retained; the tools read it with shell read.{RESET}\r"
                     );
                 }
                 (offset, String::new())
@@ -285,30 +274,9 @@ pub fn run(home: &Path) -> Result<(), String> {
                 entry.0 += bytes.len() as u64;
             }
             if entry.1 != record.state && record.finished() {
-                writeln!(
-                    stdout,
-                    "\r\n\x1b[{}m[{}: {}, elapsed {:.1}s, exit {}, signal {}{}]\x1b[0m\r",
-                    if record.exit_code == Some(0) { 32 } else { 33 },
-                    record.id,
-                    record.state,
-                    record
-                        .finished_at
-                        .unwrap_or_else(crate::jobs::now)
-                        .saturating_sub(record.started_at) as f64
-                        / 1000.0,
-                    record
-                        .exit_code
-                        .map_or_else(|| "—".into(), |code| code.to_string()),
-                    record
-                        .signal
-                        .map_or_else(|| "—".into(), |signal| signal.to_string()),
-                    if record.truncated {
-                        ", output capped"
-                    } else {
-                        ""
-                    }
-                )
-                .map_err(|e| e.to_string())?;
+                stdout
+                    .write_all(footer(&record).as_bytes())
+                    .map_err(|e| e.to_string())?;
             }
             entry.1 = record.state;
         }
@@ -316,6 +284,85 @@ pub fn run(home: &Path) -> Result<(), String> {
         std::thread::sleep(std::time::Duration::from_millis(100));
     }
 }
+const RESET: &str = "\x1b[0m";
+const INK: &str = "\x1b[1;38;2;232;232;234m";
+const INK_2: &str = "\x1b[38;2;170;170;174m";
+const MUTED: &str = "\x1b[38;2;125;125;130m";
+const OK: &str = "\x1b[38;2;134;214;156m";
+const WARN: &str = "\x1b[38;2;240;194;122m";
+
+/// The top of the window: what it is for, and what the reader is looking at.
+fn banner(selection: Option<&str>) -> String {
+    let showing = match selection {
+        Some(_) => "one job, chosen from the bar's jobs list",
+        None => "every retained job, newest last",
+    };
+    format!(
+        "\x1b[2J\x1b[H\x1b[?25l{INK}Toad Terminal{RESET}\r\n\
+         {MUTED}What the teammate runs through its tools, as it runs.\r\n\
+         Each block is one job, named by the teammate; the grey id\r\n\
+         underneath is how the tools refer to it. Nothing typed here\r\n\
+         reaches a job, and closing this window stops nothing.{RESET}\r\n\
+         \r\n{MUTED}Showing{RESET} {INK_2}{showing}{RESET}\r\n"
+    )
+}
+
+/// A job's opening: its name, then the facts the tools need, then the command.
+fn header(record: &Record) -> String {
+    let command = std::iter::once(quoted(&record.command))
+        .chain(record.args.iter().map(|s| quoted(s)))
+        .collect::<Vec<_>>()
+        .join(" ");
+    format!(
+        "\r\n{INK}▎ {}{RESET}\r\n{MUTED}  job {} · started {} · {}{RESET}\r\n{INK_2}  $ {}{RESET}\r\n",
+        record.label,
+        record.id,
+        clock(record.started_at),
+        record.cwd,
+        command
+    )
+}
+
+/// A job's close: how it ended, named again so a long output still reads.
+fn footer(record: &Record) -> String {
+    let ok = record.exit_code == Some(0);
+    let elapsed = record
+        .finished_at
+        .unwrap_or_else(crate::jobs::now)
+        .saturating_sub(record.started_at) as f64
+        / 1000.0;
+    let mut facts = vec![record.label.clone()];
+    if !ok || record.state != "exited" {
+        facts.push(record.state.replace('_', " "));
+    }
+    if let Some(code) = record.exit_code {
+        facts.push(format!("exit {code}"));
+    }
+    if let Some(signal) = record.signal {
+        facts.push(format!("signal {signal}"));
+    }
+    facts.push(format!("{elapsed:.1} s"));
+    if record.truncated {
+        facts.push("output capped".to_owned());
+    }
+    format!(
+        "\r\n{}{} {}{RESET}\r\n",
+        if ok { OK } else { WARN },
+        if ok { "✓" } else { "✗" },
+        facts.join(" · ")
+    )
+}
+
+fn clock(epoch_ms: u64) -> String {
+    chrono::DateTime::from_timestamp_millis(epoch_ms as i64)
+        .map(|at| {
+            at.with_timezone(&chrono::Local)
+                .format("%H:%M:%S")
+                .to_string()
+        })
+        .unwrap_or_else(|| "—".to_owned())
+}
+
 fn quoted(value: &str) -> String {
     if !value.is_empty()
         && value
@@ -325,5 +372,74 @@ fn quoted(value: &str) -> String {
         value.into()
     } else {
         format!("'{}'", value.replace('\'', "'\\''"))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn record(label: &str, state: &str, exit_code: Option<i32>) -> Record {
+        Record {
+            id: "0800001a0a5ee4cb4-f789fa4d".into(),
+            pid: None,
+            label: label.into(),
+            command: "bash".into(),
+            args: vec!["-c".into(), "cargo test".into()],
+            cwd: "/home/agent/src/app".into(),
+            holder: "teammate".into(),
+            state: state.into(),
+            exit_code,
+            signal: None,
+            started_at: 1_789_489_000_000,
+            finished_at: Some(1_789_489_002_500),
+            error: None,
+            output_bytes: 0,
+            truncated: false,
+            pty: false,
+            request_id: None,
+            fingerprint: String::new(),
+            artifact_staging: None,
+        }
+    }
+
+    #[test]
+    fn a_job_is_named_first_and_identified_underneath() {
+        let text = header(&record("Run the unit tests", "running", None));
+        let lines: Vec<&str> = text.lines().filter(|l| !l.is_empty()).collect();
+        assert!(lines[0].contains("▎ Run the unit tests"), "{text}");
+        assert!(
+            lines[1].contains("job 0800001a0a5ee4cb4-f789fa4d · started "),
+            "{text}"
+        );
+        assert!(lines[1].contains("· /home/agent/src/app"), "{text}");
+        assert!(lines[2].contains("$ bash -c 'cargo test'"), "{text}");
+    }
+
+    #[test]
+    fn the_ending_names_the_job_again_and_says_how_it_went() {
+        let ok = footer(&record("Run the unit tests", "exited", Some(0)));
+        assert!(ok.contains("✓ Run the unit tests · exit 0 · 2.5 s"), "{ok}");
+        assert!(ok.starts_with(&format!("\r\n{OK}")), "{ok}");
+        let failed = footer(&record("Run the unit tests", "failed", Some(101)));
+        assert!(
+            failed.contains("✗ Run the unit tests · failed · exit 101 · 2.5 s"),
+            "{failed}"
+        );
+        let cancelled = footer(&record("Serve the app", "cancelled", None));
+        assert!(
+            cancelled.contains("✗ Serve the app · cancelled · 2.5 s"),
+            "{cancelled}"
+        );
+    }
+
+    #[test]
+    fn the_banner_says_what_is_being_shown() {
+        assert!(banner(None).contains("every retained job"));
+        assert!(banner(Some("some-id")).contains("one job"));
+        assert!(
+            banner(None).starts_with("\x1b[2J\x1b[H\x1b[?25l"),
+            "clears and hides the cursor"
+        );
     }
 }

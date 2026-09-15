@@ -349,7 +349,12 @@ impl Jobs {
         let record = Record {
             id: id.clone(),
             pid: None,
-            label: start.label.clone().unwrap_or_else(|| start.command.clone()),
+            label: start
+                .label
+                .as_deref()
+                .map(str::trim)
+                .filter(|label| !label.is_empty())
+                .map_or_else(|| describe(&start.command, &start.args), str::to_owned),
             command: start.command.clone(),
             args: start.args.clone(),
             cwd: cwd.to_string_lossy().into_owned(),
@@ -571,6 +576,24 @@ fn read_file(path: &Path, offset: u64, limit: usize) -> Result<Vec<u8>, String> 
         .read_to_end(&mut bytes)
         .map_err(|e| e.to_string())?;
     Ok(bytes)
+}
+
+/// The name a job gets when the teammate gives it none: its command line,
+/// on one line, cut to a width that fits a menu row.
+pub fn describe(command: &str, args: &[String]) -> String {
+    const WIDTH: usize = 60;
+    let line = std::iter::once(command)
+        .chain(args.iter().map(String::as_str))
+        .flat_map(str::split_whitespace)
+        .collect::<Vec<_>>()
+        .join(" ");
+    if line.chars().count() <= WIDTH {
+        line
+    } else {
+        let mut cut: String = line.chars().take(WIDTH - 1).collect();
+        cut.push('…');
+        cut
+    }
 }
 
 pub fn now() -> u64 {
@@ -816,6 +839,18 @@ async fn supervise(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn an_unlabelled_job_is_named_by_its_command_line_cut_to_a_row() {
+        assert_eq!(describe("cargo", &["test".into()]), "cargo test");
+        assert_eq!(
+            describe("bash", &["-c".into(), "cc  main.c\n  -o fixture".into()]),
+            "bash -c cc main.c -o fixture"
+        );
+        let long = describe("python3", &["-c".into(), "x".repeat(200)]);
+        assert_eq!(long.chars().count(), 60);
+        assert!(long.ends_with('…'));
+    }
 
     fn command(script: &str) -> Start {
         Start {
