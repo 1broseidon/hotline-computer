@@ -9,6 +9,14 @@ padding = { x = 22, y = 16 }
 [scrolling]
 history = 20000
 
+# Text copied in another app pastes on a right click, and text selected
+# here goes to the clipboard, so the terminal and the browser share one.
+[mouse]
+bindings = [{ mouse = "Right", action = "Paste" }]
+
+[selection]
+save_to_clipboard = true
+
 [font]
 size = 12.0
 normal = { family = "DejaVu Sans Mono", style = "Book" }

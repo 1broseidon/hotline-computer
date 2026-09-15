@@ -330,6 +330,39 @@ def desktop_job_menu(c):
     c.call('windows',{'action':'close','window_id':shell['id']})
 
 
+def clipboard_between_apps(c):
+    # Copied in the browser, pasted into the person's terminal with a right
+    # click: the machine's apps share one clipboard.
+    proof = '/home/agent/qa/pasted-' + c.run_id + '.txt'
+    command = 'echo pasted-from-browser > ' + proof
+    c.call('browser', {'action': 'navigate', 'url': 'data:text/html,<title>Copy</title><textarea id=t autofocus>' + command + '</textarea>'})
+    c.call('browser', {'action': 'eval', 'js': "const t=document.getElementById('t');t.focus();t.select()"})
+    c.call('input', {'action': 'key', 'combo': 'ctrl+c'})
+    layout = bar_layout(c)
+    mark_x, mark_y = centre(layout['mark'])
+    c.call('input', {'action': 'click', 'x': mark_x, 'y': mark_y})
+    c.call('input', {'action': 'key', 'combo': 't'})
+    deadline = time.monotonic() + 10
+    while time.monotonic() < deadline:
+        shell = next((w for w in c.call('windows', {'action': 'list'}) if 'toadshell' in w['class'].lower()), None)
+        if shell and shell['focused']: break
+        time.sleep(.2)
+    assert shell and shell['focused'], c.call('windows', {'action': 'list'})
+    x, y, w, h = shell['bounds']
+    time.sleep(.5)
+    c.call('input', {'action': 'rclick', 'x': x + w // 2, 'y': y + h // 2})
+    c.call('input', {'action': 'key', 'combo': 'Return'})
+    deadline = time.monotonic() + 10
+    while time.monotonic() < deadline:
+        result = c.rpc('tools/call', {'name': 'files', 'arguments': {'action': 'get', 'path': proof}})['result']
+        text = '\n'.join(item.get('text', '') for item in result.get('content', []))
+        if not result.get('isError') and 'pasted-from-browser' in text: break
+        time.sleep(.3)
+    assert 'pasted-from-browser' in text, result
+    c.screenshot('05-browser-to-terminal-paste.png')
+    c.call('windows', {'action': 'close', 'window_id': shell['id']})
+
+
 def tray_counts(c):
     held = c.call('shell', {'action':'start','command':'sleep','args':['20'],'label':'Tray active-job fixture'})
     try:
@@ -761,7 +794,7 @@ def main():
     assert report['info']['executables']['chromium'] == '/usr/bin/chromium'
     guide = c.call('state', {'action': 'guide'})
     assert hashlib.sha256(guide['skill'].encode()).hexdigest() == guide['sha256']
-    cases = [('browser forms', browser), ('three-step browser wizard', wizard), ('public Selenium form', public_form), ('no save-password bubble', password_prompt), ('managed jobs and observer', jobs), ('desktop job menu', desktop_job_menu), ('tray counts match live jobs', tray_counts), ('Nix failure diagnostics', nix_failure), ('verified script execution', artifacts), ('artifact failure recovery', download_failures)]
+    cases = [('browser forms', browser), ('three-step browser wizard', wizard), ('public Selenium form', public_form), ('no save-password bubble', password_prompt), ('managed jobs and observer', jobs), ('desktop job menu', desktop_job_menu), ('clipboard between apps', clipboard_between_apps), ('tray counts match live jobs', tray_counts), ('Nix failure diagnostics', nix_failure), ('verified script execution', artifacts), ('artifact failure recovery', download_failures)]
     if options.suite == 'full':
         cases += [('package workspaces', workspaces), ('second repository tests', second_repository), ('Ketch installation and scraping', ketch), ('job durability and responsiveness', durability), ('native Toad build and screens', native), ('native controls and window identity', native_controls), ('legacy Xterm title', legacy_window)]
     elif options.suite == 'workspaces':
