@@ -1,5 +1,43 @@
 [
   {
+    "target": "state prepare",
+    "kind": "MCP tool",
+    "scope": "command",
+    "caller_profile": [
+      "agent"
+    ],
+    "surface_pattern": "existing action-based state tool",
+    "risk_class": "R4, explicitly requested",
+    "contracts": [
+      {
+        "surface": "prepare packages/flake",
+        "change": "add",
+        "verification": "workspace unit tests and two live smoke flows"
+      },
+      {
+        "surface": "prepare name presets",
+        "change": "remove",
+        "compatibility": "actionable replacement error; old prepared environments remain readable"
+      },
+      {
+        "surface": "catalog",
+        "change": "change",
+        "compatibility": "sources/default pin replaces fixed profiles"
+      },
+      {
+        "surface": "managed jobs, lease, home boundary",
+        "change": "preserve"
+      }
+    ],
+    "obligations": [
+      "managed progress/cancellation",
+      "saved dependency pins",
+      "environment inheritance",
+      "release-matched guide"
+    ],
+    "brief": "Generic package lists or local repository flakes replace fixed language/framework presets. Definitions survive Computer version changes. Validation is limited to build/unit checks and basic smoke testing, per user request."
+  },
+  {
     "target": "toad-computer MCP tools",
     "kind": "MCP",
     "scope": "service",

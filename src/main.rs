@@ -76,7 +76,7 @@ fn main() {
     }
     if arguments.first().map(String::as_str) == Some("prepare") {
         if arguments.len() != 4 {
-            eprintln!("prepare requires PROFILE WORKSPACE HOME");
+            eprintln!("prepare requires DEFINITION_JSON WORKSPACE HOME (internal managed job)");
             std::process::exit(2);
         }
         let runtime = tokio::runtime::Builder::new_multi_thread()

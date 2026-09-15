@@ -31,7 +31,7 @@ impl ServerHandler for ComputerTools {
     fn get_info(&self) -> ServerInfo {
         ServerInfo::new(ServerCapabilities::builder().enable_tools().build()).with_server_info(
             Implementation::new("toad-computer", env!("CARGO_PKG_VERSION")),
-        ).with_instructions("Read state action=info and state action=guide on connection. The running computer supplies its release-matched skill and pinned environment catalog. Use shell managed jobs for commands and builds; browser refs for web forms; capture/input for native apps.")
+        ).with_instructions("Read state action=info and state action=guide on connection. The running computer supplies its release-matched skill. Inspect repository requirements, then state prepare with packages or a local flake. Use shell managed jobs for commands and builds; browser refs for web forms; capture/input for native apps.")
     }
 
     async fn list_tools(

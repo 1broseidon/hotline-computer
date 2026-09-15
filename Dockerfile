@@ -26,7 +26,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     nix-bin python3 xvfb xauth x11-xkb-utils dbus at-spi2-core chromium \
     fonts-dejavu-core fonts-noto-color-emoji xfonts-base alacritty \
     libgl1-mesa-dri libegl-mesa0 libglx-mesa0 mesa-utils \
-    libgtk-3-0t64 libwebkit2gtk-4.1-0 libayatana-appindicator3-1 librsvg2-common \
+    libgtk-3-0t64 librsvg2-common \
     && rm -rf /var/lib/apt/lists/* \
     && useradd --uid 1000 --create-home --shell /bin/bash agent \
     && install -d /etc/nix \

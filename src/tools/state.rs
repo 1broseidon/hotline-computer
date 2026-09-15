@@ -16,6 +16,8 @@ struct Input {
     name: String,
     duration: Option<u64>,
     workspace: Option<PathBuf>,
+    packages: Option<Vec<String>>,
+    flake: Option<String>,
 }
 
 #[derive(Serialize, Deserialize)]
@@ -34,10 +36,14 @@ pub async fn call(app: &App, arguments: Value, holder: &str) -> ToolResult {
     match input.action.as_str() {
         "guide" => json_text(crate::guide::manifest()),
         "catalog" => json_text(crate::workspace::catalog()),
+        "prepare" if !input.name.is_empty() => Err(
+            "environment presets have been replaced: pass packages or flake instead of name".into(),
+        ),
         "prepare" => json_text(
             crate::workspace::prepare(
                 app,
-                &input.name,
+                input.packages,
+                input.flake,
                 input.workspace.as_deref().ok_or("workspace is required")?,
                 holder,
             )

@@ -286,7 +286,7 @@ def nix_failure(c):
     home = '/home/agent/qa/nix-failure-' + c.run_id
     workspace = home + '/workspace'
     c.call('files', {'action':'put','path':workspace+'/fixture','content':''})
-    job = c.call('shell', {'action':'start','command':'/usr/bin/toad-computer','args':['prepare','python',workspace,home],'env':{'NIX_REMOTE':'unix:///home/agent/qa/missing-nix-daemon.sock'},'label':'Nix failure diagnostics','timeout':30})
+    job = c.call('shell', {'action':'start','command':'/usr/bin/toad-computer','args':['prepare',json.dumps({'source':'packages','packages':['python312'],'nixpkgs':c.call('state', {'action':'info'})['nixpkgs']}),workspace,home],'env':{'NIX_REMOTE':'unix:///home/agent/qa/missing-nix-daemon.sock'},'label':'Nix failure diagnostics','timeout':30})
     job = c.call('shell', {'action':'wait','job_id':job['id'],'wait_ms':30000})
     assert job['state']=='failed',job
     output = c.call('shell', {'action':'read','job_id':job['id']})['output']
@@ -379,29 +379,31 @@ def execute(c, command, args, cwd=None, timeout=120, label=None):
     return c.call('shell', {'action': 'read', 'job_id': job['id'], 'max_output': 1048576})['output']
 
 
-def prepare(c, profile, workspace):
+def prepare(c, packages, workspace, **options):
     started = time.monotonic()
-    result = c.call('state', {'action': 'prepare', 'name': profile, 'workspace': workspace})
+    result = c.call('state', {'action': 'prepare', 'workspace': workspace, **({'packages':packages} if packages is not None else {}), **options})
     if not result['ready']:
         c.done(result['job'], 1200)
-    return {'profile': profile, 'cached': result['cached'], 'seconds': time.monotonic()-started}
+    return {'packages': packages, 'cached': result['cached'], 'seconds': time.monotonic()-started}
 
 
 def workspaces(c):
-    root = '/home/agent/qa/catalog-' + c.run_id
+    root = '/home/agent/qa/workspaces-' + c.run_id
     fixtures = {
         'python': ('main.py', 'import sqlite3, ssl\nassert sqlite3.connect(":memory:").execute("select 6*7").fetchone()[0]==42\nprint("python fixture: 42")\n', ['python3', 'main.py']),
         'go': ('main.go', 'package main\nimport "fmt"\nfunc main(){fmt.Println("go fixture: 42")}\n', ['go', 'run', 'main.go']),
         'node': ('main.js', 'const assert = require("node:assert/strict"); assert.equal(6*7,42); console.log("node fixture: 42");\n', ['node', 'main.js']),
         'rust': ('main.rs', 'fn main(){assert_eq!(6*7,42); println!("rust fixture: 42");}\n', ['bash', '-c', 'rustc main.rs -o fixture && ./fixture']),
     }
+    dependencies = {'python':['python312','uv'], 'go':['go','gopls'], 'node':['nodejs','bun','pnpm'], 'rust':['rustc','cargo','clang','cmake','perl','pkg-config','openssl']}
     timings = []
     for profile, (filename, source, command) in fixtures.items():
+        packages = dependencies[profile]
         workspace = root + '/' + profile
         c.call('files', {'action': 'put', 'path': workspace + '/' + filename, 'content': source})
         started = time.monotonic()
-        first = c.call('state', {'action':'prepare','name':profile,'workspace':workspace})
-        concurrent = c.call('state', {'action':'prepare','name':profile,'workspace':workspace+'/concurrent'})
+        first = c.call('state', {'action':'prepare','packages':packages,'workspace':workspace})
+        concurrent = c.call('state', {'action':'prepare','packages':packages,'workspace':workspace+'/concurrent'})
         for prepared in [first, concurrent]:
             if not prepared['ready']: c.done(prepared['job'],1200)
         timings.append({'profile':profile,'cached':first['cached'],'concurrent':True,'seconds':time.monotonic()-started})
@@ -410,16 +412,16 @@ def workspaces(c):
         # A second workspace inherits the cached environment without a shell hook.
         samples = []
         for n in range(5):
-            samples.append(prepare(c, profile, workspace + '/second-' + str(n)))
+            samples.append(prepare(c, packages, workspace + '/second-' + str(n)))
         assert all(sample['cached'] for sample in samples), samples
         timings.extend(samples)
     # A compiler must accept dependency headers outside the project's own directory.
     output = execute(c, 'bash', ['-c', 'set -e; mkdir -p ../headers; printf "#define ANSWER 42\\n" > ../headers/fixture.h; printf "#include <fixture.h>\\nint main(){return ANSWER != 42;}\\n" > main.c; cc -O0 -I"$PWD/../headers" main.c -o c-fixture; ./c-fixture; cmake --version; perl -e \'print "native dependencies: 42\\n"\''], cwd=root+'/rust')
     assert 'native dependencies: 42' in output
-    c.output.joinpath('catalog-timings.json').write_text(json.dumps(timings, indent=2))
+    c.output.joinpath('workspace-timings.json').write_text(json.dumps(timings, indent=2))
 
 
-# A public CLI library catches catalog assumptions that an inline hello-world misses.
+# A public CLI library catches dependency assumptions that an inline hello-world misses.
 CLICK_REVISION = '934813e4d421071a1b3db3973c02fe2721359a6e'
 
 
@@ -427,7 +429,7 @@ def second_repository(c):
     root = '/home/agent/qa/click-' + c.run_id
     execute(c, 'git', ['clone', '--filter=blob:none', 'https://github.com/pallets/click.git', root], timeout=180)
     execute(c, 'git', ['checkout', '--detach', CLICK_REVISION], cwd=root)
-    prepare(c, 'python', root)
+    prepare(c, ['python312','uv'], root)
     execute(c, 'uv', ['venv', '.venv'], cwd=root)
     execute(c, 'uv', ['pip', 'install', '--python', '.venv/bin/python', '--no-deps', '-e', '.', 'pytest==8.3.5'], cwd=root, timeout=180)
     execute(c, 'uv', ['pip', 'install', '--python', '.venv/bin/python', 'iniconfig==2.0.0', 'packaging==24.2', 'pluggy==1.5.0'], cwd=root, timeout=180)
@@ -497,13 +499,14 @@ def native(c):
     root = '/home/agent/qa/toad-' + c.run_id
     execute(c, 'git', ['clone', '--filter=blob:none', 'https://github.com/1broseidon/toad.git', root], timeout=300)
     execute(c, 'git', ['checkout', '--detach', TOAD_REVISION], cwd=root)
-    timing = prepare(c, 'rust-tauri', root)
+    flake = Path(__file__).with_name('fixtures').joinpath('toad.nix').read_text().replace('@NIXPKGS@',c.call('state', {'action':'info'})['nixpkgs'])
+    c.call('files', {'action':'put','path':root+'/qa-nix/flake.nix','content':flake})
+    timing = prepare(c, None, root, flake='qa-nix')
     assert 'tauri-cli' in execute(c, 'cargo', ['tauri', '--version'], cwd=root)
-    timing['warm_samples'] = [prepare(c, 'rust-tauri', root+'/second-'+str(n)) for n in range(5)]
-    assert all(sample['cached'] for sample in timing['warm_samples'])
+    timing['repeat'] = prepare(c, None, root)
     c.output.joinpath('native-environment.json').write_text(json.dumps(timing, indent=2))
     target = '/home/agent/qa/native-target'
-    script = 'set -euo pipefail\nexport CARGO_TARGET_DIR=/home/agent/qa/native-target\ncd ui\nbun install --frozen-lockfile\nbun run build\ncd ..\ncargo build --locked -p toad-desktop --features tauri/custom-protocol\n'
+    script = 'set -euo pipefail\nexport CARGO_TARGET_DIR=/home/agent/qa/native-target\nexport CARGO_BUILD_JOBS=2 CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0\ncd ui\nbun install --frozen-lockfile\nbun run build\ncd ..\ncargo build --locked -p toad-desktop --features tauri/custom-protocol\n'
     c.call('files', {'action': 'put', 'path': root+'/qa-build.sh', 'content': script})
     job = c.call('files', {'action': 'run', 'path': root+'/qa-build.sh', 'cwd': root, 'sha256': hashlib.sha256(script.encode()).hexdigest()})
     # Desktop work remains responsive during the native build.
@@ -511,7 +514,7 @@ def native(c):
     c.screenshot('05-browsing-during-native-build.png')
     c.done(job, 2400)
     c.output.joinpath('native-build-output.txt').write_text(c.call('shell', {'action': 'read', 'job_id': job['id'], 'max_output': 1048576})['output'])
-    app = c.call('shell', {'action': 'start', 'command': target+'/debug/toad-desktop', 'cwd': root, 'env': {'TOAD_DATA_DIR': root+'/qa-data'}, 'label': 'Toad native screen acceptance'})
+    app = c.call('shell', {'action': 'start', 'command': target+'/debug/toad-desktop', 'cwd': root, 'env': {'TOAD_DATA_DIR': root+'/qa-data', 'CARGO_BUILD_JOBS':'2', 'CARGO_PROFILE_DEV_DEBUG':'0', 'CARGO_INCREMENTAL':'0'}, 'label': 'Toad native screen acceptance'})
     native_screens(c, app)
 
 
@@ -610,7 +613,7 @@ def native_controls(c):
     root = '/home/agent/qa/gtk-' + c.run_id
     source = Path(__file__).with_name('fixtures').joinpath('native-controls.c').read_text()
     c.call('files', {'action':'put','path':root+'/main.c','content':source})
-    prepare(c,'rust-tauri',root)
+    prepare(c,['gcc','pkg-config','gtk3'],root)
     execute(c,'bash',['-c','cc -Wno-deprecated-declarations main.c -o fixture $(pkg-config --cflags --libs gtk+-3.0)'],cwd=root)
     app = c.call('shell', {'action':'launch','command':root+'/fixture','cwd':root,'label':'Native controls acceptance'})
     try:
@@ -687,9 +690,9 @@ def main():
     assert hashlib.sha256(guide['skill'].encode()).hexdigest() == guide['sha256']
     cases = [('browser forms', browser), ('three-step browser wizard', wizard), ('public Selenium form', public_form), ('managed jobs and observer', jobs), ('desktop job menu', desktop_job_menu), ('tray counts match live jobs', tray_counts), ('Nix failure diagnostics', nix_failure), ('verified script execution', artifacts), ('artifact failure recovery', download_failures)]
     if options.suite == 'full':
-        cases += [('catalog workspaces', workspaces), ('second repository tests', second_repository), ('Ketch installation and scraping', ketch), ('job durability and responsiveness', durability), ('native Toad build and screens', native), ('native controls and window identity', native_controls), ('legacy Xterm title', legacy_window)]
+        cases += [('package workspaces', workspaces), ('second repository tests', second_repository), ('Ketch installation and scraping', ketch), ('job durability and responsiveness', durability), ('native Toad build and screens', native), ('native controls and window identity', native_controls), ('legacy Xterm title', legacy_window)]
     elif options.suite == 'workspaces':
-        cases = [('catalog workspaces', workspaces), ('second repository tests', second_repository), ('Ketch installation and scraping', ketch), ('job durability and responsiveness', durability)]
+        cases = [('package workspaces', workspaces), ('second repository tests', second_repository), ('Ketch installation and scraping', ketch), ('job durability and responsiveness', durability)]
     elif options.suite == 'native':
         cases = [('native Toad build and screens', native), ('native controls and window identity', native_controls), ('legacy Xterm title', legacy_window)]
     for name, case in cases:

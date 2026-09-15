@@ -27,7 +27,7 @@ and GPU-backed terminal emulators use llvmpipe when no hardware GPU exists.
 | D-Bus and AT-SPI | Native application accessibility |
 | Chromium | Visible browser controlled through CDP |
 | Alacritty | Reopenable observer for tool-driven shell jobs |
-| Nix | Pinned Python, Go, Node, Rust, and Rust/Tauri environments |
+| Nix | Project-selected Nix packages or repository dev shells |
 | GTK3, WebKitGTK, AppIndicator | Native Linux app runtime and tray support |
 | Git, curl, archive tools, Python, ripgrep, jq | Repository and artifact workflows |
 
@@ -104,26 +104,55 @@ Start an agent session with `state info` and `state guide`. The returned skill
 and SHA-256 come from the actual running binary, so any MCP client receives
 instructions matched to its image. Toad's agent preamble uses the same path.
 
-Clone a repository, then call:
+Read the repository's requirements, then prepare the packages it needs:
 
 ```json
-{"action":"prepare","name":"rust-tauri","workspace":"/home/agent/src/project"}
+{"action":"prepare","packages":["nodejs","pnpm"],"workspace":"/home/agent/src/project"}
 ```
 
-`state prepare` returns a managed job on a cold cache, or `ready:true` for a
-cache hit. After a successful preparation, every shell job whose `cwd` is
-inside that workspace inherits the environment. Explicit job `env` values
-win. `python`, `go`, `node`, `rust`, and `rust-tauri` use the Nixpkgs commit
-reported by `state catalog`. Recipe hashes invalidate stale caches. Nix
-profiles retain their store dependencies; workspace metadata is in
-`.toad/environment.json` and shared profiles are in
-`~/.cache/toad/environments`.
+Or use a repository flake, including a named dev shell:
 
-The catalog supplies development environments: dependency headers may live
-outside the repository, and unoptimized C dependencies can compile without
-Nix's optimization-dependent fortify flags. Rust builds default to two jobs,
-no incremental cache, and no debug symbols to fit a 4 GiB computer; callers
-can override those environment values.
+```json
+{"action":"prepare","flake":".#dev","workspace":"/home/agent/src/project"}
+```
+
+Omit `packages` and `flake` to reuse the saved definition, or discover the
+workspace's root `flake.nix` on first use. Package names are Nixpkgs attribute
+paths. Flakes must be local directories under the computer home; relative
+paths are resolved from the workspace. There are no language or framework
+presets. `state catalog` describes these inputs and the default Nixpkgs pin.
+
+Preparation returns a managed job, or `ready:true` for a package cache hit.
+Follow or cancel it with the existing shell tools. Once it succeeds, shell
+jobs with `cwd` inside the workspace inherit the exported environment;
+explicit job `env` values win. A failed preparation retains the previous
+active environment. Nix profiles keep the prepared store dependencies alive.
+
+The workspace owns `.toad/environment-spec.json`. Package definitions retain
+their Nixpkgs revision across Computer upgrades and dependency additions;
+`.toad/nix/` contains their generated flake and lock. Shared caches are under
+`~/.cache/toad/environments`, keyed by recipe and architecture, independently
+of the Computer version. Keep the definition and lock with the workspace;
+these files do not themselves provide a backup or container migration.
+
+Repository flakes are re-evaluated on each preparation, reusing Nix's store
+cache. Their existing locks cannot be silently updated; first use may create
+a lock. Shell hooks run during preparation in the workspace, and exported
+variables are retained. Aliases, functions, and hooks that must run for every
+command require an explicit `nix develop --command ...`. To customize a
+package environment, edit its generated flake and prepare with
+`"flake":".toad/nix"`.
+
+The base image supplies the desktop, browser, graphics, and Nix. Framework
+libraries and compilers are project dependencies; WebKit and AppIndicator
+are no longer installed in the base image. Native projects can specify their
+runtime library paths in a flake. System-wide `.deb` installation belongs in
+an image build, since runtime jobs remain unprivileged.
+
+**0.5 development API change:** `prepare name=<preset>` is replaced by
+`packages` or `flake`. Old prepared environments remain usable while their
+Nix store paths exist; adopting the new preparation API requires a package
+list or flake. `catalog` now reports preparation sources instead of profiles.
 
 `files download` supports URLs and GitHub release assets with optional
 SHA-256 verification. Asset patterns must match exactly one file. `extract`
@@ -191,7 +220,7 @@ src/a11y.rs      the AT-SPI tree as text
 src/lease.rs     who holds the machine
 src/jobs.rs      job lifetime, retained output, PTY, cancellation
 src/observer.rs  Alacritty observer
-src/workspace.rs pinned Nix environment catalog
+src/workspace.rs workspace-owned Nix definitions and preparation
 src/guide.rs     the bundled release-matched skill
 tests/contract.rs  the opt-in proof against a running container
 ```

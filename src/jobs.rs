@@ -34,6 +34,9 @@ pub struct Start {
     // Only the artifact tool can request staging; ordinary shell input cannot.
     #[serde(skip)]
     pub artifact_destination: Option<PathBuf>,
+    // Preparation must be able to repair a missing or obsolete environment.
+    #[serde(skip)]
+    pub skip_workspace_environment: bool,
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
@@ -322,7 +325,11 @@ impl Jobs {
                 }
             }
         }
-        let mut environment = crate::workspace::environment(&self.home, &cwd)?;
+        let mut environment = if start.skip_workspace_environment {
+            BTreeMap::new()
+        } else {
+            crate::workspace::environment(&self.home, &cwd)?
+        };
         environment.append(&mut start.env);
         start.env = environment;
         let id = format!("{:016x}-{:08x}", now(), rand_id()?);
