@@ -32,11 +32,11 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && rm -f /home/agent/.bashrc /home/agent/.profile /home/agent/.bash_logout \
     && install -d /etc/nix \
     && install -d -m 1777 /tmp/.X11-unix \
-    && install -d -o agent -g agent /nix /nix/store /nix/var/nix /home/agent/.config/alacritty \
+    && install -d -o agent -g agent /nix /nix/store /nix/var/nix \
     && printf 'experimental-features = nix-command flakes\nsandbox = false\nbuild-users-group =\n' > /etc/nix/nix.conf \
     && chown -R agent:agent /nix \
     && chown -R agent:agent /home/agent
-COPY --chown=agent:agent assets/alacritty.toml /home/agent/.config/alacritty/alacritty.toml
+COPY assets/alacritty.toml /etc/toad-computer/alacritty.toml
 COPY assets/chromium-policy.json /etc/chromium/policies/managed/toad.json
 COPY assets/bashrc /etc/bash.bashrc
 COPY --from=build /usr/local/bin/toad-computer /usr/bin/toad-computer

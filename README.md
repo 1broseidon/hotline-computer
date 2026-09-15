@@ -165,8 +165,14 @@ The workspace owns `.toad/environment-spec.json`. Package definitions retain
 their Nixpkgs revision across Computer upgrades and dependency additions;
 `.toad/nix/` contains their generated flake and lock. Shared caches are under
 `~/.cache/toad/environments`, keyed by recipe and architecture, independently
-of the Computer version. Keep the definition and lock with the workspace;
-these files do not themselves provide a backup or container migration.
+of the Computer version. Keep the definition and lock with the workspace.
+The image keeps nothing of its own in the home: its Alacritty
+configuration, bash rc and Chromium policy live under `/etc`. So a home
+given a volume, as the desk gives the store and the teammate's scratch,
+carries prepared environments, their cache, jobs and their output, the
+shell's history and the browser profile across a recreate, whether for an
+upgrade or a hibernate cycle. The acceptance run replaces its container on
+the same volumes and checks that it does.
 
 Repository flakes are re-evaluated on each preparation, reusing Nix's store
 cache. Their existing locks cannot be silently updated; first use may create

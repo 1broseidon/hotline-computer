@@ -15,6 +15,9 @@ pub const OBSERVER_CLASS: &str = "ToadTerminal";
 /// The person's shell, which the desktop keeps in the bottom third of the
 /// observer's column.
 pub const SHELL_CLASS: &str = "ToadShell";
+/// Alacritty's configuration, kept with the image rather than in the home,
+/// so a home the teammate keeps across containers never shadows it.
+pub const ALACRITTY_CONFIG: &str = "/etc/toad-computer/alacritty.toml";
 /// Alacritty options for the person's window alone: a visible block cursor
 /// in the bar's foreground, where the observer paints its cursor away.
 pub const SHELL_OPTIONS: &[&str] = &[
@@ -157,10 +160,12 @@ impl Observer {
             }
             let log =
                 std::fs::File::create(directory.join("terminal.log")).map_err(|e| e.to_string())?;
-            let mut child = tokio::process::Command::new("alacritty")
-                .arg("--daemon")
-                .arg("--socket")
-                .arg(&socket)
+            let mut daemon = tokio::process::Command::new("alacritty");
+            daemon.arg("--daemon").arg("--socket").arg(&socket);
+            if Path::new(ALACRITTY_CONFIG).is_file() {
+                daemon.args(["--config-file", ALACRITTY_CONFIG]);
+            }
+            let mut child = daemon
                 .env("DISPLAY", &self.display)
                 .stdin(Stdio::null())
                 .stdout(Stdio::null())
