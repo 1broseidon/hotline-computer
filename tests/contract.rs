@@ -496,6 +496,37 @@ async fn image_honors_the_computer_contract() {
         text(&typed),
         "\"host clipboard café 🐸\\nsecond line + newer viewer\""
     );
+    // A viewer that goes away with a modifier down must not leave it down:
+    // a person's host shortcut can take the page's focus between the two.
+    let (mut vanishing, _) =
+        tokio_tungstenite::connect_async(format!("{ws_base}/ws?token={token}"))
+            .await
+            .unwrap();
+    for message in [
+        json!({"t":"control","take":true}),
+        json!({"t":"key","key":"Alt","down":true}),
+    ] {
+        vanishing
+            .send(tokio_tungstenite::tungstenite::Message::text(
+                message.to_string(),
+            ))
+            .await
+            .unwrap();
+    }
+    tokio::time::sleep(Duration::from_millis(300)).await;
+    vanishing.close(None).await.unwrap();
+    tokio::time::sleep(Duration::from_millis(500)).await;
+    let keymap = call(
+        &client,
+        "shell",
+        json!({"command":"python3","args":["-c",KEYMAP_QUERY]}),
+    )
+    .await;
+    assert!(
+        text(&keymap).contains("held keys: none"),
+        "the hands let go when a viewer vanishes: {}",
+        text(&keymap)
+    );
     let (mut reconnected, _) =
         tokio_tungstenite::connect_async(format!("{ws_base}/ws?token={token}"))
             .await
@@ -518,6 +549,18 @@ async fn image_honors_the_computer_contract() {
     alice.cancel().await.ok();
     mallory.cancel().await.ok();
 }
+
+/// Asks the X server which keys it considers down.
+const KEYMAP_QUERY: &str = r#"
+import ctypes
+x = ctypes.CDLL('libX11.so.6')
+x.XOpenDisplay.restype = ctypes.c_void_p
+d = x.XOpenDisplay(None)
+keys = (ctypes.c_char * 32)()
+x.XQueryKeymap(ctypes.c_void_p(d), keys)
+held = [byte * 8 + bit for byte in range(32) for bit in range(8) if keys[byte][0] & (1 << bit)]
+print('held keys:', held or 'none')
+"#;
 
 async fn viewer_reply(
     socket: &mut tokio_tungstenite::WebSocketStream<

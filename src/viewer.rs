@@ -124,7 +124,18 @@ async fn drive(mut ws: WebSocket, app: App, display: Arc<Display>) {
             },
         }
     }
+    if driving {
+        let_go(&display);
+    }
     let _ = app.access.release(&holder).await;
+}
+
+/// A viewer that stops driving, by choice or by vanishing, may have sent a
+/// key down whose up never came. The hands let go of whatever they hold.
+fn let_go(display: &Display) {
+    if let Ok(mut hands) = display.hands.lock() {
+        let _ = hands.release_all();
+    }
 }
 
 /// Where the hands are, for the page to draw an arrow: a move carries only
@@ -199,6 +210,9 @@ async fn handle(
     if !reaches_the_hands(&message, app, holder, driving).await {
         if matches!(message, FromViewer::Paste { .. }) {
             return Err("Take control before pasting".into());
+        }
+        if matches!(message, FromViewer::Control { take: false }) {
+            let_go(display);
         }
         return Ok(false);
     }

@@ -177,7 +177,19 @@
     if (socket && socket.readyState === WebSocket.OPEN) socket.send(JSON.stringify(message));
   }
 
+  // Keys this page has sent down and not yet up. A host shortcut can take
+  // focus between the two, and a modifier left down turns every later key
+  // into a chord, so losing focus lets go of all of them.
+  const held = new Set();
+  function letGo() {
+    for (const key of held) send({ t: "key", key, down: false });
+    held.clear();
+  }
+  addEventListener("blur", letGo);
+  document.addEventListener("visibilitychange", () => { if (document.hidden) letGo(); });
+
   function drive(taking) {
+    if (!taking) letGo();
     driving = taking;
     send({ t: "control", take: taking });
     render();
@@ -269,15 +281,16 @@
       navigator.clipboard.readText().then(pasteText).catch(() => say('Your browser did not share the clipboard.', false));
       return;
     }
-    if (!event.repeat) send({ t: "key", key: event.key, down: true });
+    if (!event.repeat) { held.add(event.key); send({ t: "key", key: event.key, down: true }); }
   });
   canvas.addEventListener("keyup", (event) => {
     if (!driving) return;
     event.preventDefault();
     if (hostPaste(event)) return;
+    held.delete(event.key);
     send({ t: "key", key: event.key, down: false });
   });
-  canvas.addEventListener("blur", () => { if (driving) say("Click the screen to type"); });
+  canvas.addEventListener("blur", () => { letGo(); if (driving) say("Click the screen to type"); });
 
   render();
   connect();
