@@ -6,6 +6,7 @@ use std::time::Duration;
 use chromiumoxide::cdp::browser_protocol::dom::SetFileInputFilesParams;
 use chromiumoxide::cdp::browser_protocol::network::CookieParam;
 use chromiumoxide::cdp::browser_protocol::page::HandleJavaScriptDialogParams;
+use chromiumoxide::cdp::js_protocol::runtime::RemoteObjectType;
 use chromiumoxide::{Browser, BrowserConfig, Page};
 use futures_util::StreamExt;
 use serde_json::{Value, json};
@@ -188,18 +189,27 @@ impl BrowserManager {
             let page = current_page(session).await?;
             let script = r#"(() => {
                 document.querySelectorAll('[data-toad-ref]').forEach(e => e.removeAttribute('data-toad-ref'));
-                const interesting = 'a,button,input,select,textarea,[role],h1,h2,h3,h4,h5,h6';
+                const interesting = 'a,button,input,select,textarea,[contenteditable],[role],h1,h2,h3,h4,h5,h6';
                 const lines = [];
                 let next = 1;
                 for (const element of document.querySelectorAll(interesting)) {
+                    if (!element.getClientRects().length || getComputedStyle(element).visibility === 'hidden' || element.closest('[hidden],[inert],[aria-hidden="true"]')) continue;
                     const ref = `e${next++}`;
                     element.setAttribute('data-toad-ref', ref);
                     const tag = element.tagName.toLowerCase();
                     const role = element.getAttribute('role') || ({a:'link',button:'button',input:element.type || 'input',select:'combobox',textarea:'textbox'}[tag] || tag);
                     const byId = (ids) => (ids || '').split(/\s+/).map(id => document.getElementById(id)).filter(Boolean).map(e => e.innerText).join(' ');
                     const labels = element.labels ? [...element.labels].map(l => l.innerText).join(' ') : '';
-                    const name = element.getAttribute('aria-label') || byId(element.getAttribute('aria-labelledby')) || labels || element.innerText || element.value || element.placeholder || element.title || element.name || '';
-                    if (name.trim()) lines.push(`[${ref}] [${role}] ${name.trim().replace(/\s+/g, ' ')}`);
+                    const name = element.getAttribute('aria-label') || byId(element.getAttribute('aria-labelledby')) || labels || element.innerText || (element.type === "password" ? "" : element.value) || element.placeholder || element.title || element.name || '';
+                    const states = [];
+                    if (element.matches(':disabled,[aria-disabled="true"]')) states.push('disabled');
+                    if (element.readOnly) states.push('readonly');
+                    if (element.required) states.push('required');
+                    if ('checked' in element && ['checkbox','radio'].includes(element.type)) states.push(`checked=${element.checked}`);
+                    if ('value' in element && element.type !== 'password') states.push(`value=${JSON.stringify(element.value)}`);
+                    if (tag === 'select') states.push(`multiple=${element.multiple}`, `options=${JSON.stringify([...element.options].map(o => ({value:o.value,label:o.label,selected:o.selected,disabled:o.disabled || !!o.closest('optgroup[disabled]')})))}`);
+                    if (element.validity && !element.validity.valid) states.push(`invalid=${JSON.stringify(element.validationMessage)}`);
+                    lines.push(`[${ref}] [${role}] ${name.trim().replace(/\s+/g, ' ')} ${states.join(' ')}`.trim());
                 }
                 const body = document.body ? document.body.innerText.trim() : '';
                 return [`page: ${document.title}`, body, ...lines].filter(Boolean).join('\n');
@@ -255,56 +265,41 @@ impl BrowserManager {
         .await
     }
 
-    /// Typed, not assigned. A value written from script is invisible to a
-    /// framework that tracks the field's value itself, so the form still says
-    /// the field is empty; key events are what every page accepts.
     pub async fn fill(&self, reference: &str, text: &str) -> Result<String, String> {
-        let selector = ref_selector(reference)?;
-        let reference = reference.to_owned();
-        let text = text.to_owned();
-        self.with_session(|session| {
-            Box::pin(async move {
-                let page = current_page(session).await?;
-                let element = page.find_element(selector).await.map_err(browser_error)?;
-                element.focus().await.map_err(browser_error)?;
-                element
-                    .call_js_fn(
-                        "function(){ if (typeof this.select === 'function') this.select(); else if (this.isContentEditable) document.execCommand('selectAll'); }",
-                        false,
-                    )
-                    .await
-                    .map_err(browser_error)?;
-                if text.is_empty() {
-                    element.press_key("Delete").await.map_err(browser_error)?;
-                } else {
-                    element.type_str(&text).await.map_err(browser_error)?;
-                }
-                Ok(format!("filled {reference}"))
-            })
-        })
-        .await
+        self.form_action(reference, "fill", json!(text)).await
     }
 
-    pub async fn select(&self, reference: &str, value: &str) -> Result<String, String> {
-        self.element_script(
-            reference,
-            &format!(
-                "function(){{this.value={};this.dispatchEvent(new Event('change',{{bubbles:true}}));}}",
-                json!(value)
-            ),
-            format!("selected {value:?} on {reference}"),
-        )
-        .await
+    pub async fn select(&self, reference: &str, values: &[String]) -> Result<String, String> {
+        self.form_action(reference, "select", json!(values)).await
     }
 
     pub async fn check(&self, reference: &str, checked: bool) -> Result<String, String> {
-        self.element_script(
-            reference,
-            &format!(
-                "function(){{this.checked={checked};this.dispatchEvent(new Event('input',{{bubbles:true}}));this.dispatchEvent(new Event('change',{{bubbles:true}}));}}"
-            ),
-            format!("{} {reference}", if checked { "checked" } else { "unchecked" }),
-        )
+        self.form_action(reference, "check", json!(checked)).await
+    }
+
+    async fn form_action(
+        &self,
+        reference: &str,
+        action: &str,
+        requested: Value,
+    ) -> Result<String, String> {
+        let selector = ref_selector(reference)?;
+        let script = format!(
+            "({})(document.querySelector({}),{}, {})",
+            include_str!("../assets/browser-form.js"),
+            json!(selector),
+            json!(action),
+            requested
+        );
+        self.with_session(|session| {
+            Box::pin(async move {
+                let value = evaluate_value(&current_page(session).await?, &script).await?;
+                if value.get("ok").and_then(Value::as_bool) != Some(true) {
+                    return Err(value.to_string());
+                }
+                Ok(value.to_string())
+            })
+        })
         .await
     }
 
@@ -322,30 +317,6 @@ impl BrowserManager {
                     .await
                     .map_err(browser_error)?;
                 Ok(format!("hovered {reference}"))
-            })
-        })
-        .await
-    }
-
-    async fn element_script(
-        &self,
-        reference: &str,
-        script: &str,
-        result: String,
-    ) -> Result<String, String> {
-        let selector = ref_selector(reference)?;
-        let script = script.to_owned();
-        self.with_session(|session| {
-            Box::pin(async move {
-                current_page(session)
-                    .await?
-                    .find_element(selector)
-                    .await
-                    .map_err(browser_error)?
-                    .call_js_fn(&script, true)
-                    .await
-                    .map_err(browser_error)?;
-                Ok(result)
             })
         })
         .await
@@ -596,11 +567,12 @@ async fn current_page(session: &mut BrowserSession) -> Result<Page, String> {
 }
 
 async fn evaluate_value(page: &Page, script: &str) -> Result<Value, String> {
-    page.evaluate(script)
-        .await
-        .map_err(browser_error)?
-        .into_value()
-        .map_err(browser_error)
+    let result = page.evaluate(script).await.map_err(browser_error)?;
+    // Valid statements such as focus() have no JavaScript return value.
+    if result.object().r#type == RemoteObjectType::Undefined {
+        return Ok(Value::Null);
+    }
+    result.into_value().map_err(browser_error)
 }
 
 async fn evaluate_string(page: &Page, script: &str) -> Result<String, String> {

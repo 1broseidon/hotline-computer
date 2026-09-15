@@ -2,7 +2,7 @@ use std::path::{Component, Path, PathBuf};
 
 use base64::Engine;
 use serde::{Deserialize, Serialize};
-use serde_json::Value;
+use serde_json::{Value, json};
 
 use crate::App;
 
@@ -14,6 +14,19 @@ const MAX_FILE_SIZE: u64 = 50 << 20;
 struct Input {
     action: String,
     path: PathBuf,
+    url: Option<String>,
+    repo: Option<String>,
+    version: Option<String>,
+    asset: Option<String>,
+    sha256: Option<String>,
+    destination: Option<PathBuf>,
+    interpreter: Option<String>,
+    #[serde(default)]
+    args: Vec<String>,
+    cwd: Option<String>,
+    #[serde(default)]
+    env: std::collections::BTreeMap<String, String>,
+    request_id: Option<String>,
     #[serde(default)]
     content: String,
     #[serde(default)]
@@ -28,14 +41,75 @@ struct Entry {
     modified: u64,
 }
 
-pub async fn call(app: &App, arguments: Value) -> ToolResult {
+pub async fn call(app: &App, arguments: Value, holder: &str) -> ToolResult {
     let input: Input = serde_json::from_value(arguments).map_err(|error| error.to_string())?;
     match input.action.as_str() {
         "get" => get(app, &input.path).await,
-        "put" => put(app, &input.path, &input.content, &input.encoding).await,
+        "put" => {
+            let _guard = app.access.mutate(holder).await?;
+            put(app, &input.path, &input.content, &input.encoding).await
+        }
+        "download" | "extract" | "run" => artifact(app, input, holder).await,
         "list" => list(app, &input.path).await,
-        action => Err(action_error("files", action, &["get", "put", "list"])),
+        action => Err(action_error(
+            "files",
+            action,
+            &["get", "put", "list", "download", "extract", "run"],
+        )),
     }
+}
+
+async fn artifact(app: &App, input: Input, holder: &str) -> ToolResult {
+    let guard = app.access.mutate(holder).await?;
+    let path = if input.action == "extract"
+        || (input.action == "run" && input.url.is_none() && input.repo.is_none())
+    {
+        existing_path(app, &input.path).await?
+    } else {
+        writable_path(app, &input.path).await?
+    };
+    let destination = if input.action == "extract" {
+        Some(
+            writable_path(
+                app,
+                input
+                    .destination
+                    .as_deref()
+                    .ok_or("destination is required")?,
+            )
+            .await?,
+        )
+    } else {
+        None
+    };
+    let spec = json!({"action":input.action,"path":path,"url":input.url,"repo":input.repo,"version":input.version,"asset":input.asset,"sha256":input.sha256,"destination":destination,"interpreter":input.interpreter,"args":input.args});
+    let job = app
+        .jobs
+        .start(
+            crate::jobs::Start {
+                command: std::env::current_exe()
+                    .map_err(|e| e.to_string())?
+                    .to_string_lossy()
+                    .into_owned(),
+                args: vec!["artifact".into(), spec.to_string()],
+                cwd: input.cwd,
+                env: input.env,
+                label: Some(format!("{} {}", input.action, path.display())),
+                request_id: input.request_id,
+                artifact_destination: Some(destination.clone().unwrap_or_else(|| path.clone())),
+                ..crate::jobs::Start::default()
+            },
+            holder,
+        )
+        .await?;
+    drop(guard);
+    let mut result = serde_json::to_value(job).map_err(|e| e.to_string())?;
+    if app.display.is_some()
+        && let Err(error) = app.observer.show(false).await
+    {
+        result["observer_error"] = json!(error);
+    }
+    json_text(result)
 }
 
 async fn get(app: &App, path: &Path) -> ToolResult {

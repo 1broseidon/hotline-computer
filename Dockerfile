@@ -1,78 +1,54 @@
-# The computer is a vanilla Alpine, a handful of distro packages, an X server
-# we build, and one binary. The binary is PID 1, the window manager, and the
-# MCP server; Xvfb owns the pixels; dbus carries the accessibility tree;
-# Chromium is the browser.
-FROM rust:1-alpine AS build
-
-# rustls's default crypto provider builds aws-lc, which wants cmake and perl.
-RUN apk add --no-cache build-base cmake perl
+# The same glibc userland builds and runs the computer. GUI and development
+# workloads need Mesa even when the display has no hardware GPU.
+FROM rust:1-trixie AS build
+RUN apt-get update && apt-get install -y --no-install-recommends cmake perl pkg-config && rm -rf /var/lib/apt/lists/*
 WORKDIR /src
 COPY Cargo.toml Cargo.lock ./
 COPY src ./src
 COPY assets ./assets
-RUN cargo build --release --locked
+COPY skills ./skills
+ARG TOAD_BUILD_REVISION=unknown
+ARG TOAD_BUILD_CHANNEL=development
+ENV TOAD_BUILD_REVISION=$TOAD_BUILD_REVISION TOAD_BUILD_CHANNEL=$TOAD_BUILD_CHANNEL
+RUN --mount=type=cache,target=/usr/local/cargo/registry --mount=type=cache,target=/src/target cargo build --release --locked && cp target/release/toad-computer /usr/local/bin/toad-computer
 
+FROM build AS checks
+RUN rustup component add rustfmt clippy
+COPY tests ./tests
+RUN --mount=type=cache,target=/usr/local/cargo/registry --mount=type=cache,target=/src/target rm -f target/debug/deps/contract-* && cargo fmt --check && CARGO_PROFILE_TEST_DEBUG=0 CARGO_INCREMENTAL=0 cargo test --locked && CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 cargo clippy --all-targets --locked -- -D warnings \
+    && mkdir -p /acceptance \
+    && for binary in target/debug/deps/contract-*; do if [ -f "$binary" ] && [ -x "$binary" ]; then cp "$binary" /acceptance/contract; fi; done \
+    && test -x /acceptance/contract
 
-# Alpine's Xvfb links libGL at load time, and libGL drags in Mesa's LLVM
-# rasterizer: 300 MB that a framebuffer in RAM never calls. So the X server
-# is built here from the xorg-server release, GLX and every hardware path
-# off, and links nothing the runtime image does not already carry.
-FROM alpine:3.22@sha256:14358309a308569c32bdc37e2e0e9694be33a9d99e68afb0f5ff33cc1f695dce AS xserver
-
-ARG XSERVER_VERSION=21.1.24
-ARG XSERVER_SHA256=1a4eb36ca65cc3b1b936566d677a9786e13c11cd5806e951ac55f3f5ce3984af
-RUN apk add --no-cache \
-        gcc musl-dev meson ninja-build pkgconf xz \
-        xorgproto xtrans libxfont2-dev libxcvt-dev libxkbfile-dev \
-        pixman-dev libxau-dev libxdmcp-dev libmd-dev
-WORKDIR /src
-RUN wget -q -O xorg-server.tar.xz \
-        "https://www.x.org/archive/individual/xserver/xorg-server-${XSERVER_VERSION}.tar.xz" \
-    && echo "${XSERVER_SHA256}  xorg-server.tar.xz" | sha256sum -c - \
-    && tar -xJf xorg-server.tar.xz --strip-components=1 \
-    && meson setup build --prefix=/usr --buildtype=release \
-        -Dxvfb=true -Dxorg=false -Dxnest=false -Dxephyr=false -Dxwin=false -Dxquartz=false \
-        -Dglx=false -Dglamor=false -Ddri1=false -Ddri2=false -Ddri3=false \
-        -Dxdmcp=false -Dsecure-rpc=false -Dlisten_tcp=false \
-        -Dudev=false -Dudev_kms=false -Dhal=false -Dsystemd_logind=false \
-        -Dpciaccess=false -Dint10=false -Dvgahw=false -Ddga=false \
-        -Dxv=false -Dxvmc=false -Dxselinux=false \
-        -Ddocs=false -Ddevel-docs=false -Ddocs-pdf=false \
-        -Dsha1=libmd -Ddefault_font_path=built-ins -Dmitshm=true \
-        -Dxkb_dir=/usr/share/X11/xkb -Dxkb_bin_dir=/usr/bin -Dxkb_output_dir=/tmp \
-    && ninja -C build hw/vfb/Xvfb \
-    && strip build/hw/vfb/Xvfb
-
-FROM alpine:3.22@sha256:14358309a308569c32bdc37e2e0e9694be33a9d99e68afb0f5ff33cc1f695dce
-
-# What Xvfb links, then the desktop. Chromium's package still names Mesa as
-# a dependency for libgbm, whose backends load on demand, so the rasterizer
-# files are deleted after install. Input is XTEST and the clipboard is a
-# selection the agent owns, so no input or clipboard program is installed.
-RUN apk add --no-cache \
-        libxfont2 libxcvt libxau libmd pixman xkbcomp xkeyboard-config \
-        dbus \
-        at-spi2-core \
-        chromium \
-        ttf-dejavu \
-        font-noto-emoji \
-    && rm -rf /usr/lib/libLLVM* /usr/lib/libgallium* /usr/lib/gallium-pipe /usr/lib/libGL.so* \
-    && adduser -D -u 1000 -h /home/agent agent \
-    && install -d -m 1777 /tmp/.X11-unix
-
-COPY --from=xserver /src/build/hw/vfb/Xvfb /usr/bin/Xvfb
-COPY --from=build /src/target/release/toad-computer /usr/bin/toad-computer
-
-# Nothing in the container runs as root, so every capability stays dropped.
-# Chromium exports its accessibility tree only when ACCESSIBILITY_ENABLED
-# says so; without it `capture` sees a window with nothing inside.
+FROM debian:trixie-slim@sha256:d7e12182ce18b85b93007c1dedf31f2d29e01ccf3182cc4017c709b6259bc132 AS runtime
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    bash git curl wget ca-certificates tar gzip bzip2 xz-utils unzip zip ripgrep jq file \
+    nix-bin python3 xvfb xauth x11-xkb-utils dbus at-spi2-core chromium \
+    fonts-dejavu-core fonts-noto-color-emoji xfonts-base alacritty \
+    libgl1-mesa-dri libegl-mesa0 libglx-mesa0 mesa-utils \
+    libgtk-3-0t64 libwebkit2gtk-4.1-0 libayatana-appindicator3-1 librsvg2-common \
+    && rm -rf /var/lib/apt/lists/* \
+    && useradd --uid 1000 --create-home --shell /bin/bash agent \
+    && install -d /etc/nix \
+    && install -d -m 1777 /tmp/.X11-unix \
+    && install -d -o agent -g agent /nix /nix/store /nix/var/nix /home/agent/.config/alacritty \
+    && printf 'experimental-features = nix-command flakes\nsandbox = false\nbuild-users-group =\n' > /etc/nix/nix.conf \
+    && chown -R agent:agent /nix \
+    && printf '[window]\ndynamic_title = false\n[font]\nsize = 12.0\n' > /home/agent/.config/alacritty/alacritty.toml \
+    && chown -R agent:agent /home/agent
+COPY --from=build /usr/local/bin/toad-computer /usr/bin/toad-computer
 USER agent
 WORKDIR /home/agent
 ENV TOAD_COMPUTER_ADDR=0.0.0.0:8787 \
     TOAD_COMPUTER_HOME=/home/agent \
     TOAD_COMPUTER_SCREEN=1920x1080 \
     DISPLAY=:0 \
-    ACCESSIBILITY_ENABLED=1
-
+    ACCESSIBILITY_ENABLED=1 \
+    LANG=C.UTF-8 \
+    NIX_REMOTE=local \
+    NIX_SSL_CERT_FILE=/etc/ssl/certs/ca-certificates.crt \
+    LIBGL_ALWAYS_SOFTWARE=1 \
+    GDK_BACKEND=x11
+RUN install -d /home/agent/src && nix-store --init
 EXPOSE 8787
 ENTRYPOINT ["/usr/bin/toad-computer", "boot"]

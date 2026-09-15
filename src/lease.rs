@@ -55,7 +55,9 @@ impl MachineAccess {
 
     pub async fn mutate(&self, holder: &str) -> Result<OwnedMutexGuard<()>, String> {
         self.check_lease(holder).await?;
-        self.action_within(ACTION_WAIT).await
+        let guard = self.action_within(ACTION_WAIT).await?;
+        self.check_lease(holder).await?;
+        Ok(guard)
     }
 
     async fn action_within(&self, wait: Duration) -> Result<OwnedMutexGuard<()>, String> {
@@ -78,6 +80,7 @@ impl MachineAccess {
         self.check_lease(holder).await?;
         *self.queue_holder.lock().await = Some(holder.to_owned());
         let action = self.action_within(ACTION_WAIT).await?;
+        self.check_lease(holder).await?;
         Ok(RunPermit {
             _queue: queue,
             _action: action,
@@ -133,6 +136,22 @@ impl MachineAccess {
             expires: Instant::now() + Duration::from_secs(seconds),
         });
         Ok((seconds, SystemTime::now() + Duration::from_secs(seconds)))
+    }
+
+    /// A driving socket may renew its own lease, but cannot steal a newer one.
+    pub async fn renew(&self, holder: &str, seconds: u64) -> bool {
+        let mut active = self.lease.lock().await;
+        if active
+            .as_ref()
+            .is_some_and(|lease| lease.expires > Instant::now() && lease.holder != holder)
+        {
+            return false;
+        }
+        *active = Some(ControlLease {
+            holder: holder.to_owned(),
+            expires: Instant::now() + Duration::from_secs(seconds),
+        });
+        true
     }
 
     /// The person at the screen outranks every lease: their hands on the

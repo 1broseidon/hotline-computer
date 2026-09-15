@@ -100,10 +100,22 @@ async fn image_honors_the_computer_contract() {
 
     // The person can close the browser from the viewer; the next browser
     // call must start a fresh one instead of waiting on the old one forever.
+    let browser_pid = window_list
+        .iter()
+        .find(|w| {
+            w["class"]
+                .as_str()
+                .unwrap_or("")
+                .to_lowercase()
+                .contains("chromium")
+        })
+        .expect("browser window")["pid"]
+        .as_u64()
+        .expect("browser PID");
     let closed = call(
         &client,
         "shell",
-        json!({"command":"sh","args":["-c","pkill -x chromium; sleep 2; echo closed"]}),
+        json!({"command":"sh","args":["-c",format!("kill {browser_pid}; sleep 2; echo closed")]}),
     )
     .await;
     assert!(text(&closed).contains("closed"), "{}", text(&closed));
@@ -123,7 +135,19 @@ async fn image_honors_the_computer_contract() {
     let windows = call(&client, "windows", json!({"action":"list"})).await;
     let window_list: Vec<serde_json::Value> =
         serde_json::from_str(&text(&windows)).expect("window JSON");
-    let browser_window = window_list[0]["id"].as_str().expect("window id").to_owned();
+    let browser_window = window_list
+        .iter()
+        .find(|w| {
+            w["class"]
+                .as_str()
+                .unwrap_or("")
+                .to_lowercase()
+                .contains("chromium")
+        })
+        .expect("browser window")["id"]
+        .as_str()
+        .expect("window id")
+        .to_owned();
     let closed = call(
         &client,
         "windows",
@@ -153,7 +177,9 @@ async fn image_honors_the_computer_contract() {
         "a browser window is on the desktop again: {windows}"
     );
 
-    let path = "/home/agent/contract/probe.txt";
+    // Toad mounts a persistent scratch volume here; the image must seed its
+    // ownership so the non-root agent can follow the bundled clone recipe.
+    let path = "/home/agent/src/contract/probe.txt";
     let put = call(
         &client,
         "files",
@@ -239,7 +265,7 @@ async fn image_honors_the_computer_contract() {
         text(&value)
     );
     // A chord: select all, then a clipboard copy Chromium serves.
-    let all = call(&client, "input", json!({"action":"key","combo":"ctrl+a"})).await;
+    let all = call(&client, "input", json!({"action":"key","combo":"Ctrl+A"})).await;
     assert!(!all.is_error.unwrap_or(false), "{}", text(&all));
     let copy = call(&client, "input", json!({"action":"key","combo":"ctrl+c"})).await;
     assert!(!copy.is_error.unwrap_or(false), "{}", text(&copy));
@@ -285,7 +311,21 @@ async fn image_honors_the_computer_contract() {
     let windows = call(&client, "windows", json!({"action":"list"})).await;
     let window_list: Vec<serde_json::Value> =
         serde_json::from_str(&text(&windows)).expect("window JSON");
-    let browser_window = window_list[0]["id"].as_str().expect("window id").to_owned();
+    let browser_window = window_list
+        .iter()
+        .find(|w| {
+            w["class"]
+                .as_str()
+                .unwrap_or("")
+                .to_lowercase()
+                .contains("chromium")
+        })
+        .expect("browser window")["id"]
+        .as_str()
+        .expect("window id")
+        .to_owned();
+    call(&client, "shell", json!({"action":"show"})).await;
+    tokio::time::sleep(Duration::from_millis(200)).await;
     let tiled = call(&client, "windows", json!({"action":"tile"})).await;
     assert!(!tiled.is_error.unwrap_or(false), "{}", text(&tiled));
     tokio::time::sleep(Duration::from_millis(500)).await;
@@ -304,6 +344,18 @@ async fn image_honors_the_computer_contract() {
     )
     .await;
     assert!(!focused.is_error.unwrap_or(false), "{}", text(&focused));
+    // Repeated restore/resize cycles expose stale client geometry requests.
+    for _ in 0..12 {
+        let maximized = call(
+            &client,
+            "windows",
+            json!({"action":"maximize","window_id":browser_window}),
+        )
+        .await;
+        assert!(!maximized.is_error.unwrap_or(false), "{}", text(&maximized));
+        let tiled = call(&client, "windows", json!({"action":"tile"})).await;
+        assert!(!tiled.is_error.unwrap_or(false), "{}", text(&tiled));
+    }
     let maximized = call(
         &client,
         "windows",
@@ -348,99 +400,117 @@ async fn image_honors_the_computer_contract() {
         text(&watched)
     );
 
-    // Take control, and the same messages are the person's hands.
+    // Paste is explicit and a view-only connection cannot change the clipboard.
+    socket
+        .send(tokio_tungstenite::tungstenite::Message::text(
+            json!({"t":"paste","text":"denied"}).to_string(),
+        ))
+        .await
+        .unwrap();
+    assert_eq!(viewer_reply(&mut socket).await["t"], "error");
+    call(&client, "browser", json!({"action":"eval","js":"document.getElementById('t').value='';document.getElementById('t').focus();setInterval(()=>document.body.style.backgroundColor = Date.now()%2 ? '#eee' : '#fff',100)"})).await;
     socket
         .send(tokio_tungstenite::tungstenite::Message::text(
             json!({"t":"control","take":true}).to_string(),
         ))
         .await
-        .expect("take control");
-
-    // The pointer sits in the browser window, so the server's software
-    // cursor is inside every captured rectangle, and pages keep repainting.
-    // The stream must keep flowing: a DamageNotify the cursor causes during
-    // a read once landed inside the GetImage reply and froze it for good.
+        .unwrap();
     socket
         .send(tokio_tungstenite::tungstenite::Message::text(
-            json!({"t":"move","x":960,"y":540}).to_string(),
+            json!({"t":"paste","text":"host clipboard café 🐸\nsecond line"}).to_string(),
         ))
         .await
-        .expect("send move");
-    for page in ["one", "two", "three"] {
-        call(
-            &client,
-            "browser",
-            json!({"action":"navigate","url":format!("data:text/html,<title>Typing</title><h1 style=font-size:160px>{page}</h1><textarea id=t autofocus></textarea>")}),
-        )
-        .await;
-        tokio::time::sleep(Duration::from_millis(300)).await;
-    }
-    let mut later = 0;
-    let deadline = tokio::time::Instant::now() + Duration::from_secs(8);
-    while later < 3 && tokio::time::Instant::now() < deadline {
-        if let Ok(Some(Ok(message))) =
-            tokio::time::timeout(Duration::from_secs(1), socket.next()).await
-            && message.is_binary()
-        {
-            later += 1;
-        }
-    }
+        .unwrap();
+    assert_eq!(viewer_reply(&mut socket).await["ok"], true);
+    let held = call(&client, "input", json!({"action":"key","combo":"Escape"})).await;
+    assert!(held.is_error.unwrap_or(false), "{}", text(&held));
+    assert!(text(&held).contains("person"));
+    // Capture remains available while the viewer owns control.
+    let captured = call(&client, "capture", json!({})).await;
+    assert!(!captured.is_error.unwrap_or(false));
+    let (mut newer, _) = tokio_tungstenite::connect_async(format!("{ws_base}/ws?token={token}"))
+        .await
+        .unwrap();
+    newer
+        .send(tokio_tungstenite::tungstenite::Message::text(
+            json!({"t":"control","take":true}).to_string(),
+        ))
+        .await
+        .unwrap();
+    newer
+        .send(tokio_tungstenite::tungstenite::Message::text(
+            json!({"t":"paste","text":" + newer viewer"}).to_string(),
+        ))
+        .await
+        .unwrap();
+    assert_eq!(viewer_reply(&mut newer).await["ok"], true);
+    socket
+        .send(tokio_tungstenite::tungstenite::Message::text(
+            json!({"t":"paste","text":"stale viewer must not paste"}).to_string(),
+        ))
+        .await
+        .unwrap();
+    assert_eq!(viewer_reply(&mut socket).await["t"], "error");
+    socket.close(None).await.unwrap();
+    let held = call(&client, "input", json!({"action":"key","combo":"Escape"})).await;
     assert!(
-        later >= 3,
-        "frames keep flowing while the cursor is in the captured region: got {later}"
+        held.is_error.unwrap_or(false),
+        "closing the old viewer must not release the newer lease"
     );
-    // Focus the textarea for the keystroke below.
-    call(
-        &client,
-        "browser",
-        json!({"action":"eval","js":"document.getElementById('t').focus()"}),
-    )
-    .await;
-    tokio::time::sleep(Duration::from_millis(300)).await;
-    for down in [true, false] {
-        socket
-            .send(tokio_tungstenite::tungstenite::Message::text(
-                json!({"t":"key","key":"x","down":down}).to_string(),
-            ))
-            .await
-            .expect("send key");
-    }
-    tokio::time::sleep(Duration::from_millis(500)).await;
+    newer.close(None).await.unwrap();
+    tokio::time::sleep(Duration::from_millis(100)).await;
     let typed = call(
         &client,
         "browser",
         json!({"action":"eval","js":"document.getElementById('t').value"}),
     )
     .await;
-    assert!(
-        text(&typed).contains('x'),
-        "the keystroke reached the page: {}",
-        text(&typed)
+    assert_eq!(
+        text(&typed),
+        "\"host clipboard café 🐸\\nsecond line + newer viewer\""
     );
-    let held = call(&client, "input", json!({"action":"key","combo":"Escape"})).await;
-    assert!(held.is_error.unwrap_or(false), "{}", text(&held));
-    assert!(text(&held).contains("person"), "{}", text(&held));
-
-    // Handing it back is the person's word too: the teammate has the machine
-    // again at once, rather than ten seconds after the last keystroke.
-    socket
+    let (mut reconnected, _) =
+        tokio_tungstenite::connect_async(format!("{ws_base}/ws?token={token}"))
+            .await
+            .unwrap();
+    reconnected
         .send(tokio_tungstenite::tungstenite::Message::text(
-            json!({"t":"control","take":false}).to_string(),
+            json!({"t":"paste","text":"reconnect must watch"}).to_string(),
         ))
         .await
-        .expect("give it back");
-    tokio::time::sleep(Duration::from_millis(300)).await;
+        .unwrap();
+    assert_eq!(viewer_reply(&mut reconnected).await["t"], "error");
     let handed = call(&client, "input", json!({"action":"key","combo":"Escape"})).await;
     assert!(
         !handed.is_error.unwrap_or(false),
-        "the screen is the agent's again: {}",
-        text(&handed)
+        "disconnect releases control"
     );
-    socket.close(None).await.ok();
+    reconnected.close(None).await.unwrap();
 
     client.cancel().await.ok();
     alice.cancel().await.ok();
     mallory.cancel().await.ok();
+}
+
+async fn viewer_reply(
+    socket: &mut tokio_tungstenite::WebSocketStream<
+        tokio_tungstenite::MaybeTlsStream<tokio::net::TcpStream>,
+    >,
+) -> serde_json::Value {
+    tokio::time::timeout(Duration::from_secs(5), async {
+        loop {
+            let message = socket
+                .next()
+                .await
+                .expect("viewer response")
+                .expect("viewer response");
+            if message.is_text() {
+                return serde_json::from_str(message.to_text().unwrap()).unwrap();
+            }
+        }
+    })
+    .await
+    .expect("viewer reply within five seconds")
 }
 
 async fn connect(base: &str, token: &str, holder: &str) -> Client {

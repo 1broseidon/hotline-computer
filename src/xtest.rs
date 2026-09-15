@@ -162,7 +162,15 @@ impl Hands {
             };
             modifiers.push(self.keycode_for(keysym)?);
         }
-        let keysym = keysym_named(key).ok_or_else(|| format!("unknown key {key:?}"))?;
+        // Shortcut notation such as Ctrl+A names the A key; Shift must be
+        // explicit. A bare "A" still types the uppercase character.
+        let keysym =
+            if !modifiers.is_empty() && key.len() == 1 && key.as_bytes()[0].is_ascii_alphabetic() {
+                Some(u32::from(key.as_bytes()[0].to_ascii_lowercase()))
+            } else {
+                keysym_named(key)
+            }
+            .ok_or_else(|| format!("unknown key {key:?}"))?;
         let (keycode, shifted) = self.key_for(keysym)?;
         let shift = self.keycode_for(SHIFT)?;
         if shifted && !modifiers.contains(&shift) {

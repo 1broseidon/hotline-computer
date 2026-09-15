@@ -1,179 +1,144 @@
-use std::process::Stdio;
-use std::time::{Duration, Instant};
+use serde::Deserialize;
+use serde_json::{Value, json};
 
-use serde::{Deserialize, Serialize};
-use serde_json::Value;
-
-use crate::App;
-
-use super::{ToolResult, action_error, json_text, text};
+use super::{ToolResult, action_error, json_text};
+use crate::{App, jobs::Start};
 
 #[derive(Deserialize)]
 struct Input {
     #[serde(default)]
     action: String,
-    command: String,
+    #[serde(flatten)]
+    start: Start,
+    job_id: Option<String>,
+    text: Option<String>,
     #[serde(default)]
-    args: Vec<String>,
-    cwd: Option<String>,
-    timeout: Option<u64>,
+    eof: bool,
+    #[serde(default)]
+    cursor: u64,
+    wait_ms: Option<u64>,
     max_output: Option<usize>,
 }
 
-#[derive(Serialize)]
-struct ExecResult {
-    stdout: String,
-    stderr: String,
-    exit_code: i32,
-    duration_ms: u128,
-    truncated: bool,
-}
-
 pub async fn call(app: &App, arguments: Value, holder: &str) -> ToolResult {
-    let input: Input = serde_json::from_value(arguments).map_err(|error| error.to_string())?;
-    if input.command.is_empty() {
-        return Err("command is required".into());
-    }
-    let _guard = app.access.mutate(holder).await?;
+    let mut input: Input = serde_json::from_value(arguments).map_err(|error| error.to_string())?;
+    let id = input.job_id.as_deref().unwrap_or("");
+    let limit = input.max_output.unwrap_or(65_536).clamp(1, 1_048_576);
     match input.action.as_str() {
-        "" | "exec" => exec(app, input).await,
-        "launch" => launch(app, input).await,
-        action => Err(action_error("shell", action, &["exec", "launch"])),
-    }
-}
-
-async fn exec(app: &App, input: Input) -> ToolResult {
-    let timeout = input.timeout.unwrap_or(30).min(60);
-    let max_output = input.max_output.unwrap_or(65_536).min(1_048_576);
-    let started = Instant::now();
-    let mut command = tokio::process::Command::new(&input.command);
-    command
-        .args(&input.args)
-        .current_dir(
-            input
-                .cwd
-                .as_deref()
-                .unwrap_or_else(|| app.config.home.to_str().unwrap_or("/home/agent")),
-        )
-        .env("DISPLAY", &app.config.display)
-        .kill_on_drop(true)
-        .process_group(0)
-        .stdout(Stdio::piped())
-        .stderr(Stdio::piped());
-    let child = command
-        .spawn()
-        .map_err(|error| format!("{}: {error}", input.command))?;
-    let process_group = child.id();
-    let mut wait = Box::pin(child.wait_with_output());
-    let output = match tokio::time::timeout(Duration::from_secs(timeout), &mut wait).await {
-        Ok(result) => result.map_err(|error| error.to_string())?,
-        Err(_) => {
-            if let Some(process_group) = process_group {
-                // Shells may leave descendants behind, so a timeout kills their whole group.
-                unsafe {
-                    libc::kill(-(process_group as i32), libc::SIGKILL);
-                }
+        "show" => {
+            let _guard = app.access.mutate(holder).await?;
+            if !id.is_empty() {
+                app.jobs.status(id).await?;
             }
-            let _ = wait.await;
-            return json_text(ExecResult {
-                stdout: String::new(),
-                stderr: format!("exec timed out after {timeout}s"),
-                exit_code: 255,
-                duration_ms: started.elapsed().as_millis(),
-                truncated: false,
-            });
+            app.observer.select((!id.is_empty()).then_some(id)).await?;
+            json_text(
+                json!({"ok":true,"observer":"Alacritty","pid":app.observer.pid().await,"job_id":input.job_id}),
+            )
         }
-    };
-    let (stdout, stdout_truncated) = truncate(output.stdout, max_output);
-    let (stderr, stderr_truncated) = truncate(output.stderr, max_output);
-    json_text(ExecResult {
-        stdout,
-        stderr,
-        exit_code: output.status.code().unwrap_or(-1),
-        duration_ms: started.elapsed().as_millis(),
-        truncated: stdout_truncated || stderr_truncated,
-    })
-}
-
-async fn launch(app: &App, input: Input) -> ToolResult {
-    let child = std::process::Command::new(&input.command)
-        .args(&input.args)
-        .current_dir(
-            input
-                .cwd
-                .as_deref()
-                .unwrap_or_else(|| app.config.home.to_str().unwrap_or("/home/agent")),
-        )
-        .env("DISPLAY", &app.config.display)
-        .stdin(Stdio::null())
-        .stdout(Stdio::null())
-        .stderr(Stdio::null())
-        .spawn()
-        .map_err(|error| format!("{}: {error}", input.command))?;
-    Ok(text(format!(
-        "launched {} (pid {})",
-        input.command,
-        child.id()
-    )))
-}
-
-fn truncate(bytes: Vec<u8>, max: usize) -> (String, bool) {
-    if bytes.len() <= max {
-        (String::from_utf8_lossy(&bytes).into_owned(), false)
-    } else {
-        (String::from_utf8_lossy(&bytes[..max]).into_owned(), true)
+        "list" => json_text(app.jobs.list().await?),
+        "status" => json_text(app.jobs.status(id).await?),
+        "read" => json_text(app.jobs.read(id, input.cursor, limit).await?),
+        "wait" => json_text(app.jobs.wait(id, input.wait_ms.unwrap_or(1000)).await?),
+        "cancel" => {
+            // Admission is serialized with desktop input; waiting for exit is not.
+            let guard = app.access.mutate(holder).await?;
+            app.jobs.request_cancel(id).await?;
+            drop(guard);
+            json_text(app.jobs.wait(id, 5000).await?)
+        }
+        "write" => {
+            let _guard = app.access.mutate(holder).await?;
+            json_text(
+                app.jobs
+                    .write(id, input.text.as_deref().unwrap_or(""), input.eof)
+                    .await?,
+            )
+        }
+        "" | "exec" | "start" | "launch" => {
+            let synchronous = input.action.is_empty() || input.action == "exec";
+            if synchronous {
+                input.start.timeout = Some(input.start.timeout.unwrap_or(30).clamp(1, 60));
+            }
+            let guard = app.access.mutate(holder).await?;
+            let job = app.jobs.start(input.start, holder).await?;
+            drop(guard);
+            let observer_error = if app.display.is_some() {
+                app.observer.show(false).await.err()
+            } else {
+                None
+            };
+            if !synchronous {
+                let mut result = serde_json::to_value(job).map_err(|e| e.to_string())?;
+                if let Some(error) = observer_error {
+                    result["observer_error"] = json!(error);
+                }
+                return json_text(result);
+            }
+            let mut job = app.jobs.wait(&job.id, 60_000).await?;
+            // A 60-second execution may still be draining output at the deadline.
+            if !job.finished() {
+                job = app.jobs.wait(&job.id, 5000).await?;
+            }
+            let (stdout, stderr) = app.jobs.streams(&job.id, limit).await?;
+            json_text(json!({
+                "stdout":stdout,"stderr":stderr,
+                "exit_code":job.exit_code.unwrap_or(if job.state == "timed_out" {255} else {-1}),
+                "duration_ms":job.finished_at.unwrap_or_else(crate::jobs::now).saturating_sub(job.started_at),
+                "truncated":job.truncated || job.output_bytes > stdout.len() + stderr.len(),
+                "job_id":job.id,"state":job.state,"signal":job.signal,"error":job.error,"observer_error":observer_error
+            }))
+        }
+        action => Err(action_error(
+            "shell",
+            action,
+            &[
+                "exec", "start", "launch", "list", "status", "read", "wait", "write", "cancel",
+                "show",
+            ],
+        )),
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::Config;
-
     #[tokio::test]
-    async fn timeout_kills_descendants_in_the_childs_process_group() {
+    async fn a_waiting_command_does_not_lock_out_desktop_takeover() {
         let home = tempfile::tempdir().unwrap();
-        let pid_file = home.path().join("grandchild.pid");
-        let app = App::new(Config {
+        let app = App::new(crate::Config {
             addr: String::new(),
             token: None,
             home: home.path().to_owned(),
-            display: ":0".to_owned(),
-            screen: "1920x1080".to_owned(),
+            display: ":0".into(),
+            screen: "800x600".into(),
         });
-        exec(
-            &app,
-            Input {
-                action: "exec".to_owned(),
-                command: "/bin/sh".to_owned(),
-                args: vec![
-                    "-c".to_owned(),
-                    "sleep 100 & echo $! > \"$1\"; wait".to_owned(),
-                    "sh".to_owned(),
-                    pid_file.to_string_lossy().into_owned(),
-                ],
-                cwd: None,
-                timeout: Some(1),
-                max_output: None,
-            },
+        let running = app.clone();
+        let task = tokio::spawn(async move {
+            call(
+                &running,
+                json!({"command":"sh","args":["-c","printf started; sleep 1"]}),
+                "agent",
+            )
+            .await
+        });
+        while app.jobs.list().await.unwrap().is_empty() {
+            tokio::task::yield_now().await;
+        }
+        let guard = tokio::time::timeout(
+            std::time::Duration::from_millis(100),
+            app.access.mutate("person"),
         )
         .await
+        .expect("job wait held the desktop lock")
         .unwrap();
-
-        let pid: i32 = std::fs::read_to_string(pid_file)
-            .unwrap()
-            .trim()
-            .parse()
-            .unwrap();
-        let mut gone = false;
-        for _ in 0..50 {
-            let result = unsafe { libc::kill(pid, 0) };
-            if result == -1 && std::io::Error::last_os_error().raw_os_error() == Some(libc::ESRCH) {
-                gone = true;
-                break;
-            }
-            tokio::time::sleep(Duration::from_millis(20)).await;
-        }
-        assert!(gone, "grandchild {pid} survived its command timeout");
+        drop(guard);
+        app.access.seize("person", 10).await;
+        assert!(
+            call(&app, json!({"action":"start","command":"true"}), "agent")
+                .await
+                .is_err()
+        );
+        assert!(call(&app, json!({"action":"list"}), "agent").await.is_ok());
+        assert!(task.await.unwrap().is_ok());
     }
 }

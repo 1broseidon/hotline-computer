@@ -50,7 +50,7 @@ pub async fn call(app: &App, arguments: Value, holder: &str) -> ToolResult {
         return batch(app, holder, input).await;
     }
     let _guard = app.access.mutate(holder).await?;
-    one(
+    let result = one(
         app,
         &input.action,
         &json!({
@@ -58,8 +58,16 @@ pub async fn call(app: &App, arguments: Value, holder: &str) -> ToolResult {
             "clicks": input.clicks, "text": input.text, "combo": input.combo
         }),
     )
-    .await
-    .map(text)
+    .await?;
+    tokio::time::sleep(Duration::from_millis(
+        input.settle_ms.unwrap_or(40).min(2000),
+    ))
+    .await;
+    if input.capture_after == "final" || input.capture_after == "each" {
+        let windows = x11::windows(&app.config.display)?;
+        return json_text(json!({"result":result,"capture":a11y::tree(app, &windows).await}));
+    }
+    Ok(text(result))
 }
 
 /// X round trips and the pauses between keystrokes happen off the runtime.
@@ -216,7 +224,7 @@ async fn one(app: &App, action: &str, step: &Value) -> Result<String, String> {
             let deadline = tokio::time::Instant::now() + Duration::from_secs(timeout);
             loop {
                 let windows = x11::windows(&app.config.display).unwrap_or_default();
-                let tree = a11y::tree(&windows).await;
+                let tree = a11y::tree(app, &windows).await;
                 let page = app.browser.page_text_if_running().await.unwrap_or_default();
                 if tree.contains(&wanted) || page.contains(&wanted) {
                     break Ok("found".into());
@@ -247,7 +255,7 @@ async fn batch(app: &App, holder: &str, input: Input) -> ToolResult {
     }
     let _permit = app.access.run(holder).await?;
     let stop = input.stop_on_error.unwrap_or(true);
-    let settle = Duration::from_millis(input.settle_ms.unwrap_or(40));
+    let settle = Duration::from_millis(input.settle_ms.unwrap_or(40).min(2000));
     let capture_on_error = input.capture_on_error.unwrap_or(true);
     let capture_after = if input.capture_after.is_empty() {
         "final"
@@ -267,29 +275,27 @@ async fn batch(app: &App, holder: &str, input: Input) -> ToolResult {
             .and_then(Value::as_str)
             .ok_or_else(|| "step action is required".to_owned())?;
         let outcome = one(app, action, step).await;
+        tokio::time::sleep(settle).await;
         let mut result = json!({"index":index,"ok":outcome.is_ok(),"duration_ms":step_started.elapsed().as_millis()});
         if let Err(error) = &outcome {
             result["error"] = json!(error);
             if capture_on_error {
                 let windows = x11::windows(&app.config.display).unwrap_or_default();
-                final_capture = Some(a11y::tree(&windows).await);
+                final_capture = Some(a11y::tree(app, &windows).await);
             }
         }
         if capture_after == "each" {
             let windows = x11::windows(&app.config.display).unwrap_or_default();
-            result["capture"] = json!(a11y::tree(&windows).await);
+            result["capture"] = json!(a11y::tree(app, &windows).await);
         }
         results.push(result);
         if outcome.is_err() && stop {
             break;
         }
-        if index + 1 < input.steps.len() {
-            tokio::time::sleep(settle).await;
-        }
     }
     if capture_after == "final" {
         let windows = x11::windows(&app.config.display).unwrap_or_default();
-        final_capture = Some(a11y::tree(&windows).await);
+        final_capture = Some(a11y::tree(app, &windows).await);
     }
     json_text(
         json!({"steps":results,"capture":final_capture,"total_duration_ms":started.elapsed().as_millis()}),

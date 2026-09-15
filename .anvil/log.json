@@ -1,0 +1,49 @@
+[
+  {
+    "target": "toad-computer MCP tools",
+    "kind": "MCP",
+    "scope": "service",
+    "caller_profile": [
+      "agent",
+      "script",
+      "human-operator"
+    ],
+    "risk_class": "R2",
+    "surface_pattern": "existing eight tools with action enums",
+    "obligations": [
+      "retained bounded output",
+      "cancellation and reaping",
+      "lease admission",
+      "versioned discovery",
+      "truthful status"
+    ],
+    "brief": "BRO-25 through BRO-37 authorized end-to-end implementation; preserve existing tool names and exec fields, enrich launch and add managed actions."
+  },
+  {
+    "target": "toad-computer release acceptance",
+    "kind": "MCP",
+    "scope": "service",
+    "source": {
+      "computer": "b7cd1fa",
+      "toad": "cc1a19f",
+      "image": "sha256:ee28283f4cfd4c958bbee3db5c3896d8e0c63b3061a9aae549fb38dcfe88e717"
+    },
+    "verification": [
+      "27 Rust unit tests, fmt and clippy passed",
+      "Live MCP/viewer contract passed in 11.87 seconds",
+      "All 16 generic and 16 production Toad-adapter cases passed",
+      "Empty Nix store; five catalog profiles; browser wizard; verified Ketch; Click tests; native Toad screens",
+      "70-job churn per client, bounded output, cancellation and zombie checks passed",
+      "Observer startup fault and automatic retry passed on a separate 640x480 desktop",
+      "Native host clipboard, multiline/tabs/whitespace, renamed/disappearing windows, redirected installer with spaces and exit 19 passed",
+      "Hard restart retained output, marked interruption and reused environment; measured 5.698 seconds, follow-ups 3.356/0.256/0.177",
+      "Toad make check passed; isolated native QA app installed and reopened surviving computer"
+    ],
+    "remaining": [
+      "Native x86_64 CI requires public source push approval",
+      "Independent Toad model-session guide evaluation is not represented by adapter tests",
+      "Cold registry pull, release/tag and official default rollout remain gated"
+    ],
+    "evidence": "qa/0.4.0-candidate-b7cd1fa/README.md"
+  }
+]

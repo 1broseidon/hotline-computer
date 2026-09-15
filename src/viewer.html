@@ -15,17 +15,21 @@
   /* While the screen is the person's, the button sits over a desktop they
      are using, so it steps back to the edge of sight until they go for it. */
   #control.driving { opacity: .35; }
+  #paste { position:fixed; bottom:14px; right:14px; padding:6px 14px; border-radius:6px; background:#161616; color:#ddd; border:1px solid #414141; font:inherit; cursor:pointer; }
+  #paste:disabled { opacity:.35; cursor:default; }
 </style>
 </head>
 <body>
 <canvas id="screen" tabindex="0" width="1" height="1"></canvas>
 <div id="status">Connecting…</div>
 <button id="control" type="button">Take control</button>
+<button id="paste" type="button" disabled>Paste clipboard</button>
 <script>
 (() => {
   const canvas = document.getElementById("screen");
   const status = document.getElementById("status");
   const control = document.getElementById("control");
+  const paste = document.getElementById("paste");
   const context = canvas.getContext("2d");
   const token = decodeURIComponent(location.hash.slice(1));
   let socket = null;
@@ -56,8 +60,17 @@
     // A fresh socket is a machine that has not been told who is driving, so
     // a person who still holds the screen says so again.
     socket.onopen = () => { say("Connected", true); if (driving) send({ t: "control", take: true }); };
-    socket.onclose = () => { say("Reconnecting…"); setTimeout(connect, 1000); };
+    socket.onclose = () => { driving = false; paste.disabled = true; control.textContent = "Take control"; control.classList.remove("driving"); say("Reconnecting…"); setTimeout(connect, 1000); };
     socket.onmessage = (event) => {
+      if (typeof event.data === 'string') {
+        const message = JSON.parse(event.data);
+        if (message.t === 'paste') say('Pasted', true);
+        if (message.t === 'error') {
+          say(message.error, false);
+          if (!message.driving) { driving=false; paste.disabled=true; control.textContent='Take control'; control.classList.remove('driving'); }
+        }
+        return;
+      }
       const data = event.data;
       const view = new DataView(data);
       const [x, y, w, h, sw, sh] = [0, 2, 4, 6, 8, 10].map((offset) => view.getUint16(offset, true));
@@ -76,6 +89,7 @@
 
   function drive(taking) {
     driving = taking;
+    paste.disabled = !taking;
     send({ t: "control", take: taking });
     control.textContent = taking ? "Give it back" : "Take control";
     control.classList.toggle("driving", taking);
@@ -83,6 +97,23 @@
     say(taking ? "The screen is yours" : "The screen is the agent's", true);
   }
   control.addEventListener("click", () => drive(!driving));
+
+  function pasteText(text) {
+    if (!driving || !socket || socket.readyState !== WebSocket.OPEN) return;
+    if (new TextEncoder().encode(text).length > 1048576) { say('Paste exceeds 1 MiB', false); return; }
+    send({t:'paste',text});
+    canvas.focus();
+  }
+  paste.addEventListener('click', async () => {
+    if (!driving) return;
+    try { pasteText(await navigator.clipboard.readText()); }
+    catch { say('Clipboard access unavailable. Click the desktop and press ⌘V or Ctrl+V.', false); canvas.focus(); }
+  });
+  canvas.addEventListener('paste', event => {
+    if (!driving) return;
+    event.preventDefault();
+    pasteText(event.clipboardData.getData('text/plain'));
+  });
 
   function at(event) {
     const rect = canvas.getBoundingClientRect();
@@ -127,11 +158,13 @@
   // The X server repeats a held key itself, so browser repeats are dropped.
   canvas.addEventListener("keydown", (event) => {
     if (!driving) return;
+    if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 'v') return;
     event.preventDefault();
     if (!event.repeat) send({ t: "key", key: event.key, down: true });
   });
   canvas.addEventListener("keyup", (event) => {
     if (!driving) return;
+    if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 'v') return;
     event.preventDefault();
     send({ t: "key", key: event.key, down: false });
   });

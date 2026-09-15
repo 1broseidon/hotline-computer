@@ -4,11 +4,15 @@ pub mod browser;
 pub mod clipboard;
 pub mod desktop;
 pub mod display;
+pub mod guide;
+pub mod jobs;
 pub mod lease;
+pub mod observer;
 pub mod screen;
 pub mod serve;
 pub mod tools;
 pub mod viewer;
+pub mod workspace;
 pub mod x11;
 pub mod xtest;
 
@@ -50,6 +54,9 @@ pub struct App {
     pub config: Arc<Config>,
     pub access: MachineAccess,
     pub browser: BrowserManager,
+    pub jobs: jobs::Jobs,
+    pub observer: observer::Observer,
+    pub a11y: Arc<tokio::sync::OnceCell<atspi::zbus::Connection>>,
     /// The screen stream, the hands, and the clipboard; `None` until a display is up.
     pub display: Option<Arc<display::Display>>,
 }
@@ -59,6 +66,9 @@ impl App {
         let config = Arc::new(config);
         Self {
             access: MachineAccess::new(),
+            a11y: Arc::new(tokio::sync::OnceCell::new()),
+            jobs: jobs::Jobs::new(&config.home, &config.display),
+            observer: observer::Observer::new(&config.home, &config.display),
             browser: BrowserManager::new(Arc::clone(&config)),
             config,
             display: None,
