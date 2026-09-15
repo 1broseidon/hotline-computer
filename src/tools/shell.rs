@@ -27,8 +27,13 @@ pub async fn call(app: &App, arguments: Value, holder: &str) -> ToolResult {
     match input.action.as_str() {
         "show" => {
             let _guard = app.access.mutate(holder).await?;
-            app.observer.show(true).await?;
-            json_text(json!({"ok":true,"observer":"Alacritty"}))
+            if !id.is_empty() {
+                app.jobs.status(id).await?;
+            }
+            app.observer.select((!id.is_empty()).then_some(id)).await?;
+            json_text(
+                json!({"ok":true,"observer":"Alacritty","pid":app.observer.pid().await,"job_id":input.job_id}),
+            )
         }
         "list" => json_text(app.jobs.list().await?),
         "status" => json_text(app.jobs.status(id).await?),
@@ -57,13 +62,17 @@ pub async fn call(app: &App, arguments: Value, holder: &str) -> ToolResult {
             let guard = app.access.mutate(holder).await?;
             let job = app.jobs.start(input.start, holder).await?;
             drop(guard);
-            if app.display.is_some()
-                && let Err(error) = app.observer.show(false).await
-            {
-                eprintln!("toad-computer: {error}");
-            }
+            let observer_error = if app.display.is_some() {
+                app.observer.show(false).await.err()
+            } else {
+                None
+            };
             if !synchronous {
-                return json_text(job);
+                let mut result = serde_json::to_value(job).map_err(|e| e.to_string())?;
+                if let Some(error) = observer_error {
+                    result["observer_error"] = json!(error);
+                }
+                return json_text(result);
             }
             let mut job = app.jobs.wait(&job.id, 60_000).await?;
             // A 60-second execution may still be draining output at the deadline.
@@ -76,7 +85,7 @@ pub async fn call(app: &App, arguments: Value, holder: &str) -> ToolResult {
                 "exit_code":job.exit_code.unwrap_or(if job.state == "timed_out" {255} else {-1}),
                 "duration_ms":job.finished_at.unwrap_or_else(crate::jobs::now).saturating_sub(job.started_at),
                 "truncated":job.truncated || job.output_bytes > stdout.len() + stderr.len(),
-                "job_id":job.id,"state":job.state,"signal":job.signal,"error":job.error
+                "job_id":job.id,"state":job.state,"signal":job.signal,"error":job.error,"observer_error":observer_error
             }))
         }
         action => Err(action_error(

@@ -26,11 +26,10 @@ pub async fn call(app: &App, arguments: Value) -> ToolResult {
     match input.mode.as_str() {
         "" | "tree" => {
             let windows = x11::windows(&app.config.display)?;
-            let (png, tree) = tokio::join!(
-                async { x11::scaled_png(&app.config.display, 1568) },
-                a11y::tree(app, &windows)
-            );
-            let png = png?;
+            // Reading native accessibility can wait for the application's event loop.
+            // Capture afterwards so the pixels are at least as recent as that read.
+            let tree = a11y::tree(app, &windows).await;
+            let png = x11::scaled_png(&app.config.display, 1568)?;
             Ok(vec![
                 ContentBlock::image(
                     base64::engine::general_purpose::STANDARD.encode(png),

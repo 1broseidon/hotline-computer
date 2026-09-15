@@ -59,7 +59,7 @@ pub fn descriptors(home: &str) -> Vec<Tool> {
         ),
         Tool::new(
             "shell",
-            "Run managed commands without holding the desktop while they execute. exec waits up to 60s and retains stdout/stderr even on timeout. start/launch return a durable job ID immediately. list/status/read/wait inspect jobs; write sends stdin (optional EOF); cancel kills and reaps the process group. show opens or focuses the Alacritty observer; commands are visible without keyboard simulation. Output is retained across observer closure and reconnect. Use request_id to retry a start safely. pty=true provides a controlling terminal without keyboard simulation.",
+            "Run managed commands without holding the desktop while they execute. exec waits up to 60s and retains stdout/stderr even on timeout. start/launch return a durable job ID immediately. list/status/read/wait inspect jobs; write sends stdin (optional EOF); cancel kills and reaps the process group. show opens or focuses the Alacritty observer, with an optional job_id to inspect one job; commands are visible without keyboard simulation. Output is retained across observer closure and reconnect. Use request_id to retry a start safely. pty=true provides a controlling terminal without keyboard simulation.",
             schema(json!({
                 "type":"object","properties":{
                     "action":{"type":"string","enum":["exec","start","launch","list","status","read","wait","write","cancel","show"],"default":"exec"},
@@ -80,16 +80,16 @@ pub fn descriptors(home: &str) -> Vec<Tool> {
                 "type":"object","properties":{
                     "action":{"type":"string","enum":["get","put","list","download","extract","run"]},"path":{"type":"string"},"content":{"type":"string"},
                     "url":{"type":"string"},"repo":{"type":"string","description":"GitHub owner/repo"},"version":{"type":"string","description":"GitHub release tag or latest"},"asset":{"type":"string","description":"Exactly one asset must match; supports {arch}=arm64/amd64 and {os}=linux"},
-                    "sha256":{"type":"string"},"destination":{"type":"string"},"interpreter":{"type":"string","enum":["bash","sh","python3"]},"args":{"type":"array","items":{"type":"string"}},"cwd":{"type":"string"},"request_id":{"type":"string"},"encoding":{"type":"string","enum":["utf8","text","base64"]}
+                    "sha256":{"type":"string"},"destination":{"type":"string"},"interpreter":{"type":"string","enum":["bash","sh","python3"]},"args":{"type":"array","items":{"type":"string"}},"cwd":{"type":"string"},"env":{"type":"object","additionalProperties":{"type":"string"}},"request_id":{"type":"string"},"encoding":{"type":"string","enum":["utf8","text","base64"]}
                 },"required":["action","path"],"additionalProperties":false
             })),
         ),
         Tool::new(
             "windows",
-            "Manage desktop windows: list them with IDs, classes, bounds, and focus; focus, close, maximize or restore; or auto-tile them with Chromium left and the rest stacked right.",
+            "Manage desktop windows: list them with IDs, classes, bounds, and focus; focus, close, maximize or restore; tile a primary_id/observer_id pair, or auto-tile with Chromium left and the rest stacked right. Tiling respects minimum sizes and the desktop work area and verifies the resulting geometry.",
             schema(json!({
                 "type":"object","properties":{
-                    "action":{"type":"string","enum":["list","focus","close","maximize","tile"]},"window_id":{"type":"string"},"unmaximize":{"type":"boolean"}
+                    "action":{"type":"string","enum":["list","focus","close","maximize","tile"]},"window_id":{"type":"string"},"unmaximize":{"type":"boolean"},"primary_id":{"type":"string"},"observer_id":{"type":"string"}
                 },"required":["action"],"additionalProperties":false
             })),
         ),

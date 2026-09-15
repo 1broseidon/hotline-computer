@@ -5,13 +5,13 @@ description: Operate a Toad Computer through its MCP tools for browser work, ins
 
 Read `state {"action":"info"}` and `state {"action":"guide"}` when connecting to a computer. Use the guide returned by that running release. A desktop's configured image tag may differ from the computer currently attached to it.
 
-This guide ships with Toad Computer {{version}}. The computer exposes eight MCP tools: `capture`, `input`, `browser`, `shell`, `files`, `windows`, `wait`, and `state`. A host may prefix those tool names.
+This guide ships with Toad Computer {{version}}, channel `{{channel}}`, revision `{{revision}}`. A development build is not an official release; compare this identity with the requested image before reporting release acceptance. The computer exposes eight MCP tools: `capture`, `input`, `browser`, `shell`, `files`, `windows`, `wait`, and `state`. A host may prefix those tool names. `state info` lists installed executable paths, including the managed `/usr/bin/chromium`; use these paths instead of downloading a second browser.
 
 ## Start with the task's shortest path
 
 - Browser tasks: `browser navigate`, then `browser text`. Use returned refs with `fill`, `select`, `check`, and `click_ref`. Take a fresh snapshot after navigation or a page change. `fill` accepts native date/time formats; `select` accepts `values` for multiple choices. An action result includes the retained value and HTML validity. Verify the submitted result, not just the field entry.
 - CLI installation or native app QA: use `shell` and the environment catalog below. The desktop is a Linux glibc container; its CPU architecture is reported by `state info`. Do not install host macOS artifacts into it.
-- Native screens: `capture` supplies a screenshot and window-scoped accessibility nodes. Use `input` for mouse/keyboard work and `windows` to focus or arrange apps. When accessibility is unavailable, use screenshot coordinates; never assume another window's tree belongs to this app.
+- Native screens: `capture` supplies a screenshot and window-scoped accessibility nodes. Use `input` for mouse/keyboard work and `windows` to focus or arrange apps. To place an app beside its observer, call `windows tile` with `primary_id` and `observer_id` from `windows list`; the result verifies work-area geometry and respects app minimum sizes. When accessibility is unavailable, use screenshot coordinates; never assume another window's tree belongs to this app.
 
 ## Build and run a repository
 
@@ -33,11 +33,11 @@ A typical Rust/Tauri task uses this sequence (replace the repository and directo
 - `shell wait` waits up to `wait_ms` (maximum 60000) without locking the desktop.
 - `shell write` sends `text` directly to stdin; `eof:true` closes pipe input. Use `pty:true` at start for software requiring a terminal. No keyboard typing into the terminal window is needed.
 - `shell cancel` stops the job's process group and retains partial output. Inspect `state`, `exit_code`, `signal`, and `error`; a launch acknowledgement is not application readiness.
-- `shell show` opens or focuses the Alacritty observer. Closing that window leaves the jobs running; the top bar's terminal button reopens it. Output is capped at 4 MiB per job, with truncation reported. The most recent 64 jobs are retained; at most 16 run concurrently.
+- `shell show` opens or focuses the Alacritty observer; pass `job_id` to inspect just that job. Closing that window leaves the jobs running; the top bar's terminal button reopens it. The job count opens a menu of retained commands, including completed and failed jobs. Output is capped at 4 MiB per job, with truncation reported. The most recent 64 jobs are retained; at most 16 run concurrently.
 
 `files download` accepts a URL, destination `path`, and optional `sha256`. For GitHub releases, use `repo`, `version` (tag or `latest`), and an `asset` pattern that matches exactly one file. `{arch}` expands to `arm64` or `amd64`; `{os}` expands to `linux`. Supplied checksums are verified before the final file appears. The result reports whether verification occurred.
 
-`files extract` takes an archive `path` and a new `destination` directory. It rejects traversal, links, special files, and expanded content above 1 GiB. `files run` runs an existing or downloaded script using `bash`, `sh`, or `python3`, with optional `args` and `cwd`. These actions return managed jobs; inspect their exit status and retained output.
+`files extract` takes an archive `path` and a new `destination` directory. It rejects traversal, links, special files, and expanded content above 1 GiB. `files run` runs an existing or downloaded script using `bash`, `sh`, or `python3`, with optional `args`, `cwd`, and `env`. These actions return managed jobs; inspect their exit status and retained output.
 
 ## Follow the person and recover from failures
 

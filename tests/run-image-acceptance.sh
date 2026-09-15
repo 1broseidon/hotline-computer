@@ -15,6 +15,7 @@ cleanup() {
     docker logs "$container" > "$output/container.log" 2>&1 || true
     if [ "${TOAD_ACCEPTANCE_KEEP:-0}" != 1 ]; then docker rm -f "$container" >/dev/null || true; fi
   fi
+  rm -rf "$output/venv"
   rm -f "$credentials"
   if [ "${TOAD_ACCEPTANCE_KEEP:-0}" != 1 ]; then rm -f "$output/token"; fi
 }
@@ -34,4 +35,7 @@ done
 curl --silent --show-error --fail "$url/health" > "$output/health.json"
 printf 'Running MCP and viewer contract against %s\n' "$url"
 docker run --rm --network "container:$container" --env-file "$credentials" -e TOAD_COMPUTER_URL=http://127.0.0.1:8787 --entrypoint /acceptance/contract "$checks" --nocapture 2>&1 | tee "$output/contract.log"
-python3 tests/acceptance.py --url "$url" --token-file "$output/token" --output "$output" --suite full
+python3 -m venv "$output/venv"
+"$output/venv/bin/pip" install --disable-pip-version-check -r tests/requirements.txt
+"$output/venv/bin/python" tests/acceptance.py --url "$url" --token-file "$output/token" --output "$output" --suite full
+"$output/venv/bin/python" tests/recovery.py --container "$container" --url "$url" --token-file "$output/token" --output "$output"

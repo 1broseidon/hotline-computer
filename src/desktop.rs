@@ -3,7 +3,7 @@
 //!
 //! Chromium needs no decorations and the agent already speaks EWMH, so the
 //! agent is the window manager. A normal window opens maximized into the
-//! work area above the dock; a dialog opens centered at its own size. Focus
+//! work area below the dock; a dialog opens centered at its own size. Focus
 //! follows a click, so a person driving the screen reaches the window they
 //! see. `_NET_CLIENT_LIST`, `_NET_ACTIVE_WINDOW` and `_NET_WM_STATE` are kept
 //! current because the `windows` tool reads them.
@@ -27,7 +27,7 @@ use x11rb::wrapper::ConnectionExt as _;
 use x11rb::{CURRENT_TIME, NONE};
 
 /// What the desktop asks of the agent side.
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Debug)]
 pub enum Request {
     /// The dock's browser was clicked and no browser window exists.
     OpenBrowser,
@@ -35,6 +35,7 @@ pub enum Request {
     /// pages outlive a destroyed window, so the agent has to be told.
     BrowserClosed,
     OpenTerminal,
+    OpenJob(String),
 }
 
 const MARK: &[u8] = include_bytes!("../assets/wallpaper-mark.png");
@@ -88,6 +89,14 @@ struct Image {
 struct DockItem {
     icon: Option<Image>,
     request: Request,
+}
+
+struct JobMenu {
+    window: Window,
+    jobs: Vec<crate::jobs::Summary>,
+    first: usize,
+    visible: usize,
+    width: u16,
 }
 
 struct Client {
@@ -222,6 +231,8 @@ struct Desktop {
     tray_opcode: Atom,
     xembed: Atom,
     jobs_running: Atom,
+    jobs_summary: Atom,
+    job_menu: Option<JobMenu>,
 }
 
 impl Desktop {
@@ -281,6 +292,7 @@ impl Desktop {
         let tray_opcode = intern(b"_NET_SYSTEM_TRAY_OPCODE")?;
         let xembed = intern(b"_XEMBED")?;
         let jobs_running = intern(b"_TOAD_JOBS_RUNNING")?;
+        let jobs_summary = intern(b"_TOAD_JOB_SUMMARY")?;
         let font = connection.generate_id().map_err(|e| e.to_string())?;
         if connection
             .open_font(
@@ -325,6 +337,8 @@ impl Desktop {
             tray_opcode,
             xembed,
             jobs_running,
+            jobs_summary,
+            job_menu: None,
         };
         desktop.announce()?;
         desktop.paint_wallpaper()?;
@@ -439,7 +453,7 @@ impl Desktop {
         Ok(())
     }
 
-    /// Black, with the mark centred in the work area above the dock.
+    /// Black, with the mark centred in the work area below the dock.
     fn paint_wallpaper(&self) -> Result<(), String> {
         let pixmap: Pixmap = self
             .connection
@@ -539,7 +553,7 @@ impl Desktop {
                 self.label(x, 30, ">_", 0xe0e0e0)?;
             }
         }
-        let count = self
+        let counts = self
             .connection
             .get_property(
                 false,
@@ -547,18 +561,27 @@ impl Desktop {
                 self.jobs_running,
                 AtomEnum::CARDINAL,
                 0,
-                1,
+                3,
             )
             .map_err(|e| e.to_string())?
             .reply()
             .ok()
-            .and_then(|r| r.value32().and_then(|mut v| v.next()))
-            .unwrap_or(0);
+            .and_then(|r| r.value32().map(Iterator::collect::<Vec<_>>))
+            .unwrap_or_default();
+        let running = counts.first().copied().unwrap_or(0);
+        let completed = counts.get(1).copied().unwrap_or(0);
+        let failed = counts.get(2).copied().unwrap_or(0);
         self.label(
             132,
-            30,
-            &format!("{count} job{}", if count == 1 { "" } else { "s" }),
-            if count > 0 { 0x98d8a0 } else { 0x999999 },
+            20,
+            &format!("{running} active"),
+            if running > 0 { 0x98d8a0 } else { 0x999999 },
+        )?;
+        self.label(
+            132,
+            39,
+            &format!("{completed} ok {failed} err"),
+            if failed > 0 { 0xf0b37e } else { 0x999999 },
         )?;
         let available = self.width.saturating_sub(240 + self.tray.len() as u16 * 40);
         for (index, window) in self
@@ -600,9 +623,21 @@ impl Desktop {
     }
 
     fn label(&self, x: i16, y: i16, text: &str, color: u32) -> Result<(), String> {
+        self.text_at(self.dock, x, y, text, 16, color)
+    }
+
+    fn text_at(
+        &self,
+        window: Window,
+        x: i16,
+        y: i16,
+        text: &str,
+        limit: usize,
+        color: u32,
+    ) -> Result<(), String> {
         let text: Vec<_> = text
             .chars()
-            .take(16)
+            .take(limit)
             .map(|c| {
                 if c.is_ascii_graphic() || c == ' ' {
                     c as u8
@@ -618,8 +653,126 @@ impl Desktop {
             )
             .map_err(|e| e.to_string())?;
         self.connection
-            .image_text8(self.dock, self.gc, x, y, &text)
+            .image_text8(window, self.gc, x, y, &text)
             .map_err(|e| e.to_string())?;
+        Ok(())
+    }
+
+    fn open_job_menu(&mut self) -> Result<(), String> {
+        if self.job_menu.is_some() {
+            return self.close_job_menu();
+        }
+        let reply = self
+            .connection
+            .get_property(
+                false,
+                self.root,
+                self.jobs_summary,
+                self.atoms.utf8_string,
+                0,
+                65536,
+            )
+            .map_err(|e| e.to_string())?
+            .reply()
+            .map_err(|e| e.to_string())?;
+        let jobs: Vec<crate::jobs::Summary> =
+            serde_json::from_slice(&reply.value).unwrap_or_default();
+        let visible = jobs
+            .len()
+            .min(usize::from(self.work_height().saturating_sub(30) / 30).min(12));
+        let width = self.width.saturating_sub(120).min(640);
+        let window = self.connection.generate_id().map_err(|e| e.to_string())?;
+        self.connection
+            .create_window(
+                self.depth,
+                window,
+                self.root,
+                120,
+                DOCK_HEIGHT as i16,
+                width,
+                ((visible + 1) * 30) as u16,
+                1,
+                WindowClass::INPUT_OUTPUT,
+                0,
+                &CreateWindowAux::new()
+                    .override_redirect(1)
+                    .background_pixel(DOCK_FILL)
+                    .border_pixel(DOCK_EDGE)
+                    .event_mask(EventMask::EXPOSURE | EventMask::BUTTON_PRESS),
+            )
+            .map_err(|e| e.to_string())?;
+        self.connection
+            .map_window(window)
+            .map_err(|e| e.to_string())?;
+        self.connection
+            .configure_window(
+                window,
+                &ConfigureWindowAux::new().stack_mode(StackMode::ABOVE),
+            )
+            .map_err(|e| e.to_string())?;
+        self.job_menu = Some(JobMenu {
+            window,
+            jobs,
+            first: 0,
+            visible,
+            width,
+        });
+        self.draw_job_menu()
+    }
+
+    fn close_job_menu(&mut self) -> Result<(), String> {
+        if let Some(menu) = self.job_menu.take() {
+            self.connection
+                .destroy_window(menu.window)
+                .map_err(|e| e.to_string())?;
+        }
+        Ok(())
+    }
+
+    fn draw_job_menu(&self) -> Result<(), String> {
+        let Some(menu) = &self.job_menu else {
+            return Ok(());
+        };
+        self.fill(
+            menu.window,
+            DOCK_FILL,
+            0,
+            0,
+            menu.width,
+            ((menu.visible + 1) * 30) as u16,
+        )?;
+        let limit = usize::from(menu.width.saturating_sub(16) / 9);
+        self.text_at(
+            menu.window,
+            8,
+            21,
+            "All retained jobs (scroll for more)",
+            limit,
+            0xd6d6d6,
+        )?;
+        for (row, job) in menu
+            .jobs
+            .iter()
+            .skip(menu.first)
+            .take(menu.visible)
+            .enumerate()
+        {
+            let color = if job.state == "running" {
+                0x98d8a0
+            } else if job.exit_code == Some(0) {
+                0xd6d6d6
+            } else {
+                0xf0b37e
+            };
+            self.text_at(
+                menu.window,
+                8,
+                (row as i16 + 1) * 30 + 21,
+                &format!("{}  {}", job.state, job.label),
+                limit,
+                color,
+            )?;
+        }
         Ok(())
     }
 
@@ -834,6 +987,15 @@ impl Desktop {
                 }
             }
             Event::ButtonPress(event) => self.button_press(event),
+            Event::Expose(event)
+                if self
+                    .job_menu
+                    .as_ref()
+                    .is_some_and(|menu| menu.window == event.window)
+                    && event.count == 0 =>
+            {
+                self.draw_job_menu()
+            }
             Event::Expose(event) if event.window == self.dock && event.count == 0 => {
                 self.draw_dock()
             }
@@ -1252,6 +1414,30 @@ impl Desktop {
     }
 
     fn button_press(&mut self, event: ButtonPressEvent) -> Result<(), String> {
+        if let Some(menu) = &mut self.job_menu {
+            if event.event == menu.window {
+                if event.detail == 4 || event.detail == 5 {
+                    menu.first = if event.detail == 4 {
+                        menu.first.saturating_sub(1)
+                    } else {
+                        (menu.first + 1).min(menu.jobs.len().saturating_sub(menu.visible))
+                    };
+                    return self.draw_job_menu();
+                }
+                let row = usize::try_from(event.event_y).unwrap_or(0) / 30;
+                let request = if row == 0 {
+                    Request::OpenTerminal
+                } else {
+                    let Some(job) = menu.jobs.get(menu.first + row - 1) else {
+                        return Ok(());
+                    };
+                    Request::OpenJob(job.id.clone())
+                };
+                self.close_job_menu()?;
+                return self.dock_action(request);
+            }
+            self.close_job_menu()?;
+        }
         if event.event == self.dock {
             if event.event_x >= 240 {
                 let index = (event.event_x as usize - 240) / 160;
@@ -1265,14 +1451,14 @@ impl Desktop {
                 return Ok(());
             }
             if event.event_x >= 120 {
-                return self.dock_action(Request::OpenTerminal);
+                return self.open_job_menu();
             }
             let slot = usize::from(u16::try_from(event.event_x).unwrap_or(0) / (ICON + DOCK_PAD));
             if slot == 0 {
                 return self.dock_action(Request::OpenBrowser);
             }
             if let Some(item) = self.items.get(slot - 1) {
-                self.dock_action(item.request)?;
+                self.dock_action(item.request.clone())?;
             }
             return Ok(());
         }
@@ -1294,10 +1480,7 @@ impl Desktop {
                 let _ = self.requests.send(request);
                 Ok(())
             }
-            Request::OpenTerminal => {
-                if let Some(window) = self.client_with_class("toadterminal") {
-                    return self.focus(window);
-                }
+            Request::OpenTerminal | Request::OpenJob(_) => {
                 let _ = self.requests.send(request);
                 Ok(())
             }

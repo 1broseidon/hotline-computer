@@ -151,12 +151,14 @@ pub async fn prepare(
         )
         .await?;
     drop(guard);
-    if app.display.is_some()
-        && let Err(error) = app.observer.show(false).await
-    {
-        eprintln!("toad-computer: {error}");
-    }
-    Ok(json!({"ready":false,"cached":false,"workspace":workspace,"profile":profile,"job":job}))
+    let observer_error = if app.display.is_some() {
+        app.observer.show(false).await.err()
+    } else {
+        None
+    };
+    Ok(
+        json!({"ready":false,"cached":false,"workspace":workspace,"profile":profile,"job":job,"observer_error":observer_error}),
+    )
 }
 
 pub async fn build(home: &Path, profile: &str, workspace: &Path) -> Result<(), String> {
@@ -198,9 +200,12 @@ pub async fn build(home: &Path, profile: &str, workspace: &Path) -> Result<(), S
         .args(["print-dev-env", "--json", "--profile"])
         .arg(directory.join("profile"))
         .arg(&directory)
+        .stdout(std::process::Stdio::piped())
         .stderr(std::process::Stdio::inherit())
         .kill_on_drop(true)
-        .output()
+        .spawn()
+        .map_err(|e| format!("nix: {e}"))?
+        .wait_with_output()
         .await
         .map_err(|e| format!("nix: {e}"))?;
     if !output.status.success() {

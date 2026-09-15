@@ -6,6 +6,7 @@ use std::time::Duration;
 use chromiumoxide::cdp::browser_protocol::dom::SetFileInputFilesParams;
 use chromiumoxide::cdp::browser_protocol::network::CookieParam;
 use chromiumoxide::cdp::browser_protocol::page::HandleJavaScriptDialogParams;
+use chromiumoxide::cdp::js_protocol::runtime::RemoteObjectType;
 use chromiumoxide::{Browser, BrowserConfig, Page};
 use futures_util::StreamExt;
 use serde_json::{Value, json};
@@ -566,11 +567,12 @@ async fn current_page(session: &mut BrowserSession) -> Result<Page, String> {
 }
 
 async fn evaluate_value(page: &Page, script: &str) -> Result<Value, String> {
-    page.evaluate(script)
-        .await
-        .map_err(browser_error)?
-        .into_value()
-        .map_err(browser_error)
+    let result = page.evaluate(script).await.map_err(browser_error)?;
+    // Valid statements such as focus() have no JavaScript return value.
+    if result.object().r#type == RemoteObjectType::Undefined {
+        return Ok(Value::Null);
+    }
+    result.into_value().map_err(browser_error)
 }
 
 async fn evaluate_string(page: &Page, script: &str) -> Result<String, String> {

@@ -263,7 +263,7 @@ async fn image_honors_the_computer_contract() {
         text(&value)
     );
     // A chord: select all, then a clipboard copy Chromium serves.
-    let all = call(&client, "input", json!({"action":"key","combo":"ctrl+a"})).await;
+    let all = call(&client, "input", json!({"action":"key","combo":"Ctrl+A"})).await;
     assert!(!all.is_error.unwrap_or(false), "{}", text(&all));
     let copy = call(&client, "input", json!({"action":"key","combo":"ctrl+c"})).await;
     assert!(!copy.is_error.unwrap_or(false), "{}", text(&copy));
@@ -342,6 +342,18 @@ async fn image_honors_the_computer_contract() {
     )
     .await;
     assert!(!focused.is_error.unwrap_or(false), "{}", text(&focused));
+    // Repeated restore/resize cycles expose stale client geometry requests.
+    for _ in 0..12 {
+        let maximized = call(
+            &client,
+            "windows",
+            json!({"action":"maximize","window_id":browser_window}),
+        )
+        .await;
+        assert!(!maximized.is_error.unwrap_or(false), "{}", text(&maximized));
+        let tiled = call(&client, "windows", json!({"action":"tile"})).await;
+        assert!(!tiled.is_error.unwrap_or(false), "{}", text(&tiled));
+    }
     let maximized = call(
         &client,
         "windows",

@@ -3,6 +3,7 @@
 import argparse
 import base64
 import hashlib
+import io
 import json
 from pathlib import Path
 import re
@@ -10,6 +11,9 @@ import subprocess
 import time
 import urllib.request
 import uuid
+import zipfile
+
+from PIL import Image, ImageChops
 
 
 class Computer:
@@ -67,11 +71,11 @@ class Computer:
         assert job['state'] == 'exited' and job['exit_code'] == 0, self.call('shell', {'action': 'read', 'job_id': job['id']})
         return job
 
-    def screenshot(self, name):
+    def screenshot(self, name, settle_ms=100):
         path = '/home/agent/qa/screenshots/' + self.run_id + '-' + name
         # files put creates the parent; capture then writes the original-resolution PNG.
         self.call('files', {'action': 'put', 'path': path, 'content': ''})
-        self.call('capture', {'mode': 'png', 'path': path})
+        self.call('capture', {'mode': 'png', 'path': path, 'settle_ms': settle_ms})
         result = self.rpc('tools/call', {'name': 'files', 'arguments': {'action': 'get', 'path': path}})['result']
         assert not result.get('isError'), result
         content = '\n'.join(item.get('text', '') for item in result['content'])
@@ -114,6 +118,8 @@ FORM = '''<!doctype html><html><head><meta charset="utf-8"><title>Toad release a
 def browser(c):
     c.call('files', {'action': 'put', 'path': '/home/agent/qa/forms.html', 'content': FORM})
     c.call('browser', {'action': 'navigate', 'url': 'file:///home/agent/qa/forms.html'})
+    assert c.call('browser', {'action': 'eval', 'js': 'document.body.focus()'}) is None
+    c.call('browser', {'action': 'eval', 'js': 'throw new Error("expected evaluation failure")'}, error=True)
     snapshot = c.call('browser', {'action': 'text'})
     assert 'secret-hidden' not in snapshot and 'secret-password' not in snapshot
     assert 'readonly' in snapshot and 'disabled' in snapshot
@@ -136,6 +142,64 @@ def browser(c):
     c.screenshot('02-browser-submission.png')
 
 
+def browser_refs(c):
+    c.call('browser', {'action': 'text'})
+    return c.call('browser', {'action': 'eval', 'js': "Object.fromEntries([...document.querySelectorAll('[data-toad-ref]')].map(e=>[e.id||e.name,e.dataset.toadRef]))"})
+
+
+def wizard(c):
+    fixture = Path(__file__).with_name('fixtures').joinpath('forms.html').read_text()
+    c.call('files', {'action':'put', 'path':'/home/agent/qa/wizard.html', 'content':fixture})
+    c.call('files', {'action':'put', 'path':'/home/agent/qa/notes.txt', 'content':'Synthetic acceptance attachment'})
+    c.call('browser', {'action':'navigate', 'url':'file:///home/agent/qa/wizard.html'})
+    refs = browser_refs(c)
+    for field, value in [('applicant','Agent QA'),('contact','qa@example.test')]:
+        c.call('browser', {'action':'fill', 'ref':refs[field], 'text':value})
+    c.call('browser', {'action':'click_ref', 'ref':refs['next1']})
+    refs = browser_refs(c)
+    c.call('browser', {'action':'select', 'ref':refs['project'], 'value':'Team'})
+    refs = browser_refs(c)
+    c.call('browser', {'action':'fill', 'ref':refs['org'], 'text':'Toad QA'})
+    c.call('browser', {'action':'fill', 'ref':refs['date'], 'text':'2026-09-15'})
+    c.call('browser', {'action':'select', 'ref':refs['platforms'], 'values':['Linux','macOS']})
+    c.call('browser', {'action':'upload', 'ref':refs['attachment'], 'path':'/home/agent/qa/notes.txt'})
+    c.call('browser', {'action':'click_ref', 'ref':refs['back1']})
+    refs = browser_refs(c)
+    assert c.call('browser', {'action':'eval', 'js':'document.getElementById("applicant").value'}) == 'Agent QA'
+    c.call('browser', {'action':'click_ref', 'ref':refs['next1']})
+    refs = browser_refs(c)
+    c.call('browser', {'action':'click_ref', 'ref':refs['next2']})
+    snapshot = c.call('browser', {'action':'text'})
+    assert 'Review application' in snapshot and 'notes.txt' in snapshot and 'Toad QA' in snapshot, snapshot
+    refs = browser_refs(c)
+    c.call('browser', {'action':'click_ref', 'ref':refs['back2']})
+    refs = browser_refs(c)
+    c.call('browser', {'action':'click_ref', 'ref':refs['next2']})
+    refs = browser_refs(c)
+    c.call('browser', {'action':'check', 'ref':refs['terms']})
+    c.screenshot('02b-browser-review.png')
+    c.call('browser', {'action':'click_ref', 'ref':refs['submit']})
+    c.call('wait', {'text':'Application QA-040 accepted', 'timeout':10})
+    values = c.call('browser', {'action':'eval', 'js':'JSON.parse(localStorage.getItem("complex-result"))'})
+    assert values == {'name':'Agent QA','email':'qa@example.test','project':'Team','organization':'Toad QA','date':'2026-09-15','file':'notes.txt','platforms':['Linux','macOS']}, values
+    c.screenshot('02c-browser-wizard-submitted.png')
+
+
+def public_form(c):
+    c.call('browser', {'action':'navigate', 'url':'https://www.selenium.dev/selenium/web/web-form.html'})
+    refs = browser_refs(c)
+    c.call('browser', {'action':'fill', 'ref':refs['my-text-id'], 'text':'Synthetic Toad QA'})
+    c.call('browser', {'action':'fill', 'ref':refs['my-textarea'], 'text':'Public browser form acceptance'})
+    c.call('browser', {'action':'select', 'ref':refs['my-select'], 'value':'2'})
+    c.call('browser', {'action':'upload', 'ref':refs['my-file'], 'path':'/home/agent/qa/notes.txt'})
+    c.call('browser', {'action':'fill', 'ref':refs['my-readonly'], 'text':'unchanged'}, error=True)
+    snapshot = c.call('browser', {'action':'text'})
+    submit = re.search(r'\[(e\d+)\] \[button\] Submit', snapshot).group(1)
+    c.call('browser', {'action':'click_ref', 'ref':submit})
+    c.call('wait', {'text':'Received!', 'timeout':10})
+    c.screenshot('02d-public-form-received.png')
+
+
 def jobs(c):
     job = c.call('shell', {'action': 'start', 'command': 'bash', 'args': ['-c', 'printf ready; read answer; printf " received:%s" "$answer"'], 'pty': True, 'request_id': 'acceptance-stdin-' + c.run_id})
     repeat = c.call('shell', {'action': 'start', 'command': 'bash', 'args': ['-c', 'printf ready; read answer; printf " received:%s" "$answer"'], 'pty': True, 'request_id': 'acceptance-stdin-' + c.run_id})
@@ -146,34 +210,161 @@ def jobs(c):
     result = c.call('shell', {'command': 'bash', 'args': ['-c', 'printf partial; sleep 10'], 'timeout': 1})
     assert result['state'] == 'timed_out' and result['stdout'] == 'partial'
     job = c.call('shell', {'action': 'start', 'command': 'bash', 'args': ['-c', 'for i in $(seq 1 200); do echo tick:$i; sleep .1; done'], 'label': 'Observer close/reopen acceptance'})
-    windows = c.call('windows', {'action': 'list'})
-    terminal = next(w for w in windows if 'toadterminal' in w['class'].lower())
-    c.call('windows', {'action': 'close', 'window_id': terminal['id']})
-    assert c.call('shell', {'action': 'status', 'job_id': job['id']})['state'] == 'running'
-    started = time.monotonic()
-    c.call('shell', {'action': 'show'})
+    samples = []
+    for _ in range(12):
+        windows = c.call('windows', {'action': 'list'})
+        terminal = next(w for w in windows if 'toadterminal' in w['class'].lower())
+        c.call('windows', {'action': 'close', 'window_id': terminal['id']})
+        assert c.call('shell', {'action': 'status', 'job_id': job['id']})['state'] == 'running'
+        started = time.monotonic()
+        c.call('shell', {'action': 'show', 'job_id': job['id']})
+        assert any('toadterminal' in w['class'].lower() for w in c.call('windows', {'action': 'list'})), 'observer did not reopen'
+        samples.append((time.monotonic()-started)*1000)
+    c.output.joinpath('observer-timing.json').write_text(json.dumps({'samples': samples, 'p50': sorted(samples)[len(samples)//2], 'p95': sorted(samples)[int(len(samples)*.95)], 'max': max(samples)}, indent=2))
+    assert max(samples) < 300, samples
+    shown = c.call('shell', {'action':'show','job_id':job['id']})
+    daemon = shown['pid']  # PID captured by the observer service at spawn.
+    c.done(c.call('shell', {'action':'start','command':'kill','args':['-KILL',str(daemon)],'label':'Observer daemon recovery fixture'}))
+    assert c.call('shell', {'action':'status','job_id':job['id']})['state']=='running'
     deadline = time.monotonic()+3
-    while time.monotonic()<deadline:
-        if any('toadterminal' in w['class'].lower() for w in c.call('windows', {'action': 'list'})):
-            break
-        time.sleep(.03)
-    else:
-        raise AssertionError('observer did not reopen')
-    c.output.joinpath('observer-timing.json').write_text(json.dumps({'reopen_ms': (time.monotonic()-started)*1000}))
+    while any('toadterminal' in w['class'].lower() for w in c.call('windows',{'action':'list'})):
+        assert time.monotonic()<deadline
+        time.sleep(.05)
+    reopened = c.call('shell', {'action':'show','job_id':job['id']})
+    assert reopened['pid'] != daemon
     c.screenshot('03-running-job-observer.png')
     assert c.call('shell', {'action': 'cancel', 'job_id': job['id']})['state'] == 'cancelled'
+    c.call('shell', {'action':'show', 'job_id':job['id']})
+    c.screenshot('03b-completed-job-observer.png', settle_ms=200)
+    c.call('shell', {'action':'show', 'job_id':'no-such-job'}, error=True)
+    c.call('shell', {'action':'show'})
+
+
+def desktop_job_menu(c):
+    job = c.call('shell',{'action':'start','command':'sh','args':['-c','echo "A failed job stays inspectable"; exit 7'],'label':'Inspect a completed failure'})
+    job = c.call('shell',{'action':'wait','job_id':job['id'],'wait_ms':5000})
+    assert job['state']=='failed' and job['exit_code']==7,job
+    c.call('input',{'action':'click','x':170,'y':24})
+    c.screenshot('03c-desktop-job-menu.png')
+    c.call('input',{'action':'click','x':260,'y':93})
+    assert c.call('files',{'action':'get','path':'/home/agent/.toad/observer-view.json'}) == job['id']
+    c.screenshot('03d-selected-failed-job.png',settle_ms=200)
+    c.call('input',{'action':'click','x':170,'y':24})
+    c.call('input',{'action':'click','x':260,'y':63})
+    assert c.call('files',{'action':'get','path':'/home/agent/.toad/observer-view.json'}) is None
+
+
+
+def tray_counts(c):
+    held = c.call('shell', {'action':'start','command':'sleep','args':['20'],'label':'Tray active-job fixture'})
+    try:
+        code = """import ast,json,subprocess,time
+# Observe both properties from an independent X11 connection after startup.
+time.sleep(.15)
+lines=subprocess.check_output(['xprop','-root','_TOAD_JOBS_RUNNING','_TOAD_JOB_SUMMARY'],text=True).splitlines()
+counts=[int(value.strip()) for value in lines[0].split(' = ',1)[1].split(',')]
+jobs=json.loads(ast.literal_eval(lines[1].split(' = ',1)[1]))
+assert any(j['label']=='Tray active-job fixture' and j['state']=='running' for j in jobs),jobs
+running=sum(j['state']=='running' for j in jobs)
+completed=sum(j['state']=='exited' and j['exit_code']==0 for j in jobs)
+assert counts==[running,completed,len(jobs)-running-completed],(counts,jobs)
+print('Tray counts match live jobs:',counts)
+"""
+        execute(c,'python3',['-c',code],label='Tray property verification')
+        c.screenshot('04b-tray-active-jobs.png')
+    finally:
+        c.call('shell', {'action':'cancel','job_id':held['id']})
+
+
+def nix_failure(c):
+    home = '/home/agent/qa/nix-failure-' + c.run_id
+    workspace = home + '/workspace'
+    c.call('files', {'action':'put','path':workspace+'/fixture','content':''})
+    job = c.call('shell', {'action':'start','command':'/usr/bin/toad-computer','args':['prepare','python',workspace,home],'env':{'NIX_REMOTE':'unix:///home/agent/qa/missing-nix-daemon.sock'},'label':'Nix failure diagnostics','timeout':30})
+    job = c.call('shell', {'action':'wait','job_id':job['id'],'wait_ms':30000})
+    assert job['state']=='failed',job
+    output = c.call('shell', {'action':'read','job_id':job['id']})['output']
+    assert 'missing-nix-daemon.sock' in output and 'Nix preparation failed' in output,output
+    c.output.joinpath('nix-failure.txt').write_text(output)
 
 
 def artifacts(c):
-    script = '#!/bin/bash\nprintf "installer argument: %s\\n" "$1"\n'
+    script = '#!/bin/bash\nprintf "installer argument: %s; environment: %s\\n" "$1" "$INSTALL_FIXTURE"\n'
     c.call('files', {'action': 'put', 'path': '/home/agent/qa/install-fixture.sh', 'content': script})
-    job = c.call('files', {'action': 'run', 'path': '/home/agent/qa/install-fixture.sh', 'sha256': hashlib.sha256(script.encode()).hexdigest(), 'args': ['value with spaces']})
+    job = c.call('files', {'action': 'run', 'path': '/home/agent/qa/install-fixture.sh', 'sha256': hashlib.sha256(script.encode()).hexdigest(), 'args': ['value with spaces'], 'env': {'INSTALL_FIXTURE': 'explicit environment'}})
     c.done(job)
-    assert 'installer argument: value with spaces' in c.call('shell', {'action': 'read', 'job_id': job['id']})['output']
+    assert 'installer argument: value with spaces; environment: explicit environment' in c.call('shell', {'action': 'read', 'job_id': job['id']})['output']
     bad = c.call('files', {'action': 'run', 'path': '/home/agent/qa/install-fixture.sh', 'sha256': '0'*64})
     bad = c.call('shell', {'action': 'wait', 'job_id': bad['id'], 'wait_ms': 5000})
     assert bad['state'] == 'failed'
+    archive = io.BytesIO()
+    with zipfile.ZipFile(archive, 'w') as bundle:
+        bundle.writestr('../escaped.txt', 'must not escape')
+    path = '/home/agent/qa/unsafe-' + c.run_id + '.zip'
+    c.call('files', {'action': 'put', 'path': path, 'encoding': 'base64', 'content': base64.b64encode(archive.getvalue()).decode()})
+    extracted = c.call('files', {'action': 'extract', 'path': path, 'destination': path+'.out'})
+    extracted = c.call('shell', {'action': 'wait', 'job_id': extracted['id'], 'wait_ms': 5000})
+    assert extracted['state'] == 'failed'
+    assert 'escapes the destination' in c.call('shell', {'action': 'read', 'job_id': extracted['id']})['output']
+    c.call('files', {'action': 'get', 'path': '/home/agent/qa/escaped.txt'}, error=True)
+    special = io.BytesIO()
+    with zipfile.ZipFile(special, 'w') as bundle:
+        entry = zipfile.ZipInfo('named-pipe')
+        entry.create_system = 3
+        entry.external_attr = (0o010000 | 0o600) << 16
+        bundle.writestr(entry, '')
+    path = '/home/agent/qa/special-' + c.run_id + '.zip'
+    c.call('files', {'action':'put','path':path,'encoding':'base64','content':base64.b64encode(special.getvalue()).decode()})
+    extracted = c.call('files', {'action':'extract','path':path,'destination':path+'.out'})
+    extracted = c.call('shell', {'action':'wait','job_id':extracted['id'],'wait_ms':5000})
+    assert extracted['state']=='failed',extracted
+    assert 'special files are not supported' in c.call('shell', {'action':'read','job_id':extracted['id']})['output']
 
+
+
+
+def download_failures(c):
+    root = '/home/agent/qa/downloads-' + c.run_id
+    server_source = """from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+import time
+class Handler(BaseHTTPRequestHandler):
+ def do_GET(self):
+  if self.path=='/missing': self.send_error(404); return
+  self.send_response(200)
+  length = {'/ok':12,'/partial':20,'/large':2**31,'/slow':2**22}[self.path]
+  self.send_header('Content-Length',str(length)); self.end_headers()
+  if self.path=='/ok': self.wfile.write(b'fixture-data')
+  elif self.path=='/partial': self.wfile.write(b'partial'); self.close_connection=True
+  elif self.path=='/slow': self.wfile.write(b'x'*(2**20)); self.wfile.flush(); time.sleep(120)
+ThreadingHTTPServer(('127.0.0.1',8082),Handler).serve_forever()
+"""
+    c.call('files', {'action':'put','path':root+'/server.py','content':server_source})
+    server = c.call('shell', {'action':'start','command':'python3','args':[root+'/server.py'],'label':'Artifact HTTP failure fixture'})
+    try:
+        execute(c,'python3',['-c','import urllib.request,time\nfor _ in range(100):\n try: urllib.request.urlopen("http://127.0.0.1:8082/ok"); break\n except OSError: time.sleep(.05)\nelse: raise RuntimeError("fixture did not start")'])
+        checksum = hashlib.sha256(b'fixture-data').hexdigest()
+        spec = {'action':'download','url':'http://127.0.0.1:8082/ok','path':root+'/cached','sha256':checksum}
+        c.done(c.call('files',spec))
+        cached = c.done(c.call('files',spec))
+        assert '"cached": true' in c.call('shell',{'action':'read','job_id':cached['id']})['output']
+        for endpoint, expected in [('missing','404'),('partial','incomplete'),('large','exceeds 1 GiB')]:
+            job = c.call('files',{'action':'download','url':'http://127.0.0.1:8082/'+endpoint,'path':root+'/'+endpoint})
+            job = c.call('shell',{'action':'wait','job_id':job['id'],'wait_ms':5000})
+            assert job['state']=='failed',job
+            assert expected in c.call('shell',{'action':'read','job_id':job['id']})['output']
+            c.call('files',{'action':'get','path':root+'/'+endpoint},error=True)
+        interrupted = c.call('files',{'action':'download','url':'http://127.0.0.1:8082/slow','path':root+'/interrupted'})
+        deadline = time.monotonic()+5
+        while 'Downloaded' not in c.call('shell',{'action':'read','job_id':interrupted['id']})['output']:
+            assert time.monotonic()<deadline
+            time.sleep(.05)
+        c.call('shell',{'action':'cancel','job_id':interrupted['id']})
+        c.call('files',{'action':'get','path':root+'/interrupted'},error=True)
+        assert not any(entry['name'].startswith('.toad-artifact-') for entry in c.call('files',{'action':'list','path':root}))
+        retried = c.done(c.call('files',{'action':'download','url':'http://127.0.0.1:8082/ok','path':root+'/interrupted','sha256':checksum}))
+        assert retried['exit_code']==0
+    finally:
+        c.call('shell',{'action':'cancel','job_id':server['id']})
 
 
 def execute(c, command, args, cwd=None, timeout=120, label=None):
@@ -202,7 +393,12 @@ def workspaces(c):
     for profile, (filename, source, command) in fixtures.items():
         workspace = root + '/' + profile
         c.call('files', {'action': 'put', 'path': workspace + '/' + filename, 'content': source})
-        timings.append(prepare(c, profile, workspace))
+        started = time.monotonic()
+        first = c.call('state', {'action':'prepare','name':profile,'workspace':workspace})
+        concurrent = c.call('state', {'action':'prepare','name':profile,'workspace':workspace+'/concurrent'})
+        for prepared in [first, concurrent]:
+            if not prepared['ready']: c.done(prepared['job'],1200)
+        timings.append({'profile':profile,'cached':first['cached'],'concurrent':True,'seconds':time.monotonic()-started})
         output = execute(c, command[0], command[1:], cwd=workspace)
         assert profile + ' fixture: 42' in output, output
         # A second workspace inherits the cached environment without a shell hook.
@@ -215,6 +411,23 @@ def workspaces(c):
     output = execute(c, 'bash', ['-c', 'set -e; mkdir -p ../headers; printf "#define ANSWER 42\\n" > ../headers/fixture.h; printf "#include <fixture.h>\\nint main(){return ANSWER != 42;}\\n" > main.c; cc -O0 -I"$PWD/../headers" main.c -o c-fixture; ./c-fixture; cmake --version; perl -e \'print "native dependencies: 42\\n"\''], cwd=root+'/rust')
     assert 'native dependencies: 42' in output
     c.output.joinpath('catalog-timings.json').write_text(json.dumps(timings, indent=2))
+
+
+# A public CLI library catches catalog assumptions that an inline hello-world misses.
+CLICK_REVISION = '934813e4d421071a1b3db3973c02fe2721359a6e'
+
+
+def second_repository(c):
+    root = '/home/agent/qa/click-' + c.run_id
+    execute(c, 'git', ['clone', '--filter=blob:none', 'https://github.com/pallets/click.git', root], timeout=180)
+    execute(c, 'git', ['checkout', '--detach', CLICK_REVISION], cwd=root)
+    prepare(c, 'python', root)
+    execute(c, 'uv', ['venv', '.venv'], cwd=root)
+    execute(c, 'uv', ['pip', 'install', '--python', '.venv/bin/python', '--no-deps', '-e', '.', 'pytest==8.3.5'], cwd=root, timeout=180)
+    execute(c, 'uv', ['pip', 'install', '--python', '.venv/bin/python', 'iniconfig==2.0.0', 'packaging==24.2', 'pluggy==1.5.0'], cwd=root, timeout=180)
+    output = execute(c, '.venv/bin/python', ['-m', 'pytest', '-q', 'tests/test_arguments.py', 'tests/test_options.py'], cwd=root, timeout=180)
+    assert 'passed' in output and 'failed' not in output, output
+    c.output.joinpath('second-repository-tests.txt').write_text(output)
 
 
 def ketch(c):
@@ -279,8 +492,11 @@ def native(c):
     execute(c, 'git', ['clone', '--filter=blob:none', 'https://github.com/1broseidon/toad.git', root], timeout=300)
     execute(c, 'git', ['checkout', '--detach', TOAD_REVISION], cwd=root)
     timing = prepare(c, 'rust-tauri', root)
+    timing['warm_samples'] = [prepare(c, 'rust-tauri', root+'/second-'+str(n)) for n in range(5)]
+    assert all(sample['cached'] for sample in timing['warm_samples'])
     c.output.joinpath('native-environment.json').write_text(json.dumps(timing, indent=2))
-    script = 'set -euo pipefail\ncd ui\nbun install --frozen-lockfile\nbun run build\ncd ..\ncargo build --locked -p toad-desktop --features tauri/custom-protocol\n'
+    target = '/home/agent/qa/native-target'
+    script = 'set -euo pipefail\nexport CARGO_TARGET_DIR=/home/agent/qa/native-target\ncd ui\nbun install --frozen-lockfile\nbun run build\ncd ..\ncargo build --locked -p toad-desktop --features tauri/custom-protocol\n'
     c.call('files', {'action': 'put', 'path': root+'/qa-build.sh', 'content': script})
     job = c.call('files', {'action': 'run', 'path': root+'/qa-build.sh', 'cwd': root, 'sha256': hashlib.sha256(script.encode()).hexdigest()})
     # Desktop work remains responsive during the native build.
@@ -288,7 +504,7 @@ def native(c):
     c.screenshot('05-browsing-during-native-build.png')
     c.done(job, 2400)
     c.output.joinpath('native-build-output.txt').write_text(c.call('shell', {'action': 'read', 'job_id': job['id'], 'max_output': 1048576})['output'])
-    app = c.call('shell', {'action': 'start', 'command': root+'/target/debug/toad-desktop', 'cwd': root, 'env': {'TOAD_DATA_DIR': root+'/qa-data'}, 'label': 'Toad native screen acceptance'})
+    app = c.call('shell', {'action': 'start', 'command': target+'/debug/toad-desktop', 'cwd': root, 'env': {'TOAD_DATA_DIR': root+'/qa-data'}, 'label': 'Toad native screen acceptance'})
     native_screens(c, app)
 
 
@@ -324,16 +540,129 @@ def native_screens(c, app):
 
     tree = tree_with('[button] New teammate')
     assert 'Submitted:' not in tree, 'browser content was assigned to the native app'
-    c.screenshot('06-toad-native-screen.png')
+    def painted_screen(name, previous):
+        started = time.monotonic()
+        while time.monotonic()-started < 5:
+            c.screenshot(name)
+            with Image.open(c.output/previous) as before, Image.open(c.output/name) as after:
+                # Exclude the tray; cursor and hover changes cannot satisfy this check.
+                bounds = (0, 80, min(before.width, after.width), min(before.height, after.height))
+                change = ImageChops.difference(before.convert('RGB').crop(bounds), after.convert('RGB').crop(bounds)).convert('L')
+                histogram = change.histogram()
+                fraction = sum(histogram[16:])/(change.width*change.height)
+            if fraction > .01:
+                with c.output.joinpath('native-paint-timings.jsonl').open('a') as output:
+                    output.write(json.dumps({'screen':name, 'seconds':time.monotonic()-started, 'changed_fraction':fraction})+'\n')
+                return
+            time.sleep(.1)
+        raise AssertionError('Accessibility changed but the native screen did not paint: ' + name)
+
+    c.screenshot('06-toad-native-screen.png', settle_ms=1000)
+    terminal = next(w for w in c.call('windows', {'action':'list'}) if 'toadterminal' in w['class'].lower())
+    c.call('shell', {'action':'show','job_id':app['id']})
+    tiled = c.call('windows', {'action':'tile','primary_id':window_id,'observer_id':terminal['id']})
+    assert tiled['ok'], tiled
+    tree_with('[button] New teammate')
+    c.screenshot('06b-toad-and-observer.png', settle_ms=1000)
+    c.call('windows', {'action':'maximize','window_id':window_id})
+    tree = tree_with('[button] New teammate')
     click_label(tree, 'Settings')
     tree = tree_with('[button] Computer')
-    c.screenshot('07-toad-settings.png')
+    painted_screen('07-toad-settings.png', '06-toad-native-screen.png')
     click_label(tree, 'Computer')
     tree = tree_with('Desktop image')
-    c.screenshot('08-toad-computer-settings.png')
+    painted_screen('08-toad-computer-settings.png', '07-toad-settings.png')
     c.output.joinpath('native-accessibility.txt').write_text(tree)
     c.output.joinpath('native-window.json').write_text(json.dumps(native_windows, indent=2))
     c.call('shell', {'action': 'cancel', 'job_id': app['id']})
+
+def legacy_window(c):
+    revision = c.call('state', {'action':'info'})['nixpkgs']
+    nixpkgs = 'github:NixOS/nixpkgs/' + revision
+    job = c.call('shell',{'action':'launch','command':'nix','args':['shell',nixpkgs+'#xterm','--command','xterm','-title','Legacy title acceptance','-e','sleep','120'],'label':'Legacy Xterm window acceptance'})
+    try:
+        deadline = time.monotonic()+180
+        while time.monotonic()<deadline:
+            assert c.call('shell',{'action':'status','job_id':job['id']})['state']=='running',c.call('shell',{'action':'read','job_id':job['id']})
+            legacy = next((w for w in c.call('windows',{'action':'list'}) if w['title']=='Legacy title acceptance'),None)
+            if legacy: break
+            time.sleep(.2)
+        assert legacy,'Xterm did not map a window'
+        execute(c,'nix',['shell',nixpkgs+'#xorg.xprop','--command','xprop','-id',legacy['id'],'-f','_NET_WM_NAME','8u','-set','_NET_WM_NAME',''],timeout=180)
+        observed = next(w for w in c.call('windows',{'action':'list'}) if w['id']==legacy['id'])
+        assert observed['title']=='Legacy title acceptance',observed
+        c.call('windows',{'action':'focus','window_id':legacy['id']})
+        c.screenshot('13-legacy-xterm-title.png')
+        c.call('windows',{'action':'close','window_id':legacy['id']})
+    finally:
+        if c.call('shell',{'action':'status','job_id':job['id']})['state']=='running':
+            c.call('shell',{'action':'cancel','job_id':job['id']})
+
+
+def native_controls(c):
+    root = '/home/agent/qa/gtk-' + c.run_id
+    source = Path(__file__).with_name('fixtures').joinpath('native-controls.c').read_text()
+    c.call('files', {'action':'put','path':root+'/main.c','content':source})
+    prepare(c,'rust-tauri',root)
+    execute(c,'bash',['-c','cc -Wno-deprecated-declarations main.c -o fixture $(pkg-config --cflags --libs gtk+-3.0)'],cwd=root)
+    app = c.call('shell', {'action':'launch','command':root+'/fixture','cwd':root,'label':'Native controls acceptance'})
+    try:
+        deadline = time.monotonic()+10
+        while time.monotonic()<deadline:
+            windows = c.call('windows',{'action':'list'})
+            native = [w for w in windows if w.get('pid')==app['pid']]
+            if len(native)==2: break
+            time.sleep(.1)
+        assert len(native)==2,windows
+        capture = str(c.call('capture',{}))
+        assert 'hidden-native-password' not in capture
+        # Identical titles/PIDs/geometry are intentionally ambiguous until arranged.
+        assert capture.count('no unambiguous application/window match') >= 2, capture
+        primary = next(w for w in native if w['minimum_size'][0]>=640)
+        secondary = next(w for w in native if w['id']!=primary['id'])
+        c.call('windows',{'action':'tile','primary_id':primary['id'],'observer_id':secondary['id']})
+        capture = str(c.call('capture',{}))
+        def window_tree(window_id):
+            return capture.split('['+window_id+' ',1)[1].split('\n[0x',1)[0]
+        primary_tree = window_tree(primary['id'])
+        secondary_tree = window_tree(secondary['id'])
+        assert 'Primary acceptance window' in primary_tree and 'Secondary acceptance window' not in primary_tree, primary_tree
+        assert 'Secondary acceptance window' in secondary_tree and 'Primary acceptance window' not in secondary_tree, secondary_tree
+        assert 'value="Editable native value"' in primary_tree, primary_tree
+        assert re.search(r'Native checked state.*states=\[[^\]]*checked',primary_tree),primary_tree
+        c.output.joinpath('native-controls-tree.txt').write_text(capture)
+        c.call('windows',{'action':'focus','window_id':primary['id']})
+        match = re.search(r'Native clipboard field (-?\d+),(-?\d+) (\d+)x(\d+)',primary_tree)
+        assert match,primary_tree
+        x,y,w,h = map(int,match.groups())
+        c.call('input',{'action':'click','x':x+w//2,'y':y+h//2})
+        c.call('input',{'action':'key','combo':'ctrl+a'})
+        c.call('input',{'action':'paste','text':'Native café 🐸'})
+        capture = str(c.call('capture',{}))
+        assert 'value="Native café 🐸"' in capture,capture
+        c.screenshot('11-native-controls.png')
+        c.call('input',{'action':'right_click','x':1896,'y':24})
+        c.screenshot('12-tray-menu.png')
+        c.call('input',{'action':'key','combo':'Down'})
+        c.call('input',{'action':'key','combo':'Return'})
+        capture = str(c.call('capture',{}))
+        assert 'Tray action activated' in capture,capture
+        c.screenshot('12b-tray-action.png')
+        c.call('windows',{'action':'close','window_id':primary['id']},error=True)
+        capture = str(c.call('capture',{}))
+        assert 'Confirm closing the test app' in capture,capture
+        button = re.search(r'\[button\] Close app (-?\d+),(-?\d+) (\d+)x(\d+)',capture)
+        assert button,capture
+        x,y,w,h=map(int,button.groups())
+        c.call('input',{'action':'click','x':x+w//2,'y':y+h//2})
+        c.done(app)
+        c.screenshot('12c-tray-disappeared.png')
+        with Image.open(c.output/'12b-tray-action.png') as before, Image.open(c.output/'12c-tray-disappeared.png') as after:
+            assert ImageChops.difference(before.convert('RGB').crop((1880,8,1912,40)),after.convert('RGB').crop((1880,8,1912,40))).getbbox(), 'tray icon remained after application exit'
+    finally:
+        if c.call('shell',{'action':'status','job_id':app['id']})['state']=='running':
+            c.call('shell',{'action':'cancel','job_id':app['id']})
+
 
 def main():
     parser = argparse.ArgumentParser()
@@ -346,15 +675,16 @@ def main():
     options.output.mkdir(parents=True, exist_ok=True)
     c = ToadComputer(options.url, options.token_file, options.output, options.toad_bridge) if options.toad_bridge else Computer(options.url, options.token_file.read_text().strip(), options.output)
     report = {'info': c.call('state', {'action': 'info'}), 'cases': []}
+    assert report['info']['executables']['chromium'] == '/usr/bin/chromium'
     guide = c.call('state', {'action': 'guide'})
     assert hashlib.sha256(guide['skill'].encode()).hexdigest() == guide['sha256']
-    cases = [('browser forms', browser), ('managed jobs and observer', jobs), ('verified script execution', artifacts)]
+    cases = [('browser forms', browser), ('three-step browser wizard', wizard), ('public Selenium form', public_form), ('managed jobs and observer', jobs), ('desktop job menu', desktop_job_menu), ('tray counts match live jobs', tray_counts), ('Nix failure diagnostics', nix_failure), ('verified script execution', artifacts), ('artifact failure recovery', download_failures)]
     if options.suite == 'full':
-        cases += [('catalog workspaces', workspaces), ('Ketch installation and scraping', ketch), ('job durability and responsiveness', durability), ('native Toad build and screens', native)]
+        cases += [('catalog workspaces', workspaces), ('second repository tests', second_repository), ('Ketch installation and scraping', ketch), ('job durability and responsiveness', durability), ('native Toad build and screens', native), ('native controls and window identity', native_controls), ('legacy Xterm title', legacy_window)]
     elif options.suite == 'workspaces':
-        cases = [('catalog workspaces', workspaces), ('Ketch installation and scraping', ketch), ('job durability and responsiveness', durability)]
+        cases = [('catalog workspaces', workspaces), ('second repository tests', second_repository), ('Ketch installation and scraping', ketch), ('job durability and responsiveness', durability)]
     elif options.suite == 'native':
-        cases = [('native Toad build and screens', native)]
+        cases = [('native Toad build and screens', native), ('native controls and window identity', native_controls), ('legacy Xterm title', legacy_window)]
     for name, case in cases:
         started = time.monotonic()
         try:

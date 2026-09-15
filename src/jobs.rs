@@ -31,6 +31,9 @@ pub struct Start {
     #[serde(default)]
     pub pty: bool,
     pub request_id: Option<String>,
+    // Only the artifact tool can request staging; ordinary shell input cannot.
+    #[serde(skip)]
+    pub artifact_destination: Option<PathBuf>,
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
@@ -55,6 +58,16 @@ pub struct Record {
     // Environment values never enter the persisted metadata or public response.
     #[serde(default)]
     pub fingerprint: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub artifact_staging: Option<PathBuf>,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct Summary {
+    pub id: String,
+    pub label: String,
+    pub state: String,
+    pub exit_code: Option<i32>,
 }
 
 impl Record {
@@ -90,6 +103,32 @@ impl Job {
         )
         .and_then(|()| std::fs::rename(temporary, self.directory.join("record.json")))
         .map_err(|e| format!("save job {}: {e}", record.id))
+    }
+
+    fn cleanup_artifact(&self) -> Result<(), String> {
+        let record = self.record();
+        let Some(staging) = record.artifact_staging else {
+            return Ok(());
+        };
+        let expected = format!(".toad-artifact-{}", record.id);
+        let home = self
+            .directory
+            .ancestors()
+            .nth(3)
+            .ok_or("job home unavailable")?;
+        if staging.file_name().and_then(|s| s.to_str()) != Some(&expected)
+            || !staging
+                .parent()
+                .and_then(|p| p.canonicalize().ok())
+                .is_some_and(|p| p.starts_with(home))
+        {
+            return Err("refusing invalid artifact staging path".into());
+        }
+        match std::fs::remove_dir_all(&staging) {
+            Ok(()) => Ok(()),
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(()),
+            Err(error) => Err(format!("clean artifact staging: {error}")),
+        }
     }
 
     fn append(&self, channel: &str, bytes: &[u8]) -> Result<(), String> {
@@ -181,9 +220,12 @@ impl Jobs {
                         cancel,
                         changes,
                     });
+                    job.cleanup_artifact()?;
                     job.save()?;
                     jobs.insert(job.record().id.clone(), job);
                 }
+                drop(jobs);
+                self.publish();
                 Ok::<(), String>(())
             })
             .await
@@ -286,6 +328,17 @@ impl Jobs {
         let id = format!("{:016x}-{:08x}", now(), rand_id()?);
         let directory = self.root.join(&id);
         std::fs::create_dir(&directory).map_err(|e| e.to_string())?;
+        let artifact_staging = start
+            .artifact_destination
+            .as_ref()
+            .and_then(|destination| destination.parent())
+            .map(|parent| parent.join(format!(".toad-artifact-{id}")));
+        if let Some(staging) = &artifact_staging {
+            start.env.insert(
+                "TOAD_ARTIFACT_DIR".into(),
+                staging.to_string_lossy().into_owned(),
+            );
+        }
         let record = Record {
             id: id.clone(),
             pid: None,
@@ -305,6 +358,7 @@ impl Jobs {
             pty: start.pty,
             request_id: start.request_id.clone(),
             fingerprint,
+            artifact_staging,
         };
         let (cancel, receiver) = mpsc::channel(1);
         let (changes, _) = watch::channel(0);
@@ -360,14 +414,26 @@ impl Jobs {
     }
 
     fn publish(&self) {
-        let count = self
-            .jobs
-            .lock()
-            .unwrap()
-            .values()
-            .filter(|job| !job.record().finished())
-            .count();
-        let _ = crate::x11::publish_jobs(&self.display, count as u32);
+        // Keep snapshots ordered through publication; a finishing job must not
+        // overwrite a newer start with an older count on another X11 connection.
+        let jobs = self.jobs.lock().unwrap();
+        let mut records: Vec<_> = jobs.values().map(|job| job.record()).collect();
+        records.sort_by(|a, b| {
+            b.started_at
+                .cmp(&a.started_at)
+                .then_with(|| b.id.cmp(&a.id))
+        });
+        let summaries: Vec<_> = records
+            .into_iter()
+            .map(|record| Summary {
+                id: record.id,
+                label: record.label,
+                state: record.state,
+                exit_code: record.exit_code,
+            })
+            .collect();
+        let _ = crate::x11::publish_jobs(&self.display, &summaries);
+        drop(jobs);
     }
 
     pub async fn wait(&self, id: &str, milliseconds: u64) -> Result<Record, String> {
@@ -708,6 +774,9 @@ async fn supervise(
                 output_error = Some("output reader did not close".into());
             }
         }
+    }
+    if let Err(error) = job.cleanup_artifact() {
+        output_error = Some(error);
     }
     {
         let mut record = job.record.lock().unwrap();

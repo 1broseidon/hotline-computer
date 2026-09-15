@@ -14,6 +14,8 @@ struct Node {
     role: String,
     name: String,
     bounds: [i32; 4],
+    states: String,
+    value: Option<String>,
 }
 
 pub async fn tree(app: &crate::App, windows: &[Window]) -> String {
@@ -37,18 +39,31 @@ pub async fn tree(app: &crate::App, windows: &[Window]) -> String {
             .iter()
             .filter(|tree| matches_window(tree, window))
             .collect();
+        // A single application may have several windows with the same title.
+        // Prefer the matching geometry before treating a title as ambiguous.
+        let exact: Vec<_> = candidates
+            .iter()
+            .copied()
+            .filter(|tree| bounds_match(tree, window))
+            .collect();
+        let candidates = if exact.is_empty() { candidates } else { exact };
         if let [tree] = candidates.as_slice() {
             let nodes = &tree.nodes;
             for node in nodes {
                 output.push_str(&"  ".repeat(node.depth + 1));
                 output.push_str(&format!(
-                    "[{}] {} {},{} {}x{}\n",
+                    "[{}] {} {},{} {}x{} states=[{}]{}\n",
                     node.role,
                     truncate(&node.name, 200),
                     node.bounds[0],
                     node.bounds[1],
                     node.bounds[2],
-                    node.bounds[3]
+                    node.bounds[3],
+                    node.states,
+                    node.value
+                        .as_ref()
+                        .map(|value| format!(" value={:?}", truncate(value, 200)))
+                        .unwrap_or_default()
                 ));
             }
         }
@@ -200,15 +215,45 @@ async fn query(app: &crate::App) -> Result<Vec<WindowTree>, String> {
                     .await
                     .map(|role| role.name().to_owned())
                     .unwrap_or_else(|_| "unknown".to_owned());
+                let states = proxy
+                    .get_state()
+                    .await
+                    .ok()
+                    .map(|states| {
+                        states
+                            .iter()
+                            .map(|state| state.to_string())
+                            .collect::<Vec<_>>()
+                            .join(",")
+                    })
+                    .unwrap_or_default();
+                let mut value = None;
                 let bounds = match proxy.proxies().await {
-                    Ok(proxies) => match proxies.component().await {
-                        Ok(component) => component
-                            .get_extents(CoordType::Screen)
-                            .await
-                            .map(|(x, y, width, height)| [x, y, width, height])
-                            .unwrap_or([0; 4]),
-                        Err(_) => [0; 4],
-                    },
+                    Ok(proxies) => {
+                        // Password fields may expose their contents through Text.
+                        // Only return ordinary editable text and numeric controls.
+                        if role != "password text" {
+                            if let Ok(numeric) = proxies.value().await {
+                                value = numeric
+                                    .current_value()
+                                    .await
+                                    .ok()
+                                    .map(|value| value.to_string());
+                            } else if matches!(role.as_str(), "text" | "entry")
+                                && let Ok(text) = proxies.text().await
+                            {
+                                value = text.get_text(0, 200).await.ok();
+                            }
+                        }
+                        match proxies.component().await {
+                            Ok(component) => component
+                                .get_extents(CoordType::Screen)
+                                .await
+                                .map(|(x, y, width, height)| [x, y, width, height])
+                                .unwrap_or([0; 4]),
+                            Err(_) => [0; 4],
+                        }
+                    }
                     Err(_) => [0; 4],
                 };
                 if !name.is_empty() || bounds[2] > 0 || bounds[3] > 0 {
@@ -217,6 +262,8 @@ async fn query(app: &crate::App) -> Result<Vec<WindowTree>, String> {
                         role,
                         name,
                         bounds,
+                        states,
+                        value,
                     });
                 }
                 let mut children = children(&proxy).await;
@@ -245,13 +292,17 @@ async fn query(app: &crate::App) -> Result<Vec<WindowTree>, String> {
     Ok(result)
 }
 
-fn matches_window(tree: &WindowTree, window: &Window) -> bool {
-    let bounds_match = tree.bounds[2] > 0
+fn bounds_match(tree: &WindowTree, window: &Window) -> bool {
+    tree.bounds[2] > 0
         && tree
             .bounds
             .iter()
             .zip(window.bounds)
-            .all(|(a, b)| (i64::from(*a) - i64::from(b)).abs() <= 4);
+            .all(|(a, b)| (i64::from(*a) - i64::from(b)).abs() <= 4)
+}
+
+fn matches_window(tree: &WindowTree, window: &Window) -> bool {
+    let bounds_match = bounds_match(tree, window);
     let title_match = tree.title == window.title;
     match (tree.pid, window.pid) {
         (Some(a), Some(b)) => {
@@ -317,6 +368,7 @@ mod tests {
             focused: true,
             pid: Some(100),
             maximized: false,
+            minimum_size: [1, 1],
         };
         let mut tree = WindowTree {
             title: "Toad".into(),

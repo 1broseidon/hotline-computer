@@ -24,6 +24,8 @@ struct Input {
     #[serde(default)]
     args: Vec<String>,
     cwd: Option<String>,
+    #[serde(default)]
+    env: std::collections::BTreeMap<String, String>,
     request_id: Option<String>,
     #[serde(default)]
     content: String,
@@ -91,20 +93,23 @@ async fn artifact(app: &App, input: Input, holder: &str) -> ToolResult {
                     .into_owned(),
                 args: vec!["artifact".into(), spec.to_string()],
                 cwd: input.cwd,
+                env: input.env,
                 label: Some(format!("{} {}", input.action, path.display())),
                 request_id: input.request_id,
+                artifact_destination: Some(destination.clone().unwrap_or_else(|| path.clone())),
                 ..crate::jobs::Start::default()
             },
             holder,
         )
         .await?;
     drop(guard);
+    let mut result = serde_json::to_value(job).map_err(|e| e.to_string())?;
     if app.display.is_some()
         && let Err(error) = app.observer.show(false).await
     {
-        eprintln!("toad-computer: {error}");
+        result["observer_error"] = json!(error);
     }
-    json_text(job)
+    json_text(result)
 }
 
 async fn get(app: &App, path: &Path) -> ToolResult {

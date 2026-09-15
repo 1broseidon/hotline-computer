@@ -12,6 +12,8 @@ struct Input {
     window_id: String,
     #[serde(default)]
     unmaximize: bool,
+    primary_id: Option<String>,
+    observer_id: Option<String>,
 }
 
 pub async fn call(app: &App, arguments: Value, holder: &str) -> ToolResult {
@@ -21,7 +23,7 @@ pub async fn call(app: &App, arguments: Value, holder: &str) -> ToolResult {
     }
     let _guard = app.access.mutate(holder).await?;
     if input.action == "tile" {
-        return tile(app).await;
+        return tile(app, &input).await;
     }
     let id = required_id(&input)?;
     if !x11::windows(&app.config.display)?
@@ -70,65 +72,189 @@ fn required_id(input: &Input) -> Result<&str, String> {
         .ok_or_else(|| "window_id is required".to_owned())
 }
 
-async fn tile(app: &App) -> ToolResult {
-    let windows = x11::windows(&app.config.display)?;
-    if windows.is_empty() {
-        return Ok(text("no windows"));
-    }
-    let [left, top, width, height] = x11::workarea(&app.config.display)?;
-    let browser = windows
+fn layout(
+    windows: &[x11::Window],
+    area: [i32; 4],
+    primary: Option<usize>,
+) -> Result<Vec<(String, [i32; 4])>, String> {
+    let [left, top, width, height] = area;
+    let right: Vec<_> = windows
         .iter()
-        .position(|window| window.class.to_ascii_lowercase().contains("chromium"));
-    let right_count = windows.len() - usize::from(browser.is_some());
-    let midpoint = if browser.is_some() && right_count > 0 {
-        width / 2
+        .enumerate()
+        .filter(|(index, _)| Some(*index) != primary)
+        .collect();
+    let right_min = right
+        .iter()
+        .map(|(_, w)| w.minimum_size[0])
+        .max()
+        .unwrap_or(0);
+    let primary_min = primary
+        .map(|index| windows[index].minimum_size[0])
+        .unwrap_or(0);
+    if primary_min + right_min > width
+        || windows.iter().any(|w| w.minimum_size[1] > height)
+        || right
+            .iter()
+            .map(|(_, w)| i64::from(w.minimum_size[1]))
+            .sum::<i64>()
+            > i64::from(height)
+    {
+        return Err("selected windows' minimum sizes do not fit the work area; close an observer, choose a smaller pair, or increase the screen size".into());
+    }
+    let split = if primary.is_some() {
+        if right.is_empty() {
+            width
+        } else {
+            (width / 2).max(primary_min).min(width - right_min)
+        }
     } else {
         0
     };
-    let right_height = height / right_count.max(1) as i32;
     let mut expected = Vec::new();
-    let mut right_index = 0_i32;
-    for (index, window) in windows.iter().enumerate() {
-        let (x, y, width, height) = if Some(index) == browser {
-            (
-                left,
-                top,
-                if right_count == 0 { width } else { midpoint },
-                height,
-            )
-        } else {
-            let geometry = (
-                left + midpoint,
-                top + right_index * right_height,
-                width - midpoint,
-                right_height,
-            );
-            right_index += 1;
-            geometry
-        };
-        expected.push((window.id.clone(), [x, y, width, height]));
-        x11::maximize(&app.config.display, &window.id, false)?;
+    if let Some(index) = primary {
+        expected.push((windows[index].id.clone(), [left, top, split, height]));
+    }
+    let mut y = top;
+    let mut available = height - right.iter().map(|(_, w)| w.minimum_size[1]).sum::<i32>();
+    for (position, (_, window)) in right.iter().enumerate() {
+        let extra = available / (right.len() - position) as i32;
+        available -= extra;
+        let row_height = window.minimum_size[1] + extra;
+        expected.push((
+            window.id.clone(),
+            [left + split, y, width - split, row_height],
+        ));
+        y += row_height;
+    }
+    Ok(expected)
+}
+
+async fn tile(app: &App, input: &Input) -> ToolResult {
+    let all = x11::windows(&app.config.display)?;
+    let (windows, primary) = match (&input.primary_id, &input.observer_id) {
+        (None, None) => {
+            let primary = all
+                .iter()
+                .position(|w| w.class.to_ascii_lowercase().contains("chromium"));
+            (all, primary)
+        }
+        (Some(primary), Some(observer)) if primary != observer => {
+            let mut selected = Vec::new();
+            for id in [primary, observer] {
+                selected.push(
+                    all.iter()
+                        .find(|w| &w.id == id)
+                        .cloned()
+                        .ok_or_else(|| format!("window {id} is not present"))?,
+                );
+            }
+            (selected, Some(0))
+        }
+        _ => return Err(
+            "tile requires distinct primary_id and observer_id, or neither for automatic layout"
+                .into(),
+        ),
+    };
+    if windows.is_empty() {
+        return Ok(text("no windows"));
+    }
+    let expected = layout(&windows, x11::workarea(&app.config.display)?, primary)?;
+    for (id, bounds) in &expected {
+        x11::maximize(&app.config.display, id, false)?;
         x11::place(
             &app.config.display,
-            &window.id,
-            x,
-            y,
-            width as u32,
-            height as u32,
+            id,
+            bounds[0],
+            bounds[1],
+            bounds[2] as u32,
+            bounds[3] as u32,
         )?;
     }
+    // Raise the selected pair above unrelated windows. Placement alone leaves
+    // perfectly valid geometry hidden beneath whichever app was last active.
+    for (id, _) in expected.iter().rev() {
+        x11::activate(&app.config.display, id)?;
+    }
     let deadline = tokio::time::Instant::now() + std::time::Duration::from_secs(2);
+    let mut settled = false;
     loop {
         let actual = x11::windows(&app.config.display)?;
-        let complete = expected
-            .iter()
-            .all(|(id, bounds)| actual.iter().any(|w| &w.id == id && w.bounds == *bounds));
-        if complete {
+        let complete = expected.iter().all(|(id, bounds)| {
+            actual
+                .iter()
+                .any(|w| &w.id == id && !w.maximized && w.bounds == *bounds)
+        });
+        if complete && settled {
             return json_text(json!({"ok":true,"windows":actual}));
         }
+        settled = complete;
         if tokio::time::Instant::now() >= deadline {
             return Err(json!({"ok":false,"error":"one or more windows refused the requested tile geometry","expected":expected,"windows":actual}).to_string());
         }
+        // Chromium can submit its saved geometry after observing the restore.
+        // Reapply placement once restored, and require it to survive a poll.
+        for (id, bounds) in &expected {
+            if actual
+                .iter()
+                .any(|w| &w.id == id && !w.maximized && w.bounds != *bounds)
+            {
+                x11::place(
+                    &app.config.display,
+                    id,
+                    bounds[0],
+                    bounds[1],
+                    bounds[2] as u32,
+                    bounds[3] as u32,
+                )?;
+            }
+        }
         tokio::time::sleep(std::time::Duration::from_millis(40)).await;
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    fn window(id: &str, minimum_size: [i32; 2]) -> x11::Window {
+        x11::Window {
+            id: id.into(),
+            title: id.into(),
+            class: String::new(),
+            bounds: [0; 4],
+            focused: false,
+            pid: None,
+            maximized: false,
+            minimum_size,
+        }
+    }
+    #[test]
+    fn a_large_application_gets_its_minimum_width_above_the_bar() {
+        let result = layout(
+            &[window("app", [1280, 860]), window("observer", [100, 100])],
+            [0, 48, 1920, 1032],
+            Some(0),
+        )
+        .unwrap();
+        assert_eq!(result[0].1, [0, 48, 1280, 1032]);
+        assert_eq!(result[1].1, [1280, 48, 640, 1032]);
+    }
+    #[test]
+    fn impossible_layouts_fail_before_moving_any_windows() {
+        assert!(
+            layout(
+                &[window("a", [1280, 860]), window("b", [800, 100])],
+                [0, 48, 1920, 1032],
+                Some(0)
+            )
+            .is_err()
+        );
+        assert!(
+            layout(
+                &[window("a", [100, 600]), window("b", [100, 600])],
+                [0, 48, 1920, 1032],
+                None
+            )
+            .is_err()
+        );
     }
 }

@@ -17,6 +17,7 @@ pub struct Window {
     pub focused: bool,
     pub pid: Option<u32>,
     pub maximized: bool,
+    pub minimum_size: [i32; 2],
 }
 
 pub struct Screenshot {
@@ -243,6 +244,30 @@ pub fn windows(display: &str) -> Result<Vec<Window>, String> {
                 i32::from(geometry.width),
                 i32::from(geometry.height),
             ],
+            minimum_size: {
+                let hints = connection
+                    .get_property(
+                        false,
+                        id,
+                        AtomEnum::WM_NORMAL_HINTS,
+                        AtomEnum::WM_SIZE_HINTS,
+                        0,
+                        18,
+                    )
+                    .map_err(|e| e.to_string())?
+                    .reply()
+                    .ok()
+                    .and_then(|reply| reply.value32().map(Iterator::collect::<Vec<_>>))
+                    .unwrap_or_default();
+                if hints.len() >= 7 && hints[0] & (1 << 4) != 0 {
+                    [
+                        hints[5].clamp(1, i32::MAX as u32) as i32,
+                        hints[6].clamp(1, i32::MAX as u32) as i32,
+                    ]
+                } else {
+                    [1, 1]
+                }
+            },
             focused: active == Some(id),
             pid: cardinal_property(&connection, id, atom(&connection, b"_NET_WM_PID")?)
                 .first()
@@ -464,17 +489,34 @@ pub fn workarea(display: &str) -> Result<[i32; 4], String> {
     Ok([0, 0, i32::from(geometry.width), i32::from(geometry.height)])
 }
 
-pub fn publish_jobs(display: &str, running: u32) -> Result<(), String> {
+pub fn publish_jobs(display: &str, jobs: &[crate::jobs::Summary]) -> Result<(), String> {
     use x11rb::wrapper::ConnectionExt as _;
     let (connection, root) = connect(display)?;
+    let running = jobs.iter().filter(|job| job.state == "running").count() as u32;
+    let completed = jobs
+        .iter()
+        .filter(|job| job.state == "exited" && job.exit_code == Some(0))
+        .count() as u32;
+    let failed = jobs.len() as u32 - running - completed;
+    connection
+        .change_property8(
+            x11rb::protocol::xproto::PropMode::REPLACE,
+            root,
+            atom(&connection, b"_TOAD_JOB_SUMMARY")?,
+            atom(&connection, b"UTF8_STRING")?,
+            &serde_json::to_vec(jobs).map_err(|e| e.to_string())?,
+        )
+        .map_err(|e| e.to_string())?;
     connection
         .change_property32(
             x11rb::protocol::xproto::PropMode::REPLACE,
             root,
             atom(&connection, b"_TOAD_JOBS_RUNNING")?,
             AtomEnum::CARDINAL,
-            &[running],
+            &[running, completed, failed],
         )
-        .map_err(|e| e.to_string())?;
-    connection.flush().map_err(|e| e.to_string())
+        .map_err(|e| e.to_string())?
+        // Wait for X11 to apply both properties before dropping this connection.
+        .check()
+        .map_err(|e| e.to_string())
 }

@@ -7,6 +7,9 @@ COPY Cargo.toml Cargo.lock ./
 COPY src ./src
 COPY assets ./assets
 COPY skills ./skills
+ARG TOAD_BUILD_REVISION=unknown
+ARG TOAD_BUILD_CHANNEL=development
+ENV TOAD_BUILD_REVISION=$TOAD_BUILD_REVISION TOAD_BUILD_CHANNEL=$TOAD_BUILD_CHANNEL
 RUN --mount=type=cache,target=/usr/local/cargo/registry --mount=type=cache,target=/src/target cargo build --release --locked && cp target/release/toad-computer /usr/local/bin/toad-computer
 
 FROM build AS checks

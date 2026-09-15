@@ -44,7 +44,7 @@ pub async fn call(app: &App, arguments: Value, holder: &str) -> ToolResult {
             .await?,
         ),
         "info" => json_text(
-            json!({"version":env!("CARGO_PKG_VERSION"),"architecture":std::env::consts::ARCH,"home":app.config.home,"display":app.config.display,"nixpkgs":crate::workspace::NIXPKGS,"catalog":crate::workspace::catalog(),"jobs":app.jobs.list().await?,"terminal":"Alacritty","graphics":"Mesa software rendering"}),
+            json!({"version":env!("CARGO_PKG_VERSION"),"build":crate::guide::identity(),"architecture":std::env::consts::ARCH,"home":app.config.home,"display":app.config.display,"nixpkgs":crate::workspace::NIXPKGS,"catalog":crate::workspace::catalog(),"executables":executables(),"capabilities":crate::tools::NAMES,"skill_sha256":crate::guide::manifest()["sha256"],"jobs":app.jobs.list().await?,"terminal":"Alacritty","graphics":"Mesa software rendering"}),
         ),
         "control" => control(app, holder, input.duration).await,
         "release" => release(app, holder).await,
@@ -85,6 +85,31 @@ pub async fn call(app: &App, arguments: Value, holder: &str) -> ToolResult {
             ],
         )),
     }
+}
+
+fn executables() -> std::collections::BTreeMap<&'static str, String> {
+    use std::os::unix::fs::PermissionsExt;
+    let path = std::env::var_os("PATH").unwrap_or_default();
+    [
+        "bash",
+        "git",
+        "curl",
+        "python3",
+        "nix",
+        "chromium",
+        "alacritty",
+    ]
+    .into_iter()
+    .filter_map(|name| {
+        std::env::split_paths(&path)
+            .map(|directory| directory.join(name))
+            .find(|path| {
+                path.metadata()
+                    .is_ok_and(|m| m.is_file() && m.permissions().mode() & 0o111 != 0)
+            })
+            .map(|path| (name, path.to_string_lossy().into_owned()))
+    })
+    .collect()
 }
 
 async fn control(app: &App, holder: &str, duration: Option<u64>) -> ToolResult {

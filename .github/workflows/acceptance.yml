@@ -25,6 +25,9 @@ jobs:
       - uses: docker/build-push-action@v7
         with:
           context: .
+          build-args: |
+            TOAD_BUILD_REVISION=${{ github.sha }}
+            TOAD_BUILD_CHANNEL=development
           target: checks
           load: true
           tags: toad-computer:checks
@@ -33,6 +36,9 @@ jobs:
       - uses: docker/build-push-action@v7
         with:
           context: .
+          build-args: |
+            TOAD_BUILD_REVISION=${{ github.sha }}
+            TOAD_BUILD_CHANNEL=development
           load: true
           tags: toad-computer:candidate
           cache-from: type=gha,scope=acceptance-${{ matrix.arch }}

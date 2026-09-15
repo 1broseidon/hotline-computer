@@ -1,6 +1,6 @@
 # The computer image, built for both architectures a desk runs on and
 # published as one name. Each architecture builds on its own runner — a
-# Rust release build and an X server from source are hours under emulation
+# Rust release build and native-app acceptance are hours under emulation
 # and minutes native — pushes by digest, and a last job stitches the two
 # digests into the manifest the desk pulls.
 #
@@ -54,9 +54,39 @@ jobs:
           - arch: arm64
             runner: ubuntu-24.04-arm
     runs-on: ${{ matrix.runner }}
+    timeout-minutes: 60
     steps:
       - uses: actions/checkout@v7
       - uses: docker/setup-buildx-action@v4
+      - uses: docker/build-push-action@v7
+        with:
+          context: .
+          build-args: |
+            TOAD_BUILD_REVISION=${{ github.sha }}
+            TOAD_BUILD_CHANNEL=${{ github.ref_type == 'tag' && 'release' || 'development' }}
+          target: checks
+          load: true
+          tags: toad-computer:checks
+          cache-from: type=gha,scope=${{ matrix.arch }}
+      - uses: docker/build-push-action@v7
+        with:
+          context: .
+          build-args: |
+            TOAD_BUILD_REVISION=${{ github.sha }}
+            TOAD_BUILD_CHANNEL=${{ github.ref_type == 'tag' && 'release' || 'development' }}
+          load: true
+          tags: toad-computer:candidate
+          cache-from: type=gha,scope=${{ matrix.arch }}
+      - name: Accept the fresh image before publishing
+        run: tests/run-image-acceptance.sh toad-computer:candidate toad-computer:checks acceptance
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: release-acceptance-${{ matrix.arch }}
+          path: |
+            acceptance/
+            !acceptance/token
+          if-no-files-found: error
       - uses: docker/login-action@v4
         with:
           registry: ghcr.io
@@ -66,11 +96,23 @@ jobs:
         uses: docker/build-push-action@v7
         with:
           context: .
+          build-args: |
+            TOAD_BUILD_REVISION=${{ github.sha }}
+            TOAD_BUILD_CHANNEL=${{ github.ref_type == 'tag' && 'release' || 'development' }}
           platforms: linux/${{ matrix.arch }}
           outputs: type=image,name=${{ env.IMAGE }},push-by-digest=true,name-canonical=true,push=true
           cache-from: type=gha,scope=${{ matrix.arch }}
           # A cache that cannot be written is a slower build, not a failed one.
           cache-to: type=gha,scope=${{ matrix.arch }},mode=max,ignore-error=true
+      - name: Require the published image to match the accepted image
+        env:
+          PUBLISHED_DIGEST: ${{ steps.build.outputs.digest }}
+        run: |
+          set -eu
+          tested=$(docker image inspect --format '{{.Id}}' toad-computer:candidate)
+          docker pull "${IMAGE}@${PUBLISHED_DIGEST}"
+          published=$(docker image inspect --format '{{.Id}}' "${IMAGE}@${PUBLISHED_DIGEST}")
+          test "$tested" = "$published"
       # An artifact path may not carry a colon, so the digest is filed
       # without its `sha256:` and gets it back when the manifest is made.
       - run: |
@@ -98,11 +140,13 @@ jobs:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
-      - run: |
+      - env:
+          RELEASE_TAGS: ${{ needs.version.outputs.tags }}
+        run: |
           set -eu
-          tags=""
-          for tag in $(echo "${{ needs.version.outputs.tags }}" | tr ',' ' '); do tags="$tags -t $tag"; done
-          digests=""
-          for digest in digests/*; do digests="$digests ${IMAGE}@sha256:$(basename "$digest")"; done
-          docker buildx imagetools create $tags $digests
+          IFS=',' read -r -a tags <<< "$RELEASE_TAGS"
+          args=()
+          for tag in "${tags[@]}"; do args+=(--tag "$tag"); done
+          for digest in digests/*; do args+=("${IMAGE}@sha256:$(basename "$digest")"); done
+          docker buildx imagetools create "${args[@]}"
       - run: docker buildx imagetools inspect "$(echo "${{ needs.version.outputs.tags }}" | cut -d, -f1)"

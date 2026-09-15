@@ -111,6 +111,14 @@ fn machine(config: Config, width: u16, height: u16) -> Result<(), String> {
         std::env::set_var("DBUS_SESSION_BUS_ADDRESS", &bus_address);
     }
 
+    // A hard container stop leaves sockets and X's PID lock behind. PIDs are
+    // reused on restart, so the lock's PID cannot establish that X is alive.
+    let display_socket = x_socket(&config.display)?;
+    remove_stale_socket(&display_socket)?;
+    let number = display_socket.file_name().unwrap().to_string_lossy();
+    remove_if_present(&PathBuf::from(format!("/tmp/.{number}-lock")))?;
+    remove_stale_socket(&bus_path)?;
+
     let mut xvfb = spawn(
         "Xvfb",
         &[
@@ -181,7 +189,12 @@ fn machine(config: Config, width: u16, height: u16) -> Result<(), String> {
                         }
                         desktop::Request::BrowserClosed => app.browser.forget().await,
                         desktop::Request::OpenTerminal => {
-                            if let Err(error) = app.observer.show(true).await {
+                            if let Err(error) = app.observer.select(None).await {
+                                eprintln!("toad-computer: terminal: {error}");
+                            }
+                        }
+                        desktop::Request::OpenJob(job_id) => {
+                            if let Err(error) = app.observer.select(Some(&job_id)).await {
                                 eprintln!("toad-computer: terminal: {error}");
                             }
                         }
@@ -238,6 +251,32 @@ fn x_socket(display: &str) -> Result<PathBuf, String> {
     Ok(PathBuf::from(format!("/tmp/.X11-unix/X{number}")))
 }
 
+fn remove_if_present(path: &Path) -> Result<(), String> {
+    match std::fs::remove_file(path) {
+        Ok(()) => Ok(()),
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(()),
+        Err(error) => Err(format!("remove stale {}: {error}", path.display())),
+    }
+}
+
+fn remove_stale_socket(path: &Path) -> Result<(), String> {
+    match std::os::unix::net::UnixStream::connect(path) {
+        Ok(_) => Err(format!(
+            "{} is already serving; refusing to replace it",
+            path.display()
+        )),
+        Err(error)
+            if matches!(
+                error.kind(),
+                std::io::ErrorKind::ConnectionRefused | std::io::ErrorKind::NotFound
+            ) =>
+        {
+            remove_if_present(path)
+        }
+        Err(error) => Err(format!("inspect {}: {error}", path.display())),
+    }
+}
+
 fn wait_for(path: &Path, what: &str, child: &mut Child) -> Result<(), String> {
     let deadline = Instant::now() + START_TIMEOUT;
     while !path.exists() {
@@ -276,6 +315,19 @@ fn wait_for_x(display: &str, xvfb: &mut Child) -> Result<(), String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn only_dead_endpoints_are_removed() {
+        let directory = tempfile::tempdir().unwrap();
+        let socket = directory.path().join("bus");
+        let listener = std::os::unix::net::UnixListener::bind(&socket).unwrap();
+        assert!(remove_stale_socket(&socket).is_err());
+        assert!(socket.exists());
+        drop(listener);
+        remove_stale_socket(&socket).unwrap();
+        assert!(!socket.exists());
+        remove_stale_socket(&socket).unwrap();
+    }
 
     #[test]
     fn a_screen_is_width_by_height() {

@@ -10,7 +10,6 @@ import shutil
 import stat
 import sys
 import tarfile
-import tempfile
 import urllib.request
 import zipfile
 
@@ -61,7 +60,8 @@ def download(spec, destination):
             return
         raise ValueError('destination exists; use a matching sha256 for a cache hit or choose another path')
     url = source_url(spec)
-    temporary = destination.with_name(destination.name + f'.{os.getpid()}.part')
+    temporary = Path(os.environ['TOAD_ARTIFACT_DIR']) / 'download.part'
+    temporary.parent.mkdir(exist_ok=True)
     try:
         checksum = hashlib.sha256()
         total = 0
@@ -98,15 +98,17 @@ def member_path(name):
 def extract(archive, destination):
     if destination.exists():
         raise ValueError('extraction destination already exists; choose an empty new directory')
-    temporary = Path(tempfile.mkdtemp(prefix='.toad-extract-', dir=destination.parent))
+    temporary = Path(os.environ['TOAD_ARTIFACT_DIR']) / 'extract'
+    temporary.mkdir(parents=True)
     total = 0
     try:
         if zipfile.is_zipfile(archive):
             with zipfile.ZipFile(archive) as bundle:
                 for entry in bundle.infolist():
                     member_path(entry.filename)
-                    if stat.S_ISLNK(entry.external_attr >> 16):
-                        raise ValueError('archive symlinks are not supported')
+                    kind = stat.S_IFMT(entry.external_attr >> 16)
+                    if kind not in (0, stat.S_IFREG, stat.S_IFDIR):
+                        raise ValueError('archive links and special files are not supported')
                     total += entry.file_size
                     if total > LIMIT:
                         raise ValueError('expanded archive exceeds 1 GiB')

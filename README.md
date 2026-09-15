@@ -198,5 +198,10 @@ tests/contract.rs  the opt-in proof against a running container
 
 The `desktop acceptance` workflow runs the same fresh-image gate on native
 ARM64 and x86_64 runners. Evidence includes the image ID, tool-call trace,
-job output, screenshots, and cold/warm timings. It does not publish images.
-A release must pass both architecture gates before a version tag is created.
+job output, screenshots, and cold/warm timings. Native-screen checks require
+both the expected accessibility controls and a visible pixel change. The runner
+creates a temporary Python environment for its pinned image-comparison dependency.
+It does not publish images. A release must pass both architecture gates before a
+version tag is created. The tag/manual publishing workflow repeats acceptance,
+then verifies the pushed image has the same configuration digest as the tested
+image before publishing the combined architecture manifest.

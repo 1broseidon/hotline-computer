@@ -158,6 +158,17 @@ async fn handle(
         if text.contains('\0') {
             return Err("Clipboard text contains a NUL byte".into());
         }
+        if crate::x11::windows(&app.config.display)?
+            .iter()
+            .any(|window| {
+                window.focused && window.class.to_ascii_lowercase().contains("toadterminal")
+            })
+        {
+            return Err(
+                "The terminal observer is read-only. Paste into the application you are testing."
+                    .into(),
+            );
+        }
         let display = app.display()?;
         tokio::task::spawn_blocking(move || {
             display.clipboard.write(&text)?;
