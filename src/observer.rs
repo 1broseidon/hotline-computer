@@ -15,6 +15,13 @@ pub const OBSERVER_CLASS: &str = "ToadTerminal";
 /// The person's shell, which the desktop keeps in the bottom third of the
 /// observer's column.
 pub const SHELL_CLASS: &str = "ToadShell";
+/// Alacritty options for the person's window alone: a visible block cursor
+/// in the bar's foreground, where the observer paints its cursor away.
+pub const SHELL_OPTIONS: &[&str] = &[
+    "cursor.style.shape=\"Block\"",
+    "colors.cursor.cursor=\"#d6d6d9\"",
+    "colors.cursor.text=\"#141416\"",
+];
 
 fn window_of_class(display: &str, class: &str) -> Result<Option<String>, String> {
     let wanted = class.to_lowercase();
@@ -81,6 +88,7 @@ impl Observer {
             &socket,
             "Observer",
             OBSERVER_CLASS,
+            &[],
             &[
                 executable.as_os_str(),
                 "observe".as_ref(),
@@ -111,10 +119,13 @@ impl Observer {
             return crate::x11::activate(&self.display, &window);
         }
         let executable = std::env::current_exe().map_err(|e| e.to_string())?;
+        // The shared config hides the cursor, since nobody types in the
+        // observer. The person's window gets one back.
         self.create_window(
             &socket,
             "Terminal",
             SHELL_CLASS,
+            SHELL_OPTIONS,
             &[
                 executable.as_os_str(),
                 "shell".as_ref(),
@@ -189,19 +200,22 @@ impl Observer {
         socket: &Path,
         title: &str,
         class: &str,
+        options: &[&str],
         command: &[&std::ffi::OsStr],
     ) -> Result<(), String> {
-        let request = tokio::process::Command::new("alacritty")
-            .args(["msg", "--socket"])
-            .arg(socket)
-            .args([
-                "create-window",
-                "--title",
-                title,
-                "--class",
-                class,
-                "--working-directory",
-            ])
+        let mut request = tokio::process::Command::new("alacritty");
+        request.args(["msg", "--socket"]).arg(socket).args([
+            "create-window",
+            "--title",
+            title,
+            "--class",
+            class,
+        ]);
+        for option in options {
+            request.args(["-o", option]);
+        }
+        let request = request
+            .arg("--working-directory")
             .arg(&self.home)
             .arg("-e")
             .args(command)
@@ -503,7 +517,10 @@ mod tests {
     fn the_rc_file_sets_the_prompt_and_leaves_room_for_the_operators_own() {
         let rc = super::BASHRC;
         assert!(rc.contains("PS1='\\[\\e[38;2;127;196;240m\\]\\w\\[\\e[0m\\] $ '"));
-        assert!(rc.contains("export PS1"));
+        assert!(
+            !rc.contains("export PS1"),
+            "an exported prompt reaches sh as text"
+        );
         assert!(rc.contains("HISTFILE=\"$HOME/.toad/shell_history\""));
         assert!(rc.contains("export SHELL=/bin/bash"));
         assert!(

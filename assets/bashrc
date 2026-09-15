@@ -6,10 +6,10 @@
 # The image ships no ~/.bashrc. To add your own, create ~/.bashrc: it runs
 # at the end of this file, and what it does is up to you.
 
-# The working directory in the bar's blue, then a dollar. Exported so a
-# shell started from here, say by `nix shell`, looks the same.
+# The working directory in the bar's blue, then a dollar. Not exported:
+# a bash started from here reads this file too, and `sh` would print the
+# escapes as text.
 PS1='\[\e[38;2;127;196;240m\]\w\[\e[0m\] $ '
-export PS1
 
 # What you type here is yours, not a job: history stays with the computer.
 HISTFILE="$HOME/.toad/shell_history"
