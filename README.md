@@ -98,8 +98,11 @@ thirds; `windows tile` uses the same split. The person's terminal opens in
 the bottom third of that column, under an 8 px line, so it never covers
 the app on the left: an interactive bash in the mounted workspace with the
 environment the teammate prepared there, for signing in to something or
-unblocking a stuck step. What is typed there is not a job: it is not
-retained, and the teammate sees only what is on the screen. From there,
+unblocking a stuck step. It is the system's bash with Toad's own rc file,
+written to `~/.toad/bashrc` on each open: the blue prompt, history kept
+under `~/.toad`, and no Debian skeleton files in the home. To customise it,
+create `~/.bashrc`; it runs after Toad's. What is typed there is not a job:
+it is not retained, and the teammate sees only what is on the screen. From there,
 `toad-computer prepare --packages go gopls` prepares the workspace by hand
 the way the teammate's job would, and `toad-computer packages` lists common
 Nixpkgs names to choose from.
@@ -121,10 +124,12 @@ The viewer's control bar sits at the foot of the page. Watching, it reads the
 machine's state (whose it is, how many jobs, how many failed) beside **Take
 control**; if another person holds the screen the button waits. Driving, it
 shows **Paste** and **Give it back** and fades while the pointer is still, so
-it never sits over the screen being driven. The **Paste** button and
-Cmd/Ctrl+V send plain text only while that viewer owns control. A reconnect
-starts view-only. A stale viewer cannot paste over a newer viewer's control.
-Paste is limited to 1 MiB.
+it never sits over the screen being driven. Ctrl+V, Ctrl+C and the rest
+reach the machine as keys, so its apps use their own clipboard. Text from
+the viewer's computer comes in on Ctrl+Alt+V (⌥⌘V on a Mac) or the
+**Paste** button, as plain text, only while that viewer owns control. A
+reconnect starts view-only. A stale viewer cannot paste over a newer
+viewer's control. Paste is limited to 1 MiB.
 
 ## Workspaces and the release guide
 

@@ -125,7 +125,7 @@
     control.disabled = held;
     paste.hidden = back.hidden = hint.hidden = !(connected && driving);
     if (!connected) { status.textContent = "Reconnecting…"; sub.textContent = ""; return; }
-    if (driving) { status.textContent = "You’re in control"; sub.textContent = ""; hint.textContent = (mac ? "⌘V" : "Ctrl+V") + " pastes"; return; }
+    if (driving) { status.textContent = "You’re in control"; sub.textContent = ""; hint.textContent = (mac ? "⌥⌘V" : "Ctrl+Alt+V") + " pastes from your computer"; return; }
     if (held) { status.textContent = "Someone else has the screen"; sub.textContent = ""; return; }
     status.textContent = "Watching";
     const jobs = machine.running ? `${machine.running} ${machine.running === 1 ? "job" : "jobs"}` : "";
@@ -206,8 +206,14 @@
   paste.addEventListener('click', async () => {
     if (!driving) return;
     try { pasteText(await navigator.clipboard.readText()); }
-    catch { say('Clipboard access unavailable. Click the desktop and press ' + (mac ? '⌘V' : 'Ctrl+V') + '.', false); canvas.focus(); }
+    catch { say('Your browser did not share the clipboard.', false); canvas.focus(); }
   });
+  // The machine has its own clipboard: Ctrl+V, Ctrl+C and Ctrl+Shift+V reach
+  // it like any other key. Text from this computer comes in on Ctrl+Alt+V
+  // (⌥⌘V on a Mac), or the Paste button.
+  function hostPaste(event) {
+    return (event.ctrlKey || event.metaKey) && event.altKey && event.code === 'KeyV';
+  }
   canvas.addEventListener('paste', event => {
     if (!driving) return;
     event.preventDefault();
@@ -257,14 +263,18 @@
   // The X server repeats a held key itself, so browser repeats are dropped.
   canvas.addEventListener("keydown", (event) => {
     if (!driving) return;
-    if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 'v') return;
     event.preventDefault();
+    if (hostPaste(event)) {
+      if (event.repeat) return;
+      navigator.clipboard.readText().then(pasteText).catch(() => say('Your browser did not share the clipboard.', false));
+      return;
+    }
     if (!event.repeat) send({ t: "key", key: event.key, down: true });
   });
   canvas.addEventListener("keyup", (event) => {
     if (!driving) return;
-    if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 'v') return;
     event.preventDefault();
+    if (hostPaste(event)) return;
     send({ t: "key", key: event.key, down: false });
   });
   canvas.addEventListener("blur", () => { if (driving) say("Click the screen to type"); });
