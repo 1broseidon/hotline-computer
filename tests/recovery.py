@@ -45,7 +45,8 @@ def main():
     recovered = c.call('shell', {'action': 'status', 'job_id': job['id']})
     assert recovered['state'] == 'interrupted', recovered
     assert 'retained before restart' in c.call('shell', {'action': 'read', 'job_id': job['id']})['output']
-    prepared = c.call('state', {'action': 'prepare', 'name': 'python', 'workspace': '/home/agent/qa/recovered'})
+    # The full suite prepared these packages before the restart; the store keeps them.
+    prepared = c.call('state', {'action': 'prepare', 'packages': ['python312', 'uv'], 'workspace': '/home/agent/qa/recovered'})
     assert prepared['ready'] and prepared['cached'], prepared
     assert 'recovered' in execute(c, 'python3', ['-c', 'import sqlite3; print("recovered")'], cwd='/home/agent/qa/recovered')
     c.call('shell', {'action': 'show'})
