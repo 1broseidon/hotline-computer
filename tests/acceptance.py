@@ -206,6 +206,27 @@ def public_form(c):
     c.screenshot('02d-public-form-received.png')
 
 
+def password_prompt(c):
+    # A form with a password, filled the way a person would, by pointer and
+    # keys, must not leave Chromium's "Save password?" bubble over the page.
+    c.call('browser', {'action':'navigate', 'url':'https://www.selenium.dev/selenium/web/web-form.html'})
+    fields = c.call('browser', {'action':'eval', 'js':"""(() => {
+      const off = { x: window.screenX, y: window.screenY + (window.outerHeight - window.innerHeight) };
+      const at = (selector) => { const r = document.querySelector(selector).getBoundingClientRect(); return [Math.round(off.x + r.left + r.width/2), Math.round(off.y + r.top + r.height/2)]; };
+      return JSON.stringify({ text: at('#my-text-id'), password: at('input[name=my-password]'), submit: at('button[type=submit]') }); })()"""})
+    fields = json.loads(fields) if isinstance(fields, str) else fields
+    c.call('input', {'action':'click','x':fields['text'][0],'y':fields['text'][1]})
+    c.call('input', {'action':'type','text':'Synthetic Toad QA'})
+    c.call('input', {'action':'click','x':fields['password'][0],'y':fields['password'][1]})
+    c.call('input', {'action':'type','text':'not-a-real-secret'})
+    c.call('input', {'action':'click','x':fields['submit'][0],'y':fields['submit'][1]})
+    c.call('wait', {'text':'Received!', 'timeout':10})
+    time.sleep(1)
+    capture = str(c.call('capture', {}))
+    c.screenshot('02e-password-form-submitted.png')
+    assert 'Save password' not in capture and 'password manager' not in capture.lower(), capture[:2000]
+
+
 def jobs(c):
     job = c.call('shell', {'action': 'start', 'command': 'bash', 'args': ['-c', 'printf ready; read answer; printf " received:%s" "$answer"'], 'pty': True, 'request_id': 'acceptance-stdin-' + c.run_id})
     repeat = c.call('shell', {'action': 'start', 'command': 'bash', 'args': ['-c', 'printf ready; read answer; printf " received:%s" "$answer"'], 'pty': True, 'request_id': 'acceptance-stdin-' + c.run_id})
@@ -726,7 +747,7 @@ def main():
     assert report['info']['executables']['chromium'] == '/usr/bin/chromium'
     guide = c.call('state', {'action': 'guide'})
     assert hashlib.sha256(guide['skill'].encode()).hexdigest() == guide['sha256']
-    cases = [('browser forms', browser), ('three-step browser wizard', wizard), ('public Selenium form', public_form), ('managed jobs and observer', jobs), ('desktop job menu', desktop_job_menu), ('tray counts match live jobs', tray_counts), ('Nix failure diagnostics', nix_failure), ('verified script execution', artifacts), ('artifact failure recovery', download_failures)]
+    cases = [('browser forms', browser), ('three-step browser wizard', wizard), ('public Selenium form', public_form), ('no save-password bubble', password_prompt), ('managed jobs and observer', jobs), ('desktop job menu', desktop_job_menu), ('tray counts match live jobs', tray_counts), ('Nix failure diagnostics', nix_failure), ('verified script execution', artifacts), ('artifact failure recovery', download_failures)]
     if options.suite == 'full':
         cases += [('package workspaces', workspaces), ('second repository tests', second_repository), ('Ketch installation and scraping', ketch), ('job durability and responsiveness', durability), ('native Toad build and screens', native), ('native controls and window identity', native_controls), ('legacy Xterm title', legacy_window)]
     elif options.suite == 'workspaces':

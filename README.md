@@ -65,7 +65,7 @@ stop — at once when they give it back or close the page.
 
 - `capture` returns a scaled PNG and the AT-SPI tree, or writes an original PNG.
 - `input` clicks, moves, drags, scrolls, types, presses keys, and uses the clipboard.
-- `browser` drives the visible Chromium over CDP; element refs last for one text snapshot. No action runs longer than a minute, and a browser the person closed is replaced by the next call rather than waited on.
+- `browser` drives the visible Chromium over CDP; element refs last for one text snapshot. No action runs longer than a minute, and a browser the person closed is replaced by the next call rather than waited on. A managed policy (`assets/chromium-policy.json`) turns off the password manager, autofill and sign-in, so nothing typed into a form is offered for keeping and no bubble sits over the page.
 - `shell` starts managed jobs, reads retained output, writes stdin, waits, cancels, and opens the terminal observer.
 - `files` gets, puts, and lists paths below the computer home; downloads, verifies, extracts, and runs artifacts through managed jobs.
 - `windows` lists, focuses, closes, maximizes, and tiles windows.

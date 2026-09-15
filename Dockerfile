@@ -36,6 +36,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && chown -R agent:agent /nix \
     && chown -R agent:agent /home/agent
 COPY --chown=agent:agent assets/alacritty.toml /home/agent/.config/alacritty/alacritty.toml
+COPY assets/chromium-policy.json /etc/chromium/policies/managed/toad.json
 COPY --from=build /usr/local/bin/toad-computer /usr/bin/toad-computer
 USER agent
 WORKDIR /home/agent
