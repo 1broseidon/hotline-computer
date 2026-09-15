@@ -1,7 +1,7 @@
 [package]
 name = "toad-computer"
 description = "A small Linux desktop for a coding agent: one binary boots it, owns it, and serves it over MCP."
-version = "0.5.0-dev"
+version = "0.5.0"
 edition = "2024"
 
 [dependencies]
