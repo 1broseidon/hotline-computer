@@ -416,6 +416,11 @@ def rootless(c):
     # The person's shell answers apt with where software comes from instead.
     output = execute(c, 'bash', ['-ic', 'apt install go; true'], label='apt in the shell')
     assert 'toad-computer prepare' in output and 'toad-computer packages' in output and 'nix shell' in output, output
+    # An AppImage assumes the libraries on the AppImage exclude list are on
+    # the system, since its tooling never bundles them; the image has them.
+    assumed = ['libgpg-error.so.0', 'libOpenGL.so.0', 'libxcb-dri2.so.0', 'libjack.so.0', 'libpipewire-0.3.so.0', 'libusb-1.0.so.0', 'libGL.so.1', 'libgtk-3.so.0', 'libfontconfig.so.1']
+    present = execute(c, 'bash', ['-c', 'ldconfig -p | awk "{print \\$1}"'], label='AppImage system libraries').split()
+    assert all(lib in present for lib in assumed), [lib for lib in assumed if lib not in present]
     # What the person installs for themselves runs by name.
     # An interactive bash without a terminal warns first; the PATH is the last line.
     path = execute(c, 'bash', ['-ic', 'echo "$PATH"'], label='the shell PATH').strip().splitlines()[-1].split(':')

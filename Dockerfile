@@ -27,6 +27,9 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     fonts-dejavu-core fonts-noto-color-emoji xfonts-base alacritty tzdata \
     libgl1-mesa-dri libegl-mesa0 libglx-mesa0 mesa-utils \
     libgtk-3-0t64 librsvg2-common \
+    # What AppImage tooling never bundles because every desktop is assumed
+    # to have it (the AppImage exclude list), beyond glibc, Mesa and GTK above.
+    libgpg-error0 libopengl0 libxcb-dri2-0 libjack-jackd2-0 libpipewire-0.3-0 libusb-1.0-0 \
     && rm -rf /var/lib/apt/lists/* \
     # Rootless by design: nothing runs as root, so apt could never install
     # anything. It goes, so nobody is invited to try; software comes from

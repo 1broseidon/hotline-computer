@@ -213,7 +213,10 @@ Nix by hand (`nix shell nixpkgs#<name>` for one tool), then what the image
 already has. The person's shell answers `apt` and `sudo` with that order.
 A `.deb` or a system-wide install belongs in an image build. An AppImage
 runs without FUSE, which a container cannot offer: the image sets
-`APPIMAGE_EXTRACT_AND_RUN=1`.
+`APPIMAGE_EXTRACT_AND_RUN=1`, and it carries every library on the AppImage
+exclude list, the ones AppImage tooling never bundles because every desktop
+is assumed to have them, from `libgpg-error` to `libOpenGL`, so an AppImage
+built anywhere finds what it expects.
 
 **0.5 development API change:** `prepare name=<preset>` is replaced by
 `packages` or `flake`. Old prepared environments remain usable while their
