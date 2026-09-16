@@ -14,6 +14,7 @@ over streamable HTTP at `/mcp`, with `/health` open, is a valid computer.
 toad-computer  PID 1, supervisor, window manager, bar, MCP server
 ├── Xvfb       the X server; pixels in RAM, no GPU
 ├── dbus       the session bus the accessibility tree rides on
+├── keyring    gnome-keyring, the Secret Service, unlocked from boot
 └── chromium   the visible browser, driven over its DevTools protocol
 ```
 
@@ -25,6 +26,7 @@ and GPU-backed terminal emulators use llvmpipe when no hardware GPU exists.
 | --- | --- |
 | Xvfb and Mesa | X11 desktop and software OpenGL/EGL |
 | D-Bus and AT-SPI | Native application accessibility |
+| gnome-keyring | The Secret Service native apps and CLIs keep passwords in |
 | Chromium | Visible browser controlled through CDP |
 | Alacritty | Reopenable observer for tool-driven shell jobs |
 | Nix | Project-selected Nix packages or repository dev shells |
@@ -234,8 +236,20 @@ shell commands. The complete examples ship in `state guide`.
 
 `toad-computer boot` is the entrypoint. As PID 1 it forks: the parent reaps
 every child the kernel hands it and forwards SIGTERM; the child starts Xvfb
-and dbus-daemon, becomes the window manager, and serves. A machine whose
-display or bus has died exits, and the container with it.
+dbus-daemon and gnome-keyring, becomes the window manager, and serves. A
+machine whose display or bus has died exits, and the container with it; a
+keyring that dies is started again.
+
+## Secrets
+
+Anything that uses libsecret, from a native app to `secret-tool`, finds a
+Secret Service on the session bus from boot: gnome-keyring with its login
+collection unlocked, so a store is a store and never a prompt on the desktop.
+The keyring's password is empty, which means its file under
+`~/.local/share/keyrings` is not encrypted. The home volume is the boundary
+around a computer's secrets, as it is for everything else the person and the
+agent keep there. Environments prepared with Nix share the same bus and so the
+same keyring.
 
 `toad-computer serve` serves on a display that already exists, for running
 the agent outside the container.
