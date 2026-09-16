@@ -12,7 +12,8 @@
 
 use std::path::{Path, PathBuf};
 use std::process::{Child, Command, Stdio};
-use std::sync::mpsc;
+use std::sync::atomic::{AtomicU32, Ordering};
+use std::sync::{Arc, mpsc};
 use std::time::{Duration, Instant};
 
 use crate::display::Display;
@@ -137,6 +138,7 @@ fn machine(config: Config, width: u16, height: u16) -> Result<(), String> {
     )?;
     wait_for(&x_socket(&config.display)?, "the display", &mut xvfb)?;
     wait_for_x(&config.display, &mut xvfb)?;
+    ensure_keymap(&config.display)?;
 
     let mut dbus = spawn(
         "dbus-daemon",
@@ -148,6 +150,8 @@ fn machine(config: Config, width: u16, height: u16) -> Result<(), String> {
         ],
     )?;
     wait_for(&bus_path, "the session bus", &mut dbus)?;
+    let keyring = spawn_keyring()?;
+    let keyring_pid = Arc::new(AtomicU32::new(keyring.id()));
 
     let app = App::new(config.clone()).with_display(Display::open(&config.display)?);
     let (requests, mut incoming) = tokio::sync::mpsc::unbounded_channel();
@@ -173,7 +177,11 @@ fn machine(config: Config, width: u16, height: u16) -> Result<(), String> {
         .enable_all()
         .build()
         .map_err(|error| error.to_string())?;
+    let keeper_pid = keyring_pid.clone();
     let result = runtime.block_on(async {
+        tokio::time::timeout(START_TIMEOUT, secrets_on_the_bus())
+            .await
+            .map_err(|_| "the Secret Service did not appear on the bus".to_owned())??;
         tokio::time::timeout(START_TIMEOUT, crate::a11y::connection(&app))
             .await
             .map_err(|_| "accessibility bus did not start".to_owned())??;
@@ -216,10 +224,14 @@ fn machine(config: Config, width: u16, height: u16) -> Result<(), String> {
                 Err(format!("dbus-daemon exited: {}", describe(status)))
             }
             () = dock => Ok(()),
+            () = keep_keyring(keyring, keeper_pid) => Ok(()),
         }
     });
     // Only PIDs captured at spawn are ever signalled.
-    for pid in [xvfb_pid, dbus_pid] {
+    for pid in [xvfb_pid, dbus_pid, keyring_pid.load(Ordering::Relaxed)] {
+        if pid == 0 {
+            continue;
+        }
         // SAFETY: kill with a PID this process spawned is a plain syscall.
         unsafe {
             libc::kill(pid as libc::pid_t, libc::SIGTERM);
@@ -236,6 +248,118 @@ fn describe(
         Ok(Ok(status)) => status.to_string(),
         Ok(Err(error)) => error.to_string(),
         Err(error) => error.to_string(),
+    }
+}
+
+/// The Secret Service: gnome-keyring on the session bus, its login
+/// collection unlocked, so a native app or `secret-tool` that stores a
+/// password gets a keyring and never a prompt on the desktop. The password
+/// is empty. The home volume is the boundary around a computer's secrets,
+/// as it is for everything else the person and the agent keep there.
+fn spawn_keyring() -> Result<Child, String> {
+    let mut child = Command::new("gnome-keyring-daemon")
+        .args(["--foreground", "--components=secrets", "--unlock"])
+        .stdin(Stdio::piped())
+        // It prints the control socket's location for a shell to export;
+        // clients here find it on the bus.
+        .stdout(Stdio::null())
+        .spawn()
+        .map_err(|error| format!("gnome-keyring-daemon: {error}"))?;
+    if let Some(mut stdin) = child.stdin.take() {
+        use std::io::Write as _;
+        // A daemon that has already gone is noticed by whoever waits on it.
+        let _ = stdin.write_all(b"\n");
+    }
+    Ok(child)
+}
+
+/// Nothing serves before the keyring owns its name, and the image carries
+/// no activation file for it, so no client ever meets a locked keyring the
+/// bus started in its place.
+async fn secrets_on_the_bus() -> Result<(), String> {
+    use atspi::zbus;
+    let connection = zbus::Connection::session()
+        .await
+        .map_err(|error| format!("session bus: {error}"))?;
+    let bus = zbus::fdo::DBusProxy::new(&connection)
+        .await
+        .map_err(|error| format!("session bus: {error}"))?;
+    let name = zbus::names::BusName::try_from("org.freedesktop.secrets")
+        .map_err(|error| error.to_string())?;
+    loop {
+        if bus
+            .name_has_owner(name.clone())
+            .await
+            .map_err(|error| format!("ask the bus for the Secret Service: {error}"))?
+        {
+            return Ok(());
+        }
+        tokio::time::sleep(POLL).await;
+    }
+}
+
+/// A keyring that dies takes nobody's secrets with it; the file is in the
+/// home. It comes back unlocked at once, and apps find it where they left
+/// it; a request in the gap gets "no such name", never a locked keyring.
+async fn keep_keyring(mut child: Child, pid: Arc<AtomicU32>) {
+    loop {
+        let status = tokio::task::spawn_blocking(move || child.wait()).await;
+        pid.store(0, Ordering::Relaxed);
+        eprintln!(
+            "toad-computer: gnome-keyring-daemon exited: {}; starting it again",
+            describe(status)
+        );
+        loop {
+            match spawn_keyring() {
+                Ok(next) => {
+                    pid.store(next.id(), Ordering::Relaxed);
+                    child = next;
+                    break;
+                }
+                Err(error) => {
+                    eprintln!("toad-computer: {error}; trying again in a minute");
+                    tokio::time::sleep(Duration::from_secs(60)).await;
+                }
+            }
+        }
+    }
+}
+
+/// Xvfb loads a pc105/us keymap on its own. A desk reported a display with
+/// none, which no GTK client can type into; if it ever happens here, the
+/// map is loaded explicitly and the log says so.
+fn ensure_keymap(display: &str) -> Result<(), String> {
+    use x11rb::connection::Connection as _;
+    use x11rb::protocol::xproto::ConnectionExt as _;
+    let (connection, _) =
+        x11rb::connect(Some(display)).map_err(|error| format!("x11 connect: {error}"))?;
+    let (min, max) = (
+        connection.setup().min_keycode,
+        connection.setup().max_keycode,
+    );
+    let mapping = connection
+        .get_keyboard_mapping(min, max - min + 1)
+        .map_err(|error| error.to_string())?
+        .reply()
+        .map_err(|error| format!("keyboard mapping: {error}"))?;
+    let mapped = mapping
+        .keysyms
+        .chunks(usize::from(mapping.keysyms_per_keycode).max(1))
+        .filter(|columns| columns.iter().any(|&keysym| keysym != 0))
+        .count();
+    if mapped >= 100 {
+        return Ok(());
+    }
+    eprintln!("toad-computer: the display came up with {mapped} mapped keycodes; loading pc105/us");
+    let status = Command::new("setxkbmap")
+        .args(["-model", "pc105", "-layout", "us"])
+        .stdin(Stdio::null())
+        .status()
+        .map_err(|error| format!("setxkbmap: {error}"))?;
+    if status.success() {
+        Ok(())
+    } else {
+        Err(format!("setxkbmap: {status}"))
     }
 }
 

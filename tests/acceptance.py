@@ -521,6 +521,30 @@ ThreadingHTTPServer(('127.0.0.1',8082),Handler).serve_forever()
         c.call('shell',{'action':'cancel','job_id':server['id']})
 
 
+def secrets(c):
+    # Native apps and CLIs keep passwords in the Secret Service. It is on the
+    # bus from boot with its collection unlocked, so a store is a store and
+    # never a "create a keyring" prompt on the desktop.
+    owner = execute(c, 'dbus-send', ['--session', '--print-reply', '--dest=org.freedesktop.DBus', '/org/freedesktop/DBus', 'org.freedesktop.DBus.NameHasOwner', 'string:org.freedesktop.secrets'])
+    assert 'boolean true' in owner, owner
+    execute(c, 'bash', ['-c', "printf 'not-a-real-secret' | secret-tool store --label='Toad QA' service toad-qa user agent"])
+    assert execute(c, 'secret-tool', ['lookup', 'service', 'toad-qa', 'user', 'agent']).strip().splitlines()[-1] == 'not-a-real-secret'
+    execute(c, 'secret-tool', ['clear', 'service', 'toad-qa', 'user', 'agent'])
+    assert 'not-a-real-secret' not in execute(c, 'bash', ['-c', 'secret-tool lookup service toad-qa user agent; true'])
+
+
+def keyboard(c):
+    # The display carries a full keymap from boot; a GTK app can be typed
+    # into without anyone loading one by hand.
+    probe = """import ctypes
+x = ctypes.CDLL('libX11.so.6'); x.XOpenDisplay.restype = ctypes.c_void_p; x.XGetKeyboardMapping.restype = ctypes.POINTER(ctypes.c_ulong)
+d = x.XOpenDisplay(None); lo = ctypes.c_int(); hi = ctypes.c_int(); x.XDisplayKeycodes(ctypes.c_void_p(d), ctypes.byref(lo), ctypes.byref(hi))
+per = ctypes.c_int(); syms = x.XGetKeyboardMapping(ctypes.c_void_p(d), lo.value, hi.value - lo.value + 1, ctypes.byref(per))
+print(sum(1 for k in range(hi.value - lo.value + 1) if any(syms[k*per.value + i] for i in range(per.value))))"""
+    mapped = int(execute(c, 'python3', ['-c', probe]).strip().splitlines()[-1])
+    assert mapped >= 200, f'{mapped} keycodes carry keysyms'
+
+
 def execute(c, command, args, cwd=None, timeout=120, label=None):
     job = c.call('shell', {'action': 'start', 'command': command, 'args': args, 'cwd': cwd or '/home/agent', 'timeout': timeout, 'label': label or command})
     c.done(job, timeout+10)
@@ -840,7 +864,7 @@ def main():
     assert report['info']['executables']['chromium'] == '/usr/bin/chromium'
     guide = c.call('state', {'action': 'guide'})
     assert hashlib.sha256(guide['skill'].encode()).hexdigest() == guide['sha256']
-    cases = [('browser forms', browser), ('three-step browser wizard', wizard), ('public Selenium form', public_form), ('no save-password bubble', password_prompt), ('managed jobs and observer', jobs), ('desktop job menu', desktop_job_menu), ('clipboard between apps', clipboard_between_apps), ('tray counts match live jobs', tray_counts), ('Nix failure diagnostics', nix_failure), ('verified script execution', artifacts), ('artifact failure recovery', download_failures), ('rootless by design', rootless), ('a folder opens in a terminal', open_folder)]
+    cases = [('browser forms', browser), ('three-step browser wizard', wizard), ('public Selenium form', public_form), ('no save-password bubble', password_prompt), ('managed jobs and observer', jobs), ('desktop job menu', desktop_job_menu), ('clipboard between apps', clipboard_between_apps), ('tray counts match live jobs', tray_counts), ('Nix failure diagnostics', nix_failure), ('verified script execution', artifacts), ('artifact failure recovery', download_failures), ('rootless by design', rootless), ('a folder opens in a terminal', open_folder), ('secrets have a home from boot', secrets), ('the keyboard has a map', keyboard)]
     if options.suite == 'full':
         cases += [('package workspaces', workspaces), ('second repository tests', second_repository), ('Ketch installation and scraping', ketch), ('job durability and responsiveness', durability), ('native Toad build and screens', native), ('native controls and window identity', native_controls), ('legacy Xterm title', legacy_window)]
     elif options.suite == 'workspaces':
