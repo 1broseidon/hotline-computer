@@ -105,7 +105,8 @@ create `~/.bashrc`; it runs after Toad's. What is typed there is not a job:
 it is not retained, and the teammate sees only what is on the screen. From there,
 `toad-computer prepare --packages go gopls` prepares the workspace by hand
 the way the teammate's job would, and `toad-computer packages` lists common
-Nixpkgs names to choose from.
+Nixpkgs names to choose from. What the person installs for themselves runs
+by name: `~/.local/bin`, `~/go/bin` and `~/.cargo/bin` lead the shell's PATH.
 `windows` operations verify the resulting focus, geometry, or disappearance;
 a refused operation reports the remaining windows.
 
@@ -138,8 +139,11 @@ page's browser. Behind it, `GET /files?path=` lists a folder as JSON
 (`path`, `home`, `entries` with `name`, `size`, `is_dir`, `modified`) and
 `GET /files/download?path=` streams a file as an attachment; both take the
 token as a query like `/ws`, an empty path means the home, and both stop at
-the home like the `files` tool. Inside the computer, the managed Chromium
-lists a folder at `file:///home/agent/`.
+the home like the `files` tool. A file from the viewer's computer goes the
+other way with the panel's **+** button or a drop onto the panel: it lands
+where the panel is looking, through `POST /files?path=` with the file as
+the body, written whole or not at all, under the home only. Inside the
+computer, the managed Chromium lists a folder at `file:///home/agent/`.
 
 ## Workspaces and the release guide
 

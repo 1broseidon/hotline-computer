@@ -211,7 +211,7 @@ pub(crate) async fn existing_path(app: &App, requested: &Path) -> Result<PathBuf
     Ok(path)
 }
 
-async fn writable_path(app: &App, requested: &Path) -> Result<PathBuf, String> {
+pub(crate) async fn writable_path(app: &App, requested: &Path) -> Result<PathBuf, String> {
     let home = tokio::fs::canonicalize(&app.config.home)
         .await
         .map_err(|error| format!("home: {error}"))?;

@@ -49,6 +49,7 @@
   #files header button { border: 0; font: inherit; width: 28px; height: 28px; border-radius: 999px; background: transparent; color: var(--ink-2); cursor: pointer; }
   #files header button:hover:not([disabled]) { background: var(--raised); color: var(--ink); }
   #files header button[disabled] { opacity: .3; cursor: default; }
+  #files.arriving { outline: 2px dashed var(--you); outline-offset: -2px; }
   #files ul { list-style: none; margin: 0; padding: 6px 0; overflow-y: auto; }
   #files li { display: flex; align-items: center; gap: 10px; padding: 6px 14px; cursor: pointer; color: var(--ink); }
   #files li:hover { background: var(--raised); }
@@ -66,7 +67,8 @@
 <svg id="pointer" viewBox="0 0 22 30" aria-hidden="true"><path d="M2.5 1.5 L2.5 23 L8.6 17.6 L19 15.4 Z" fill="#f4f4f6" stroke="#141416" stroke-width="1.6" stroke-linejoin="round"/></svg>
 <div id="toast" class="quiet"></div>
 <div id="files" hidden>
-  <header><span class="path" id="files-path"></span><button id="files-up" type="button" title="Up a folder">↑</button><button id="files-close" type="button" title="Close">×</button></header>
+  <header><span class="path" id="files-path"></span><button id="files-add" type="button" title="Add a file from your computer">+</button><button id="files-up" type="button" title="Up a folder">↑</button><button id="files-close" type="button" title="Close">×</button></header>
+  <input id="files-pick" type="file" multiple hidden>
   <ul id="files-list"></ul>
 </div>
 <div id="bar" class="lost">
@@ -318,6 +320,30 @@
     document.body.appendChild(link); link.click(); link.remove();
     say("Saving " + name);
   }
+  // A file from this computer goes where the panel is looking: picked with
+  // the + button, or dropped onto the panel.
+  const filesAdd = document.getElementById("files-add");
+  const filesPick = document.getElementById("files-pick");
+  async function sendFiles(list) {
+    for (const file of list) {
+      say("Sending " + file.name + "…", false);
+      try {
+        const response = await fetch(fileUrl("/files", folder.replace(/\/$/, "") + "/" + file.name), { method: "POST", body: file });
+        const reply = await response.json();
+        if (!response.ok) throw new Error(reply.error || response.statusText);
+        say("Sent " + file.name);
+      } catch (error) { say(error.message || String(error), false); }
+    }
+    showFolder(folder);
+  }
+  filesAdd.addEventListener("click", () => filesPick.click());
+  filesPick.addEventListener("change", () => { sendFiles([...filesPick.files]); filesPick.value = ""; });
+  files.addEventListener("dragover", (event) => { event.preventDefault(); files.classList.add("arriving"); });
+  files.addEventListener("dragleave", () => files.classList.remove("arriving"));
+  files.addEventListener("drop", (event) => {
+    event.preventDefault(); files.classList.remove("arriving");
+    sendFiles([...event.dataTransfer.files]);
+  });
   function closeFiles() { files.hidden = true; if (driving) canvas.focus(); }
   browse.addEventListener("click", () => { if (files.hidden) showFolder(folder); else closeFiles(); });
   document.getElementById("files-close").addEventListener("click", closeFiles);

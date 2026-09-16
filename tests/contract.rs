@@ -263,6 +263,34 @@ async fn image_honors_the_computer_contract() {
         saved.text().await.expect("file body"),
         "saved on the person's computer"
     );
+    let sent = http
+        .post(format!(
+            "{base}/files?token={token}&path=/home/agent/src/viewer-upload/notes.txt"
+        ))
+        .body("from the person's computer")
+        .send()
+        .await
+        .expect("upload");
+    assert_eq!(
+        sent.status(),
+        200,
+        "{}",
+        sent.text().await.unwrap_or_default()
+    );
+    let landed = call(
+        &client,
+        "files",
+        json!({"action":"get","path":"/home/agent/src/viewer-upload/notes.txt"}),
+    )
+    .await;
+    assert_eq!(text(&landed), "from the person's computer");
+    let astray = http
+        .post(format!("{base}/files?token={token}&path=/tmp/astray.txt"))
+        .body("nowhere")
+        .send()
+        .await
+        .expect("upload outside the home");
+    assert_eq!(astray.status(), 400, "only the home takes a file");
     let above = http
         .get(format!("{base}/files?token={token}&path=/etc"))
         .send()
