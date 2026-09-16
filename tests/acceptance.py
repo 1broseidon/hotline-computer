@@ -416,10 +416,30 @@ def rootless(c):
     # The person's shell answers apt with where software comes from instead.
     output = execute(c, 'bash', ['-ic', 'apt install go; true'], label='apt in the shell')
     assert 'toad-computer prepare' in output and 'toad-computer packages' in output and 'nix shell' in output, output
+    # An AppImage assumes the libraries on the AppImage exclude list are on
+    # the system, since its tooling never bundles them; the image has them.
+    assumed = ['libgpg-error.so.0', 'libOpenGL.so.0', 'libxcb-dri2.so.0', 'libjack.so.0', 'libpipewire-0.3.so.0', 'libusb-1.0.so.0', 'libGL.so.1', 'libgtk-3.so.0', 'libfontconfig.so.1']
+    present = execute(c, 'bash', ['-c', 'ldconfig -p | awk "{print \\$1}"'], label='AppImage system libraries').split()
+    assert all(lib in present for lib in assumed), [lib for lib in assumed if lib not in present]
     # What the person installs for themselves runs by name.
     # An interactive bash without a terminal warns first; the PATH is the last line.
     path = execute(c, 'bash', ['-ic', 'echo "$PATH"'], label='the shell PATH').strip().splitlines()[-1].split(':')
     assert path[:3] == ['/home/agent/.local/bin', '/home/agent/go/bin', '/home/agent/.cargo/bin'], path
+
+
+def open_folder(c):
+    # The browser's "Show in folder" hands a folder to xdg-open; the image
+    # answers with a fresh terminal for the person in that folder.
+    execute(c, 'xdg-open', ['/home/agent/src'], label='Open a folder')
+    deadline = time.monotonic()+5
+    while True:
+        opened = next((w for w in c.call('windows', {'action': 'list'}) if 'toadshell' in w['class'].lower() and w['title'] == '~/src'), None)
+        if opened or time.monotonic() > deadline:
+            break
+        time.sleep(.1)
+    assert opened, c.call('windows', {'action': 'list'})
+    c.screenshot('03i-folder-in-a-terminal.png', settle_ms=400)
+    c.call('windows', {'action': 'close', 'window_id': opened['id']})
 
 
 def artifacts(c):
@@ -820,7 +840,7 @@ def main():
     assert report['info']['executables']['chromium'] == '/usr/bin/chromium'
     guide = c.call('state', {'action': 'guide'})
     assert hashlib.sha256(guide['skill'].encode()).hexdigest() == guide['sha256']
-    cases = [('browser forms', browser), ('three-step browser wizard', wizard), ('public Selenium form', public_form), ('no save-password bubble', password_prompt), ('managed jobs and observer', jobs), ('desktop job menu', desktop_job_menu), ('clipboard between apps', clipboard_between_apps), ('tray counts match live jobs', tray_counts), ('Nix failure diagnostics', nix_failure), ('verified script execution', artifacts), ('artifact failure recovery', download_failures), ('rootless by design', rootless)]
+    cases = [('browser forms', browser), ('three-step browser wizard', wizard), ('public Selenium form', public_form), ('no save-password bubble', password_prompt), ('managed jobs and observer', jobs), ('desktop job menu', desktop_job_menu), ('clipboard between apps', clipboard_between_apps), ('tray counts match live jobs', tray_counts), ('Nix failure diagnostics', nix_failure), ('verified script execution', artifacts), ('artifact failure recovery', download_failures), ('rootless by design', rootless), ('a folder opens in a terminal', open_folder)]
     if options.suite == 'full':
         cases += [('package workspaces', workspaces), ('second repository tests', second_repository), ('Ketch installation and scraping', ketch), ('job durability and responsiveness', durability), ('native Toad build and screens', native), ('native controls and window identity', native_controls), ('legacy Xterm title', legacy_window)]
     elif options.suite == 'workspaces':

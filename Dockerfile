@@ -27,6 +27,9 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     fonts-dejavu-core fonts-noto-color-emoji xfonts-base alacritty tzdata \
     libgl1-mesa-dri libegl-mesa0 libglx-mesa0 mesa-utils \
     libgtk-3-0t64 librsvg2-common \
+    # What AppImage tooling never bundles because every desktop is assumed
+    # to have it (the AppImage exclude list), beyond glibc, Mesa and GTK above.
+    libgpg-error0 libopengl0 libxcb-dri2-0 libjack-jackd2-0 libpipewire-0.3-0 libusb-1.0-0 \
     && rm -rf /var/lib/apt/lists/* \
     # Rootless by design: nothing runs as root, so apt could never install
     # anything. It goes, so nobody is invited to try; software comes from
@@ -43,6 +46,9 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 COPY assets/alacritty.toml /etc/toad-computer/alacritty.toml
 COPY assets/chromium-policy.json /etc/chromium/policies/managed/toad.json
 COPY assets/bashrc /etc/bash.bashrc
+# "Show in folder" in the browser, and xdg-open on a folder, open the
+# person's terminal there.
+COPY assets/toad-open-folder.desktop assets/mimeapps.list /usr/share/applications/
 COPY --from=build /usr/local/bin/toad-computer /usr/bin/toad-computer
 USER agent
 WORKDIR /home/agent
