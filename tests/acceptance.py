@@ -422,8 +422,10 @@ def rootless(c):
     present = execute(c, 'bash', ['-c', 'ldconfig -p | awk "{print \\$1}"'], label='AppImage system libraries').split()
     assert all(lib in present for lib in assumed), [lib for lib in assumed if lib not in present]
     # What the person installs for themselves runs by name.
-    # An interactive bash without a terminal warns first; the PATH is the last line.
-    path = execute(c, 'bash', ['-ic', 'echo "$PATH"'], label='the shell PATH').strip().splitlines()[-1].split(':')
+    # An interactive bash without a terminal warns on stderr, which lands
+    # before or after the PATH; the PATH is the line that is one.
+    lines = execute(c, 'bash', ['-ic', 'echo "$PATH"'], label='the shell PATH').strip().splitlines()
+    path = next((line for line in lines if line.startswith('/')), '').split(':')
     assert path[:3] == ['/home/agent/.local/bin', '/home/agent/go/bin', '/home/agent/.cargo/bin'], path
 
 
