@@ -146,6 +146,11 @@ impl Observer {
         let directory = self.home.join(".toad");
         std::fs::create_dir_all(&directory).map_err(|e| e.to_string())?;
         let socket = directory.join("alacritty.sock");
+        // A daemon `toad-computer open` started answers here already; it
+        // is used rather than replaced.
+        if active.is_none() && std::os::unix::net::UnixStream::connect(&socket).is_ok() {
+            return Ok(socket);
+        }
         if active
             .as_ref()
             .is_none_or(|process| process.task.is_finished())
@@ -158,18 +163,7 @@ impl Observer {
                 Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
                 Err(error) => return Err(format!("remove stale observer socket: {error}")),
             }
-            let log =
-                std::fs::File::create(directory.join("terminal.log")).map_err(|e| e.to_string())?;
-            let mut daemon = tokio::process::Command::new("alacritty");
-            daemon.arg("--daemon").arg("--socket").arg(&socket);
-            if Path::new(ALACRITTY_CONFIG).is_file() {
-                daemon.args(["--config-file", ALACRITTY_CONFIG]);
-            }
-            let mut child = daemon
-                .env("DISPLAY", &self.display)
-                .stdin(Stdio::null())
-                .stdout(Stdio::null())
-                .stderr(Stdio::from(log))
+            let mut child = tokio::process::Command::from(daemon_command(&socket, &self.display)?)
                 .kill_on_drop(true)
                 .spawn()
                 .map_err(|e| {
@@ -208,26 +202,17 @@ impl Observer {
         options: &[&str],
         command: &[&std::ffi::OsStr],
     ) -> Result<(), String> {
-        let mut request = tokio::process::Command::new("alacritty");
-        request.args(["msg", "--socket"]).arg(socket).args([
-            "create-window",
-            "--title",
+        let request = tokio::process::Command::from(window_request(
+            socket,
+            &self.display,
             title,
-            "--class",
             class,
-        ]);
-        for option in options {
-            request.args(["-o", option]);
-        }
-        let request = request
-            .arg("--working-directory")
-            .arg(&self.home)
-            .arg("-e")
-            .args(command)
-            .env("DISPLAY", &self.display)
-            .stdin(Stdio::null())
-            .kill_on_drop(true)
-            .output();
+            options,
+            &self.home,
+            command,
+        ))
+        .kill_on_drop(true)
+        .output();
         let response = tokio::time::timeout(std::time::Duration::from_secs(2), request)
             .await
             .map_err(|_| "Alacritty observer IPC timed out".to_owned())?
@@ -282,19 +267,20 @@ impl Observer {
 /// operator's own `~/.bashrc`.
 pub const BASHRC: &str = include_str!("../assets/bashrc");
 
-/// `toad-computer shell <home>`: the person's interactive shell. It starts
-/// in the mounted workspace when there is one, with the environment the
-/// teammate prepared there, and then it is bash with Toad's rc file.
-pub fn shell(home: &Path) -> Result<(), String> {
+/// `toad-computer shell <home> [folder]`: the person's interactive shell.
+/// It starts in the folder asked for, else in the mounted workspace when
+/// there is one, with the environment the teammate prepared there, and
+/// then it is bash with Toad's rc file.
+pub fn shell(home: &Path, at: Option<&Path>) -> Result<(), String> {
     use std::os::unix::process::CommandExt;
     let rc = home.join(".toad/bashrc");
     std::fs::create_dir_all(home.join(".toad")).map_err(|e| e.to_string())?;
     std::fs::write(&rc, BASHRC).map_err(|e| format!("{}: {e}", rc.display()))?;
     let workspace = home.join("workspace");
-    let cwd = if workspace.is_dir() {
-        workspace
-    } else {
-        home.to_path_buf()
+    let cwd = match at {
+        Some(folder) if folder.is_dir() => folder.to_path_buf(),
+        _ if workspace.is_dir() => workspace,
+        _ => home.to_path_buf(),
     };
     let mut command = std::process::Command::new(interactive_bash());
     command.current_dir(&cwd);
@@ -312,6 +298,118 @@ pub fn shell(home: &Path) -> Result<(), String> {
         .arg("-i")
         .exec();
     Err(format!("start bash: {error}"))
+}
+
+/// `toad-computer open <folder>`: a fresh terminal for the person in that
+/// folder. The browser's "Show in folder" and `xdg-open` on a folder land
+/// here through the image's desktop entry, since the computer has no file
+/// manager and a shell in the folder is what a person wants from one. The
+/// terminal comes from the same Alacritty daemon as the observer, started
+/// here if nothing has started it yet.
+pub fn open(home: &Path, target: &Path) -> Result<(), String> {
+    let folder =
+        std::fs::canonicalize(target).map_err(|error| format!("{}: {error}", target.display()))?;
+    if !folder.is_dir() {
+        return Err(format!("{} is not a folder", folder.display()));
+    }
+    let display = std::env::var("DISPLAY").unwrap_or_else(|_| ":0".to_owned());
+    let directory = home.join(".toad");
+    std::fs::create_dir_all(&directory).map_err(|e| e.to_string())?;
+    let socket = directory.join("alacritty.sock");
+    if std::os::unix::net::UnixStream::connect(&socket).is_err() {
+        let _ = std::fs::remove_file(&socket);
+        daemon_command(&socket, &display)?
+            .spawn()
+            .map_err(|e| format!("start Alacritty daemon: {e}"))?;
+        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(2);
+        while std::os::unix::net::UnixStream::connect(&socket).is_err() {
+            if std::time::Instant::now() >= deadline {
+                return Err(
+                    "Alacritty daemon did not become ready; inspect ~/.toad/terminal.log".into(),
+                );
+            }
+            std::thread::sleep(std::time::Duration::from_millis(10));
+        }
+    }
+    let title = match folder.strip_prefix(home) {
+        Ok(inside) if inside.as_os_str().is_empty() => "~".to_owned(),
+        Ok(inside) => format!("~/{}", inside.display()),
+        Err(_) => folder.display().to_string(),
+    };
+    let executable = std::env::current_exe().map_err(|e| e.to_string())?;
+    let response = window_request(
+        &socket,
+        &display,
+        &title,
+        SHELL_CLASS,
+        SHELL_OPTIONS,
+        &folder,
+        &[
+            executable.as_os_str(),
+            "shell".as_ref(),
+            home.as_os_str(),
+            folder.as_os_str(),
+        ],
+    )
+    .output()
+    .map_err(|e| format!("Alacritty IPC: {e}"))?;
+    if !response.status.success() {
+        return Err(format!(
+            "Alacritty IPC failed: {}",
+            String::from_utf8_lossy(&response.stderr)
+        ));
+    }
+    Ok(())
+}
+
+/// The Alacritty daemon every terminal window comes from, as a command:
+/// its socket, the shared config, and its log under `~/.toad`.
+fn daemon_command(socket: &Path, display: &str) -> Result<std::process::Command, String> {
+    let log =
+        std::fs::File::create(socket.with_file_name("terminal.log")).map_err(|e| e.to_string())?;
+    let mut daemon = std::process::Command::new("alacritty");
+    daemon.arg("--daemon").arg("--socket").arg(socket);
+    if Path::new(ALACRITTY_CONFIG).is_file() {
+        daemon.args(["--config-file", ALACRITTY_CONFIG]);
+    }
+    daemon
+        .env("DISPLAY", display)
+        .stdin(Stdio::null())
+        .stdout(Stdio::null())
+        .stderr(Stdio::from(log));
+    Ok(daemon)
+}
+
+/// A window from the daemon, as a command: its title, class and options,
+/// the folder it starts in, and what runs inside it.
+fn window_request(
+    socket: &Path,
+    display: &str,
+    title: &str,
+    class: &str,
+    options: &[&str],
+    cwd: &Path,
+    command: &[&std::ffi::OsStr],
+) -> std::process::Command {
+    let mut request = std::process::Command::new("alacritty");
+    request.args(["msg", "--socket"]).arg(socket).args([
+        "create-window",
+        "--title",
+        title,
+        "--class",
+        class,
+    ]);
+    for option in options {
+        request.args(["-o", option]);
+    }
+    request
+        .arg("--working-directory")
+        .arg(cwd)
+        .arg("-e")
+        .args(command)
+        .env("DISPLAY", display)
+        .stdin(Stdio::null());
+    request
 }
 
 /// The bash a person types into: the system's, found on this process's own

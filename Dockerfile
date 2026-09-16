@@ -43,6 +43,9 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 COPY assets/alacritty.toml /etc/toad-computer/alacritty.toml
 COPY assets/chromium-policy.json /etc/chromium/policies/managed/toad.json
 COPY assets/bashrc /etc/bash.bashrc
+# "Show in folder" in the browser, and xdg-open on a folder, open the
+# person's terminal there.
+COPY assets/toad-open-folder.desktop assets/mimeapps.list /usr/share/applications/
 COPY --from=build /usr/local/bin/toad-computer /usr/bin/toad-computer
 USER agent
 WORKDIR /home/agent

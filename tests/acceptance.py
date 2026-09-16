@@ -422,6 +422,21 @@ def rootless(c):
     assert path[:3] == ['/home/agent/.local/bin', '/home/agent/go/bin', '/home/agent/.cargo/bin'], path
 
 
+def open_folder(c):
+    # The browser's "Show in folder" hands a folder to xdg-open; the image
+    # answers with a fresh terminal for the person in that folder.
+    execute(c, 'xdg-open', ['/home/agent/src'], label='Open a folder')
+    deadline = time.monotonic()+5
+    while True:
+        opened = next((w for w in c.call('windows', {'action': 'list'}) if 'toadshell' in w['class'].lower() and w['title'] == '~/src'), None)
+        if opened or time.monotonic() > deadline:
+            break
+        time.sleep(.1)
+    assert opened, c.call('windows', {'action': 'list'})
+    c.screenshot('03i-folder-in-a-terminal.png', settle_ms=400)
+    c.call('windows', {'action': 'close', 'window_id': opened['id']})
+
+
 def artifacts(c):
     script = '#!/bin/bash\nprintf "installer argument: %s; environment: %s\\n" "$1" "$INSTALL_FIXTURE"\n'
     c.call('files', {'action': 'put', 'path': '/home/agent/qa/install-fixture.sh', 'content': script})
@@ -820,7 +835,7 @@ def main():
     assert report['info']['executables']['chromium'] == '/usr/bin/chromium'
     guide = c.call('state', {'action': 'guide'})
     assert hashlib.sha256(guide['skill'].encode()).hexdigest() == guide['sha256']
-    cases = [('browser forms', browser), ('three-step browser wizard', wizard), ('public Selenium form', public_form), ('no save-password bubble', password_prompt), ('managed jobs and observer', jobs), ('desktop job menu', desktop_job_menu), ('clipboard between apps', clipboard_between_apps), ('tray counts match live jobs', tray_counts), ('Nix failure diagnostics', nix_failure), ('verified script execution', artifacts), ('artifact failure recovery', download_failures), ('rootless by design', rootless)]
+    cases = [('browser forms', browser), ('three-step browser wizard', wizard), ('public Selenium form', public_form), ('no save-password bubble', password_prompt), ('managed jobs and observer', jobs), ('desktop job menu', desktop_job_menu), ('clipboard between apps', clipboard_between_apps), ('tray counts match live jobs', tray_counts), ('Nix failure diagnostics', nix_failure), ('verified script execution', artifacts), ('artifact failure recovery', download_failures), ('rootless by design', rootless), ('a folder opens in a terminal', open_folder)]
     if options.suite == 'full':
         cases += [('package workspaces', workspaces), ('second repository tests', second_repository), ('Ketch installation and scraping', ketch), ('job durability and responsiveness', durability), ('native Toad build and screens', native), ('native controls and window identity', native_controls), ('legacy Xterm title', legacy_window)]
     elif options.suite == 'workspaces':

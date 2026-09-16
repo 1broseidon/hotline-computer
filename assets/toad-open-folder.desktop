@@ -1,0 +1,7 @@
+[Desktop Entry]
+Type=Application
+Name=Terminal here
+Comment=Open a folder in the person's terminal
+Exec=toad-computer open %f
+NoDisplay=true
+MimeType=inode/directory;

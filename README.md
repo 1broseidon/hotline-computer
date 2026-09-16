@@ -107,6 +107,10 @@ it is not retained, and the teammate sees only what is on the screen. From there
 the way the teammate's job would, and `toad-computer packages` lists common
 Nixpkgs names to choose from. What the person installs for themselves runs
 by name: `~/.local/bin`, `~/go/bin` and `~/.cargo/bin` lead the shell's PATH.
+The computer has no file manager; a folder opens as a fresh terminal in it.
+The browser's **Show in folder**, `xdg-open` on a folder, and
+`toad-computer open DIR` all do that, through the image's desktop entry for
+`inode/directory`, titled with the folder (`~/Downloads`).
 `windows` operations verify the resulting focus, geometry, or disappearance;
 a refused operation reports the remaining windows.
 

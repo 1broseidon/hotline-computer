@@ -2,7 +2,7 @@ use toad_computer::display::Display;
 use toad_computer::{App, Config, boot, serve};
 
 fn usage() -> &'static str {
-    "Usage: toad-computer <boot|serve> [--addr ADDRESS] [--token TOKEN] [--home PATH] [--display DISPLAY] [--screen WIDTHxHEIGHT]\n\n  boot   start the display, the session bus and the desktop, then serve; the container entrypoint\n  serve  serve on a display that already exists\n\nAt the person's terminal:\n  toad-computer prepare [--workspace DIR] [--packages NAME... | --flake DIR]\n  toad-computer packages   common Nixpkgs names to choose from"
+    "Usage: toad-computer <boot|serve> [--addr ADDRESS] [--token TOKEN] [--home PATH] [--display DISPLAY] [--screen WIDTHxHEIGHT]\n\n  boot   start the display, the session bus and the desktop, then serve; the container entrypoint\n  serve  serve on a display that already exists\n\nAt the person's terminal:\n  toad-computer prepare [--workspace DIR] [--packages NAME... | --flake DIR]\n  toad-computer packages   common Nixpkgs names to choose from\n  toad-computer open DIR   a fresh terminal in that folder; what the browser's Show in folder does"
 }
 
 enum Command {
@@ -67,7 +67,20 @@ fn main() {
             .get(1)
             .map(std::path::PathBuf::from)
             .unwrap_or_else(|| Config::from_env().home);
-        if let Err(error) = toad_computer::observer::shell(&home) {
+        let at = arguments.get(2).map(std::path::PathBuf::from);
+        if let Err(error) = toad_computer::observer::shell(&home, at.as_deref()) {
+            eprintln!("{error}");
+            std::process::exit(1);
+        }
+        return;
+    }
+    if arguments.first().map(String::as_str) == Some("open") {
+        let Some(target) = arguments.get(1) else {
+            eprintln!("open takes a folder");
+            std::process::exit(2);
+        };
+        let home = Config::from_env().home;
+        if let Err(error) = toad_computer::observer::open(&home, std::path::Path::new(target)) {
             eprintln!("{error}");
             std::process::exit(1);
         }
