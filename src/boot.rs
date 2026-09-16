@@ -273,8 +273,9 @@ fn spawn_keyring() -> Result<Child, String> {
     Ok(child)
 }
 
-/// A client asking for secrets before the daemon owns the name would have
-/// the bus activate a second, locked keyring in its place.
+/// Nothing serves before the keyring owns its name, and the image carries
+/// no activation file for it, so no client ever meets a locked keyring the
+/// bus started in its place.
 async fn secrets_on_the_bus() -> Result<(), String> {
     use atspi::zbus;
     let connection = zbus::Connection::session()
@@ -298,7 +299,8 @@ async fn secrets_on_the_bus() -> Result<(), String> {
 }
 
 /// A keyring that dies takes nobody's secrets with it; the file is in the
-/// home. It comes back unlocked, and apps find it where they left it.
+/// home. It comes back unlocked at once, and apps find it where they left
+/// it; a request in the gap gets "no such name", never a locked keyring.
 async fn keep_keyring(mut child: Child, pid: Arc<AtomicU32>) {
     loop {
         let status = tokio::task::spawn_blocking(move || child.wait()).await;
@@ -307,7 +309,6 @@ async fn keep_keyring(mut child: Child, pid: Arc<AtomicU32>) {
             "toad-computer: gnome-keyring-daemon exited: {}; starting it again",
             describe(status)
         );
-        tokio::time::sleep(Duration::from_secs(1)).await;
         loop {
             match spawn_keyring() {
                 Ok(next) => {

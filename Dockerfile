@@ -38,6 +38,12 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     # anything. It goes, so nobody is invited to try; software comes from
     # toad-computer, then Nix, then what the image already has.
     && rm -f /usr/bin/apt /usr/bin/apt-* \
+    # Boot starts the keyring unlocked. Without these, a client that asks
+    # for secrets while it is being restarted would have the bus start a
+    # locked one in its place.
+    && rm -f /usr/share/dbus-1/services/org.freedesktop.secrets.service \
+             /usr/share/dbus-1/services/org.gnome.keyring.service \
+             /usr/share/dbus-1/services/org.freedesktop.impl.portal.Secret.service \
     && useradd --uid 1000 --create-home --shell /bin/bash agent \
     && rm -f /home/agent/.bashrc /home/agent/.profile /home/agent/.bash_logout \
     && install -d /etc/nix \
