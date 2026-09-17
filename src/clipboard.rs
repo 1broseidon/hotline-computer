@@ -43,7 +43,7 @@ impl Clipboard {
                 Ok(mut owner) => {
                     let _ = ready.send(Ok(()));
                     if let Err(error) = owner.serve(incoming) {
-                        eprintln!("toad-computer: clipboard: {error}");
+                        eprintln!("hotline-computer: clipboard: {error}");
                     }
                 }
                 Err(error) => {
@@ -125,7 +125,7 @@ impl Owner {
             clipboard: atom(b"CLIPBOARD")?,
             utf8: atom(b"UTF8_STRING")?,
             targets: atom(b"TARGETS")?,
-            landing: atom(b"TOAD_CLIPBOARD")?,
+            landing: atom(b"HOTLINE_CLIPBOARD")?,
             connection,
             window,
             held: None,

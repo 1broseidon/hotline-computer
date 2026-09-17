@@ -36,15 +36,16 @@ pub struct Config {
 impl Config {
     pub fn from_env() -> Self {
         Self {
-            addr: std::env::var("TOAD_COMPUTER_ADDR").unwrap_or_else(|_| "0.0.0.0:8787".to_owned()),
-            token: std::env::var("TOAD_COMPUTER_TOKEN")
+            addr: std::env::var("HOTLINE_COMPUTER_ADDR")
+                .unwrap_or_else(|_| "0.0.0.0:8787".to_owned()),
+            token: std::env::var("HOTLINE_COMPUTER_TOKEN")
                 .ok()
                 .filter(|value| !value.is_empty()),
-            home: std::env::var_os("TOAD_COMPUTER_HOME")
+            home: std::env::var_os("HOTLINE_COMPUTER_HOME")
                 .map(PathBuf::from)
                 .unwrap_or_else(|| PathBuf::from("/home/agent")),
             display: std::env::var("DISPLAY").unwrap_or_else(|_| ":0".to_owned()),
-            screen: std::env::var("TOAD_COMPUTER_SCREEN")
+            screen: std::env::var("HOTLINE_COMPUTER_SCREEN")
                 .unwrap_or_else(|_| "1920x1080".to_owned()),
         }
     }

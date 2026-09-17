@@ -1,4 +1,4 @@
-# Dependencies of the pinned Toad test repository, not a Computer preset.
+# Dependencies of the pinned Hotline test repository, not a Computer preset.
 {
   inputs.nixpkgs.url = "github:NixOS/nixpkgs/@NIXPKGS@";
   outputs = { self, nixpkgs }: {

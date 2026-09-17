@@ -1,8 +1,8 @@
-use toad_computer::display::Display;
-use toad_computer::{App, Config, boot, serve};
+use hotline_computer::display::Display;
+use hotline_computer::{App, Config, boot, serve};
 
 fn usage() -> &'static str {
-    "Usage: toad-computer <boot|serve> [--addr ADDRESS] [--token TOKEN] [--home PATH] [--display DISPLAY] [--screen WIDTHxHEIGHT]\n\n  boot   start the display, the session bus and the desktop, then serve; the container entrypoint\n  serve  serve on a display that already exists\n\nAt the person's terminal:\n  toad-computer prepare [--workspace DIR] [--packages NAME... | --flake DIR]\n  toad-computer packages   common Nixpkgs names to choose from\n  toad-computer open DIR   a fresh terminal in that folder; what the browser's Show in folder does"
+    "Usage: hotline-computer <boot|serve> [--addr ADDRESS] [--token TOKEN] [--home PATH] [--display DISPLAY] [--screen WIDTHxHEIGHT]\n\n  boot   start the display, the session bus and the desktop, then serve; the container entrypoint\n  serve  serve on a display that already exists\n\nAt the person's terminal:\n  hotline-computer prepare [--workspace DIR] [--packages NAME... | --flake DIR]\n  hotline-computer packages   common Nixpkgs names to choose from\n  hotline-computer open DIR   a fresh terminal in that folder; what the browser's Show in folder does"
 }
 
 enum Command {
@@ -42,7 +42,7 @@ fn parse() -> Result<(Command, Config), String> {
 fn main() {
     let arguments: Vec<_> = std::env::args().skip(1).collect();
     if matches!(arguments.first().map(String::as_str), Some("--version")) {
-        println!("toad-computer {}", env!("CARGO_PKG_VERSION"));
+        println!("hotline-computer {}", env!("CARGO_PKG_VERSION"));
         return;
     }
     if arguments.is_empty()
@@ -56,7 +56,7 @@ fn main() {
             .get(1)
             .map(std::path::PathBuf::from)
             .unwrap_or_else(|| Config::from_env().home);
-        if let Err(error) = toad_computer::observer::run(&home) {
+        if let Err(error) = hotline_computer::observer::run(&home) {
             eprintln!("{error}");
             std::process::exit(1);
         }
@@ -68,7 +68,7 @@ fn main() {
             .map(std::path::PathBuf::from)
             .unwrap_or_else(|| Config::from_env().home);
         let at = arguments.get(2).map(std::path::PathBuf::from);
-        if let Err(error) = toad_computer::observer::shell(&home, at.as_deref()) {
+        if let Err(error) = hotline_computer::observer::shell(&home, at.as_deref()) {
             eprintln!("{error}");
             std::process::exit(1);
         }
@@ -80,7 +80,7 @@ fn main() {
             std::process::exit(2);
         };
         let home = Config::from_env().home;
-        if let Err(error) = toad_computer::observer::open(&home, std::path::Path::new(target)) {
+        if let Err(error) = hotline_computer::observer::open(&home, std::path::Path::new(target)) {
             eprintln!("{error}");
             std::process::exit(1);
         }
@@ -99,11 +99,11 @@ fn main() {
         std::process::exit(1);
     }
     if arguments.first().map(String::as_str) == Some("packages") {
-        print!("{}", toad_computer::workspace::catalog_text());
+        print!("{}", hotline_computer::workspace::catalog_text());
         return;
     }
     if arguments.first().map(String::as_str) == Some("prepare") {
-        use toad_computer::workspace::{self, Operator};
+        use hotline_computer::workspace::{self, Operator};
         let runtime = tokio::runtime::Builder::new_multi_thread()
             .enable_all()
             .build()
@@ -170,7 +170,7 @@ fn main() {
         }),
     };
     if let Err(error) = result {
-        eprintln!("toad-computer: {error}");
+        eprintln!("hotline-computer: {error}");
         std::process::exit(1);
     }
 }

@@ -1,5 +1,5 @@
 [package]
-name = "toad-computer"
+name = "hotline-computer"
 description = "A small Linux desktop for a coding agent: one binary boots it, owns it, and serves it over MCP."
 version = "0.5.4"
 license = "MIT OR Apache-2.0"

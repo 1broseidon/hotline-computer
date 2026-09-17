@@ -137,7 +137,7 @@ async fn release(app: &App, holder: &str) -> ToolResult {
 }
 
 async fn login_save(app: &App, name: &str) -> ToolResult {
-    let directory = app.config.home.join(".toad/logins");
+    let directory = app.config.home.join(".hotline/logins");
     tokio::fs::create_dir_all(&directory)
         .await
         .map_err(|error| error.to_string())?;
@@ -160,7 +160,7 @@ async fn login_load(app: &App, name: &str) -> ToolResult {
     let path = app
         .config
         .home
-        .join(".toad/logins")
+        .join(".hotline/logins")
         .join(format!("{name}.json"));
     let data = tokio::fs::read(&path)
         .await
@@ -180,7 +180,7 @@ async fn login_load(app: &App, name: &str) -> ToolResult {
 }
 
 async fn login_list(app: &App) -> ToolResult {
-    let directory = app.config.home.join(".toad/logins");
+    let directory = app.config.home.join(".hotline/logins");
     let mut entries = match tokio::fs::read_dir(directory).await {
         Ok(entries) => entries,
         Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
@@ -214,7 +214,7 @@ async fn login_delete(app: &App, name: &str) -> ToolResult {
     let path = app
         .config
         .home
-        .join(".toad/logins")
+        .join(".hotline/logins")
         .join(format!("{name}.json"));
     tokio::fs::remove_file(&path)
         .await
@@ -225,7 +225,7 @@ async fn login_delete(app: &App, name: &str) -> ToolResult {
 fn snapshot_path(app: &App, name: &str) -> PathBuf {
     app.config
         .home
-        .join(".toad/snapshots")
+        .join(".hotline/snapshots")
         .join(format!("{name}.tar.gz"))
 }
 
@@ -237,7 +237,7 @@ async fn snapshot_save(app: &App, name: &str) -> ToolResult {
     tar(&[
         "czf",
         path_str(&path)?,
-        "--exclude=.toad/snapshots",
+        "--exclude=.hotline/snapshots",
         "-C",
         path_str(&app.config.home)?,
         ".",
@@ -282,7 +282,7 @@ async fn snapshot_load(app: &App, name: &str) -> ToolResult {
 }
 
 async fn snapshot_list(app: &App) -> ToolResult {
-    let directory = app.config.home.join(".toad/snapshots");
+    let directory = app.config.home.join(".hotline/snapshots");
     let mut entries = match tokio::fs::read_dir(directory).await {
         Ok(entries) => entries,
         Err(error) if error.kind() == std::io::ErrorKind::NotFound => {

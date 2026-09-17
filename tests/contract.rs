@@ -16,11 +16,11 @@ type Client = RunningService<rmcp::RoleClient, ClientInfo>;
 
 #[tokio::test(flavor = "multi_thread")]
 async fn image_honors_the_computer_contract() {
-    let Some(base) = std::env::var("TOAD_COMPUTER_URL").ok() else {
-        eprintln!("skipped: set TOAD_COMPUTER_URL to run the container contract test");
+    let Some(base) = std::env::var("HOTLINE_COMPUTER_URL").ok() else {
+        eprintln!("skipped: set HOTLINE_COMPUTER_URL to run the container contract test");
         return;
     };
-    let token = std::env::var("TOAD_COMPUTER_TOKEN").unwrap_or_default();
+    let token = std::env::var("HOTLINE_COMPUTER_TOKEN").unwrap_or_default();
     let health = reqwest::get(format!("{base}/health"))
         .await
         .expect("health request");
@@ -177,7 +177,7 @@ async fn image_honors_the_computer_contract() {
         "a browser window is on the desktop again: {windows}"
     );
 
-    // Toad mounts a persistent scratch volume here; the image must seed its
+    // Hotline mounts a persistent scratch volume here; the image must seed its
     // ownership so the non-root agent can follow the bundled clone recipe.
     let path = "/home/agent/src/contract/probe.txt";
     let put = call(
@@ -431,7 +431,7 @@ async fn image_honors_the_computer_contract() {
         )
     };
     let (browser_x, browser_width) = bounds("chromium");
-    let (observer_x, _) = bounds("toadterminal");
+    let (observer_x, _) = bounds("hotlineterminal");
     assert!(
         browser_x == 0 && (1240..=1320).contains(&browser_width),
         "the app takes the left two thirds of a 1920 screen: {windows:?}"
@@ -692,7 +692,7 @@ async fn connect(base: &str, token: &str, holder: &str) -> Client {
     );
     ClientInfo::new(
         Default::default(),
-        Implementation::new("toad-computer-contract", "1"),
+        Implementation::new("hotline-computer-contract", "1"),
     )
     .serve(transport)
     .await

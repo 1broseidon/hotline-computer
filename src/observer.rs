@@ -11,13 +11,13 @@ use std::sync::{
 use tokio::sync::Mutex;
 
 /// The observer's window class, which the desktop places in the right third.
-pub const OBSERVER_CLASS: &str = "ToadTerminal";
+pub const OBSERVER_CLASS: &str = "HotlineTerminal";
 /// The person's shell, which the desktop keeps in the bottom third of the
 /// observer's column.
-pub const SHELL_CLASS: &str = "ToadShell";
+pub const SHELL_CLASS: &str = "HotlineShell";
 /// Alacritty's configuration, kept with the image rather than in the home,
 /// so a home the teammate keeps across containers never shadows it.
-pub const ALACRITTY_CONFIG: &str = "/etc/toad-computer/alacritty.toml";
+pub const ALACRITTY_CONFIG: &str = "/etc/hotline-computer/alacritty.toml";
 /// Alacritty options for the person's window alone: a visible block cursor
 /// in the bar's foreground, where the observer paints its cursor away.
 pub const SHELL_OPTIONS: &[&str] = &[
@@ -58,7 +58,7 @@ impl Observer {
     pub async fn select(&self, job_id: Option<&str>) -> Result<(), String> {
         {
             let _guard = self.child.lock().await;
-            let directory = self.home.join(".toad");
+            let directory = self.home.join(".hotline");
             std::fs::create_dir_all(&directory).map_err(|e| e.to_string())?;
             let temporary = directory.join("observer-view.tmp");
             std::fs::write(
@@ -103,7 +103,7 @@ impl Observer {
             .wait_for_window(&active, OBSERVER_CLASS)
             .await
             .map_err(|error| {
-                format!("{error}; the job is independent. Inspect ~/.toad/terminal.log")
+                format!("{error}; the job is independent. Inspect ~/.hotline/terminal.log")
             })?;
         if explicit {
             crate::x11::activate(&self.display, &window)?;
@@ -143,10 +143,10 @@ impl Observer {
     /// The Alacritty daemon every terminal window comes from, started if it
     /// is not running; returns its socket once it answers.
     async fn daemon(&self, active: &mut Option<TerminalProcess>) -> Result<PathBuf, String> {
-        let directory = self.home.join(".toad");
+        let directory = self.home.join(".hotline");
         std::fs::create_dir_all(&directory).map_err(|e| e.to_string())?;
         let socket = directory.join("alacritty.sock");
-        // A daemon `toad-computer open` started answers here already; it
+        // A daemon `hotline-computer open` started answers here already; it
         // is used rather than replaced.
         if active.is_none() && std::os::unix::net::UnixStream::connect(&socket).is_ok() {
             return Ok(socket);
@@ -186,7 +186,7 @@ impl Observer {
             {
                 self.opened.store(false, Ordering::Relaxed);
                 return Err(
-                    "Alacritty daemon did not become ready; inspect ~/.toad/terminal.log".into(),
+                    "Alacritty daemon did not become ready; inspect ~/.hotline/terminal.log".into(),
                 );
             }
             tokio::time::sleep(std::time::Duration::from_millis(10)).await;
@@ -267,14 +267,14 @@ impl Observer {
 /// operator's own `~/.bashrc`.
 pub const BASHRC: &str = include_str!("../assets/bashrc");
 
-/// `toad-computer shell <home> [folder]`: the person's interactive shell.
+/// `hotline-computer shell <home> [folder]`: the person's interactive shell.
 /// It starts in the folder asked for, else in the mounted workspace when
 /// there is one, with the environment the teammate prepared there, and
-/// then it is bash with Toad's rc file.
+/// then it is bash with Hotline's rc file.
 pub fn shell(home: &Path, at: Option<&Path>) -> Result<(), String> {
     use std::os::unix::process::CommandExt;
-    let rc = home.join(".toad/bashrc");
-    std::fs::create_dir_all(home.join(".toad")).map_err(|e| e.to_string())?;
+    let rc = home.join(".hotline/bashrc");
+    std::fs::create_dir_all(home.join(".hotline")).map_err(|e| e.to_string())?;
     std::fs::write(&rc, BASHRC).map_err(|e| format!("{}: {e}", rc.display()))?;
     let workspace = home.join("workspace");
     let cwd = match at {
@@ -300,7 +300,7 @@ pub fn shell(home: &Path, at: Option<&Path>) -> Result<(), String> {
     Err(format!("start bash: {error}"))
 }
 
-/// `toad-computer open <folder>`: a fresh terminal for the person in that
+/// `hotline-computer open <folder>`: a fresh terminal for the person in that
 /// folder. The browser's "Show in folder" and `xdg-open` on a folder land
 /// here through the image's desktop entry, since the computer has no file
 /// manager and a shell in the folder is what a person wants from one. The
@@ -313,7 +313,7 @@ pub fn open(home: &Path, target: &Path) -> Result<(), String> {
         return Err(format!("{} is not a folder", folder.display()));
     }
     let display = std::env::var("DISPLAY").unwrap_or_else(|_| ":0".to_owned());
-    let directory = home.join(".toad");
+    let directory = home.join(".hotline");
     std::fs::create_dir_all(&directory).map_err(|e| e.to_string())?;
     let socket = directory.join("alacritty.sock");
     if std::os::unix::net::UnixStream::connect(&socket).is_err() {
@@ -325,7 +325,7 @@ pub fn open(home: &Path, target: &Path) -> Result<(), String> {
         while std::os::unix::net::UnixStream::connect(&socket).is_err() {
             if std::time::Instant::now() >= deadline {
                 return Err(
-                    "Alacritty daemon did not become ready; inspect ~/.toad/terminal.log".into(),
+                    "Alacritty daemon did not become ready; inspect ~/.hotline/terminal.log".into(),
                 );
             }
             std::thread::sleep(std::time::Duration::from_millis(10));
@@ -363,7 +363,7 @@ pub fn open(home: &Path, target: &Path) -> Result<(), String> {
 }
 
 /// The Alacritty daemon every terminal window comes from, as a command:
-/// its socket, the shared config, and its log under `~/.toad`.
+/// its socket, the shared config, and its log under `~/.hotline`.
 fn daemon_command(socket: &Path, display: &str) -> Result<std::process::Command, String> {
     let log =
         std::fs::File::create(socket.with_file_name("terminal.log")).map_err(|e| e.to_string())?;
@@ -440,14 +440,14 @@ pub fn run(home: &Path) -> Result<(), String> {
             libc::tcsetattr(0, libc::TCSANOW, &settings);
         }
     }
-    let root = home.join(".toad/jobs");
+    let root = home.join(".hotline/jobs");
     let mut seen: BTreeMap<String, (u64, String)> = BTreeMap::new();
     let mut stdout = std::io::stdout().lock();
     let mut selection: Option<String> = None;
     let mut initialized = false;
     let mut missing_reported = false;
     loop {
-        let selected = std::fs::read(home.join(".toad/observer-view.json"))
+        let selected = std::fs::read(home.join(".hotline/observer-view.json"))
             .ok()
             .and_then(|bytes| serde_json::from_slice::<Option<String>>(&bytes).ok())
             .flatten();
@@ -624,7 +624,7 @@ mod tests {
             !rc.contains("export PS1"),
             "an exported prompt reaches sh as text"
         );
-        assert!(rc.contains("HISTFILE=\"$HOME/.toad/shell_history\""));
+        assert!(rc.contains("HISTFILE=\"$HOME/.hotline/shell_history\""));
         assert!(rc.contains("export SHELL=/bin/bash"));
         assert!(
             rc.trim_end()

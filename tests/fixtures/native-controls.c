@@ -58,7 +58,7 @@ int main(int argc, char **argv) {
     gtk_window_move(GTK_WINDOW(primary), 30, 80);
     gtk_window_move(GTK_WINDOW(second), 1000, 120);
     tray = gtk_status_icon_new_from_icon_name("dialog-information");
-    gtk_status_icon_set_tooltip_text(tray, "Toad tray acceptance");
+    gtk_status_icon_set_tooltip_text(tray, "Hotline tray acceptance");
     g_signal_connect(tray, "activate", G_CALLBACK(activated), NULL);
     g_signal_connect(tray, "popup-menu", G_CALLBACK(popup), NULL);
     gtk_main();

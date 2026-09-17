@@ -1,8 +1,8 @@
-# toad.computer
+# hotline.computer
 
 A small Linux desktop for a coding agent. One container is one machine: a
 display, a browser, a shell, a home directory, and one MCP server that lets
-an agent see the screen, act on it, and check what happened. Toad starts one
+an agent see the screen, act on it, and check what happened. Hotline starts one
 per teammate; anything else that speaks MCP can point at it too.
 
 The image is a contract, not a binary. Anything that serves these eight tools
@@ -11,7 +11,7 @@ over streamable HTTP at `/mcp`, with `/health` open, is a valid computer.
 ## What is in the box
 
 ```
-toad-computer  PID 1, supervisor, window manager, bar, MCP server
+hotline-computer  PID 1, supervisor, window manager, bar, MCP server
 ├── Xvfb       the X server; pixels in RAM, no GPU
 ├── dbus       the session bus the accessibility tree rides on
 ├── keyring    gnome-keyring, the Secret Service, unlocked from boot
@@ -54,7 +54,7 @@ XTEST:
 ```
 
 The socket takes the bearer as a `token` query, because a browser cannot send
-a header on a WebSocket; Toad opens `http://127.0.0.1:<port>/#<token>` and the
+a header on a WebSocket; Hotline opens `http://127.0.0.1:<port>/#<token>` and the
 page reads the fragment, which never leaves the browser. The page opens
 view-only, with `Take control` at the foot of the screen: until that is
 pressed the socket shows the desktop and moves nothing, so watching a teammate
@@ -75,14 +75,14 @@ stop — at once when they give it back or close the page.
 - `state` identifies the running version, returns its guide/catalog, prepares workspaces, and manages leases, browser logins, and snapshots.
 
 `/health` and the viewer page never require authentication. When
-`TOAD_COMPUTER_TOKEN` is set, every method on `/mcp` requires
+`HOTLINE_COMPUTER_TOKEN` is set, every method on `/mcp` requires
 `Authorization: Bearer <token>`, the viewer's socket and its `/files` routes
 require the same token as their `token` query, and otherwise all return a JSON 401. `X-Computer-Holder` names the teammate using a lease or
 run slot; an absent header means `anonymous`.
 
 ## The desktop
 
-The top bar is three answers. On the left, the Toad mark opens a menu, and
+The top bar is three answers. On the left, the Hotline mark opens a menu, and
 each row's initial picks it while the menu is open: **B** the browser
 (opened, or focused if open), **T** a terminal of the person's own, **O** the
 observer of the teammate's jobs, **A** an About card (version, channel,
@@ -91,8 +91,8 @@ click one to focus it, right-click to close it. On the right, a jobs chip
 (`no jobs`, `2 running · 5 done`, `1 failed · 2 running`) that drops the
 jobs list from under itself, a lease chip that reads `agent at work`, `agent in control` or
 `person in control`, an XEmbed application tray that appears when an app
-uses it, and a clock in the host's zone (`TZ`, which Toad passes; UTC
-otherwise). Everything on the bar is published as `_TOAD_BAR_LAYOUT` on the
+uses it, and a clock in the host's zone (`TZ`, which Hotline passes; UTC
+otherwise). Everything on the bar is published as `_HOTLINE_BAR_LAYOUT` on the
 root window, so tests find its parts by rectangle rather than by pixel.
 Normal apps occupy the work area below the bar. The observer opens in the
 right third of the screen, and the app being watched keeps the left two
@@ -100,18 +100,18 @@ thirds; `windows tile` uses the same split. The person's terminal opens in
 the bottom third of that column, under an 8 px line, so it never covers
 the app on the left: an interactive bash in the mounted workspace with the
 environment the teammate prepared there, for signing in to something or
-unblocking a stuck step. It is the system's bash with Toad's own rc file,
-written to `~/.toad/bashrc` on each open: the blue prompt, history kept
-under `~/.toad`, and no Debian skeleton files in the home. To customise it,
-create `~/.bashrc`; it runs after Toad's. What is typed there is not a job:
+unblocking a stuck step. It is the system's bash with Hotline's own rc file,
+written to `~/.hotline/bashrc` on each open: the blue prompt, history kept
+under `~/.hotline`, and no Debian skeleton files in the home. To customise it,
+create `~/.bashrc`; it runs after Hotline's. What is typed there is not a job:
 it is not retained, and the teammate sees only what is on the screen. From there,
-`toad-computer prepare --packages go gopls` prepares the workspace by hand
-the way the teammate's job would, and `toad-computer packages` lists common
+`hotline-computer prepare --packages go gopls` prepares the workspace by hand
+the way the teammate's job would, and `hotline-computer packages` lists common
 Nixpkgs names to choose from. What the person installs for themselves runs
 by name: `~/.local/bin`, `~/go/bin` and `~/.cargo/bin` lead the shell's PATH.
 The computer has no file manager; a folder opens as a fresh terminal in it.
 The browser's **Show in folder**, `xdg-open` on a folder, and
-`toad-computer open DIR` all do that, through the image's desktop entry for
+`hotline-computer open DIR` all do that, through the image's desktop entry for
 `inode/directory`, titled with the folder (`~/Downloads`).
 `windows` operations verify the resulting focus, geometry, or disappearance;
 a refused operation reports the remaining windows.
@@ -155,7 +155,7 @@ computer, the managed Chromium lists a folder at `file:///home/agent/`.
 
 Start an agent session with `state info` and `state guide`. The returned skill
 and SHA-256 come from the actual running binary, so any MCP client receives
-instructions matched to its image. Toad's agent preamble uses the same path.
+instructions matched to its image. Hotline's agent preamble uses the same path.
 
 Read the repository's requirements, then prepare the packages it needs:
 
@@ -181,10 +181,10 @@ jobs with `cwd` inside the workspace inherit the exported environment;
 explicit job `env` values win. A failed preparation retains the previous
 active environment. Nix profiles keep the prepared store dependencies alive.
 
-The workspace owns `.toad/environment-spec.json`. Package definitions retain
+The workspace owns `.hotline/environment-spec.json`. Package definitions retain
 their Nixpkgs revision across Computer upgrades and dependency additions;
-`.toad/nix/` contains their generated flake and lock. Shared caches are under
-`~/.cache/toad/environments`, keyed by recipe and architecture, independently
+`.hotline/nix/` contains their generated flake and lock. Shared caches are under
+`~/.cache/hotline/environments`, keyed by recipe and architecture, independently
 of the Computer version. Keep the definition and lock with the workspace.
 The image keeps nothing of its own in the home: its Alacritty
 configuration, bash rc and Chromium policy live under `/etc`. So a home
@@ -200,7 +200,7 @@ a lock. Shell hooks run during preparation in the workspace, and exported
 variables are retained. Aliases, functions, and hooks that must run for every
 command require an explicit `nix develop --command ...`. To customize a
 package environment, edit its generated flake and prepare with
-`"flake":".toad/nix"`.
+`"flake":".hotline/nix"`.
 
 The base image supplies the desktop, browser, graphics, and Nix. Framework
 libraries and compilers are project dependencies; WebKit and AppIndicator
@@ -210,7 +210,7 @@ runtime library paths in a flake.
 The computer is rootless by design: nothing runs as root, nothing can
 elevate, and the image carries no `apt` or `sudo`, so nobody is invited to
 try. Software comes in this order: what the computer prepares
-(`state prepare` for a teammate, `toad-computer prepare` for a person), then
+(`state prepare` for a teammate, `hotline-computer prepare` for a person), then
 Nix by hand (`nix shell nixpkgs#<name>` for one tool), then what the image
 already has. The person's shell answers `apt` and `sudo` with that order.
 A `.deb` or a system-wide install belongs in an image build. An AppImage
@@ -234,7 +234,7 @@ shell commands. The complete examples ship in `state guide`.
 
 ## Boot
 
-`toad-computer boot` is the entrypoint. As PID 1 it forks: the parent reaps
+`hotline-computer boot` is the entrypoint. As PID 1 it forks: the parent reaps
 every child the kernel hands it and forwards SIGTERM; the child starts Xvfb
 dbus-daemon and gnome-keyring, becomes the window manager, and serves. A
 machine whose display or bus has died exits, and the container with it; a
@@ -251,37 +251,37 @@ around a computer's secrets, as it is for everything else the person and the
 agent keep there. Environments prepared with Nix share the same bus and so the
 same keyring.
 
-`toad-computer serve` serves on a display that already exists, for running
+`hotline-computer serve` serves on a display that already exists, for running
 the agent outside the container.
 
 | variable | default | |
 | --- | --- | --- |
-| `TOAD_COMPUTER_ADDR` | `0.0.0.0:8787` | where `/mcp`, `/health`, and the viewer listen |
-| `TOAD_COMPUTER_TOKEN` | unset | bearer for `/mcp`; unset means open |
-| `TOAD_COMPUTER_HOME` | `/home/agent` | the directory `files` is confined to |
-| `TOAD_COMPUTER_SCREEN` | `1920x1080` | the Xvfb screen `boot` creates |
+| `HOTLINE_COMPUTER_ADDR` | `0.0.0.0:8787` | where `/mcp`, `/health`, and the viewer listen |
+| `HOTLINE_COMPUTER_TOKEN` | unset | bearer for `/mcp`; unset means open |
+| `HOTLINE_COMPUTER_HOME` | `/home/agent` | the directory `files` is confined to |
+| `HOTLINE_COMPUTER_SCREEN` | `1920x1080` | the Xvfb screen `boot` creates |
 | `DISPLAY` | `:0` | the display `boot` creates and `serve` uses |
 
 ## Build and run
 
 ```sh
-make image                # docker build -t toad-computer:next .
+make image                # docker build -t hotline-computer:next .
 make run                  # a hardened container on 127.0.0.1:8787, token in .token
 make contract             # the contract test against it, through a real MCP client
 make check                # fmt, clippy -D warnings, unit tests
 make acceptance           # fresh image, real MCP/viewer tests, repository builds
 ```
 
-`make run` is the create command Toad uses, spelled out:
+`make run` is the create command Hotline uses, spelled out:
 
 ```sh
-docker run -d --name toad-computer-next \
+docker run -d --name hotline-computer-next \
   --cap-drop=ALL --security-opt no-new-privileges \
   --pids-limit 1024 --memory 4g --shm-size 1g \
   -p 127.0.0.1:8787:8787 \
-  -e TOAD_COMPUTER_TOKEN="$(cat .token)" \
+  -e HOTLINE_COMPUTER_TOKEN="$(cat .token)" \
   -e TZ="$(cat /etc/timezone)" \
-  toad-computer:next
+  hotline-computer:next
 ```
 
 Mount a workspace with `-v "$PWD:/home/agent/workspace"`. Chromium needs the

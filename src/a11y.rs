@@ -362,7 +362,7 @@ mod tests {
     fn similar_titles_never_cross_application_boundaries() {
         let window = Window {
             id: "0x1".into(),
-            title: "Toad Computer".into(),
+            title: "Hotline Computer".into(),
             class: "chromium".into(),
             bounds: [0, 0, 800, 600],
             focused: true,
@@ -371,7 +371,7 @@ mod tests {
             minimum_size: [1, 1],
         };
         let mut tree = WindowTree {
-            title: "Toad".into(),
+            title: "Hotline".into(),
             pid: Some(200),
             bounds: [0, 0, 800, 600],
             nodes: vec![],
