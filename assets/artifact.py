@@ -24,7 +24,7 @@ def digest(path):
 def request(url):
     if not url.startswith(('https://', 'http://')):
         raise ValueError('URL must use HTTPS or HTTP')
-    return urllib.request.urlopen(urllib.request.Request(url, headers={'User-Agent': 'Toad-Computer'}), timeout=30)
+    return urllib.request.urlopen(urllib.request.Request(url, headers={'User-Agent': 'Hotline-Computer'}), timeout=30)
 
 
 def source_url(spec):
@@ -60,7 +60,7 @@ def download(spec, destination):
             return
         raise ValueError('destination exists; use a matching sha256 for a cache hit or choose another path')
     url = source_url(spec)
-    temporary = Path(os.environ['TOAD_ARTIFACT_DIR']) / 'download.part'
+    temporary = Path(os.environ['HOTLINE_ARTIFACT_DIR']) / 'download.part'
     temporary.parent.mkdir(exist_ok=True)
     try:
         checksum = hashlib.sha256()
@@ -98,7 +98,7 @@ def member_path(name):
 def extract(archive, destination):
     if destination.exists():
         raise ValueError('extraction destination already exists; choose an empty new directory')
-    temporary = Path(os.environ['TOAD_ARTIFACT_DIR']) / 'extract'
+    temporary = Path(os.environ['HOTLINE_ARTIFACT_DIR']) / 'extract'
     temporary.mkdir(parents=True)
     total = 0
     try:

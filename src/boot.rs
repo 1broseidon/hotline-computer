@@ -1,5 +1,5 @@
 //! Booting the machine: the display, the session bus, the desktop, then the
-//! agent. `toad-computer boot` is the container's entrypoint.
+//! agent. `hotline-computer boot` is the container's entrypoint.
 //!
 //! As PID 1 the process forks first. The parent stays a reaper: it collects
 //! every child the kernel hands it, forwards SIGTERM to the agent, and exits
@@ -8,7 +8,7 @@
 //! that outlives its parent, or a program `shell launch` started, is
 //! re-parented to PID 1 and collected there instead of lingering as a zombie.
 //! A machine whose display or bus has died is a dead machine: the agent exits
-//! and the container with it, and Toad starts a fresh one.
+//! and the container with it, and Hotline starts a fresh one.
 
 use std::path::{Path, PathBuf};
 use std::process::{Child, Command, Stdio};
@@ -19,7 +19,7 @@ use std::time::{Duration, Instant};
 use crate::display::Display;
 use crate::{App, Config, desktop, serve};
 
-const RUNTIME_DIR: &str = "/tmp/toad-computer";
+const RUNTIME_DIR: &str = "/tmp/hotline-computer";
 const START_TIMEOUT: Duration = Duration::from_secs(10);
 const POLL: Duration = Duration::from_millis(20);
 const SHUTDOWN: Duration = Duration::from_secs(2);
@@ -59,7 +59,7 @@ fn become_init() {
         libc::sigprocmask(libc::SIG_BLOCK, &signals, std::ptr::null_mut());
         let agent = libc::fork();
         if agent < 0 {
-            eprintln!("toad-computer: fork failed");
+            eprintln!("hotline-computer: fork failed");
             std::process::exit(1);
         }
         if agent == 0 {
@@ -161,7 +161,7 @@ fn machine(config: Config, width: u16, height: u16) -> Result<(), String> {
         .name("desktop".to_owned())
         .spawn(move || {
             if let Err(error) = desktop::run(&display, requests, ready) {
-                eprintln!("toad-computer: desktop: {error}");
+                eprintln!("hotline-computer: desktop: {error}");
             }
         })
         .map_err(|error| format!("spawn desktop thread: {error}"))?;
@@ -192,23 +192,23 @@ fn machine(config: Config, width: u16, height: u16) -> Result<(), String> {
                     match request {
                         desktop::Request::OpenBrowser => {
                             if let Err(error) = app.browser.open().await {
-                                eprintln!("toad-computer: dock: {error}");
+                                eprintln!("hotline-computer: dock: {error}");
                             }
                         }
                         desktop::Request::BrowserClosed => app.browser.forget().await,
                         desktop::Request::OpenTerminal => {
                             if let Err(error) = app.observer.select(None).await {
-                                eprintln!("toad-computer: terminal: {error}");
+                                eprintln!("hotline-computer: terminal: {error}");
                             }
                         }
                         desktop::Request::OpenShell => {
                             if let Err(error) = app.observer.open_shell().await {
-                                eprintln!("toad-computer: shell: {error}");
+                                eprintln!("hotline-computer: shell: {error}");
                             }
                         }
                         desktop::Request::OpenJob(job_id) => {
                             if let Err(error) = app.observer.select(Some(&job_id)).await {
-                                eprintln!("toad-computer: terminal: {error}");
+                                eprintln!("hotline-computer: terminal: {error}");
                             }
                         }
                     }
@@ -306,7 +306,7 @@ async fn keep_keyring(mut child: Child, pid: Arc<AtomicU32>) {
         let status = tokio::task::spawn_blocking(move || child.wait()).await;
         pid.store(0, Ordering::Relaxed);
         eprintln!(
-            "toad-computer: gnome-keyring-daemon exited: {}; starting it again",
+            "hotline-computer: gnome-keyring-daemon exited: {}; starting it again",
             describe(status)
         );
         loop {
@@ -317,7 +317,7 @@ async fn keep_keyring(mut child: Child, pid: Arc<AtomicU32>) {
                     break;
                 }
                 Err(error) => {
-                    eprintln!("toad-computer: {error}; trying again in a minute");
+                    eprintln!("hotline-computer: {error}; trying again in a minute");
                     tokio::time::sleep(Duration::from_secs(60)).await;
                 }
             }
@@ -350,7 +350,9 @@ fn ensure_keymap(display: &str) -> Result<(), String> {
     if mapped >= 100 {
         return Ok(());
     }
-    eprintln!("toad-computer: the display came up with {mapped} mapped keycodes; loading pc105/us");
+    eprintln!(
+        "hotline-computer: the display came up with {mapped} mapped keycodes; loading pc105/us"
+    );
     let status = Command::new("setxkbmap")
         .args(["-model", "pc105", "-layout", "us"])
         .stdin(Stdio::null())

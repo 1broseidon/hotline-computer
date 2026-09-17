@@ -45,7 +45,7 @@ pub async fn call(app: &App, arguments: Value) -> ToolResult {
                         .duration_since(UNIX_EPOCH)
                         .unwrap_or_default()
                         .as_millis();
-                    std::env::temp_dir().join(format!("toad-computer-{timestamp}.png"))
+                    std::env::temp_dir().join(format!("hotline-computer-{timestamp}.png"))
                 },
                 Into::into,
             );

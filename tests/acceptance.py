@@ -83,8 +83,8 @@ class Computer:
         (self.output / name).write_bytes(base64.b64decode(content.split('\n', 2)[2]))
 
 
-class ToadComputer(Computer):
-    """Use Toad's compiled MCP adapter so all cases also exercise the integration."""
+class HotlineComputer(Computer):
+    """Use Hotline's compiled MCP adapter so all cases also exercise the integration."""
     def __init__(self, url, token_file, output, executable):
         self.output = output
         self.run_id = uuid.uuid4().hex[:12]
@@ -96,7 +96,7 @@ class ToadComputer(Computer):
         self.process.stdin.flush()
         line = self.process.stdout.readline()
         if not line:
-            raise RuntimeError('Toad acceptance adapter closed its output')
+            raise RuntimeError('Hotline acceptance adapter closed its output')
         return {'result': json.loads(line)}
 
     def close(self):
@@ -104,7 +104,7 @@ class ToadComputer(Computer):
         assert self.process.wait(timeout=10) == 0
 
 
-FORM = '''<!doctype html><html><head><meta charset="utf-8"><title>Toad release acceptance</title>
+FORM = '''<!doctype html><html><head><meta charset="utf-8"><title>Hotline release acceptance</title>
 <style>body{font:18px system-ui;max-width:780px;margin:40px auto;background:#f7f6f1;color:#202420}h1{font-size:30px}label{display:block;margin:14px 0}input,select,textarea,button{font:inherit;padding:8px;border:1px solid #aaa;border-radius:5px}button{background:#215c36;color:white}#result{padding:20px;background:#d5f5dd}small{color:#555}</style></head>
 <body><h1>Release acceptance · browser workflow</h1><p>Complete the form, review, and submit.</p>
 <form id="form"><section id="one"><label>Name <input id="name" required></label><label>Email <input id="email" type="email" required></label><label>Date <input id="date" type="date" required></label>
@@ -123,7 +123,7 @@ def browser(c):
     snapshot = c.call('browser', {'action': 'text'})
     assert 'secret-hidden' not in snapshot and 'secret-password' not in snapshot
     assert 'readonly' in snapshot and 'disabled' in snapshot
-    refs = c.call('browser', {'action': 'eval', 'js': "Object.fromEntries([...document.querySelectorAll('[id][data-toad-ref]')].map(e=>[e.id,e.dataset.toadRef]))"})
+    refs = c.call('browser', {'action': 'eval', 'js': "Object.fromEntries([...document.querySelectorAll('[id][data-hotline-ref]')].map(e=>[e.id,e.dataset.hotlineRef]))"})
     for key, text in [('name', 'Agent QA'), ('email', 'qa@example.test'), ('date', '2026-09-15'), ('notes', 'Unicode: café 🐸\nSecond line')]:
         result = c.call('browser', {'action': 'fill', 'ref': refs[key], 'text': text})
         assert result['value'] == text, result
@@ -150,7 +150,7 @@ def browser(c):
 
 def browser_refs(c):
     c.call('browser', {'action': 'text'})
-    return c.call('browser', {'action': 'eval', 'js': "Object.fromEntries([...document.querySelectorAll('[data-toad-ref]')].map(e=>[e.id||e.name,e.dataset.toadRef]))"})
+    return c.call('browser', {'action': 'eval', 'js': "Object.fromEntries([...document.querySelectorAll('[data-hotline-ref]')].map(e=>[e.id||e.name,e.dataset.hotlineRef]))"})
 
 
 def wizard(c):
@@ -165,7 +165,7 @@ def wizard(c):
     refs = browser_refs(c)
     c.call('browser', {'action':'select', 'ref':refs['project'], 'value':'Team'})
     refs = browser_refs(c)
-    c.call('browser', {'action':'fill', 'ref':refs['org'], 'text':'Toad QA'})
+    c.call('browser', {'action':'fill', 'ref':refs['org'], 'text':'Hotline QA'})
     c.call('browser', {'action':'fill', 'ref':refs['date'], 'text':'2026-09-15'})
     c.call('browser', {'action':'select', 'ref':refs['platforms'], 'values':['Linux','macOS']})
     c.call('browser', {'action':'upload', 'ref':refs['attachment'], 'path':'/home/agent/qa/notes.txt'})
@@ -176,7 +176,7 @@ def wizard(c):
     refs = browser_refs(c)
     c.call('browser', {'action':'click_ref', 'ref':refs['next2']})
     snapshot = c.call('browser', {'action':'text'})
-    assert 'Review application' in snapshot and 'notes.txt' in snapshot and 'Toad QA' in snapshot, snapshot
+    assert 'Review application' in snapshot and 'notes.txt' in snapshot and 'Hotline QA' in snapshot, snapshot
     refs = browser_refs(c)
     c.call('browser', {'action':'click_ref', 'ref':refs['back2']})
     refs = browser_refs(c)
@@ -187,14 +187,14 @@ def wizard(c):
     c.call('browser', {'action':'click_ref', 'ref':refs['submit']})
     c.call('wait', {'text':'Application QA-040 accepted', 'timeout':10})
     values = c.call('browser', {'action':'eval', 'js':'JSON.parse(localStorage.getItem("complex-result"))'})
-    assert values == {'name':'Agent QA','email':'qa@example.test','project':'Team','organization':'Toad QA','date':'2026-09-15','file':'notes.txt','platforms':['Linux','macOS']}, values
+    assert values == {'name':'Agent QA','email':'qa@example.test','project':'Team','organization':'Hotline QA','date':'2026-09-15','file':'notes.txt','platforms':['Linux','macOS']}, values
     c.screenshot('02c-browser-wizard-submitted.png')
 
 
 def public_form(c):
     c.call('browser', {'action':'navigate', 'url':'https://www.selenium.dev/selenium/web/web-form.html'})
     refs = browser_refs(c)
-    c.call('browser', {'action':'fill', 'ref':refs['my-text-id'], 'text':'Synthetic Toad QA'})
+    c.call('browser', {'action':'fill', 'ref':refs['my-text-id'], 'text':'Synthetic Hotline QA'})
     c.call('browser', {'action':'fill', 'ref':refs['my-textarea'], 'text':'Public browser form acceptance'})
     c.call('browser', {'action':'select', 'ref':refs['my-select'], 'value':'2'})
     c.call('browser', {'action':'upload', 'ref':refs['my-file'], 'path':'/home/agent/qa/notes.txt'})
@@ -216,7 +216,7 @@ def password_prompt(c):
       return JSON.stringify({ text: at('#my-text-id'), password: at('input[name=my-password]'), submit: at('button[type=submit]') }); })()"""})
     fields = json.loads(fields) if isinstance(fields, str) else fields
     c.call('input', {'action':'click','x':fields['text'][0],'y':fields['text'][1]})
-    c.call('input', {'action':'type','text':'Synthetic Toad QA'})
+    c.call('input', {'action':'type','text':'Synthetic Hotline QA'})
     c.call('input', {'action':'click','x':fields['password'][0],'y':fields['password'][1]})
     c.call('input', {'action':'type','text':'not-a-real-secret'})
     c.call('input', {'action':'click','x':fields['submit'][0],'y':fields['submit'][1]})
@@ -240,12 +240,12 @@ def jobs(c):
     samples = []
     for _ in range(12):
         windows = c.call('windows', {'action': 'list'})
-        terminal = next(w for w in windows if 'toadterminal' in w['class'].lower())
+        terminal = next(w for w in windows if 'hotlineterminal' in w['class'].lower())
         c.call('windows', {'action': 'close', 'window_id': terminal['id']})
         assert c.call('shell', {'action': 'status', 'job_id': job['id']})['state'] == 'running'
         started = time.monotonic()
         c.call('shell', {'action': 'show', 'job_id': job['id']})
-        assert any('toadterminal' in w['class'].lower() for w in c.call('windows', {'action': 'list'})), 'observer did not reopen'
+        assert any('hotlineterminal' in w['class'].lower() for w in c.call('windows', {'action': 'list'})), 'observer did not reopen'
         samples.append((time.monotonic()-started)*1000)
     c.output.joinpath('observer-timing.json').write_text(json.dumps({'samples': samples, 'p50': sorted(samples)[len(samples)//2], 'p95': sorted(samples)[int(len(samples)*.95)], 'max': max(samples)}, indent=2))
     assert max(samples) < 300, samples
@@ -254,7 +254,7 @@ def jobs(c):
     c.done(c.call('shell', {'action':'start','command':'kill','args':['-KILL',str(daemon)],'label':'Observer daemon recovery fixture'}))
     assert c.call('shell', {'action':'status','job_id':job['id']})['state']=='running'
     deadline = time.monotonic()+3
-    while any('toadterminal' in w['class'].lower() for w in c.call('windows',{'action':'list'})):
+    while any('hotlineterminal' in w['class'].lower() for w in c.call('windows',{'action':'list'})):
         assert time.monotonic()<deadline
         time.sleep(.05)
     reopened = c.call('shell', {'action':'show','job_id':job['id']})
@@ -270,7 +270,7 @@ def jobs(c):
 def bar_layout(c):
     """Where the bar drew its parts, as the desktop publishes it on the root window."""
     code = """import ast,json,subprocess
-line=subprocess.check_output(['xprop','-root','_TOAD_BAR_LAYOUT'],text=True).strip()
+line=subprocess.check_output(['xprop','-root','_HOTLINE_BAR_LAYOUT'],text=True).strip()
 print(json.dumps(json.loads(ast.literal_eval(line.split(' = ',1)[1]))))
 """
     return json.loads(execute(c,'python3',['-c',code],label='Bar layout lookup').strip().splitlines()[-1])
@@ -297,15 +297,15 @@ def desktop_job_menu(c):
     c.call('input',{'action':'click','x':jobs_x,'y':jobs_y})
     c.screenshot('03c-desktop-job-menu.png')
     c.call('input',{'action':'click','x':row(1)[0],'y':row(1)[1]})
-    assert c.call('files',{'action':'get','path':'/home/agent/.toad/observer-view.json'}) == job['id']
+    assert c.call('files',{'action':'get','path':'/home/agent/.hotline/observer-view.json'}) == job['id']
     c.screenshot('03d-selected-failed-job.png',settle_ms=200)
     c.call('input',{'action':'click','x':jobs_x,'y':jobs_y})
     c.call('input',{'action':'click','x':row(0)[0],'y':row(0)[1]})
-    assert c.call('files',{'action':'get','path':'/home/agent/.toad/observer-view.json'}) is None
-    # The toad menu: the mark opens it, a letter picks, Escape closes.
+    assert c.call('files',{'action':'get','path':'/home/agent/.hotline/observer-view.json'}) is None
+    # The hotline menu: the mark opens it, a letter picks, Escape closes.
     mark_x, mark_y = centre(layout['mark'])
     c.call('input',{'action':'click','x':mark_x,'y':mark_y})
-    c.screenshot('03e-toad-menu.png')
+    c.screenshot('03e-hotline-menu.png')
     c.call('input',{'action':'key','combo':'a'})
     c.screenshot('03f-about-this-computer.png')
     c.call('input',{'action':'key','combo':'Escape'})
@@ -316,13 +316,13 @@ def desktop_job_menu(c):
     c.call('input',{'action':'key','combo':'t'})
     deadline = time.monotonic()+10
     while time.monotonic()<deadline:
-        shell = next((w for w in c.call('windows',{'action':'list'}) if 'toadshell' in w['class'].lower()), None)
+        shell = next((w for w in c.call('windows',{'action':'list'}) if 'hotlineshell' in w['class'].lower()), None)
         if shell: break
         time.sleep(.2)
     assert shell, c.call('windows',{'action':'list'})
     x, y, w, h = shell['bounds']
     assert x == 1280 and w == 640 and y + h == 1080 and h == 340, shell
-    observer = next((w for w in c.call('windows',{'action':'list'}) if 'toadterminal' in w['class'].lower()), None)
+    observer = next((w for w in c.call('windows',{'action':'list'}) if 'hotlineterminal' in w['class'].lower()), None)
     if observer:
         ox, oy, ow, oh = observer['bounds']
         assert ox == 1280 and oy == 36 and oy + oh + 8 == y, (observer, shell)
@@ -344,7 +344,7 @@ def clipboard_between_apps(c):
     c.call('input', {'action': 'key', 'combo': 't'})
     deadline = time.monotonic() + 10
     while time.monotonic() < deadline:
-        shell = next((w for w in c.call('windows', {'action': 'list'}) if 'toadshell' in w['class'].lower()), None)
+        shell = next((w for w in c.call('windows', {'action': 'list'}) if 'hotlineshell' in w['class'].lower()), None)
         if shell and shell['focused']: break
         time.sleep(.2)
     assert shell and shell['focused'], c.call('windows', {'action': 'list'})
@@ -381,7 +381,7 @@ def tray_counts(c):
         code = """import ast,json,subprocess,time
 # Observe both properties from an independent X11 connection after startup.
 time.sleep(.15)
-lines=subprocess.check_output(['xprop','-root','_TOAD_JOBS_RUNNING','_TOAD_JOB_SUMMARY'],text=True).splitlines()
+lines=subprocess.check_output(['xprop','-root','_HOTLINE_JOBS_RUNNING','_HOTLINE_JOB_SUMMARY'],text=True).splitlines()
 counts=[int(value.strip()) for value in lines[0].split(' = ',1)[1].split(',')]
 jobs=json.loads(ast.literal_eval(lines[1].split(' = ',1)[1]))
 assert any(j['label']=='Tray active-job fixture' and j['state']=='running' for j in jobs),jobs
@@ -400,7 +400,7 @@ def nix_failure(c):
     home = '/home/agent/qa/nix-failure-' + c.run_id
     workspace = home + '/workspace'
     c.call('files', {'action':'put','path':workspace+'/fixture','content':''})
-    job = c.call('shell', {'action':'start','command':'/usr/bin/toad-computer','args':['prepare',json.dumps({'source':'packages','packages':['python312'],'nixpkgs':c.call('state', {'action':'info'})['nixpkgs']}),workspace,home],'env':{'NIX_REMOTE':'unix:///home/agent/qa/missing-nix-daemon.sock'},'label':'Nix failure diagnostics','timeout':30})
+    job = c.call('shell', {'action':'start','command':'/usr/bin/hotline-computer','args':['prepare',json.dumps({'source':'packages','packages':['python312'],'nixpkgs':c.call('state', {'action':'info'})['nixpkgs']}),workspace,home],'env':{'NIX_REMOTE':'unix:///home/agent/qa/missing-nix-daemon.sock'},'label':'Nix failure diagnostics','timeout':30})
     job = c.call('shell', {'action':'wait','job_id':job['id'],'wait_ms':30000})
     assert job['state']=='failed',job
     output = c.call('shell', {'action':'read','job_id':job['id']})['output']
@@ -415,7 +415,7 @@ def rootless(c):
     assert output.split() == ['1000', '1'], output
     # The person's shell answers apt with where software comes from instead.
     output = execute(c, 'bash', ['-ic', 'apt install go; true'], label='apt in the shell')
-    assert 'toad-computer prepare' in output and 'toad-computer packages' in output and 'nix shell' in output, output
+    assert 'hotline-computer prepare' in output and 'hotline-computer packages' in output and 'nix shell' in output, output
     # An AppImage assumes the libraries on the AppImage exclude list are on
     # the system, since its tooling never bundles them; the image has them.
     assumed = ['libgpg-error.so.0', 'libOpenGL.so.0', 'libxcb-dri2.so.0', 'libjack.so.0', 'libpipewire-0.3.so.0', 'libusb-1.0.so.0', 'libGL.so.1', 'libgtk-3.so.0', 'libfontconfig.so.1']
@@ -435,7 +435,7 @@ def open_folder(c):
     execute(c, 'xdg-open', ['/home/agent/src'], label='Open a folder')
     deadline = time.monotonic()+5
     while True:
-        opened = next((w for w in c.call('windows', {'action': 'list'}) if 'toadshell' in w['class'].lower() and w['title'] == '~/src'), None)
+        opened = next((w for w in c.call('windows', {'action': 'list'}) if 'hotlineshell' in w['class'].lower() and w['title'] == '~/src'), None)
         if opened or time.monotonic() > deadline:
             break
         time.sleep(.1)
@@ -516,7 +516,7 @@ ThreadingHTTPServer(('127.0.0.1',8082),Handler).serve_forever()
             time.sleep(.05)
         c.call('shell',{'action':'cancel','job_id':interrupted['id']})
         c.call('files',{'action':'get','path':root+'/interrupted'},error=True)
-        assert not any(entry['name'].startswith('.toad-artifact-') for entry in c.call('files',{'action':'list','path':root}))
+        assert not any(entry['name'].startswith('.hotline-artifact-') for entry in c.call('files',{'action':'list','path':root}))
         retried = c.done(c.call('files',{'action':'download','url':'http://127.0.0.1:8082/ok','path':root+'/interrupted','sha256':checksum}))
         assert retried['exit_code']==0
     finally:
@@ -529,10 +529,10 @@ def secrets(c):
     # never a "create a keyring" prompt on the desktop.
     owner = execute(c, 'dbus-send', ['--session', '--print-reply', '--dest=org.freedesktop.DBus', '/org/freedesktop/DBus', 'org.freedesktop.DBus.NameHasOwner', 'string:org.freedesktop.secrets'])
     assert 'boolean true' in owner, owner
-    execute(c, 'bash', ['-c', "printf 'not-a-real-secret' | secret-tool store --label='Toad QA' service toad-qa user agent"])
-    assert execute(c, 'secret-tool', ['lookup', 'service', 'toad-qa', 'user', 'agent']).strip().splitlines()[-1] == 'not-a-real-secret'
-    execute(c, 'secret-tool', ['clear', 'service', 'toad-qa', 'user', 'agent'])
-    assert 'not-a-real-secret' not in execute(c, 'bash', ['-c', 'secret-tool lookup service toad-qa user agent; true'])
+    execute(c, 'bash', ['-c', "printf 'not-a-real-secret' | secret-tool store --label='Hotline QA' service hotline-qa user agent"])
+    assert execute(c, 'secret-tool', ['lookup', 'service', 'hotline-qa', 'user', 'agent']).strip().splitlines()[-1] == 'not-a-real-secret'
+    execute(c, 'secret-tool', ['clear', 'service', 'hotline-qa', 'user', 'agent'])
+    assert 'not-a-real-secret' not in execute(c, 'bash', ['-c', 'secret-tool lookup service hotline-qa user agent; true'])
 
 
 def keyboard(c):
@@ -666,14 +666,18 @@ def durability(c):
     c.output.joinpath('job-acknowledgement-ms.json').write_text(json.dumps({'samples': timings, 'p50': sorted(timings)[len(timings)//2], 'p95': sorted(timings)[int(len(timings)*.95)], 'max': max(timings)}, indent=2))
 
 
-TOAD_REVISION = 'f3c17b78d85b4cc235455862d9c9241579157b39'
+# A pinned desk revision: 0.11.0, which predates the Hotline rename, so the
+# crate, the built binary and the data-directory variable are the names that
+# revision carries. Bump this to a 0.14.0 commit and they become hotline-app
+# and HOTLINE_DATA_DIR together.
+HOTLINE_REVISION = 'f3c17b78d85b4cc235455862d9c9241579157b39'
 
 
 def native(c):
-    root = '/home/agent/qa/toad-' + c.run_id
-    execute(c, 'git', ['clone', '--filter=blob:none', 'https://github.com/1broseidon/toad.git', root], timeout=300)
-    execute(c, 'git', ['checkout', '--detach', TOAD_REVISION], cwd=root)
-    flake = Path(__file__).with_name('fixtures').joinpath('toad.nix').read_text().replace('@NIXPKGS@',c.call('state', {'action':'info'})['nixpkgs'])
+    root = '/home/agent/qa/hotline-' + c.run_id
+    execute(c, 'git', ['clone', '--filter=blob:none', 'https://github.com/1broseidon/hotline.git', root], timeout=300)
+    execute(c, 'git', ['checkout', '--detach', HOTLINE_REVISION], cwd=root)
+    flake = Path(__file__).with_name('fixtures').joinpath('hotline.nix').read_text().replace('@NIXPKGS@',c.call('state', {'action':'info'})['nixpkgs'])
     c.call('files', {'action':'put','path':root+'/qa-nix/flake.nix','content':flake})
     timing = prepare(c, None, root, flake='qa-nix')
     assert 'tauri-cli' in execute(c, 'cargo', ['tauri', '--version'], cwd=root)
@@ -688,7 +692,7 @@ def native(c):
     c.screenshot('05-browsing-during-native-build.png')
     c.done(job, 2400)
     c.output.joinpath('native-build-output.txt').write_text(c.call('shell', {'action': 'read', 'job_id': job['id'], 'max_output': 1048576})['output'])
-    app = c.call('shell', {'action': 'start', 'command': target+'/debug/toad-desktop', 'cwd': root, 'env': {'TOAD_DATA_DIR': root+'/qa-data', 'CARGO_BUILD_JOBS':'2', 'CARGO_PROFILE_DEV_DEBUG':'0', 'CARGO_INCREMENTAL':'0'}, 'label': 'Toad native screen acceptance'})
+    app = c.call('shell', {'action': 'start', 'command': target+'/debug/toad-desktop', 'cwd': root, 'env': {'TOAD_DATA_DIR': root+'/qa-data', 'CARGO_BUILD_JOBS':'2', 'CARGO_PROFILE_DEV_DEBUG':'0', 'CARGO_INCREMENTAL':'0'}, 'label': 'Hotline native screen acceptance'})
     native_screens(c, app)
 
 
@@ -697,10 +701,10 @@ def native_screens(c, app):
     while time.monotonic()<deadline:
         assert c.call('shell', {'action': 'status', 'job_id': app['id']})['state'] == 'running', c.call('shell', {'action': 'read', 'job_id': app['id']})
         windows = c.call('windows', {'action': 'list'})
-        native_windows = [w for w in windows if w.get('pid') == app['pid'] and 'toadterminal' not in w['class'].lower()]
+        native_windows = [w for w in windows if w.get('pid') == app['pid'] and 'hotlineterminal' not in w['class'].lower()]
         if native_windows: break
         time.sleep(.2)
-    else: raise AssertionError('Toad did not map a native window')
+    else: raise AssertionError('Hotline did not map a native window')
     c.call('windows', {'action': 'focus', 'window_id': native_windows[0]['id']})
     c.call('windows', {'action': 'maximize', 'window_id': native_windows[0]['id']})
     window_id = native_windows[0]['id']
@@ -714,7 +718,7 @@ def native_screens(c, app):
             if label in tree:
                 return tree
             time.sleep(.1)
-        raise AssertionError('Native Toad tree did not expose ' + label + ': ' + tree)
+        raise AssertionError('Native Hotline tree did not expose ' + label + ': ' + tree)
 
     def click_label(tree, label):
         match = re.search(r'\[button\] ' + re.escape(label) + r' (-?\d+),(-?\d+) (\d+)x(\d+)', tree)
@@ -741,21 +745,21 @@ def native_screens(c, app):
             time.sleep(.1)
         raise AssertionError('Accessibility changed but the native screen did not paint: ' + name)
 
-    c.screenshot('06-toad-native-screen.png', settle_ms=1000)
-    terminal = next(w for w in c.call('windows', {'action':'list'}) if 'toadterminal' in w['class'].lower())
+    c.screenshot('06-hotline-native-screen.png', settle_ms=1000)
+    terminal = next(w for w in c.call('windows', {'action':'list'}) if 'hotlineterminal' in w['class'].lower())
     c.call('shell', {'action':'show','job_id':app['id']})
     tiled = c.call('windows', {'action':'tile','primary_id':window_id,'observer_id':terminal['id']})
     assert tiled['ok'], tiled
     tree_with('[button] New teammate')
-    c.screenshot('06b-toad-and-observer.png', settle_ms=1000)
+    c.screenshot('06b-hotline-and-observer.png', settle_ms=1000)
     c.call('windows', {'action':'maximize','window_id':window_id})
     tree = tree_with('[button] New teammate')
     click_label(tree, 'Settings')
     tree = tree_with('[button] Computer')
-    painted_screen('07-toad-settings.png', '06-toad-native-screen.png')
+    painted_screen('07-hotline-settings.png', '06-hotline-native-screen.png')
     click_label(tree, 'Computer')
     tree = tree_with('Desktop image')
-    painted_screen('08-toad-computer-settings.png', '07-toad-settings.png')
+    painted_screen('08-hotline-computer-settings.png', '07-hotline-settings.png')
     c.output.joinpath('native-accessibility.txt').write_text(tree)
     c.output.joinpath('native-window.json').write_text(json.dumps(native_windows, indent=2))
     c.call('shell', {'action': 'cancel', 'job_id': app['id']})
@@ -857,22 +861,22 @@ def main():
     parser.add_argument('--url', required=True)
     parser.add_argument('--token-file', type=Path, required=True)
     parser.add_argument('--output', type=Path, required=True)
-    parser.add_argument('--toad-bridge', type=Path)
+    parser.add_argument('--hotline-bridge', type=Path)
     parser.add_argument('--suite', choices=['quick', 'full', 'workspaces', 'native'], default='quick')
     options = parser.parse_args()
     options.output.mkdir(parents=True, exist_ok=True)
-    c = ToadComputer(options.url, options.token_file, options.output, options.toad_bridge) if options.toad_bridge else Computer(options.url, options.token_file.read_text().strip(), options.output)
+    c = HotlineComputer(options.url, options.token_file, options.output, options.hotline_bridge) if options.hotline_bridge else Computer(options.url, options.token_file.read_text().strip(), options.output)
     report = {'info': c.call('state', {'action': 'info'}), 'cases': []}
     assert report['info']['executables']['chromium'] == '/usr/bin/chromium'
     guide = c.call('state', {'action': 'guide'})
     assert hashlib.sha256(guide['skill'].encode()).hexdigest() == guide['sha256']
     cases = [('browser forms', browser), ('three-step browser wizard', wizard), ('public Selenium form', public_form), ('no save-password bubble', password_prompt), ('managed jobs and observer', jobs), ('desktop job menu', desktop_job_menu), ('clipboard between apps', clipboard_between_apps), ('tray counts match live jobs', tray_counts), ('Nix failure diagnostics', nix_failure), ('verified script execution', artifacts), ('artifact failure recovery', download_failures), ('rootless by design', rootless), ('a folder opens in a terminal', open_folder), ('secrets have a home from boot', secrets), ('the keyboard has a map', keyboard)]
     if options.suite == 'full':
-        cases += [('package workspaces', workspaces), ('second repository tests', second_repository), ('Ketch installation and scraping', ketch), ('job durability and responsiveness', durability), ('native Toad build and screens', native), ('native controls and window identity', native_controls), ('legacy Xterm title', legacy_window)]
+        cases += [('package workspaces', workspaces), ('second repository tests', second_repository), ('Ketch installation and scraping', ketch), ('job durability and responsiveness', durability), ('native Hotline build and screens', native), ('native controls and window identity', native_controls), ('legacy Xterm title', legacy_window)]
     elif options.suite == 'workspaces':
         cases = [('package workspaces', workspaces), ('second repository tests', second_repository), ('Ketch installation and scraping', ketch), ('job durability and responsiveness', durability)]
     elif options.suite == 'native':
-        cases = [('native Toad build and screens', native), ('native controls and window identity', native_controls), ('legacy Xterm title', legacy_window)]
+        cases = [('native Hotline build and screens', native), ('native controls and window identity', native_controls), ('legacy Xterm title', legacy_window)]
     for name, case in cases:
         started = time.monotonic()
         try:
@@ -888,7 +892,7 @@ def main():
         report['cases'].append(result)
         print(json.dumps(result), flush=True)
         (options.output / 'results.json').write_text(json.dumps(report, indent=2))
-    if isinstance(c, ToadComputer):
+    if isinstance(c, HotlineComputer):
         c.close()
     return 0 if all(case['passed'] for case in report['cases']) else 1
 

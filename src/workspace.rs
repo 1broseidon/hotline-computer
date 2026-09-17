@@ -174,7 +174,7 @@ pub fn catalog() -> Value {
         .collect();
     json!({"version":env!("CARGO_PKG_VERSION"),"nixpkgs":NIXPKGS,
         "sources":["packages","flake"],
-        "usage":"state prepare with workspace and either packages (Nixpkgs attribute names) or flake (local directory with optional #devShell). Omit both to reuse .toad/environment-spec.json, or the repository's flake.nix on first use. Wait for the returned job; shell cwd then inherits the prepared environment. No framework presets; packages lists common attribute names to choose from.",
+        "usage":"state prepare with workspace and either packages (Nixpkgs attribute names) or flake (local directory with optional #devShell). Omit both to reuse .hotline/environment-spec.json, or the repository's flake.nix on first use. Wait for the returned job; shell cwd then inherits the prepared environment. No framework presets; packages lists common attribute names to choose from.",
         "packages":packages})
 }
 
@@ -188,7 +188,7 @@ pub fn catalog_text() -> String {
         }
     }
     text.push_str(
-        "\nAnything else in Nixpkgs works too. Prepare with\n  toad-computer prepare --packages go gopls\nin the workspace, or --workspace DIR from elsewhere.\n",
+        "\nAnything else in Nixpkgs works too. Prepare with\n  hotline-computer prepare --packages go gopls\nin the workspace, or --workspace DIR from elsewhere.\n",
     );
     text
 }
@@ -205,7 +205,7 @@ pub enum Operator {
     Help,
 }
 
-pub const OPERATOR_USAGE: &str = "Usage: toad-computer prepare [--workspace DIR] [--packages NAME... | --flake DIR[#shell]]\n       toad-computer packages\n\n  --packages  Nixpkgs attribute names; see toad-computer packages\n  --flake     a local flake directory, optionally #devShell\n  --workspace the directory to prepare; the current one otherwise\n  neither     reuse the saved definition, or the workspace's flake.nix\n\nWhat is prepared is what the teammate's jobs inherit there.";
+pub const OPERATOR_USAGE: &str = "Usage: hotline-computer prepare [--workspace DIR] [--packages NAME... | --flake DIR[#shell]]\n       hotline-computer packages\n\n  --packages  Nixpkgs attribute names; see hotline-computer packages\n  --flake     a local flake directory, optionally #devShell\n  --workspace the directory to prepare; the current one otherwise\n  neither     reuse the saved definition, or the workspace's flake.nix\n\nWhat is prepared is what the teammate's jobs inherit there.";
 
 /// Reads the operator's spelling of prepare: flags, not the internal JSON.
 pub fn operator(arguments: &[String], cwd: &Path) -> Result<Operator, String> {
@@ -269,7 +269,7 @@ pub async fn prepare_here(
     let workspace = resolve_workspace(&home, workspace)?;
     let definition = definition(&home, &workspace, packages, flake)?;
     write_json(
-        &workspace.join(".toad/environment-request.json"),
+        &workspace.join(".hotline/environment-request.json"),
         &definition,
     )?;
     let specification = serde_json::to_string(&definition).map_err(|e| e.to_string())?;
@@ -348,7 +348,7 @@ fn definition(
     if packages.is_some() && flake.is_some() {
         return Err("choose packages or flake, not both".into());
     }
-    let saved = workspace.join(".toad/environment-spec.json");
+    let saved = workspace.join(".hotline/environment-spec.json");
     let definition = if let Some(mut packages) = packages {
         packages.sort();
         packages.dedup();
@@ -392,7 +392,7 @@ fn cache(home: &Path, workspace: &Path, definition: &Definition) -> Result<PathB
         Definition::Packages { packages, nixpkgs } => recipe(packages, nixpkgs)?,
         Definition::Flake { flake } => format!("{}:{flake}", workspace.display()),
     };
-    Ok(home.join(".cache/toad/environments").join(format!(
+    Ok(home.join(".cache/hotline/environments").join(format!(
         "v{FORMAT}-{}-{:x}",
         std::env::consts::ARCH,
         Sha256::digest(key)
@@ -423,24 +423,24 @@ fn cached(directory: &Path, definition: &Definition) -> Option<Environment> {
 }
 
 fn attach(workspace: &Path, directory: &Path, environment: &Environment) -> Result<(), String> {
-    let pending: Definition = read_json(&workspace.join(".toad/environment-request.json"))?;
+    let pending: Definition = read_json(&workspace.join(".hotline/environment-request.json"))?;
     if pending != environment.definition {
         return Err(
             "a newer preparation replaced this request; previous environment retained".into(),
         );
     }
     if matches!(environment.definition, Definition::Packages { .. }) {
-        let target = workspace.join(".toad/nix");
+        let target = workspace.join(".hotline/nix");
         std::fs::create_dir_all(&target).map_err(|e| e.to_string())?;
         for file in ["flake.nix", "flake.lock"] {
             std::fs::copy(directory.join(file), target.join(file)).map_err(|e| e.to_string())?;
         }
     }
     write_json(
-        &workspace.join(".toad/environment-spec.json"),
+        &workspace.join(".hotline/environment-spec.json"),
         &environment.definition,
     )?;
-    write_json(&workspace.join(".toad/environment.json"), environment)
+    write_json(&workspace.join(".hotline/environment.json"), environment)
 }
 
 pub async fn prepare(
@@ -456,7 +456,7 @@ pub async fn prepare(
     let definition = definition(&home, &workspace, packages, flake)?;
     let directory = cache(&home, &workspace, &definition)?;
     write_json(
-        &workspace.join(".toad/environment-request.json"),
+        &workspace.join(".hotline/environment-request.json"),
         &definition,
     )?;
     if let Some(environment) = cached(&directory, &definition) {
@@ -614,7 +614,7 @@ pub async fn build(home: &Path, specification: &str, workspace: &Path) -> Result
         "TERM",
         "SHELLOPTS",
         "BASHOPTS",
-        "TOAD_COMPUTER_TOKEN",
+        "HOTLINE_COMPUTER_TOKEN",
         "_",
     ] {
         env.remove(name);
@@ -639,7 +639,7 @@ pub async fn build(home: &Path, specification: &str, workspace: &Path) -> Result
 pub fn environment(home: &Path, cwd: &Path) -> Result<BTreeMap<String, String>, String> {
     let home = home.canonicalize().map_err(|e| e.to_string())?;
     for directory in cwd.ancestors().take_while(|dir| dir.starts_with(&home)) {
-        let path = directory.join(".toad/environment.json");
+        let path = directory.join(".hotline/environment.json");
         if path.exists() {
             let saved: Value = read_json(&path)?;
             // The old preset format also contains usable exported variables. Preserve
@@ -744,7 +744,7 @@ mod tests {
         let home = temp.path().canonicalize().unwrap();
         let pin = "0123456789012345678901234567890123456789";
         write_json(
-            &home.join(".toad/environment-spec.json"),
+            &home.join(".hotline/environment-spec.json"),
             &Definition::Packages {
                 packages: vec!["hello".into()],
                 nixpkgs: pin.into(),
@@ -871,7 +871,7 @@ mod tests {
             .unwrap();
         assert_eq!(result["ready"], true);
         assert_eq!(result["cached"], true);
-        assert!(workspace.join(".toad/nix/flake.lock").exists());
+        assert!(workspace.join(".hotline/nix/flake.lock").exists());
         let job = app
             .jobs
             .start(
@@ -899,7 +899,7 @@ mod tests {
     fn image_versions_do_not_invalidate_existing_environment_but_missing_store_paths_do() {
         let temp = tempfile::tempdir().unwrap();
         let home = temp.path().canonicalize().unwrap();
-        let path = home.join(".toad/environment.json");
+        let path = home.join(".hotline/environment.json");
         write_json(&path, &json!({"version":"0.4.0","profile":"node","env":{"PATH":"/usr/bin:/bin","PROJECT_VALUE":"kept"}})).unwrap();
         assert_eq!(environment(&home, &home).unwrap()["PROJECT_VALUE"], "kept");
         write_json(&path, &json!({"version":"0.4.0","profile":"node","env":{"PATH":"/nix/store/this-path-does-not-exist/bin"}})).unwrap();

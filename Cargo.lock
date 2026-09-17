@@ -978,6 +978,31 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7f24254aa9a54b5c858eaee2f5bccdb46aaf0e486a595ed5fd8f86ba55232a70"
 
 [[package]]
+name = "hotline-computer"
+version = "0.6.0"
+dependencies = [
+ "atspi",
+ "axum",
+ "base64 0.22.1",
+ "chromiumoxide",
+ "chrono",
+ "fontdue",
+ "futures-util",
+ "libc",
+ "png",
+ "reqwest",
+ "rmcp",
+ "serde",
+ "serde_json",
+ "sha2",
+ "tempfile",
+ "tokio",
+ "tokio-tungstenite 0.28.0",
+ "tokio-util",
+ "x11rb",
+]
+
+[[package]]
 name = "http"
 version = "1.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2314,31 +2339,6 @@ name = "tinyvec_macros"
 version = "0.1.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "1f3ccbac311fea05f86f61904b462b55fb3df8837a366dfc601a0161d0532f20"
-
-[[package]]
-name = "toad-computer"
-version = "0.5.4"
-dependencies = [
- "atspi",
- "axum",
- "base64 0.22.1",
- "chromiumoxide",
- "chrono",
- "fontdue",
- "futures-util",
- "libc",
- "png",
- "reqwest",
- "rmcp",
- "serde",
- "serde_json",
- "sha2",
- "tempfile",
- "tokio",
- "tokio-tungstenite 0.28.0",
- "tokio-util",
- "x11rb",
-]
 
 [[package]]
 name = "tokio"

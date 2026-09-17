@@ -8,7 +8,7 @@
 //! see. `_NET_CLIENT_LIST`, `_NET_ACTIVE_WINDOW` and `_NET_WM_STATE` are kept
 //! current because the `windows` tool reads them.
 //!
-//! The bar is three answers: on the left, what can be opened (the toad menu);
+//! The bar is three answers: on the left, what can be opened (the hotline menu);
 //! in the middle, what is open; on the right, what the machine is doing and
 //! whose it is. It is drawn as pixels by `paint` and sent whole, so its text
 //! is antialiased and its state is legible at a glance in a screenshot.
@@ -108,7 +108,7 @@ pub fn run(
             .wait_for_event()
             .map_err(|error| format!("display connection lost: {error}"))?;
         if let Err(error) = desktop.handle(event) {
-            eprintln!("toad-computer: desktop: {error}");
+            eprintln!("hotline-computer: desktop: {error}");
         }
         desktop
             .connection
@@ -155,7 +155,7 @@ impl Rect {
 }
 
 /// Where everything on the bar landed the last time it was drawn: clicks
-/// are answered from this, and tests read it from `_TOAD_BAR_LAYOUT`.
+/// are answered from this, and tests read it from `_HOTLINE_BAR_LAYOUT`.
 #[derive(Default)]
 struct Layout {
     mark: Rect,
@@ -295,11 +295,11 @@ impl Atoms {
             tray_selection: atom(format!("_NET_SYSTEM_TRAY_S{screen_number}").as_bytes())?,
             tray_opcode: atom(b"_NET_SYSTEM_TRAY_OPCODE")?,
             xembed: atom(b"_XEMBED")?,
-            jobs_running: atom(b"_TOAD_JOBS_RUNNING")?,
-            jobs_summary: atom(b"_TOAD_JOB_SUMMARY")?,
-            holder: atom(b"_TOAD_HOLDER")?,
-            tick: atom(b"_TOAD_TICK")?,
-            layout: atom(b"_TOAD_BAR_LAYOUT")?,
+            jobs_running: atom(b"_HOTLINE_JOBS_RUNNING")?,
+            jobs_summary: atom(b"_HOTLINE_JOB_SUMMARY")?,
+            holder: atom(b"_HOTLINE_HOLDER")?,
+            tick: atom(b"_HOTLINE_TICK")?,
+            layout: atom(b"_HOTLINE_BAR_LAYOUT")?,
         })
     }
 
@@ -471,12 +471,14 @@ impl Desktop {
     /// Restacks the right column after the observer or the shell opens or
     /// closes, so the observer takes the whole column when it is alone.
     fn stack_column(&mut self) -> Result<(), String> {
-        let shell_open = self.client_with_class("toadshell").is_some();
+        let shell_open = self.client_with_class("hotlineshell").is_some();
         let column: Vec<(Window, bool)> = self
             .clients
             .iter()
-            .filter(|(_, c)| c.class.contains("toadshell") || c.class.contains("toadterminal"))
-            .map(|(id, c)| (*id, c.class.contains("toadshell")))
+            .filter(|(_, c)| {
+                c.class.contains("hotlineshell") || c.class.contains("hotlineterminal")
+            })
+            .map(|(id, c)| (*id, c.class.contains("hotlineshell")))
             .collect();
         for (id, shell) in column {
             let bounds = self.column(shell, shell_open);
@@ -525,7 +527,7 @@ impl Desktop {
                 check,
                 atoms.net_wm_name,
                 atoms.utf8_string,
-                b"toad-computer",
+                b"hotline-computer",
             )
             .map_err(|error| error.to_string())?;
         let root = self.root;
@@ -899,9 +901,9 @@ impl Desktop {
                 Some(icon) => canvas.blit(icon_x, icon_y, icon),
                 None => {
                     canvas.round_rect(icon_x, icon_y, 16, 16, 4.0, BAR_HOVER);
-                    let glyph = if client.is_some_and(|c| c.class.contains("toadterminal")) {
+                    let glyph = if client.is_some_and(|c| c.class.contains("hotlineterminal")) {
                         ">_".to_owned()
-                    } else if client.is_some_and(|c| c.class.contains("toadshell")) {
+                    } else if client.is_some_and(|c| c.class.contains("hotlineshell")) {
                         "$".to_owned()
                     } else {
                         title
@@ -968,7 +970,7 @@ impl Desktop {
         Ok(())
     }
 
-    // ---- popups: the toad menu, the jobs list, about ------------------------
+    // ---- popups: the hotline menu, the jobs list, about ------------------------
 
     fn open_popup(&mut self, kind: Popup) -> Result<(), String> {
         self.close_popup()?;
@@ -1133,7 +1135,7 @@ impl Desktop {
                 }
                 canvas.fill_rect(PAD + 4, PAD + 3 * ROW + 5, width - 2 * PAD - 8, 1, RULE);
                 let foot = format!(
-                    "toad-computer {} · {}",
+                    "hotline-computer {} · {}",
                     env!("CARGO_PKG_VERSION"),
                     std::env::consts::ARCH
                 );
@@ -1624,7 +1626,7 @@ impl Desktop {
             .reply()
             .map_err(|error| error.to_string())?;
         let class = self.class_of(window)?;
-        let icon = if class.contains("toadterminal") || class.contains("toadshell") {
+        let icon = if class.contains("hotlineterminal") || class.contains("hotlineshell") {
             None
         } else {
             self.icon_of(window)
@@ -1639,10 +1641,10 @@ impl Desktop {
             // The observer and the person's shell share the right column:
             // the shell takes its bottom third when it is open, under a
             // line, so whatever is on the left stays out of their way.
-            Kind::Normal if class.contains("toadshell") || class.contains("toadterminal") => {
+            Kind::Normal if class.contains("hotlineshell") || class.contains("hotlineterminal") => {
                 Client {
                     maximized: false,
-                    saved: self.column(class.contains("toadshell"), true),
+                    saved: self.column(class.contains("hotlineshell"), true),
                     class,
                     icon,
                 }
@@ -1670,7 +1672,7 @@ impl Desktop {
             }
         };
         // The terminal keeps the right third; the app being watched keeps the rest.
-        if client.class.contains("toadterminal") {
+        if client.class.contains("hotlineterminal") {
             let width = self.width * 2 / 3;
             let height = self.work_height();
             let others: Vec<_> = self
@@ -1939,7 +1941,7 @@ impl Desktop {
         };
         self.order.retain(|client| *client != window);
         self.publish_client_list()?;
-        if client.class.contains("toadshell") || client.class.contains("toadterminal") {
+        if client.class.contains("hotlineshell") || client.class.contains("hotlineterminal") {
             self.stack_column()?;
         }
         if client.class.contains(BROWSER_CLASS) && self.client_with_class(BROWSER_CLASS).is_none() {
@@ -2207,7 +2209,7 @@ fn spawn_ticker(display: String) {
                 return;
             };
             let root = connection.setup().roots[screen].root;
-            let Ok(cookie) = connection.intern_atom(false, b"_TOAD_TICK") else {
+            let Ok(cookie) = connection.intern_atom(false, b"_HOTLINE_TICK") else {
                 return;
             };
             let Ok(reply) = cookie.reply() else {

@@ -189,7 +189,7 @@ pub async fn upload(
     else {
         return refused("path has no file name".to_owned());
     };
-    let arriving = path.with_file_name(format!(".{name}.toad-upload"));
+    let arriving = path.with_file_name(format!(".{name}.hotline-upload"));
     let written = async {
         let mut file = tokio::fs::File::create(&arriving)
             .await
@@ -401,7 +401,11 @@ async fn handle(
         if crate::x11::windows(&app.config.display)?
             .iter()
             .any(|window| {
-                window.focused && window.class.to_ascii_lowercase().contains("toadterminal")
+                window.focused
+                    && window
+                        .class
+                        .to_ascii_lowercase()
+                        .contains("hotlineterminal")
             })
         {
             return Err(
@@ -507,7 +511,8 @@ mod tests {
 
     #[tokio::test]
     async fn the_files_panel_sees_the_home_and_nothing_above_it() {
-        let home = std::env::temp_dir().join(format!("toad-viewer-files-{}", std::process::id()));
+        let home =
+            std::env::temp_dir().join(format!("hotline-viewer-files-{}", std::process::id()));
         std::fs::create_dir_all(home.join("notes")).unwrap();
         std::fs::write(home.join("notes/café.txt"), "kept").unwrap();
         let app = app_at(home.clone(), None);
@@ -550,7 +555,8 @@ mod tests {
 
     #[tokio::test]
     async fn a_file_from_the_persons_computer_lands_whole_under_the_home() {
-        let home = std::env::temp_dir().join(format!("toad-viewer-upload-{}", std::process::id()));
+        let home =
+            std::env::temp_dir().join(format!("hotline-viewer-upload-{}", std::process::id()));
         std::fs::create_dir_all(&home).unwrap();
         let app = app_at(home.clone(), None);
         let request = |path: &str| {

@@ -113,7 +113,7 @@ impl Job {
         let Some(staging) = record.artifact_staging else {
             return Ok(());
         };
-        let expected = format!(".toad-artifact-{}", record.id);
+        let expected = format!(".hotline-artifact-{}", record.id);
         let home = self
             .directory
             .ancestors()
@@ -177,7 +177,7 @@ pub struct Output {
 impl Jobs {
     pub fn new(home: &Path, display: &str) -> Self {
         Self {
-            root: home.join(".toad/jobs"),
+            root: home.join(".hotline/jobs"),
             home: home.to_owned(),
             display: display.to_owned(),
             jobs: Arc::new(Mutex::new(BTreeMap::new())),
@@ -339,10 +339,10 @@ impl Jobs {
             .artifact_destination
             .as_ref()
             .and_then(|destination| destination.parent())
-            .map(|parent| parent.join(format!(".toad-artifact-{id}")));
+            .map(|parent| parent.join(format!(".hotline-artifact-{id}")));
         if let Some(staging) = &artifact_staging {
             start.env.insert(
-                "TOAD_ARTIFACT_DIR".into(),
+                "HOTLINE_ARTIFACT_DIR".into(),
                 staging.to_string_lossy().into_owned(),
             );
         }
@@ -900,7 +900,7 @@ mod tests {
         let failure = jobs
             .start(
                 Start {
-                    command: "/missing/toad-command".into(),
+                    command: "/missing/hotline-command".into(),
                     ..Start::default()
                 },
                 "alice",

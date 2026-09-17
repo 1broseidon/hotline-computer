@@ -62,23 +62,23 @@ jobs:
         with:
           context: .
           build-args: |
-            TOAD_BUILD_REVISION=${{ github.sha }}
-            TOAD_BUILD_CHANNEL=${{ github.ref_type == 'tag' && 'release' || 'development' }}
+            HOTLINE_BUILD_REVISION=${{ github.sha }}
+            HOTLINE_BUILD_CHANNEL=${{ github.ref_type == 'tag' && 'release' || 'development' }}
           target: checks
           load: true
-          tags: toad-computer:checks
+          tags: hotline-computer:checks
           cache-from: type=gha,scope=${{ matrix.arch }}
       - uses: docker/build-push-action@v7
         with:
           context: .
           build-args: |
-            TOAD_BUILD_REVISION=${{ github.sha }}
-            TOAD_BUILD_CHANNEL=${{ github.ref_type == 'tag' && 'release' || 'development' }}
+            HOTLINE_BUILD_REVISION=${{ github.sha }}
+            HOTLINE_BUILD_CHANNEL=${{ github.ref_type == 'tag' && 'release' || 'development' }}
           load: true
-          tags: toad-computer:candidate
+          tags: hotline-computer:candidate
           cache-from: type=gha,scope=${{ matrix.arch }}
       - name: Accept the fresh image before publishing
-        run: tests/run-image-acceptance.sh toad-computer:candidate toad-computer:checks acceptance
+        run: tests/run-image-acceptance.sh hotline-computer:candidate hotline-computer:checks acceptance
       - uses: actions/upload-artifact@v7
         if: always()
         with:
@@ -97,8 +97,8 @@ jobs:
         with:
           context: .
           build-args: |
-            TOAD_BUILD_REVISION=${{ github.sha }}
-            TOAD_BUILD_CHANNEL=${{ github.ref_type == 'tag' && 'release' || 'development' }}
+            HOTLINE_BUILD_REVISION=${{ github.sha }}
+            HOTLINE_BUILD_CHANNEL=${{ github.ref_type == 'tag' && 'release' || 'development' }}
           platforms: linux/${{ matrix.arch }}
           outputs: type=image,name=${{ env.IMAGE }},push-by-digest=true,name-canonical=true,push=true
           cache-from: type=gha,scope=${{ matrix.arch }}
@@ -109,7 +109,7 @@ jobs:
           PUBLISHED_DIGEST: ${{ steps.build.outputs.digest }}
         run: |
           set -eu
-          tested=$(docker image inspect --format '{{.Id}}' toad-computer:candidate)
+          tested=$(docker image inspect --format '{{.Id}}' hotline-computer:candidate)
           docker pull "${IMAGE}@${PUBLISHED_DIGEST}"
           published=$(docker image inspect --format '{{.Id}}' "${IMAGE}@${PUBLISHED_DIGEST}")
           test "$tested" = "$published"

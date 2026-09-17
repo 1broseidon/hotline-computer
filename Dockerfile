@@ -7,10 +7,10 @@ COPY Cargo.toml Cargo.lock ./
 COPY src ./src
 COPY assets ./assets
 COPY skills ./skills
-ARG TOAD_BUILD_REVISION=unknown
-ARG TOAD_BUILD_CHANNEL=development
-ENV TOAD_BUILD_REVISION=$TOAD_BUILD_REVISION TOAD_BUILD_CHANNEL=$TOAD_BUILD_CHANNEL
-RUN --mount=type=cache,target=/usr/local/cargo/registry --mount=type=cache,target=/src/target cargo build --release --locked && cp target/release/toad-computer /usr/local/bin/toad-computer
+ARG HOTLINE_BUILD_REVISION=unknown
+ARG HOTLINE_BUILD_CHANNEL=development
+ENV HOTLINE_BUILD_REVISION=$HOTLINE_BUILD_REVISION HOTLINE_BUILD_CHANNEL=$HOTLINE_BUILD_CHANNEL
+RUN --mount=type=cache,target=/usr/local/cargo/registry --mount=type=cache,target=/src/target cargo build --release --locked && cp target/release/hotline-computer /usr/local/bin/hotline-computer
 
 FROM build AS checks
 RUN rustup component add rustfmt clippy
@@ -36,7 +36,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && rm -rf /var/lib/apt/lists/* \
     # Rootless by design: nothing runs as root, so apt could never install
     # anything. It goes, so nobody is invited to try; software comes from
-    # toad-computer, then Nix, then what the image already has.
+    # hotline-computer, then Nix, then what the image already has.
     && rm -f /usr/bin/apt /usr/bin/apt-* \
     # Boot starts the keyring unlocked. Without these, a client that asks
     # for secrets while it is being restarted would have the bus start a
@@ -52,18 +52,18 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && printf 'experimental-features = nix-command flakes\nsandbox = false\nbuild-users-group =\n' > /etc/nix/nix.conf \
     && chown -R agent:agent /nix \
     && chown -R agent:agent /home/agent
-COPY assets/alacritty.toml /etc/toad-computer/alacritty.toml
-COPY assets/chromium-policy.json /etc/chromium/policies/managed/toad.json
+COPY assets/alacritty.toml /etc/hotline-computer/alacritty.toml
+COPY assets/chromium-policy.json /etc/chromium/policies/managed/hotline.json
 COPY assets/bashrc /etc/bash.bashrc
 # "Show in folder" in the browser, and xdg-open on a folder, open the
 # person's terminal there.
-COPY assets/toad-open-folder.desktop assets/mimeapps.list /usr/share/applications/
-COPY --from=build /usr/local/bin/toad-computer /usr/bin/toad-computer
+COPY assets/hotline-open-folder.desktop assets/mimeapps.list /usr/share/applications/
+COPY --from=build /usr/local/bin/hotline-computer /usr/bin/hotline-computer
 USER agent
 WORKDIR /home/agent
-ENV TOAD_COMPUTER_ADDR=0.0.0.0:8787 \
-    TOAD_COMPUTER_HOME=/home/agent \
-    TOAD_COMPUTER_SCREEN=1920x1080 \
+ENV HOTLINE_COMPUTER_ADDR=0.0.0.0:8787 \
+    HOTLINE_COMPUTER_HOME=/home/agent \
+    HOTLINE_COMPUTER_SCREEN=1920x1080 \
     DISPLAY=:0 \
     ACCESSIBILITY_ENABLED=1 \
     LANG=C.UTF-8 \
@@ -74,4 +74,4 @@ ENV TOAD_COMPUTER_ADDR=0.0.0.0:8787 \
     APPIMAGE_EXTRACT_AND_RUN=1
 RUN install -d /home/agent/src && nix-store --init
 EXPOSE 8787
-ENTRYPOINT ["/usr/bin/toad-computer", "boot"]
+ENTRYPOINT ["/usr/bin/hotline-computer", "boot"]

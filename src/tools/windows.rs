@@ -123,7 +123,7 @@ fn layout(
     // as the desktop places it; the rest of the column is shared above it.
     let (shells, column): (Vec<_>, Vec<_>) = right
         .iter()
-        .partition(|(_, w)| w.class.to_ascii_lowercase().contains("toadshell"));
+        .partition(|(_, w)| w.class.to_ascii_lowercase().contains("hotlineshell"));
     let shell_height = if shells.is_empty() { 0 } else { height / 3 };
     let column_height = height - shell_height;
     let mut y = top;
@@ -264,7 +264,7 @@ mod tests {
     #[test]
     fn the_persons_shell_takes_the_bottom_third_of_the_column_under_a_line() {
         let mut shell = window("shell", [1, 1]);
-        shell.class = "ToadShell.ToadShell".into();
+        shell.class = "HotlineShell.HotlineShell".into();
         let result = layout(
             &[window("app", [500, 87]), window("observer", [1, 1]), shell],
             [0, 36, 1920, 1044],

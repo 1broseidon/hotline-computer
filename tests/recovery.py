@@ -66,7 +66,7 @@ def main():
             mounts += ['-v', '%s:%s' % (mount['Source'], mount['Destination'])]
     assert any(m.endswith('target=/home/agent') for m in mounts), mounts
     subprocess.run(['docker', 'rm', '-f', args.container], check=True, stdout=subprocess.DEVNULL)
-    replacement = subprocess.check_output(['docker', 'run', '-d', '--cap-drop=ALL', '--security-opt', 'no-new-privileges', '--pids-limit', '1024', '--memory', '4g', '--shm-size', '1g', '-p', '127.0.0.1:0:8787', '-e', 'TOAD_COMPUTER_TOKEN=' + token, *mounts, described['Config']['Image']], text=True).strip()
+    replacement = subprocess.check_output(['docker', 'run', '-d', '--cap-drop=ALL', '--security-opt', 'no-new-privileges', '--pids-limit', '1024', '--memory', '4g', '--shm-size', '1g', '-p', '127.0.0.1:0:8787', '-e', 'HOTLINE_COMPUTER_TOKEN=' + token, *mounts, described['Config']['Image']], text=True).strip()
     args.output.joinpath('recreated-container-id.txt').write_text(replacement)
     try:
         port = subprocess.check_output(['docker', 'port', replacement, '8787/tcp'], text=True).strip().rsplit(':', 1)[1]
@@ -95,7 +95,7 @@ def main():
     finally:
         with args.output.joinpath('recreated-container.log').open('w') as log:
             subprocess.run(['docker', 'logs', replacement], stdout=log, stderr=subprocess.STDOUT)
-        if os.environ.get('TOAD_ACCEPTANCE_KEEP', '0') != '1':
+        if os.environ.get('HOTLINE_ACCEPTANCE_KEEP', '0') != '1':
             subprocess.run(['docker', 'rm', '-f', replacement], check=True, stdout=subprocess.DEVNULL)
     output.joinpath('results.json').write_text(json.dumps({'passed': True, 'startup_seconds': startup, 'job_state': recovered['state'], 'output_retained': True, 'environment_cached': True, 'recreated_on_same_volumes': True}, indent=2))
 

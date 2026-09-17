@@ -14,7 +14,7 @@ def main():
     parser.add_argument('--output', type=Path, required=True)
     args = parser.parse_args()
     args.output.mkdir(parents=True, exist_ok=True)
-    c = Computer(args.url, os.environ['TOAD_COMPUTER_TOKEN'], args.output)
+    c = Computer(args.url, os.environ['HOTLINE_COMPUTER_TOKEN'], args.output)
     root = '/home/agent/src/generic-environment-smoke'
 
     def prepare(workspace, **source):
@@ -31,7 +31,7 @@ def main():
     assert prepare(root+'/packages')['cached']
 
     # A bad replacement must leave the working environment usable.
-    failed = c.call('state', {'action': 'prepare', 'workspace': root+'/packages', 'packages': ['toadSmokePackageDoesNotExist']})
+    failed = c.call('state', {'action': 'prepare', 'workspace': root+'/packages', 'packages': ['hotlineSmokePackageDoesNotExist']})
     job = failed['job']
     for _ in range(30):
         job = c.call('shell', {'action': 'wait', 'job_id': job['id'], 'wait_ms': 1000})
@@ -39,7 +39,7 @@ def main():
             break
     assert job['state'] == 'failed', job
     failure_output = c.call('shell', {'action': 'read', 'job_id': job['id']})['output']
-    assert 'toadSmokePackageDoesNotExist' in failure_output and 'error:' in failure_output, failure_output
+    assert 'hotlineSmokePackageDoesNotExist' in failure_output and 'error:' in failure_output, failure_output
     assert 'Hello, world!' in execute(c, 'hello', [], cwd=root+'/packages')
 
     pin = c.call('state', {'action': 'info'})['nixpkgs']

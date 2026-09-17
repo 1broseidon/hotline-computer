@@ -56,7 +56,7 @@ def main():
         with tempfile.NamedTemporaryFile(mode='w', delete=False) as file:
             credential = file.name
             os.chmod(credential, 0o600)
-            file.write('TOAD_COMPUTER_TOKEN=' + token + '\n')
+            file.write('HOTLINE_COMPUTER_TOKEN=' + token + '\n')
         started = time.monotonic()
         container = docker('run', '-d', '--cap-drop=ALL', '--security-opt', 'no-new-privileges', '--pids-limit', '1024', '--memory', '4g', '--shm-size', '1g', '-p', '127.0.0.1::8787', '--env-file', credential, args.image)
         report['container_start_seconds'] = time.monotonic() - started

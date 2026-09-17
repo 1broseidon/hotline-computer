@@ -504,7 +504,7 @@ pub fn publish_jobs(display: &str, jobs: &[crate::jobs::Summary]) -> Result<(), 
         .change_property8(
             x11rb::protocol::xproto::PropMode::REPLACE,
             root,
-            atom(&connection, b"_TOAD_JOB_SUMMARY")?,
+            atom(&connection, b"_HOTLINE_JOB_SUMMARY")?,
             atom(&connection, b"UTF8_STRING")?,
             &serde_json::to_vec(jobs).map_err(|e| e.to_string())?,
         )
@@ -513,7 +513,7 @@ pub fn publish_jobs(display: &str, jobs: &[crate::jobs::Summary]) -> Result<(), 
         .change_property32(
             x11rb::protocol::xproto::PropMode::REPLACE,
             root,
-            atom(&connection, b"_TOAD_JOBS_RUNNING")?,
+            atom(&connection, b"_HOTLINE_JOBS_RUNNING")?,
             AtomEnum::CARDINAL,
             &[running, completed, failed],
         )
@@ -523,7 +523,7 @@ pub fn publish_jobs(display: &str, jobs: &[crate::jobs::Summary]) -> Result<(), 
         .map_err(|e| e.to_string())
 }
 
-/// The bar shows who holds the machine: `_TOAD_HOLDER` carries the holder and
+/// The bar shows who holds the machine: `_HOTLINE_HOLDER` carries the holder and
 /// when the lease lapses, or nothing when nobody holds it.
 pub fn publish_holder(display: &str, lease: Option<(&str, u64)>) -> Result<(), String> {
     use x11rb::wrapper::ConnectionExt as _;
@@ -538,7 +538,7 @@ pub fn publish_holder(display: &str, lease: Option<(&str, u64)>) -> Result<(), S
         .change_property8(
             x11rb::protocol::xproto::PropMode::REPLACE,
             root,
-            atom(&connection, b"_TOAD_HOLDER")?,
+            atom(&connection, b"_HOTLINE_HOLDER")?,
             atom(&connection, b"UTF8_STRING")?,
             value.as_bytes(),
         )

@@ -26,23 +26,23 @@ jobs:
         with:
           context: .
           build-args: |
-            TOAD_BUILD_REVISION=${{ github.sha }}
-            TOAD_BUILD_CHANNEL=development
+            HOTLINE_BUILD_REVISION=${{ github.sha }}
+            HOTLINE_BUILD_CHANNEL=development
           target: checks
           load: true
-          tags: toad-computer:checks
+          tags: hotline-computer:checks
           cache-from: type=gha,scope=acceptance-${{ matrix.arch }}
           cache-to: type=gha,scope=acceptance-${{ matrix.arch }},mode=max,ignore-error=true
       - uses: docker/build-push-action@v7
         with:
           context: .
           build-args: |
-            TOAD_BUILD_REVISION=${{ github.sha }}
-            TOAD_BUILD_CHANNEL=development
+            HOTLINE_BUILD_REVISION=${{ github.sha }}
+            HOTLINE_BUILD_CHANNEL=development
           load: true
-          tags: toad-computer:candidate
+          tags: hotline-computer:candidate
           cache-from: type=gha,scope=acceptance-${{ matrix.arch }}
-      - run: tests/run-image-acceptance.sh toad-computer:candidate toad-computer:checks acceptance
+      - run: tests/run-image-acceptance.sh hotline-computer:candidate hotline-computer:checks acceptance
       - uses: actions/upload-artifact@v7
         if: always()
         with:

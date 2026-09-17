@@ -1,6 +1,6 @@
-# The person's shell on a Toad Computer.
+# The person's shell on a Hotline Computer.
 #
-# `toad-computer shell` writes this file to ~/.toad/bashrc and starts bash
+# `hotline-computer shell` writes this file to ~/.hotline/bashrc and starts bash
 # with it as the rc file. The image also installs it as /etc/bash.bashrc,
 # so a shell started from inside, by hand or by `nix shell`, reads it too.
 # The image ships no ~/.bashrc. To add your own, create ~/.bashrc: it runs
@@ -12,7 +12,7 @@
 PS1='\[\e[38;2;127;196;240m\]\w\[\e[0m\] $ '
 
 # What you type here is yours, not a job: history stays with the computer.
-HISTFILE="$HOME/.toad/shell_history"
+HISTFILE="$HOME/.hotline/shell_history"
 HISTSIZE=5000
 HISTFILESIZE=20000
 HISTCONTROL=ignoreboth
@@ -37,17 +37,17 @@ export PATH
 
 # Rootless by design: nothing here runs as root, so apt and sudo can never
 # work and the image does not carry them. Software comes in this order:
-# what toad-computer prepares, then Nix by hand, then what is already here.
-_toad_rootless() {
+# what hotline-computer prepares, then Nix by hand, then what is already here.
+_hotline_rootless() {
   printf '%s\n' \
     "This computer runs nothing as root, so \`$1\` cannot install anything here." \
-    "  Prepare the workspace:  toad-computer prepare --packages <names>" \
-    "  Names to choose from:   toad-computer packages" \
+    "  Prepare the workspace:  hotline-computer prepare --packages <names>" \
+    "  Names to choose from:   hotline-computer packages" \
     "  One tool for now:       nix shell nixpkgs#<name>" >&2
   return 127
 }
-apt() { _toad_rootless apt; }
-apt-get() { _toad_rootless apt-get; }
-sudo() { _toad_rootless sudo; }
+apt() { _hotline_rootless apt; }
+apt-get() { _hotline_rootless apt-get; }
+sudo() { _hotline_rootless sudo; }
 
 [ -r "$HOME/.bashrc" ] && . "$HOME/.bashrc"

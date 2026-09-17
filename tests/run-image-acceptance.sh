@@ -8,7 +8,7 @@ mkdir -p "$output"
 output=$(cd "$output" && pwd)
 credentials=$(mktemp)
 chmod 600 "$credentials"
-printf 'TOAD_COMPUTER_TOKEN=%s\n' "$(openssl rand -hex 24)" > "$credentials"
+printf 'HOTLINE_COMPUTER_TOKEN=%s\n' "$(openssl rand -hex 24)" > "$credentials"
 container=''
 scratch=''
 home=''
@@ -16,14 +16,14 @@ store=''
 cleanup() {
   if [ -n "$container" ]; then
     docker logs "$container" > "$output/container.log" 2>&1 || true
-    if [ "${TOAD_ACCEPTANCE_KEEP:-0}" != 1 ]; then docker rm -f "$container" >/dev/null || true; fi
+    if [ "${HOTLINE_ACCEPTANCE_KEEP:-0}" != 1 ]; then docker rm -f "$container" >/dev/null || true; fi
   fi
   for volume in "$scratch" "$home" "$store"; do
-    if [ -n "$volume" ] && [ "${TOAD_ACCEPTANCE_KEEP:-0}" != 1 ]; then docker volume rm "$volume" >/dev/null || true; fi
+    if [ -n "$volume" ] && [ "${HOTLINE_ACCEPTANCE_KEEP:-0}" != 1 ]; then docker volume rm "$volume" >/dev/null || true; fi
   done
   rm -rf "$output/venv"
   rm -f "$credentials"
-  if [ "${TOAD_ACCEPTANCE_KEEP:-0}" != 1 ]; then rm -f "$output/token"; fi
+  if [ "${HOTLINE_ACCEPTANCE_KEEP:-0}" != 1 ]; then rm -f "$output/token"; fi
 }
 trap cleanup EXIT INT TERM
 # The desk gives a computer a scratch volume, a home volume and the shared
@@ -34,7 +34,7 @@ store=$(docker volume create)
 printf '%s\n' "$scratch" > "$output/scratch-volume.txt"
 printf '%s\n' "$home" > "$output/home-volume.txt"
 printf '%s\n' "$store" > "$output/store-volume.txt"
-container=$(docker run -d --cap-drop=ALL --security-opt no-new-privileges --pids-limit 1024 --memory 4g --shm-size 1g -p "127.0.0.1:${TOAD_ACCEPTANCE_PORT:-}:8787" --env-file "$credentials" --mount "type=volume,source=$home,target=/home/agent" --mount "type=volume,source=$scratch,target=/home/agent/src" --mount "type=volume,source=$store,target=/nix" "$image")
+container=$(docker run -d --cap-drop=ALL --security-opt no-new-privileges --pids-limit 1024 --memory 4g --shm-size 1g -p "127.0.0.1:${HOTLINE_ACCEPTANCE_PORT:-}:8787" --env-file "$credentials" --mount "type=volume,source=$home,target=/home/agent" --mount "type=volume,source=$scratch,target=/home/agent/src" --mount "type=volume,source=$store,target=/nix" "$image")
 printf '%s\n' "$container" > "$output/container-id.txt"
 docker inspect --format '{{.Image}}' "$container" > "$output/image-id.txt"
 port=$(docker port "$container" 8787/tcp | sed 's/.*://')
@@ -48,7 +48,7 @@ for attempt in $(seq 1 100); do
 done
 curl --silent --show-error --fail "$url/health" > "$output/health.json"
 printf 'Running MCP and viewer contract against %s\n' "$url"
-docker run --rm --network "container:$container" --env-file "$credentials" -e TOAD_COMPUTER_URL=http://127.0.0.1:8787 --entrypoint /acceptance/contract "$checks" --nocapture 2>&1 | tee "$output/contract.log"
+docker run --rm --network "container:$container" --env-file "$credentials" -e HOTLINE_COMPUTER_URL=http://127.0.0.1:8787 --entrypoint /acceptance/contract "$checks" --nocapture 2>&1 | tee "$output/contract.log"
 python3 -m venv "$output/venv"
 "$output/venv/bin/pip" install --disable-pip-version-check -r tests/requirements.txt
 "$output/venv/bin/python" tests/acceptance.py --url "$url" --token-file "$output/token" --output "$output" --suite full

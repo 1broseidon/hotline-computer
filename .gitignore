@@ -1,6 +1,14 @@
 /target
 /.token
 
+# Agent scratch: plans, ledgers and notes that belong to a session, not the repo.
+/.anvil/
+/.brainfile/
+/.recoil/
+/.scribe/
+/design/
+/.claude/
+
 __pycache__/
 /qa/latest/
 

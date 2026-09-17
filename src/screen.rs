@@ -92,7 +92,7 @@ impl Screen {
                     match stream(&display, &streamer) {
                         Ok(()) => return,
                         Err(error) => {
-                            eprintln!("toad-computer: screen: {error}; reopening the stream");
+                            eprintln!("hotline-computer: screen: {error}; reopening the stream");
                         }
                     }
                     std::thread::sleep(REOPEN_DELAY);
@@ -206,7 +206,7 @@ impl Capture {
             Ok(shared) => Some(shared),
             Err(error) => {
                 eprintln!(
-                    "toad-computer: screen: MIT-SHM unavailable ({error}); reading the screen over the socket"
+                    "hotline-computer: screen: MIT-SHM unavailable ({error}); reading the screen over the socket"
                 );
                 None
             }
@@ -281,7 +281,7 @@ impl Shared {
             .map_err(|error| error.to_string())?
             .reply()
             .map_err(|error| error.to_string())?;
-        let raw = unsafe { libc::memfd_create(c"toad-screen".as_ptr(), libc::MFD_CLOEXEC) };
+        let raw = unsafe { libc::memfd_create(c"hotline-screen".as_ptr(), libc::MFD_CLOEXEC) };
         if raw < 0 {
             return Err(format!("memfd_create: {}", std::io::Error::last_os_error()));
         }

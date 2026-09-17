@@ -112,7 +112,7 @@ impl BrowserManager {
 
     async fn launch(&self) -> Result<BrowserSession, String> {
         let executable = find_on_path("chromium").ok_or_else(|| NO_BROWSER.to_owned())?;
-        let profile = self.config.home.join(".toad/browser");
+        let profile = self.config.home.join(".hotline/browser");
         tokio::fs::create_dir_all(&profile)
             .await
             .map_err(|error| format!("create browser profile: {error}"))?;
@@ -201,14 +201,14 @@ impl BrowserManager {
         self.with_session(|session| Box::pin(async move {
             let page = current_page(session).await?;
             let script = r#"(() => {
-                document.querySelectorAll('[data-toad-ref]').forEach(e => e.removeAttribute('data-toad-ref'));
+                document.querySelectorAll('[data-hotline-ref]').forEach(e => e.removeAttribute('data-hotline-ref'));
                 const interesting = 'a,button,input,select,textarea,[contenteditable],[role],h1,h2,h3,h4,h5,h6';
                 const lines = [];
                 let next = 1;
                 for (const element of document.querySelectorAll(interesting)) {
                     if (!element.getClientRects().length || getComputedStyle(element).visibility === 'hidden' || element.closest('[hidden],[inert],[aria-hidden="true"]')) continue;
                     const ref = `e${next++}`;
-                    element.setAttribute('data-toad-ref', ref);
+                    element.setAttribute('data-hotline-ref', ref);
                     const tag = element.tagName.toLowerCase();
                     const role = element.getAttribute('role') || ({a:'link',button:'button',input:element.type || 'input',select:'combobox',textarea:'textbox'}[tag] || tag);
                     const byId = (ids) => (ids || '').split(/\s+/).map(id => document.getElementById(id)).filter(Boolean).map(e => e.innerText).join(' ');
@@ -605,7 +605,7 @@ fn ref_selector(reference: &str) -> Result<String, String> {
     {
         return Err("ref is invalid".to_owned());
     }
-    Ok(format!("[data-toad-ref=\"{reference}\"]"))
+    Ok(format!("[data-hotline-ref=\"{reference}\"]"))
 }
 
 fn browser_error(error: impl std::fmt::Display) -> String {
@@ -626,7 +626,7 @@ fn find_on_path(name: &str) -> Option<PathBuf> {
 mod tests {
     #[test]
     fn stale_profile_locks_are_cleared_before_launch() {
-        let profile = std::env::temp_dir().join(format!("toad-profile-{}", std::process::id()));
+        let profile = std::env::temp_dir().join(format!("hotline-profile-{}", std::process::id()));
         std::fs::create_dir_all(&profile).unwrap();
         for name in ["SingletonLock", "SingletonSocket", "SingletonCookie"] {
             std::os::unix::fs::symlink("old-host-62", profile.join(name)).unwrap();
