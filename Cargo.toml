@@ -2,6 +2,7 @@
 name = "toad-computer"
 description = "A small Linux desktop for a coding agent: one binary boots it, owns it, and serves it over MCP."
 version = "0.5.4"
+license = "MIT OR Apache-2.0"
 edition = "2024"
 
 [dependencies]
