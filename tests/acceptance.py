@@ -666,11 +666,11 @@ def durability(c):
     c.output.joinpath('job-acknowledgement-ms.json').write_text(json.dumps({'samples': timings, 'p50': sorted(timings)[len(timings)//2], 'p95': sorted(timings)[int(len(timings)*.95)], 'max': max(timings)}, indent=2))
 
 
-# A pinned desk revision: 0.11.0, which predates the Hotline rename, so the
-# crate, the built binary and the data-directory variable are the names that
-# revision carries. Bump this to a 0.14.0 commit and they become hotline-app
-# and HOTLINE_DATA_DIR together.
-HOTLINE_REVISION = 'f3c17b78d85b4cc235455862d9c9241579157b39'
+# A pinned desk revision: 0.14.0, the first release that carries the Hotline
+# name, so the crate, the built binary and the data-directory variable are all
+# hotline. A revision before 0.14.0 spells all three toad instead; they move
+# together, and a build that mixes them fails at `cargo build -p`.
+HOTLINE_REVISION = '7541c1e2bef4b95e230e96f137b0e9cc3a13248a'
 
 
 def native(c):
@@ -684,7 +684,7 @@ def native(c):
     timing['repeat'] = prepare(c, None, root)
     c.output.joinpath('native-environment.json').write_text(json.dumps(timing, indent=2))
     target = '/home/agent/qa/native-target'
-    script = 'set -euo pipefail\nexport CARGO_TARGET_DIR=/home/agent/qa/native-target\nexport CARGO_BUILD_JOBS=2 CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0\ncd ui\nbun install --frozen-lockfile\nbun run build\ncd ..\ncargo build --locked -p toad-desktop --features tauri/custom-protocol\n'
+    script = 'set -euo pipefail\nexport CARGO_TARGET_DIR=/home/agent/qa/native-target\nexport CARGO_BUILD_JOBS=2 CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0\ncd ui\nbun install --frozen-lockfile\nbun run build\ncd ..\ncargo build --locked -p hotline-app --features tauri/custom-protocol\n'
     c.call('files', {'action': 'put', 'path': root+'/qa-build.sh', 'content': script})
     job = c.call('files', {'action': 'run', 'path': root+'/qa-build.sh', 'cwd': root, 'sha256': hashlib.sha256(script.encode()).hexdigest()})
     # Desktop work remains responsive during the native build.
@@ -692,8 +692,14 @@ def native(c):
     c.screenshot('05-browsing-during-native-build.png')
     c.done(job, 2400)
     c.output.joinpath('native-build-output.txt').write_text(c.call('shell', {'action': 'read', 'job_id': job['id'], 'max_output': 1048576})['output'])
-    app = c.call('shell', {'action': 'start', 'command': target+'/debug/toad-desktop', 'cwd': root, 'env': {'TOAD_DATA_DIR': root+'/qa-data', 'CARGO_BUILD_JOBS':'2', 'CARGO_PROFILE_DEV_DEBUG':'0', 'CARGO_INCREMENTAL':'0'}, 'label': 'Hotline native screen acceptance'})
-    native_screens(c, app)
+    app = c.call('shell', {'action': 'start', 'command': target+'/debug/hotline-app', 'cwd': root, 'env': {'HOTLINE_DATA_DIR': root+'/qa-data', 'CARGO_BUILD_JOBS':'2', 'CARGO_PROFILE_DEV_DEBUG':'0', 'CARGO_INCREMENTAL':'0'}, 'label': 'Hotline native screen acceptance'})
+    try:
+        native_screens(c, app)
+    finally:
+        # A desk left running keeps its window and its tray icon, which the
+        # next case would count as its own.
+        if c.call('shell', {'action': 'status', 'job_id': app['id']})['state'] == 'running':
+            c.call('shell', {'action': 'cancel', 'job_id': app['id']})
 
 
 def native_screens(c, app):
@@ -758,11 +764,14 @@ def native_screens(c, app):
     tree = tree_with('[button] Computer')
     painted_screen('07-hotline-settings.png', '06-hotline-native-screen.png')
     click_label(tree, 'Computer')
-    tree = tree_with('Desktop image')
+    # The pane the desk shows for computers: which runtime it runs on, and
+    # which release it creates one from. 0.11.0 called this one control
+    # "Desktop image"; 0.14.0 asks the same question in two.
+    tree = tree_with('Runs on')
+    assert '[combo box] Release' in tree, tree
     painted_screen('08-hotline-computer-settings.png', '07-hotline-settings.png')
     c.output.joinpath('native-accessibility.txt').write_text(tree)
     c.output.joinpath('native-window.json').write_text(json.dumps(native_windows, indent=2))
-    c.call('shell', {'action': 'cancel', 'job_id': app['id']})
 
 def legacy_window(c):
     revision = c.call('state', {'action':'info'})['nixpkgs']
