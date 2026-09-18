@@ -693,7 +693,13 @@ def native(c):
     c.done(job, 2400)
     c.output.joinpath('native-build-output.txt').write_text(c.call('shell', {'action': 'read', 'job_id': job['id'], 'max_output': 1048576})['output'])
     app = c.call('shell', {'action': 'start', 'command': target+'/debug/hotline-app', 'cwd': root, 'env': {'HOTLINE_DATA_DIR': root+'/qa-data', 'CARGO_BUILD_JOBS':'2', 'CARGO_PROFILE_DEV_DEBUG':'0', 'CARGO_INCREMENTAL':'0'}, 'label': 'Hotline native screen acceptance'})
-    native_screens(c, app)
+    try:
+        native_screens(c, app)
+    finally:
+        # A desk left running keeps its window and its tray icon, which the
+        # next case would count as its own.
+        if c.call('shell', {'action': 'status', 'job_id': app['id']})['state'] == 'running':
+            c.call('shell', {'action': 'cancel', 'job_id': app['id']})
 
 
 def native_screens(c, app):
@@ -758,11 +764,14 @@ def native_screens(c, app):
     tree = tree_with('[button] Computer')
     painted_screen('07-hotline-settings.png', '06-hotline-native-screen.png')
     click_label(tree, 'Computer')
-    tree = tree_with('Desktop image')
+    # The pane the desk shows for computers: which runtime it runs on, and
+    # which release it creates one from. 0.11.0 called this one control
+    # "Desktop image"; 0.14.0 asks the same question in two.
+    tree = tree_with('Runs on')
+    assert '[combo box] Release' in tree, tree
     painted_screen('08-hotline-computer-settings.png', '07-hotline-settings.png')
     c.output.joinpath('native-accessibility.txt').write_text(tree)
     c.output.joinpath('native-window.json').write_text(json.dumps(native_windows, indent=2))
-    c.call('shell', {'action': 'cancel', 'job_id': app['id']})
 
 def legacy_window(c):
     revision = c.call('state', {'action':'info'})['nixpkgs']
