@@ -105,7 +105,7 @@ pub fn descriptors(home: &str) -> Vec<Tool> {
         ),
         Tool::new(
             "state",
-            "info identifies the running release; guide returns its bundled skill and checksum; catalog describes generic Nix preparation, the default Nixpkgs pin, and common package names by purpose. prepare accepts packages or a local flake, or reuses the saved workspace definition when both are omitted. Returns a managed job or ready=true for a package cache hit. Shell cwd inherits the prepared environment. Repository shell hooks run during preparation; their exported variables are retained. control leases the desktop to this holder until release or expiry; other holders' mutations are refused. Only the holder can release it. login_* manages browser cookies/storage by name. snapshot_* archives/restores home.",
+            "info identifies the running release and names the person's stored secrets, each an environment variable in every shell job; guide returns its bundled skill and checksum; catalog describes generic Nix preparation, the default Nixpkgs pin, and common package names by purpose. prepare accepts packages or a local flake, or reuses the saved workspace definition when both are omitted. Returns a managed job or ready=true for a package cache hit. Shell cwd inherits the prepared environment. Repository shell hooks run during preparation; their exported variables are retained. control leases the desktop to this holder until release or expiry; other holders' mutations are refused. Only the holder can release it. login_* manages browser cookies/storage by name. snapshot_* archives/restores home.",
             schema(json!({
                 "type":"object","properties":{
                     "action":{"type":"string","enum":["info","guide","catalog","prepare","control","release","login_save","login_load","login_list","login_delete","snapshot_save","snapshot_load","snapshot_list","snapshot_delete"]},
@@ -125,7 +125,7 @@ fn schema(value: Value) -> Arc<JsonObject> {
 }
 
 pub async fn call(app: &App, name: &str, arguments: Value, holder: &str) -> ToolResult {
-    match name {
+    let result = match name {
         "capture" => capture::call(app, arguments).await,
         "input" => input::call(app, arguments, holder).await,
         "browser" => browser::call(app, arguments, holder).await,
@@ -135,7 +135,10 @@ pub async fn call(app: &App, name: &str, arguments: Value, holder: &str) -> Tool
         "wait" => wait::call(app, arguments).await,
         "state" => state::call(app, arguments, holder).await,
         _ => Err(format!("unknown tool {name:?}")),
-    }
+    };
+    // Every answer leaves through here, so this is where the value of a
+    // secret the person stored is taken out of it (see `crate::secrets`).
+    app.secrets.redact_result(result)
 }
 
 pub fn text(value: impl Into<String>) -> Vec<ContentBlock> {

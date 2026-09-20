@@ -59,6 +59,8 @@ pub async fn call(app: &App, arguments: Value, holder: &str) -> ToolResult {
             if synchronous {
                 input.start.timeout = Some(input.start.timeout.unwrap_or(30).clamp(1, 60));
             }
+            // A command the agent runs is offered the person's stored secrets.
+            input.start.secrets = true;
             let guard = app.access.mutate(holder).await?;
             let job = app.jobs.start(input.start, holder).await?;
             drop(guard);

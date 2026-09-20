@@ -10,6 +10,7 @@ pub mod lease;
 pub mod observer;
 pub mod paint;
 pub mod screen;
+pub mod secrets;
 pub mod serve;
 pub mod tools;
 pub mod viewer;
@@ -57,6 +58,9 @@ pub struct App {
     pub access: MachineAccess,
     pub browser: BrowserManager,
     pub jobs: jobs::Jobs,
+    /// The person's stored secrets: what a job starts with, and what every
+    /// answer leaves out.
+    pub secrets: secrets::Secrets,
     pub observer: observer::Observer,
     pub a11y: Arc<tokio::sync::OnceCell<atspi::zbus::Connection>>,
     /// The screen stream, the hands, and the clipboard; `None` until a display is up.
@@ -66,10 +70,12 @@ pub struct App {
 impl App {
     pub fn new(config: Config) -> Self {
         let config = Arc::new(config);
+        let secrets = secrets::Secrets::default();
         Self {
             access: MachineAccess::new().on_display(&config.display),
             a11y: Arc::new(tokio::sync::OnceCell::new()),
-            jobs: jobs::Jobs::new(&config.home, &config.display),
+            jobs: jobs::Jobs::new(&config.home, &config.display, secrets.clone()),
+            secrets,
             observer: observer::Observer::new(&config.home, &config.display),
             browser: BrowserManager::new(Arc::clone(&config)),
             config,

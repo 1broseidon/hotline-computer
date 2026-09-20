@@ -13,6 +13,8 @@ use serde::{Deserialize, Serialize};
 use tokio::io::{AsyncRead, AsyncReadExt, AsyncWriteExt, unix::AsyncFd};
 use tokio::sync::{OnceCell, mpsc, watch};
 
+use crate::secrets::Secrets;
+
 const OUTPUT_LIMIT: usize = 4 * 1024 * 1024;
 const MAX_JOBS: usize = 64;
 const MAX_RUNNING: usize = 16;
@@ -37,6 +39,11 @@ pub struct Start {
     // Preparation must be able to repair a missing or obsolete environment.
     #[serde(skip)]
     pub skip_workspace_environment: bool,
+    // The person's stored secrets join the environment only for the tools an
+    // agent runs commands through. Preparation never asks: what it captures
+    // is written into the workspace.
+    #[serde(skip)]
+    pub secrets: bool,
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
@@ -160,6 +167,8 @@ pub struct Jobs {
     root: PathBuf,
     home: PathBuf,
     display: String,
+    /// The person's stored secrets, for the jobs that are offered them.
+    secrets: Secrets,
     jobs: Arc<Mutex<BTreeMap<String, Arc<Job>>>>,
     initialized: Arc<OnceCell<()>>,
     admission: Arc<tokio::sync::Mutex<()>>,
@@ -175,11 +184,12 @@ pub struct Output {
 }
 
 impl Jobs {
-    pub fn new(home: &Path, display: &str) -> Self {
+    pub fn new(home: &Path, display: &str, secrets: Secrets) -> Self {
         Self {
             root: home.join(".hotline/jobs"),
             home: home.to_owned(),
             display: display.to_owned(),
+            secrets,
             jobs: Arc::new(Mutex::new(BTreeMap::new())),
             initialized: Arc::new(OnceCell::new()),
             admission: Arc::new(tokio::sync::Mutex::new(())),
@@ -330,6 +340,12 @@ impl Jobs {
         } else {
             crate::workspace::environment(&self.home, &cwd)?
         };
+        if start.secrets {
+            // After the workspace, so the person's stored value beats a
+            // repository's placeholder; before the agent's own entries, so
+            // an explicit one still wins.
+            environment.append(&mut self.secrets.environment());
+        }
         environment.append(&mut start.env);
         start.env = environment;
         let id = format!("{:016x}-{:08x}", now(), rand_id()?);
@@ -620,6 +636,10 @@ fn spawn(start: &Start, cwd: &Path, display: &str) -> Result<Spawned, String> {
     command
         .args(&start.args)
         .current_dir(cwd)
+        // The bearer that guards this computer's door is the service's, not
+        // a job's: a command must not find it with `env`, or carry it into
+        // what it starts.
+        .env_remove("HOTLINE_COMPUTER_TOKEN")
         .envs(&start.env)
         .env("DISPLAY", display)
         .kill_on_drop(true);
@@ -860,10 +880,48 @@ mod tests {
         }
     }
 
+    async fn output(jobs: &Jobs, start: Start) -> String {
+        let job = jobs.start(start, "test").await.unwrap();
+        let done = jobs.wait(&job.id, 5000).await.unwrap();
+        assert_eq!(done.exit_code, Some(0), "{done:?}");
+        jobs.read(&job.id, 0, 4096).await.unwrap().output
+    }
+
+    #[tokio::test]
+    async fn a_job_offered_the_persons_secrets_finds_them_by_name_and_never_the_bearer() {
+        let home = tempfile::tempdir().unwrap();
+        let secrets = Secrets::default();
+        secrets
+            .replace(BTreeMap::from([(
+                "JOB_SECRET".to_owned(),
+                "job-secret-value-0001".to_owned(),
+            )]))
+            .unwrap();
+        let jobs = Jobs::new(home.path(), ":0", secrets);
+        // The service holds the bearer in its own environment, the way the
+        // container hands it over. No test reads this variable back.
+        unsafe { std::env::set_var("HOTLINE_COMPUTER_TOKEN", "the-services-bearer") };
+        let print = "printf '%s|%s|%s' \"${JOB_SECRET-absent}\" \"${HOTLINE_COMPUTER_TOKEN-absent}\" \"${OWN-absent}\"";
+        let mut offered = command(print);
+        offered.secrets = true;
+        offered.env.insert("OWN".into(), "the agent's".into());
+        assert_eq!(
+            output(&jobs, offered).await,
+            "job-secret-value-0001|absent|the agent's"
+        );
+        // The agent's own entry wins over a stored one of the same name.
+        let mut own = command(print);
+        own.secrets = true;
+        own.env.insert("JOB_SECRET".into(), "the agent's".into());
+        assert_eq!(output(&jobs, own).await, "the agent's|absent|absent");
+        // A job that was not offered them, such as preparation, sees none.
+        assert_eq!(output(&jobs, command(print)).await, "absent|absent|absent");
+    }
+
     #[tokio::test]
     async fn deadlines_retain_partial_output_and_cancellation_reaps_the_child() {
         let home = tempfile::tempdir().unwrap();
-        let jobs = Jobs::new(home.path(), ":0");
+        let jobs = Jobs::new(home.path(), ":0", Secrets::default());
         let mut start = command("printf 'before timeout'; printf 'diagnostic' >&2; sleep 30");
         start.timeout = Some(1);
         let job = jobs.start(start, "test").await.unwrap();
@@ -881,7 +939,7 @@ mod tests {
     #[tokio::test]
     async fn retry_ids_are_scoped_and_spawn_failures_are_queryable() {
         let home = tempfile::tempdir().unwrap();
-        let jobs = Jobs::new(home.path(), ":0");
+        let jobs = Jobs::new(home.path(), ":0", Secrets::default());
         let mut start = command("printf once");
         start.request_id = Some("retry".into());
         let first = jobs.start(start.clone(), "alice").await.unwrap();
@@ -916,7 +974,7 @@ mod tests {
     #[tokio::test]
     async fn stdin_works_without_a_visible_terminal_for_pipes_and_ptys() {
         let home = tempfile::tempdir().unwrap();
-        let jobs = Jobs::new(home.path(), ":0");
+        let jobs = Jobs::new(home.path(), ":0", Secrets::default());
         for pty in [false, true] {
             let mut start = command("read answer; printf 'received:%s' \"$answer\"");
             start.pty = pty;
@@ -936,7 +994,7 @@ mod tests {
     #[tokio::test]
     async fn output_storage_failure_stops_and_reaps_the_job() {
         let directory = tempfile::tempdir().unwrap();
-        let jobs = Jobs::new(directory.path(), "");
+        let jobs = Jobs::new(directory.path(), "", Secrets::default());
         let record = jobs
             .start(
                 command("read line; while :; do printf output; done"),
@@ -956,7 +1014,7 @@ mod tests {
     #[tokio::test]
     async fn output_is_bounded_and_history_survives_a_new_service() {
         let home = tempfile::tempdir().unwrap();
-        let jobs = Jobs::new(home.path(), ":0");
+        let jobs = Jobs::new(home.path(), ":0", Secrets::default());
         let job = jobs
             .start(command("head -c 5000000 /dev/zero"), "test")
             .await
@@ -965,7 +1023,7 @@ mod tests {
         assert_eq!(result.exit_code, Some(0));
         assert!(result.truncated);
         assert_eq!(result.output_bytes, OUTPUT_LIMIT);
-        let restored = Jobs::new(home.path(), ":0");
+        let restored = Jobs::new(home.path(), ":0", Secrets::default());
         assert_eq!(
             restored.status(&job.id).await.unwrap().output_bytes,
             OUTPUT_LIMIT
