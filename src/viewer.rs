@@ -21,7 +21,7 @@ use axum::Json;
 use axum::body::Body;
 use axum::extract::ws::{Message, WebSocket, WebSocketUpgrade};
 use axum::extract::{Query, State};
-use axum::http::{StatusCode, header};
+use axum::http::{HeaderMap, StatusCode, header};
 use axum::response::{Html, IntoResponse, Response};
 use futures_util::TryStreamExt;
 use serde::Deserialize;
@@ -83,11 +83,23 @@ pub struct FileRequest {
     path: String,
 }
 
-fn admitted(app: &App, token: &str) -> bool {
-    match app.config.token.as_deref() {
-        Some(expected) => same_secret(token.as_bytes(), expected.as_bytes()),
-        None => true,
+/// A caller that can set its own headers — the desk's own HTTP client, not
+/// the viewer page's browser fetches — presents the bearer as an
+/// `Authorization` header instead of the `?token=` query, so it never rides
+/// in a URL that a proxy or shell history might keep. The query token still
+/// works, because the page can only ever offer that.
+fn admitted(app: &App, headers: &HeaderMap, query_token: &str) -> bool {
+    let Some(expected) = app.config.token.as_deref() else {
+        return true;
+    };
+    if let Some(bearer) = headers
+        .get(header::AUTHORIZATION)
+        .and_then(|value| value.to_str().ok())
+        .and_then(|value| value.strip_prefix("Bearer "))
+    {
+        return same_secret(bearer.as_bytes(), expected.as_bytes());
     }
+    same_secret(query_token.as_bytes(), expected.as_bytes())
 }
 
 fn unauthorized() -> Response {
@@ -113,8 +125,12 @@ fn requested(app: &App, path: &str) -> PathBuf {
 /// A folder under the home as the Files panel shows it: what is in it by
 /// name, where it is, and where the home is so the panel knows how far up
 /// it may go. Reading takes nothing from the teammate, so watching is enough.
-pub async fn files(State(app): State<App>, Query(request): Query<FileRequest>) -> Response {
-    if !admitted(&app, &request.token) {
+pub async fn files(
+    State(app): State<App>,
+    headers: HeaderMap,
+    Query(request): Query<FileRequest>,
+) -> Response {
+    if !admitted(&app, &headers, &request.token) {
         return unauthorized();
     }
     let home = match tokio::fs::canonicalize(&app.config.home).await {
@@ -131,8 +147,12 @@ pub async fn files(State(app): State<App>, Query(request): Query<FileRequest>) -
 
 /// A file under the home, sent as an attachment so the person's own browser
 /// saves it on their computer. It streams, so a build's artifact is fine.
-pub async fn download(State(app): State<App>, Query(request): Query<FileRequest>) -> Response {
-    if !admitted(&app, &request.token) {
+pub async fn download(
+    State(app): State<App>,
+    headers: HeaderMap,
+    Query(request): Query<FileRequest>,
+) -> Response {
+    if !admitted(&app, &headers, &request.token) {
         return unauthorized();
     }
     let path = match crate::tools::files::existing_path(&app, &requested(&app, &request.path)).await
@@ -167,10 +187,11 @@ pub async fn download(State(app): State<App>, Query(request): Query<FileRequest>
 /// once complete. The same rule as the `files` tool: under the home only.
 pub async fn upload(
     State(app): State<App>,
+    headers: HeaderMap,
     Query(request): Query<FileRequest>,
     body: Body,
 ) -> Response {
-    if !admitted(&app, &request.token) {
+    if !admitted(&app, &headers, &request.token) {
         return unauthorized();
     }
     if request.path.is_empty() {
@@ -509,6 +530,19 @@ mod tests {
             .to_vec()
     }
 
+    fn no_headers() -> HeaderMap {
+        HeaderMap::new()
+    }
+
+    fn bearer(token: &str) -> HeaderMap {
+        let mut headers = HeaderMap::new();
+        headers.insert(
+            header::AUTHORIZATION,
+            format!("Bearer {token}").parse().unwrap(),
+        );
+        headers
+    }
+
     #[tokio::test]
     async fn the_files_panel_sees_the_home_and_nothing_above_it() {
         let home =
@@ -523,7 +557,7 @@ mod tests {
             })
         };
 
-        let listed = files(State(app.clone()), request("")).await;
+        let listed = files(State(app.clone()), no_headers(), request("")).await;
         assert_eq!(listed.status(), StatusCode::OK);
         let listing: serde_json::Value = serde_json::from_slice(&body_of(listed).await).unwrap();
         assert_eq!(listing["path"], listing["home"], "no path means the home");
@@ -532,6 +566,7 @@ mod tests {
 
         let saved = download(
             State(app.clone()),
+            no_headers(),
             request(&home.join("notes/café.txt").display().to_string()),
         )
         .await;
@@ -542,10 +577,11 @@ mod tests {
         );
         assert_eq!(body_of(saved).await, b"kept");
 
-        let above = files(State(app.clone()), request("/")).await;
+        let above = files(State(app.clone()), no_headers(), request("/")).await;
         assert_eq!(above.status(), StatusCode::BAD_REQUEST);
         let folder = download(
             State(app),
+            no_headers(),
             request(&home.join("notes").display().to_string()),
         )
         .await;
@@ -568,6 +604,7 @@ mod tests {
         let target = home.join("in/report.csv");
         let sent = upload(
             State(app.clone()),
+            no_headers(),
             request(&target.display().to_string()),
             Body::from("a,b\n1,2\n"),
         )
@@ -584,6 +621,7 @@ mod tests {
 
         let above = upload(
             State(app.clone()),
+            no_headers(),
             request("/tmp/../etc/passwd"),
             Body::empty(),
         )
@@ -591,12 +629,13 @@ mod tests {
         assert_eq!(above.status(), StatusCode::BAD_REQUEST);
         let folder = upload(
             State(app.clone()),
+            no_headers(),
             request(&home.join("in").display().to_string()),
             Body::empty(),
         )
         .await;
         assert_eq!(folder.status(), StatusCode::BAD_REQUEST);
-        let unnamed = upload(State(app), request(""), Body::empty()).await;
+        let unnamed = upload(State(app), no_headers(), request(""), Body::empty()).await;
         assert_eq!(unnamed.status(), StatusCode::BAD_REQUEST);
         std::fs::remove_dir_all(home).unwrap();
     }
@@ -611,16 +650,62 @@ mod tests {
             })
         };
         assert_eq!(
-            files(State(app.clone()), wrong()).await.status(),
+            files(State(app.clone()), no_headers(), wrong())
+                .await
+                .status(),
             StatusCode::UNAUTHORIZED
         );
         assert_eq!(
-            download(State(app.clone()), wrong()).await.status(),
+            download(State(app.clone()), no_headers(), wrong())
+                .await
+                .status(),
             StatusCode::UNAUTHORIZED
         );
         assert_eq!(
-            upload(State(app), wrong(), Body::empty()).await.status(),
+            upload(State(app), no_headers(), wrong(), Body::empty())
+                .await
+                .status(),
             StatusCode::UNAUTHORIZED
+        );
+    }
+
+    #[tokio::test]
+    async fn a_caller_that_can_set_headers_may_present_the_bearer_there_instead() {
+        let app = app_at(std::env::temp_dir(), Some("secret"));
+        // No token in the query at all: the header alone must admit it.
+        let bare = || {
+            Query(FileRequest {
+                token: String::new(),
+                path: "/tmp/x".to_owned(),
+            })
+        };
+        assert_eq!(
+            files(State(app.clone()), bearer("secret"), bare())
+                .await
+                .status(),
+            StatusCode::BAD_REQUEST, // admitted; /tmp/x doesn't exist, which fails later, not at admitted()
+            "a correct header alone admits the request"
+        );
+        assert_eq!(
+            files(State(app.clone()), bearer("guess"), bare())
+                .await
+                .status(),
+            StatusCode::UNAUTHORIZED,
+            "a wrong header is refused even though headers were offered"
+        );
+        // A header takes precedence over a query token, right or wrong.
+        let wrong_query = || {
+            Query(FileRequest {
+                token: "guess".to_owned(),
+                path: "/tmp/x".to_owned(),
+            })
+        };
+        assert_eq!(
+            files(State(app.clone()), bearer("secret"), wrong_query())
+                .await
+                .status(),
+            StatusCode::BAD_REQUEST,
+            "the header wins over a mismatched query token"
         );
     }
 

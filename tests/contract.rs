@@ -297,6 +297,55 @@ async fn image_honors_the_computer_contract() {
         .await
         .expect("listing outside the home");
     assert_eq!(above.status(), 400, "only the home is listed");
+    // A caller that can set its own headers — the desk, not the viewer
+    // page's browser fetches — may present the bearer as an Authorization
+    // header instead of the query token, so it never rides in the URL.
+    let listed_by_header = http
+        .get(format!("{base}/files"))
+        .header(AUTHORIZATION, format!("Bearer {token}"))
+        .send()
+        .await
+        .expect("files listing over a header");
+    assert_eq!(
+        listed_by_header.status(),
+        200,
+        "the header is an accepted alternative to the query token"
+    );
+    let sent_by_header = http
+        .post(format!(
+            "{base}/files?path=/home/agent/src/viewer-upload/from-header.txt"
+        ))
+        .header(AUTHORIZATION, format!("Bearer {token}"))
+        .body("carried in a header, not a URL")
+        .send()
+        .await
+        .expect("upload over a header");
+    assert_eq!(
+        sent_by_header.status(),
+        200,
+        "{}",
+        sent_by_header.text().await.unwrap_or_default()
+    );
+    let landed_by_header = call(
+        &client,
+        "files",
+        json!({"action":"get","path":"/home/agent/src/viewer-upload/from-header.txt"}),
+    )
+    .await;
+    assert_eq!(text(&landed_by_header), "carried in a header, not a URL");
+    if !token.is_empty() {
+        let wrong_header = http
+            .get(format!("{base}/files"))
+            .header(AUTHORIZATION, "Bearer not-the-token")
+            .send()
+            .await
+            .expect("listing with the wrong header");
+        assert_eq!(
+            wrong_header.status(),
+            401,
+            "a wrong header is still refused"
+        );
+    }
     if !token.is_empty() {
         let refused = http
             .get(format!("{base}/files"))
