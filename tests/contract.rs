@@ -305,6 +305,82 @@ async fn image_honors_the_computer_contract() {
             .expect("listing without the token");
         assert_eq!(refused.status(), 401, "the listing wants the token");
     }
+    // The person's stored secrets: the desk puts the whole set in with the
+    // bearer, a job finds each by name, and nothing answers a value.
+    let door = format!("{base}/secrets");
+    let value = "contract-secret-value-0001";
+    if !token.is_empty() {
+        let naked = http
+            .put(&door)
+            .json(&json!({"CONTRACT_SECRET": value}))
+            .send()
+            .await
+            .expect("put without the bearer");
+        assert_eq!(naked.status(), 401, "the secrets door wants the bearer");
+    }
+    let taken = http
+        .put(&door)
+        .bearer_auth(&token)
+        .json(&json!({"CONTRACT_SECRET": value}))
+        .send()
+        .await
+        .expect("put secrets");
+    assert_eq!(
+        taken.status(),
+        204,
+        "{}",
+        taken.text().await.unwrap_or_default()
+    );
+    let printed = call(
+        &client,
+        "shell",
+        json!({"command":"sh","args":["-c","printf '%s' \"$CONTRACT_SECRET\""]}),
+    )
+    .await;
+    assert!(
+        text(&printed).contains("[redacted CONTRACT_SECRET]"),
+        "a job finds the secret and the answer names it: {}",
+        text(&printed)
+    );
+    assert!(
+        !text(&printed).contains(value),
+        "the value never comes back: {}",
+        text(&printed)
+    );
+    let info = call(&client, "state", json!({"action":"info"})).await;
+    let report: serde_json::Value = serde_json::from_str(&text(&info)).expect("info is JSON");
+    assert_eq!(report["secrets"], json!(["CONTRACT_SECRET"]));
+    assert!(!text(&info).contains(value), "info names, never values");
+    let asked = http
+        .get(&door)
+        .bearer_auth(&token)
+        .send()
+        .await
+        .expect("get secrets");
+    assert_eq!(asked.status(), 405, "nothing answers a value");
+    let refused = http
+        .put(&door)
+        .bearer_auth(&token)
+        .json(&json!({"contract-secret": value}))
+        .send()
+        .await
+        .expect("put a name that is not a variable");
+    assert_eq!(refused.status(), 400);
+    let cleared = http
+        .put(&door)
+        .bearer_auth(&token)
+        .json(&json!({}))
+        .send()
+        .await
+        .expect("clear secrets");
+    assert_eq!(cleared.status(), 204);
+    let gone = call(
+        &client,
+        "shell",
+        json!({"command":"sh","args":["-c","printf '%s' \"${CONTRACT_SECRET-absent}\""]}),
+    )
+    .await;
+    assert!(text(&gone).contains("absent"), "{}", text(&gone));
     let ws_base = base.replacen("http", "ws", 1);
     if !token.is_empty() {
         let refused = tokio_tungstenite::connect_async(format!("{ws_base}/ws")).await;

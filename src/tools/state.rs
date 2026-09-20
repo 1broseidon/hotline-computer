@@ -50,7 +50,7 @@ pub async fn call(app: &App, arguments: Value, holder: &str) -> ToolResult {
             .await?,
         ),
         "info" => json_text(
-            json!({"version":env!("CARGO_PKG_VERSION"),"build":crate::guide::identity(),"architecture":std::env::consts::ARCH,"home":app.config.home,"display":app.config.display,"nixpkgs":crate::workspace::NIXPKGS,"catalog":crate::workspace::catalog(),"executables":executables(),"capabilities":crate::tools::NAMES,"skill_sha256":crate::guide::manifest()["sha256"],"jobs":app.jobs.list().await?,"terminal":"Alacritty","graphics":"Mesa software rendering"}),
+            json!({"version":env!("CARGO_PKG_VERSION"),"build":crate::guide::identity(),"architecture":std::env::consts::ARCH,"home":app.config.home,"display":app.config.display,"nixpkgs":crate::workspace::NIXPKGS,"catalog":crate::workspace::catalog(),"executables":executables(),"capabilities":crate::tools::NAMES,"secrets":app.secrets.names(),"skill_sha256":crate::guide::manifest()["sha256"],"jobs":app.jobs.list().await?,"terminal":"Alacritty","graphics":"Mesa software rendering"}),
         ),
         "control" => control(app, holder, input.duration).await,
         "release" => release(app, holder).await,

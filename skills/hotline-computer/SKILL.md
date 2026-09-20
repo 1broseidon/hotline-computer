@@ -46,6 +46,10 @@ The computer is rootless by design: every job runs as the normal container user,
 
 `files extract` takes an archive `path` and a new `destination` directory. It rejects traversal, links, special files, and expanded content above 1 GiB. `files run` runs an existing or downloaded script using `bash`, `sh`, or `python3`, with optional `args`, `cwd`, and `env`. These actions return managed jobs; inspect their exit status and retained output.
 
+## Secrets the person put in this computer
+
+`state info` lists them under `secrets`, by name only. Each is an environment variable in every job you run through `shell` and `files run` (not in `state prepare`), so use it as `$NAME` in a command, or leave it for a tool that reads that variable, the way `gh` reads `GITHUB_TOKEN`. You never see a value: nothing returns one, and wherever a value would appear in a tool's answer it reads `[redacted NAME]` instead, so do not print or copy one to read it, and do not work around that. A job's own `env` entry of the same name replaces the stored one for that job. If a task needs a secret that is not listed, ask the person to store it; never ask them to paste one to you.
+
 ## Follow the person and recover from failures
 
 The viewer starts view-only. A person explicitly takes control before sending input or host clipboard text. If a tool reports that the person holds the computer, continue read-only inspection or wait for release. The person can paste with the viewer button or Cmd/Ctrl+V; clipboard contents are sent only for that explicit paste.

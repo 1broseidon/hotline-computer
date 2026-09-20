@@ -4,7 +4,7 @@ use axum::extract::Request;
 use axum::http::{StatusCode, header};
 use axum::middleware::Next;
 use axum::response::{IntoResponse, Response};
-use axum::routing::get;
+use axum::routing::{get, put};
 use axum::{Json, Router};
 use rmcp::ErrorData;
 use rmcp::handler::server::ServerHandler;
@@ -18,7 +18,7 @@ use rmcp::transport::streamable_http_server::{
 };
 use serde_json::{Value, json};
 
-use crate::{App, tools, viewer};
+use crate::{App, secrets, tools, viewer};
 
 const MAX_REQUEST_BODY: usize = 50 * 1024 * 1024 * 4 / 3 + 1024 * 1024;
 
@@ -74,6 +74,23 @@ pub async fn run(app: App) -> Result<(), String> {
     let jobs = app.jobs.clone();
     let observer = app.observer.clone();
     let address = app.config.addr.clone();
+    let router = router(app);
+    let listener = tokio::net::TcpListener::bind(&address)
+        .await
+        .map_err(|error| format!("bind {address}: {error}"))?;
+    eprintln!("hotline-computer listening on {address}");
+    axum::serve(listener, router)
+        .with_graceful_shutdown(async move {
+            shutdown().await;
+            jobs.shutdown().await;
+            observer.shutdown().await;
+        })
+        .await
+        .map_err(|error| error.to_string())
+}
+
+/// Every route, behind the bearer check.
+pub(crate) fn router(app: App) -> Router {
     let expected_token = app.config.token.clone();
     let tools_app = app.clone();
     let service: StreamableHttpService<ComputerTools, LocalSessionManager> =
@@ -88,12 +105,16 @@ pub async fn run(app: App) -> Result<(), String> {
                 .disable_allowed_hosts()
                 .with_max_request_body_bytes(MAX_REQUEST_BODY),
         );
-    let router = Router::new()
+    Router::new()
         .route("/health", get(|| async { "ok" }))
         .route("/", get(viewer::page))
         .route("/ws", get(viewer::socket))
         .route("/files", get(viewer::files).post(viewer::upload))
         .route("/files/download", get(viewer::download))
+        // The desk's door for the person's stored secrets: the whole set
+        // goes in, and no method answers one. It is not among the open
+        // routes below, so the bearer rides in the header as on `/mcp`.
+        .route("/secrets", put(secrets::replace))
         .nest_service("/mcp", service)
         .layer(axum::middleware::from_fn(
             move |request: Request, next: Next| {
@@ -101,19 +122,7 @@ pub async fn run(app: App) -> Result<(), String> {
                 async move { authenticate(request, next, expected_token.as_deref()).await }
             },
         ))
-        .with_state(app);
-    let listener = tokio::net::TcpListener::bind(&address)
-        .await
-        .map_err(|error| format!("bind {address}: {error}"))?;
-    eprintln!("hotline-computer listening on {address}");
-    axum::serve(listener, router)
-        .with_graceful_shutdown(async move {
-            shutdown().await;
-            jobs.shutdown().await;
-            observer.shutdown().await;
-        })
-        .await
-        .map_err(|error| error.to_string())
+        .with_state(app)
 }
 
 /// `/health` is open; the viewer page is open and its socket checks the

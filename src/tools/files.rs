@@ -96,6 +96,9 @@ async fn artifact(app: &App, input: Input, holder: &str) -> ToolResult {
                 env: input.env,
                 label: Some(format!("{} {}", input.action, path.display())),
                 request_id: input.request_id,
+                // A script the agent runs is offered the person's stored
+                // secrets, as a shell job is.
+                secrets: true,
                 artifact_destination: Some(destination.clone().unwrap_or_else(|| path.clone())),
                 ..crate::jobs::Start::default()
             },
