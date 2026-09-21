@@ -18,7 +18,7 @@ use rmcp::transport::streamable_http_server::{
 };
 use serde_json::{Value, json};
 
-use crate::{App, secrets, tools, viewer};
+use crate::{App, passkeys, secrets, tools, viewer};
 
 const MAX_REQUEST_BODY: usize = 50 * 1024 * 1024 * 4 / 3 + 1024 * 1024;
 
@@ -115,6 +115,14 @@ pub(crate) fn router(app: App) -> Router {
         // goes in, and no method answers one. It is not among the open
         // routes below, so the bearer rides in the header as on `/mcp`.
         .route("/secrets", put(secrets::replace))
+        // The one moment a passkey is made: the desk arms it, polls for
+        // what was minted, and ends it. Bearer-only, like `/secrets`.
+        .route(
+            "/passkeys/registration",
+            put(passkeys::arm)
+                .get(passkeys::registration)
+                .delete(passkeys::disarm),
+        )
         .nest_service("/mcp", service)
         .layer(axum::middleware::from_fn(
             move |request: Request, next: Next| {

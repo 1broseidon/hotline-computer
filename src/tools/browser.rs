@@ -17,6 +17,7 @@ struct Input {
     #[serde(default)]
     button: String,
     text: Option<String>,
+    secret: Option<String>,
     #[serde(default)]
     value: String,
     values: Option<Vec<String>>,
@@ -51,13 +52,19 @@ pub async fn call(app: &App, arguments: Value, holder: &str) -> ToolResult {
                 )
                 .await
         }
-        "fill" => {
-            let text = input
-                .text
-                .as_deref()
-                .ok_or("fill requires text; use text:\"\" to clear a field")?;
-            app.browser.fill(&input.r#ref, text).await
-        }
+        "fill" => match (input.secret.as_deref(), input.text.as_deref()) {
+            (Some(_), Some(_)) => Err("fill takes text or secret, not both".to_owned()),
+            (Some(reference), None) => {
+                // The value is looked up here and typed by the browser; the
+                // answer names it and never carries it.
+                let filled = app.secrets.resolve(reference)?;
+                app.browser.fill_secret(&input.r#ref, filled).await
+            }
+            (None, Some(text)) => app.browser.fill(&input.r#ref, text).await,
+            (None, None) => {
+                Err("fill requires text or secret; use text:\"\" to clear a field".to_owned())
+            }
+        },
         "select" => {
             app.browser
                 .select(

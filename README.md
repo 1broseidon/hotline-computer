@@ -67,16 +67,16 @@ stop — at once when they give it back or close the page.
 
 - `capture` returns a scaled PNG and the AT-SPI tree, or writes an original PNG.
 - `input` clicks, moves, drags, scrolls, types, presses keys, and uses the clipboard.
-- `browser` drives the visible Chromium over CDP; element refs last for one text snapshot. No action runs longer than a minute, and a browser the person closed is replaced by the next call rather than waited on. A managed policy (`assets/chromium-policy.json`) turns off the password manager, autofill and sign-in, so nothing typed into a form is offered for keeping and no bubble sits over the page.
+- `browser` drives the visible Chromium over CDP; element refs last for one text snapshot. `fill` types text, or one of the person's stored secrets by name (`secret` instead of `text`), and a login's field only onto that login's own sites. No action runs longer than a minute, and a browser the person closed is replaced by the next call rather than waited on. A managed policy (`assets/chromium-policy.json`) turns off the password manager, autofill and sign-in, so nothing typed into a form is offered for keeping and no bubble sits over the page.
 - `shell` starts managed jobs, reads retained output, writes stdin, waits, cancels, and opens the terminal observer.
 - `files` gets, puts, and lists paths below the computer home; downloads, verifies, extracts, and runs artifacts through managed jobs.
 - `windows` lists, focuses, closes, maximizes, and tiles windows.
 - `wait` polls the accessibility tree and browser page text for a phrase.
-- `state` identifies the running version and names the person's stored secrets, returns its guide/catalog, prepares workspaces, and manages leases, browser logins, and snapshots.
+- `state` identifies the running version and lists the person's stored secrets by name and kind, returns its guide/catalog, prepares workspaces, and manages leases, browser logins, and snapshots.
 
 `/health` and the viewer page never require authentication. When
 `HOTLINE_COMPUTER_TOKEN` is set, every method on `/mcp` and the desk's
-`PUT /secrets` require `Authorization: Bearer <token>`, the viewer's socket
+`/secrets` and `/passkeys/registration` doors require `Authorization: Bearer <token>`, the viewer's socket
 and its `/files` routes
 require the same token as their `token` query, and otherwise all return a JSON 401. `X-Computer-Holder` names the teammate using a lease or
 run slot; an absent header means `anonymous`.
@@ -254,24 +254,66 @@ same keyring.
 
 The person's own secrets come the other way, from the desk. `PUT /secrets`,
 with the bearer in the `Authorization` header and a JSON object of name to
-value as the body, replaces the whole set the computer holds; the desk sends
+entry as the body, replaces the whole set the computer holds; the desk sends
 it when the computer starts and again whenever the person stores, replaces
-or removes one. The set stays in the service's memory — the computer itself
-writes no value to disk — and every entry is an environment variable in each
-job the agent starts through `shell` or `files run`, under the name the
-person gave it. A preparation job is left out, because what it captures is
-written into the workspace. A name is what a shell variable can be called
-(`GITHUB_TOKEN`), never one starting with `HOTLINE_` nor one the shell owns
-(`PATH`, `HOME`, …); a value is at least eight characters and at most
-64 KiB; and one bad entry refuses the whole set with a 400 that names it,
-keeping the last set. Nothing answers a value: there is no `GET`, `state
-info` lists the names alone, and every text a tool returns has each value
-replaced with `[redacted NAME]` — in the spelling JSON gives it too — before
-it leaves. That keeps a value out of the agent's context when a job prints
-it. It does not stop a command written to get one out, in pieces, encoded,
-or into a file, and the screen the person watches is never redacted. A job
-does not inherit `HOTLINE_COMPUTER_TOKEN` either: the bearer is the
-service's, not a command's.
+or removes one, or grants one to this teammate. The set stays in the
+service's memory — the computer itself writes no value to disk. A name is
+what a shell variable can be called (`GITHUB_TOKEN`), never one starting
+with `HOTLINE_` nor one the shell owns (`PATH`, `HOME`, …), and every entry
+has a kind that says where it goes:
+
+- A **variable** (`{"kind":"variable","value":…}`, or a bare string, which
+  is all a desk before 0.16 sends) is an environment variable in each job
+  the agent starts through `shell` or `files run`, under its name. A
+  preparation job is left out, because what it captures is written into the
+  workspace. A value is at least eight characters and at most 64 KiB.
+- A **login** (`{"kind":"login","sites":[…],"username":…,"password":…,
+  "totp":…}`) never enters a job. `browser fill` with `secret` instead of
+  `text` types one of its fields by name — `NAME.username`, `NAME.password`,
+  or `NAME.code`, the six TOTP digits of this moment from the base32 seed —
+  and only onto a page whose origin, as Chromium reports it, is one of the
+  login's sites or lies under one. A site is an `https://` origin, or
+  `http://` on localhost. The page a password is typed into can read it, so
+  which page is the whole protection.
+- A **passkey** (`{"kind":"passkey","rpId":…,"credentialId":…,
+  "privateKey":…,"userHandle":…,"userName":…}`) is the teammate's own
+  WebAuthn credential, kept in a virtual authenticator on every tab of the
+  managed browser. It signs in by itself when a site asks the browser for
+  one, without a prompt; nothing types it and no tool answers it.
+
+One bad entry refuses the whole set with a 400 that names it, keeping the
+last set. Nothing answers a value: there is no `GET`, `state info` lists
+each secret's name, kind, and for a login its sites and username, and every
+text a tool returns has each value — a variable's, a login's password and
+seed, a passkey's private key — replaced with `[redacted NAME]` before it
+leaves, in the spelling JSON gives it too. Usernames and sites stay
+readable: a page that says who is signed in must still make sense. That
+keeps a value out of the agent's context when a job prints it or a page
+echoes it. It does not stop a command written to get one out, in pieces,
+encoded, or into a file, and the screen the person watches is never
+redacted. A job does not inherit `HOTLINE_COMPUTER_TOKEN` either: the
+bearer is the service's, not a command's.
+
+A passkey is made once, and making one is the person's act. The desk arms
+this computer for one site with `PUT /passkeys/registration
+{"rpId":"github.com"}` — for ten minutes, one site at a time, answering
+`{"state":"armed","rpId":…,"expiresAt":…}` and starting the browser on
+that site if none is up. While armed, and for that site alone,
+`navigator.credentials.create()` in the managed browser mints a credential
+in the tab's virtual authenticator: the person adds a passkey in the site's
+security settings through the viewer, or asks the teammate to. A guard
+installed in every document of every tab that carries passkeys rejects
+`create()` for any other site, or with none armed, with a `NotAllowedError`
+that says so. `GET /passkeys/registration` answers `idle`, `armed`, or
+`registered` with the minted `credential`; the desk polls it, stores what it
+answers in the vault, delivers the set with it, and ends the arming with
+`DELETE`. That answer is the one time a private key leaves the computer,
+over the bearer-guarded loopback door the desk already uses. A credential
+the authenticator holds that is neither granted nor awaited is removed at
+the next look, so a passkey made outside an arming never survives one, and
+a revoked passkey is gone from every tab as soon as the set without it
+arrives. DevTools on port 9222 inside the container can reach the same
+authenticators; nothing outside the container can.
 
 `hotline-computer serve` serves on a display that already exists, for running
 the agent outside the container.
@@ -279,7 +321,7 @@ the agent outside the container.
 | variable | default | |
 | --- | --- | --- |
 | `HOTLINE_COMPUTER_ADDR` | `0.0.0.0:8787` | where `/mcp`, `/health`, and the viewer listen |
-| `HOTLINE_COMPUTER_TOKEN` | unset | bearer for `/mcp` and `/secrets`; unset means open |
+| `HOTLINE_COMPUTER_TOKEN` | unset | bearer for `/mcp`, `/secrets` and `/passkeys/registration`; unset means open |
 | `HOTLINE_COMPUTER_HOME` | `/home/agent` | the directory `files` is confined to |
 | `HOTLINE_COMPUTER_SCREEN` | `1920x1080` | the Xvfb screen `boot` creates |
 | `DISPLAY` | `:0` | the display `boot` creates and `serve` uses |
@@ -325,7 +367,8 @@ src/x11.rs       screenshots and EWMH window queries
 src/a11y.rs      the AT-SPI tree as text
 src/lease.rs     who holds the machine
 src/jobs.rs      job lifetime, retained output, PTY, cancellation
-src/secrets.rs   the person's stored secrets: the door, the job environment, redaction
+src/secrets.rs   the person's stored secrets by kind: the door, the job environment, fill by name, redaction
+src/passkeys.rs  the arming under which the browser may make a passkey, and its door
 src/observer.rs  Alacritty observer
 src/workspace.rs workspace-owned Nix definitions and preparation
 src/guide.rs     the bundled release-matched skill

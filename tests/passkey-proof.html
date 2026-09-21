@@ -1,0 +1,38 @@
+<!doctype html>
+<title>Passkey proof</title>
+<h1>Passkey proof</h1>
+<form>
+  <label>User <input id="user" name="user"></label>
+  <label>Password <input id="pass" name="pass" type="password"></label>
+  <label>Code <input id="code" name="code"></label>
+</form>
+<script>
+  // What a site does when a person adds a passkey, and when one signs in.
+  // Both answer a sentence, so a refusal reads like one too.
+  const challenge = () => crypto.getRandomValues(new Uint8Array(32));
+  window.make = async () => {
+    try {
+      const credential = await navigator.credentials.create({publicKey: {
+        challenge: challenge(),
+        rp: {id: 'localhost', name: 'Passkey proof'},
+        user: {id: new TextEncoder().encode('teammate-1'), name: 'teammate', displayName: 'The teammate'},
+        pubKeyCredParams: [{type: 'public-key', alg: -7}],
+        authenticatorSelection: {residentKey: 'required', userVerification: 'required'},
+        timeout: 10000,
+      }});
+      return 'made ' + credential.id;
+    } catch (error) {
+      return 'refused ' + error.name + ': ' + error.message;
+    }
+  };
+  window.sign = async () => {
+    try {
+      const assertion = await navigator.credentials.get({publicKey: {
+        challenge: challenge(), rpId: 'localhost', userVerification: 'required', timeout: 10000,
+      }});
+      return 'signed ' + assertion.id;
+    } catch (error) {
+      return 'refused ' + error.name + ': ' + error.message;
+    }
+  };
+</script>
