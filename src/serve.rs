@@ -9,8 +9,8 @@ use axum::{Json, Router};
 use rmcp::ErrorData;
 use rmcp::handler::server::ServerHandler;
 use rmcp::model::{
-    CallToolRequestParams, CallToolResponse, CallToolResult, Implementation, ListToolsResult,
-    PaginatedRequestParams, ServerCapabilities, ServerInfo,
+    CacheScope, CallToolRequestParams, CallToolResponse, CallToolResult, Implementation,
+    ListToolsResult, PaginatedRequestParams, ServerCapabilities, ServerInfo,
 };
 use rmcp::service::RequestContext;
 use rmcp::transport::streamable_http_server::{
@@ -39,9 +39,7 @@ impl ServerHandler for ComputerTools {
         _request: Option<PaginatedRequestParams>,
         _context: RequestContext<rmcp::RoleServer>,
     ) -> Result<ListToolsResult, ErrorData> {
-        Ok(ListToolsResult::with_all_items(tools::descriptors(
-            &self.app.config.home.to_string_lossy(),
-        )))
+        Ok(listing(&self.app.config.home.to_string_lossy()))
     }
 
     async fn call_tool(
@@ -64,6 +62,20 @@ impl ServerHandler for ComputerTools {
         };
         Ok(result.into())
     }
+}
+
+/// The `tools/list` result, complete for the protocol a modern client
+/// negotiates.
+///
+/// Since MCP 2026-07-28 a list result must carry `ttlMs` and `cacheScope`;
+/// rmcp leaves both unset on a hand-built result, and a client that validates
+/// the modern shape — Claude Code does — rejects the listing and the agent
+/// sees no computer tools at all. Zero and private: the eight tools do not
+/// change, but they reach one holder's desktop.
+fn listing(home: &str) -> ListToolsResult {
+    ListToolsResult::with_all_items(tools::descriptors(home))
+        .with_ttl_ms(0)
+        .with_cache_scope(CacheScope::Private)
 }
 
 pub async fn run(app: App) -> Result<(), String> {
@@ -199,6 +211,17 @@ async fn shutdown() {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// A client on protocol 2026-07-28 requires the cache hints on a list
+    /// result and refuses the whole listing without them; this is what hid
+    /// the computer from a Claude Code teammate.
+    #[test]
+    fn the_listing_carries_the_cache_hints_a_modern_client_requires() {
+        let wire = serde_json::to_value(listing("/home/agent")).unwrap();
+        assert_eq!(wire["ttlMs"], json!(0), "{wire}");
+        assert_eq!(wire["cacheScope"], json!("private"), "{wire}");
+        assert_eq!(wire["tools"].as_array().unwrap().len(), 8, "{wire}");
+    }
 
     #[test]
     fn secret_comparison_needs_equal_bytes() {
