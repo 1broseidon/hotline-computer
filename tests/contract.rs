@@ -663,10 +663,148 @@ async fn image_honors_the_computer_contract() {
     assert_eq!(armed["state"], "armed", "{armed}");
     assert_eq!(armed["rpId"], "localhost");
     assert!(armed["expiresAt"].as_i64().unwrap_or_default() > 0);
-    let made = text(&call(&client, "browser", json!({"action":"eval","js":"make()"})).await);
+    // Under the arming, the site's request waits for the person: nothing
+    // is made until the desk carries their answer back, and the door says
+    // what the site asked for meanwhile.
+    let parked = text(
+        &call(
+            &client,
+            "browser",
+            json!({"action":"eval","js":"window.making = make(); 'parked'"}),
+        )
+        .await,
+    );
+    assert!(parked.contains("parked"), "{parked}");
+    let again = text(&call(&client, "browser", json!({"action":"eval","js":"make()"})).await);
+    assert!(
+        again.contains("refused NotAllowedError") && again.contains("waiting"),
+        "one request before the person at a time: {again}"
+    );
+    let asked = http
+        .get(&registration)
+        .bearer_auth(&token)
+        .send()
+        .await
+        .expect("registration state")
+        .json::<serde_json::Value>()
+        .await
+        .expect("registration JSON");
+    assert_eq!(asked["state"], "asked", "{asked}");
+    assert_eq!(asked["rpId"], "localhost");
+    assert_eq!(asked["ask"]["rpId"], "localhost");
+    assert_eq!(asked["ask"]["origin"], "http://localhost:8123");
+    assert_eq!(asked["ask"]["rpName"], "Passkey proof");
+    assert_eq!(asked["ask"]["userName"], "teammate");
+    assert_eq!(asked["ask"]["userDisplayName"], "The teammate");
+    assert!(asked["ask"]["askedAt"].as_i64().unwrap_or_default() > 0);
+    assert!(asked.get("credential").is_none(), "{asked}");
+    let ask_id = asked["ask"]["id"].as_str().expect("ask id").to_owned();
+    let answer = format!("{registration}/answer");
+    // An answer to a request that is not waiting is refused.
+    let stale = http
+        .post(&answer)
+        .bearer_auth(&token)
+        .json(&json!({"id": "nope", "approved": true}))
+        .send()
+        .await
+        .expect("answer a request that is not waiting");
+    assert_eq!(
+        stale.status(),
+        409,
+        "{}",
+        stale.text().await.unwrap_or_default()
+    );
+    // Denied, the site hears no, nothing was made, and the arming is over.
+    let denied = http
+        .post(&answer)
+        .bearer_auth(&token)
+        .json(&json!({"id": ask_id, "approved": false}))
+        .send()
+        .await
+        .expect("deny the request")
+        .json::<serde_json::Value>()
+        .await
+        .expect("denial JSON");
+    assert_eq!(denied, json!({"state": "idle"}), "{denied}");
+    let refused = text(
+        &call(
+            &client,
+            "browser",
+            json!({"action":"eval","js":"window.making"}),
+        )
+        .await,
+    );
+    assert!(
+        refused.contains("refused NotAllowedError") && refused.contains("did not approve"),
+        "a denied request is refused to the site: {refused}"
+    );
+    let refused = text(&call(&client, "browser", json!({"action":"eval","js":"make()"})).await);
+    assert!(
+        refused.contains("not armed"),
+        "a denial ends the arming: {refused}"
+    );
+    // Armed again and approved, the browser makes it.
+    let armed = http
+        .put(&registration)
+        .bearer_auth(&token)
+        .json(&json!({"rpId": "localhost"}))
+        .send()
+        .await
+        .expect("arm for the proof site again")
+        .json::<serde_json::Value>()
+        .await
+        .expect("arming JSON");
+    assert_eq!(armed["state"], "armed", "{armed}");
+    let parked = text(
+        &call(
+            &client,
+            "browser",
+            json!({"action":"eval","js":"window.making = make(); 'parked'"}),
+        )
+        .await,
+    );
+    assert!(parked.contains("parked"), "{parked}");
+    let asked = http
+        .get(&registration)
+        .bearer_auth(&token)
+        .send()
+        .await
+        .expect("registration state")
+        .json::<serde_json::Value>()
+        .await
+        .expect("registration JSON");
+    assert_eq!(asked["state"], "asked", "{asked}");
+    let ask_id = asked["ask"]["id"].as_str().expect("ask id").to_owned();
+    assert!(
+        asked["ask"]["askedAt"].as_i64().unwrap_or_default() > 0,
+        "{asked}"
+    );
+    let approved = http
+        .post(&answer)
+        .bearer_auth(&token)
+        .json(&json!({"id": ask_id, "approved": true}))
+        .send()
+        .await
+        .expect("approve the request")
+        .json::<serde_json::Value>()
+        .await
+        .expect("approval JSON");
+    assert!(
+        approved["state"] == "approved" || approved["state"] == "registered",
+        "{approved}"
+    );
+    assert_eq!(approved["ask"]["id"], ask_id);
+    let made = text(
+        &call(
+            &client,
+            "browser",
+            json!({"action":"eval","js":"window.making"}),
+        )
+        .await,
+    );
     assert!(
         made.starts_with("\"made "),
-        "the armed site makes a passkey: {made}"
+        "the approved request makes a passkey: {made}"
     );
     let registered = http
         .get(&registration)
@@ -678,6 +816,7 @@ async fn image_honors_the_computer_contract() {
         .await
         .expect("registration JSON");
     assert_eq!(registered["state"], "registered", "{registered}");
+    assert_eq!(registered["ask"]["id"], ask_id);
     let credential = registered["credential"].clone();
     assert_eq!(credential["rpId"], "localhost");
     assert_eq!(credential["userName"], "teammate");

@@ -4,7 +4,7 @@ use axum::extract::Request;
 use axum::http::{StatusCode, header};
 use axum::middleware::Next;
 use axum::response::{IntoResponse, Response};
-use axum::routing::{delete, get, put};
+use axum::routing::{delete, get, post, put};
 use axum::{Json, Router};
 use rmcp::ErrorData;
 use rmcp::handler::server::ServerHandler;
@@ -116,13 +116,16 @@ pub(crate) fn router(app: App) -> Router {
         // routes below, so the bearer rides in the header as on `/mcp`.
         .route("/secrets", put(secrets::replace))
         // The one moment a passkey is made: the desk arms it, polls for
-        // what was minted, and ends it. Bearer-only, like `/secrets`.
+        // the request the site makes and then for what was minted, carries
+        // the person's answer back, and ends it. Bearer-only, like
+        // `/secrets`.
         .route(
             "/passkeys/registration",
             put(passkeys::arm)
                 .get(passkeys::registration)
                 .delete(passkeys::disarm),
         )
+        .route("/passkeys/registration/answer", post(passkeys::answer))
         // The person taking a brought-over login back out of the browser,
         // by domain or whole. Bearer-only, like `/secrets`.
         .route("/logins/{name}", delete(logins::forget))
