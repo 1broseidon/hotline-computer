@@ -7,6 +7,7 @@ pub mod display;
 pub mod guide;
 pub mod jobs;
 pub mod lease;
+pub mod logins;
 pub mod observer;
 pub mod paint;
 pub mod passkeys;

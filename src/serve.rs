@@ -4,7 +4,7 @@ use axum::extract::Request;
 use axum::http::{StatusCode, header};
 use axum::middleware::Next;
 use axum::response::{IntoResponse, Response};
-use axum::routing::{get, put};
+use axum::routing::{delete, get, put};
 use axum::{Json, Router};
 use rmcp::ErrorData;
 use rmcp::handler::server::ServerHandler;
@@ -18,7 +18,7 @@ use rmcp::transport::streamable_http_server::{
 };
 use serde_json::{Value, json};
 
-use crate::{App, passkeys, secrets, tools, viewer};
+use crate::{App, logins, passkeys, secrets, tools, viewer};
 
 const MAX_REQUEST_BODY: usize = 50 * 1024 * 1024 * 4 / 3 + 1024 * 1024;
 
@@ -123,6 +123,9 @@ pub(crate) fn router(app: App) -> Router {
                 .get(passkeys::registration)
                 .delete(passkeys::disarm),
         )
+        // The person taking a brought-over login back out of the browser,
+        // by domain or whole. Bearer-only, like `/secrets`.
+        .route("/logins/{name}", delete(logins::forget))
         .nest_service("/mcp", service)
         .layer(axum::middleware::from_fn(
             move |request: Request, next: Next| {

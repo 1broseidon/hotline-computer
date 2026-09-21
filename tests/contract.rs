@@ -333,6 +333,135 @@ async fn image_honors_the_computer_contract() {
     )
     .await;
     assert_eq!(text(&landed_by_header), "carried in a header, not a URL");
+
+    // The desk's cookie import, then the operator taking it back: a saved
+    // login is uploaded and loaded the way the desk does it, and
+    // `DELETE /logins/{name}` drops one domain from the browser and the
+    // document, then the rest, after which the document is gone.
+    let brought = json!({
+        "name": "import-contract-Default", "browser": "chrome",
+        "created_at": "2026-09-21T00:00:00Z",
+        "cookies": [
+            {"name": "session", "value": "one", "domain": ".example.com", "path": "/", "secure": true},
+            {"name": "sid", "value": "two", "domain": "api.example.com", "path": "/", "secure": true},
+            {"name": "other", "value": "three", "domain": ".example.org", "path": "/", "secure": true}
+        ],
+        "storage": {}
+    });
+    let uploaded = http
+        .post(format!(
+            "{base}/files?path=/home/agent/.hotline/logins/import-contract-Default.json"
+        ))
+        .header(AUTHORIZATION, format!("Bearer {token}"))
+        .body(brought.to_string())
+        .send()
+        .await
+        .expect("upload a saved login");
+    assert_eq!(
+        uploaded.status(),
+        200,
+        "{}",
+        uploaded.text().await.unwrap_or_default()
+    );
+    let loaded = call(
+        &client,
+        "state",
+        json!({"action":"login_load","name":"import-contract-Default"}),
+    )
+    .await;
+    assert!(
+        text(&loaded).contains("\"loaded\":true"),
+        "{}",
+        text(&loaded)
+    );
+    let unauthorized = http
+        .delete(format!("{base}/logins/import-contract-Default"))
+        .send()
+        .await
+        .expect("forget without a bearer");
+    assert_eq!(
+        unauthorized.status(),
+        401,
+        "the logins door wants the bearer"
+    );
+    let one_site = http
+        .delete(format!("{base}/logins/import-contract-Default"))
+        .header(AUTHORIZATION, format!("Bearer {token}"))
+        .json(&json!({"domains": ["example.com"]}))
+        .send()
+        .await
+        .expect("forget one domain");
+    assert_eq!(one_site.status(), 200);
+    let answered: serde_json::Value = one_site.json().await.expect("a forget answer");
+    assert_eq!(answered["forgotten"], 2, "{answered}");
+    assert_eq!(answered["kept"], 1, "{answered}");
+    let saved_after = call(
+        &client,
+        "state",
+        json!({"action":"login_save","name":"contract-after-forget"}),
+    )
+    .await;
+    assert!(
+        text(&saved_after).contains("\"saved\":true"),
+        "{}",
+        text(&saved_after)
+    );
+    let after = call(
+        &client,
+        "files",
+        json!({"action":"get","path":"/home/agent/.hotline/logins/contract-after-forget.json"}),
+    )
+    .await;
+    let after_text = text(&after);
+    assert!(
+        !after_text.contains("example.com"),
+        "the browser dropped every example.com cookie: {after_text}"
+    );
+    assert!(
+        after_text.contains("example.org"),
+        "and kept the other site's: {after_text}"
+    );
+    let document = call(
+        &client,
+        "files",
+        json!({"action":"get","path":"/home/agent/.hotline/logins/import-contract-Default.json"}),
+    )
+    .await;
+    assert!(
+        !text(&document).contains("example.com") && text(&document).contains("example.org"),
+        "the saved login lost the domain too: {}",
+        text(&document)
+    );
+    let the_rest = http
+        .delete(format!("{base}/logins/import-contract-Default"))
+        .header(AUTHORIZATION, format!("Bearer {token}"))
+        .json(&json!({"domains": ["example.org"]}))
+        .send()
+        .await
+        .expect("forget the rest");
+    assert_eq!(the_rest.status(), 200);
+    let gone = call(
+        &client,
+        "files",
+        json!({"action":"get","path":"/home/agent/.hotline/logins/import-contract-Default.json"}),
+    )
+    .await;
+    assert!(
+        gone.is_error.unwrap_or(false),
+        "a login with nothing left is removed: {}",
+        text(&gone)
+    );
+    let nothing = http
+        .delete(format!("{base}/logins/import-contract-Default"))
+        .header(AUTHORIZATION, format!("Bearer {token}"))
+        .send()
+        .await
+        .expect("forget what is gone");
+    assert_eq!(
+        nothing.status(),
+        404,
+        "no saved login, nothing named: nothing to forget"
+    );
     if !token.is_empty() {
         let wrong_header = http
             .get(format!("{base}/files"))

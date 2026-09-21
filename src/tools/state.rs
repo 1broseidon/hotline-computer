@@ -354,7 +354,7 @@ async fn desktop_fresh(home: &Path) -> Result<bool, String> {
     Ok(true)
 }
 
-fn valid_name(name: &str) -> Result<(), String> {
+pub(crate) fn valid_name(name: &str) -> Result<(), String> {
     if name.is_empty() {
         return Err("name is required".into());
     }
