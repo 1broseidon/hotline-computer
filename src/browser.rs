@@ -5,7 +5,7 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use chromiumoxide::cdp::browser_protocol::dom::SetFileInputFilesParams;
-use chromiumoxide::cdp::browser_protocol::network::CookieParam;
+use chromiumoxide::cdp::browser_protocol::network::{CookieParam, DeleteCookiesParams};
 use chromiumoxide::cdp::browser_protocol::page::{
     AddScriptToEvaluateOnNewDocumentParams, HandleJavaScriptDialogParams,
     RemoveScriptToEvaluateOnNewDocumentParams, ScriptIdentifier,
@@ -649,11 +649,50 @@ impl BrowserManager {
     pub async fn local_storage(&self) -> Result<Value, String> {
         self.with_session(|session| {
             Box::pin(async move {
+                // A page without an origin (`about:blank`, a `data:` URL)
+                // has no storage to save; the login is its cookies alone.
                 evaluate_value(
                     &current_page(session).await?,
-                    "Object.fromEntries(Object.entries(localStorage))",
+                    "(() => { try { return Object.fromEntries(Object.entries(localStorage)); } catch { return {}; } })()",
                 )
                 .await
+            })
+        })
+        .await
+    }
+
+    /// Drops every cookie the browser holds for `sites` — each site and
+    /// every host within it — and answers how many went. The browser is
+    /// launched if it is not up, since its profile holds cookies either way.
+    pub async fn forget_cookies(&self, sites: &[String]) -> Result<usize, String> {
+        let sites = sites.to_vec();
+        self.with_session(|session| {
+            Box::pin(async move {
+                let doomed: Vec<DeleteCookiesParams> = session
+                    .browser
+                    .get_cookies()
+                    .await
+                    .map_err(browser_error)?
+                    .into_iter()
+                    .filter(|cookie| crate::logins::within(&cookie.domain, &sites))
+                    .map(|cookie| {
+                        let mut params = DeleteCookiesParams::new(cookie.name);
+                        params.domain = Some(cookie.domain);
+                        params.path = Some(cookie.path);
+                        params
+                    })
+                    .collect();
+                let count = doomed.len();
+                if count > 0 {
+                    // Cookies belong to the browser context, so any page of
+                    // it deletes them; the agent's tab is at hand.
+                    current_page(session)
+                        .await?
+                        .delete_cookies(doomed)
+                        .await
+                        .map_err(browser_error)?;
+                }
+                Ok(count)
             })
         })
         .await
@@ -664,7 +703,17 @@ impl BrowserManager {
             serde_json::from_value(cookies).map_err(|error| format!("saved cookies: {error}"))?;
         self.with_session(|session| Box::pin(async move {
             session.browser.set_cookies(cookies).await.map_err(browser_error)?;
-            let storage = serde_json::to_string(&local_storage).map_err(|error| error.to_string())?;
+            // A login saved with nothing in storage — every one the desk's
+            // cookie import lands — leaves the page alone: the script would
+            // only clear, and a page without an origin (`about:blank`, a
+            // `data:` URL) refuses storage altogether.
+            let entries = local_storage
+                .as_object()
+                .filter(|entries| !entries.is_empty());
+            let Some(entries) = entries else {
+                return Ok(());
+            };
+            let storage = serde_json::to_string(entries).map_err(|error| error.to_string())?;
             current_page(session)
                 .await?
                 .evaluate(format!(

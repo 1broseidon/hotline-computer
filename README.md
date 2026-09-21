@@ -76,7 +76,7 @@ stop — at once when they give it back or close the page.
 
 `/health` and the viewer page never require authentication. When
 `HOTLINE_COMPUTER_TOKEN` is set, every method on `/mcp` and the desk's
-`/secrets` and `/passkeys/registration` doors require `Authorization: Bearer <token>`, the viewer's socket
+`/secrets`, `/passkeys/registration` and `/logins/{name}` doors require `Authorization: Bearer <token>`, the viewer's socket
 and its `/files` routes
 require the same token as their `token` query, and otherwise all return a JSON 401. `X-Computer-Holder` names the teammate using a lease or
 run slot; an absent header means `anonymous`.
@@ -321,7 +321,7 @@ the agent outside the container.
 | variable | default | |
 | --- | --- | --- |
 | `HOTLINE_COMPUTER_ADDR` | `0.0.0.0:8787` | where `/mcp`, `/health`, and the viewer listen |
-| `HOTLINE_COMPUTER_TOKEN` | unset | bearer for `/mcp`, `/secrets` and `/passkeys/registration`; unset means open |
+| `HOTLINE_COMPUTER_TOKEN` | unset | bearer for `/mcp`, `/secrets`, `/passkeys/registration` and `/logins/{name}`; unset means open |
 | `HOTLINE_COMPUTER_HOME` | `/home/agent` | the directory `files` is confined to |
 | `HOTLINE_COMPUTER_SCREEN` | `1920x1080` | the Xvfb screen `boot` creates |
 | `DISPLAY` | `:0` | the display `boot` creates and `serve` uses |

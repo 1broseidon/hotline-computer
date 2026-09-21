@@ -3,7 +3,7 @@ mod capture;
 pub(crate) mod files;
 mod input;
 mod shell;
-mod state;
+pub(crate) mod state;
 mod wait;
 mod windows;
 
