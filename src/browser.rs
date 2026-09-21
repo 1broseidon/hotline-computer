@@ -262,14 +262,17 @@ impl BrowserManager {
             // Every tab was looked at: a request none holds went with
             // its document.
             session.passkeys.reconcile(&held);
+            // A courtesy on a fresh browser: the person is about to sign in
+            // there. A site that does not answer is the site's business, not
+            // a reason to refuse the arming.
             if fresh
                 && let Some((rp_id, _)) = session.passkeys.armed()
                 && let Some(page) = pages.first()
             {
                 page.bring_to_front().await.map_err(browser_error)?;
-                page.goto(format!("https://{rp_id}/"))
-                    .await
-                    .map_err(browser_error)?;
+                if let Err(error) = page.goto(format!("https://{rp_id}/")).await {
+                    eprintln!("[passkeys] the armed site did not open: {error}");
+                }
             }
             Ok(())
         };
