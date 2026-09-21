@@ -22,7 +22,7 @@ use serde_json::{Value, json};
 use tokio::sync::Mutex;
 
 use crate::Config;
-use crate::passkeys::Passkeys;
+use crate::passkeys::{Ask, Passkeys, Reported};
 use crate::secrets::{Filled, Origin, Passkey, Secrets};
 
 pub const NO_BROWSER: &str = "This computer has no browser installed.";
@@ -255,9 +255,13 @@ impl BrowserManager {
             session
                 .authenticators
                 .retain(|target, _| open.contains(target));
+            let mut held = HashSet::new();
             for page in &pages {
-                passkey_sync(session, page).await?;
+                held.extend(passkey_sync(session, page).await?);
             }
+            // Every tab was looked at: a request none holds went with
+            // its document.
+            session.passkeys.reconcile(&held);
             if fresh
                 && let Some((rp_id, _)) = session.passkeys.armed()
                 && let Some(page) = pages.first()
@@ -763,17 +767,20 @@ async fn current_page(session: &mut BrowserSession) -> Result<Page, String> {
 /// arming. A tab is left untouched until there is a passkey to carry or an
 /// arming to honour, and then it gets a virtual authenticator — internal,
 /// resident, user-verifying, presence simulated, so a passkey signs in
-/// without a prompt — and the guard in every document. Each look compares
-/// what the authenticator holds with what it should: a granted or awaited
-/// passkey missing is added, one the page minted under the arming is kept
+/// without a prompt — and the guard in every document. Each look reads the
+/// request the guard has parked, if any, records it for the person and
+/// carries their answer back to the page; then it compares what the
+/// authenticator holds with what it should: a granted or awaited passkey
+/// missing is added, one the page minted under an approved request is kept
 /// for the desk, and anything else is removed, so a passkey made outside
-/// an arming never survives the next look.
-async fn passkey_sync(session: &mut BrowserSession, page: &Page) -> Result<(), String> {
+/// an arming, or without the person's approval, never survives the next
+/// look. Answers the id of the request the tab holds, if it holds one.
+async fn passkey_sync(session: &mut BrowserSession, page: &Page) -> Result<Option<String>, String> {
     let granted = session.secrets.passkeys();
     let armed = session.passkeys.armed().map(|(rp_id, _)| rp_id);
     let target = page.target_id().inner().clone();
     if granted.is_empty() && armed.is_none() && !session.authenticators.contains_key(&target) {
-        return Ok(());
+        return Ok(None);
     }
     if !session.authenticators.contains_key(&target) {
         page.execute(EnableParams::default())
@@ -828,8 +835,10 @@ async fn passkey_sync(session: &mut BrowserSession, page: &Page) -> Result<(), S
             json!(armed)
         ))
         .await;
+    let authenticator = tab.id.clone();
+    let asked = look_at_request(session, page).await;
     let held = page
-        .execute(GetCredentialsParams::new(tab.id.clone()))
+        .execute(GetCredentialsParams::new(authenticator.clone()))
         .await
         .map_err(browser_error)?
         .result
@@ -853,7 +862,7 @@ async fn passkey_sync(session: &mut BrowserSession, page: &Page) -> Result<(), S
             continue;
         }
         page.execute(RemoveCredentialParams::new(
-            tab.id.clone(),
+            authenticator.clone(),
             Binary::from(id),
         ))
         .await
@@ -864,13 +873,51 @@ async fn passkey_sync(session: &mut BrowserSession, page: &Page) -> Result<(), S
             continue;
         }
         page.execute(AddCredentialParams::new(
-            tab.id.clone(),
+            authenticator.clone(),
             credential_from(&passkey),
         ))
         .await
         .map_err(|error| format!("browser: {}: {error}", passkey.rp_id))?;
     }
-    Ok(())
+    Ok(asked)
+}
+
+/// Reads the request the tab's guard has parked, if any, records it as the
+/// one before the person when none is, and tells the page the person's
+/// answer once there is one. A page that cannot be asked — one navigating,
+/// or one of Chromium's own — holds nothing. Answers the request's id.
+async fn look_at_request(session: &mut BrowserSession, page: &Page) -> Option<String> {
+    let reported = evaluate_value(
+        page,
+        &format!(
+            "typeof __hotlineLook === 'function' ? __hotlineLook({}) : null",
+            json!(session.token)
+        ),
+    )
+    .await
+    .ok()
+    .and_then(|value| serde_json::from_value::<Option<Ask>>(value).ok())
+    .flatten()?;
+    let id = reported.id.clone();
+    let answer = match session.passkeys.report(reported) {
+        Reported::Approved => true,
+        Reported::Denied => false,
+        Reported::Waiting | Reported::Later => return Some(id),
+    };
+    let told = evaluate_value(
+        page,
+        &format!(
+            "__hotlineAnswer({}, {}, {})",
+            json!(session.token),
+            json!(id),
+            json!(answer)
+        ),
+    )
+    .await;
+    if told.ok().and_then(|value| value.as_bool()) == Some(true) {
+        session.passkeys.delivered(&id);
+    }
+    Some(id)
 }
 
 /// Installs the guard for every document the tab opens from now, and the

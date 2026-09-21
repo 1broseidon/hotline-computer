@@ -76,7 +76,7 @@ stop — at once when they give it back or close the page.
 
 `/health` and the viewer page never require authentication. When
 `HOTLINE_COMPUTER_TOKEN` is set, every method on `/mcp` and the desk's
-`/secrets`, `/passkeys/registration` and `/logins/{name}` doors require `Authorization: Bearer <token>`, the viewer's socket
+`/secrets`, `/passkeys/registration` (with its `/answer`) and `/logins/{name}` doors require `Authorization: Bearer <token>`, the viewer's socket
 and its `/files` routes
 require the same token as their `token` query, and otherwise all return a JSON 401. `X-Computer-Holder` names the teammate using a lease or
 run slot; an absent header means `anonymous`.
@@ -294,26 +294,37 @@ encoded, or into a file, and the screen the person watches is never
 redacted. A job does not inherit `HOTLINE_COMPUTER_TOKEN` either: the
 bearer is the service's, not a command's.
 
-A passkey is made once, and making one is the person's act. The desk arms
-this computer for one site with `PUT /passkeys/registration
+A passkey is made once, and making one is the person's act, twice over.
+The desk arms this computer for one site with `PUT /passkeys/registration
 {"rpId":"github.com"}` — for ten minutes, one site at a time, answering
 `{"state":"armed","rpId":…,"expiresAt":…}` and starting the browser on
-that site if none is up. While armed, and for that site alone,
-`navigator.credentials.create()` in the managed browser mints a credential
-in the tab's virtual authenticator: the person adds a passkey in the site's
-security settings through the viewer, or asks the teammate to. A guard
-installed in every document of every tab that carries passkeys rejects
-`create()` for any other site, or with none armed, with a `NotAllowedError`
-that says so. `GET /passkeys/registration` answers `idle`, `armed`, or
-`registered` with the minted `credential`; the desk polls it, stores what it
-answers in the vault, delivers the set with it, and ends the arming with
-`DELETE`. That answer is the one time a private key leaves the computer,
-over the bearer-guarded loopback door the desk already uses. A credential
-the authenticator holds that is neither granted nor awaited is removed at
-the next look, so a passkey made outside an arming never survives one, and
-a revoked passkey is gone from every tab as soon as the set without it
-arrives. DevTools on port 9222 inside the container can reach the same
-authenticators; nothing outside the container can.
+that site if none is up. While armed, and for that site alone, a call to
+`navigator.credentials.create()` in the managed browser is not answered by
+the browser: a guard installed in every document of every tab that carries
+passkeys parks it and keeps what the site asked for — the site, the
+origin, the account's name and display name — and the next look (every
+action, every poll) records it as the request before the person.
+`GET /passkeys/registration` then answers `asked` with that `ask` (`id`,
+`rpId`, `origin`, `rpName`, `userName`, `userDisplayName`, `askedAt`); the
+desk shows the person a card and carries their answer back with
+`POST /passkeys/registration/answer {"id":…,"approved":true}`. Approved,
+the page is told to go ahead, the tab's virtual authenticator mints, and
+`GET` answers `approved` and then `registered` with the minted
+`credential`, until the desk stores it in the vault, delivers the set with
+it, and ends the arming with `DELETE`. Denied, the site gets a
+`NotAllowedError` — as it would from a person cancelling the browser's own
+prompt — and the arming ends with the denial, so neither a site nor a
+teammate can keep asking; an answer to a request that is not waiting is a
+409. The guard rejects `create()` for any other site, or with none armed,
+with a `NotAllowedError` that says so, and holds one request before the
+person at a time. The credential's answer is the one time a private key
+leaves the computer, over the bearer-guarded loopback door the desk
+already uses. A credential the authenticator holds that is neither granted
+nor made under an approved request is removed at the next look, so a
+passkey made outside an arming never survives one, and a revoked passkey
+is gone from every tab as soon as the set without it arrives. DevTools on
+port 9222 inside the container can reach the same authenticators;
+nothing outside the container can.
 
 `hotline-computer serve` serves on a display that already exists, for running
 the agent outside the container.
@@ -321,7 +332,7 @@ the agent outside the container.
 | variable | default | |
 | --- | --- | --- |
 | `HOTLINE_COMPUTER_ADDR` | `0.0.0.0:8787` | where `/mcp`, `/health`, and the viewer listen |
-| `HOTLINE_COMPUTER_TOKEN` | unset | bearer for `/mcp`, `/secrets`, `/passkeys/registration` and `/logins/{name}`; unset means open |
+| `HOTLINE_COMPUTER_TOKEN` | unset | bearer for `/mcp`, `/secrets`, `/passkeys/registration` (with its `/answer`) and `/logins/{name}`; unset means open |
 | `HOTLINE_COMPUTER_HOME` | `/home/agent` | the directory `files` is confined to |
 | `HOTLINE_COMPUTER_SCREEN` | `1920x1080` | the Xvfb screen `boot` creates |
 | `DISPLAY` | `:0` | the display `boot` creates and `serve` uses |
