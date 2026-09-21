@@ -9,6 +9,7 @@ pub mod jobs;
 pub mod lease;
 pub mod observer;
 pub mod paint;
+pub mod passkeys;
 pub mod screen;
 pub mod secrets;
 pub mod serve;
@@ -61,6 +62,8 @@ pub struct App {
     /// The person's stored secrets: what a job starts with, and what every
     /// answer leaves out.
     pub secrets: secrets::Secrets,
+    /// The arming under which the browser may mint a passkey.
+    pub passkeys: passkeys::Passkeys,
     pub observer: observer::Observer,
     pub a11y: Arc<tokio::sync::OnceCell<atspi::zbus::Connection>>,
     /// The screen stream, the hands, and the clipboard; `None` until a display is up.
@@ -71,13 +74,15 @@ impl App {
     pub fn new(config: Config) -> Self {
         let config = Arc::new(config);
         let secrets = secrets::Secrets::default();
+        let passkeys = passkeys::Passkeys::default();
         Self {
             access: MachineAccess::new().on_display(&config.display),
             a11y: Arc::new(tokio::sync::OnceCell::new()),
             jobs: jobs::Jobs::new(&config.home, &config.display, secrets.clone()),
+            browser: BrowserManager::new(Arc::clone(&config), secrets.clone(), passkeys.clone()),
             secrets,
+            passkeys,
             observer: observer::Observer::new(&config.home, &config.display),
-            browser: BrowserManager::new(Arc::clone(&config)),
             config,
             display: None,
         }

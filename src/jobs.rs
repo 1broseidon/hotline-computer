@@ -894,7 +894,7 @@ mod tests {
         secrets
             .replace(BTreeMap::from([(
                 "JOB_SECRET".to_owned(),
-                "job-secret-value-0001".to_owned(),
+                crate::secrets::Delivered::Value("job-secret-value-0001".to_owned()),
             )]))
             .unwrap();
         let jobs = Jobs::new(home.path(), ":0", secrets);

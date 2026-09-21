@@ -398,7 +398,10 @@ async fn image_honors_the_computer_contract() {
     );
     let info = call(&client, "state", json!({"action":"info"})).await;
     let report: serde_json::Value = serde_json::from_str(&text(&info)).expect("info is JSON");
-    assert_eq!(report["secrets"], json!(["CONTRACT_SECRET"]));
+    assert_eq!(
+        report["secrets"],
+        json!([{"name": "CONTRACT_SECRET", "kind": "variable"}])
+    );
     assert!(!text(&info).contains(value), "info names, never values");
     let asked = http
         .get(&door)
@@ -430,6 +433,336 @@ async fn image_honors_the_computer_contract() {
     )
     .await;
     assert!(text(&gone).contains("absent"), "{}", text(&gone));
+
+    // A login is typed by name onto its own site alone, and a passkey is the
+    // teammate's own: made once while the person has armed the site, kept
+    // by the desk, signing in by itself, gone when the grant goes. The site
+    // is a page the computer serves to itself.
+    let served = call(
+        &client,
+        "files",
+        json!({"action":"put","path":"/home/agent/src/contract/proof/passkey.html","content":include_str!("passkey-proof.html")}),
+    )
+    .await;
+    assert!(!served.is_error.unwrap_or(false), "{}", text(&served));
+    let server = call(
+        &client,
+        "shell",
+        json!({"action":"start","command":"python3","args":["-m","http.server","8123","--bind","127.0.0.1","--directory","/home/agent/src/contract/proof"],"label":"Serve the passkey proof"}),
+    )
+    .await;
+    assert!(!server.is_error.unwrap_or(false), "{}", text(&server));
+    let mut opened = String::new();
+    for _ in 0..40 {
+        let navigated = call(
+            &client,
+            "browser",
+            json!({"action":"navigate","url":"http://localhost:8123/passkey.html"}),
+        )
+        .await;
+        if !navigated.is_error.unwrap_or(false) {
+            opened = text(
+                &call(
+                    &client,
+                    "browser",
+                    json!({"action":"eval","js":"document.title"}),
+                )
+                .await,
+            );
+            if opened.contains("Passkey proof") {
+                break;
+            }
+        }
+        tokio::time::sleep(std::time::Duration::from_millis(250)).await;
+    }
+    assert!(
+        opened.contains("Passkey proof"),
+        "the proof page is served: {opened}"
+    );
+    let registration = format!("{base}/passkeys/registration");
+    if !token.is_empty() {
+        let naked = http
+            .get(&registration)
+            .send()
+            .await
+            .expect("registration without the bearer");
+        assert_eq!(
+            naked.status(),
+            401,
+            "the registration door wants the bearer"
+        );
+    }
+    let idle = http
+        .get(&registration)
+        .bearer_auth(&token)
+        .send()
+        .await
+        .expect("registration state")
+        .json::<serde_json::Value>()
+        .await
+        .expect("registration JSON");
+    assert_eq!(idle, json!({"state": "idle"}));
+    // Armed for another site, this one may not make a passkey.
+    let elsewhere = http
+        .put(&registration)
+        .bearer_auth(&token)
+        .json(&json!({"rpId": "example.com"}))
+        .send()
+        .await
+        .expect("arm for another site");
+    assert_eq!(
+        elsewhere.status(),
+        200,
+        "{}",
+        elsewhere.text().await.unwrap_or_default()
+    );
+    let refused = text(&call(&client, "browser", json!({"action":"eval","js":"make()"})).await);
+    assert!(
+        refused.contains("refused NotAllowedError") && refused.contains("not armed"),
+        "a passkey for a site that is not armed is refused: {refused}"
+    );
+    let armed = http
+        .put(&registration)
+        .bearer_auth(&token)
+        .json(&json!({"rpId": "localhost"}))
+        .send()
+        .await
+        .expect("arm for the proof site")
+        .json::<serde_json::Value>()
+        .await
+        .expect("arming JSON");
+    assert_eq!(armed["state"], "armed", "{armed}");
+    assert_eq!(armed["rpId"], "localhost");
+    assert!(armed["expiresAt"].as_i64().unwrap_or_default() > 0);
+    let made = text(&call(&client, "browser", json!({"action":"eval","js":"make()"})).await);
+    assert!(
+        made.starts_with("\"made "),
+        "the armed site makes a passkey: {made}"
+    );
+    let registered = http
+        .get(&registration)
+        .bearer_auth(&token)
+        .send()
+        .await
+        .expect("registration state")
+        .json::<serde_json::Value>()
+        .await
+        .expect("registration JSON");
+    assert_eq!(registered["state"], "registered", "{registered}");
+    let credential = registered["credential"].clone();
+    assert_eq!(credential["rpId"], "localhost");
+    assert_eq!(credential["userName"], "teammate");
+    assert!(
+        credential["privateKey"]
+            .as_str()
+            .is_some_and(|key| key.len() > 40)
+    );
+    let credential_id = credential["credentialId"]
+        .as_str()
+        .expect("credential id")
+        .to_owned();
+    let ended = http
+        .delete(&registration)
+        .bearer_auth(&token)
+        .send()
+        .await
+        .expect("end the arming");
+    assert_eq!(ended.status(), 204);
+    // Disarmed, the page may not make another, and what it made is gone
+    // until the desk delivers it back as a stored passkey.
+    let refused = text(&call(&client, "browser", json!({"action":"eval","js":"make()"})).await);
+    assert!(refused.contains("not armed"), "{refused}");
+    let unsigned = text(&call(&client, "browser", json!({"action":"eval","js":"sign()"})).await);
+    assert!(
+        unsigned.contains("refused"),
+        "a passkey nobody stored does not sign: {unsigned}"
+    );
+    let stored = http
+        .put(&door)
+        .bearer_auth(&token)
+        .json(&json!({
+            "PROOF_PASSKEY": credential,
+            "PROOF": {"kind": "login", "sites": ["http://localhost:8123"], "username": "teammate",
+                      "password": "correct horse battery staple", "totp": "GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQ"},
+            "PROOF_TOKEN": "contract-token-value-0002",
+        }))
+        .send()
+        .await
+        .expect("store the passkey and a login");
+    assert_eq!(
+        stored.status(),
+        204,
+        "{}",
+        stored.text().await.unwrap_or_default()
+    );
+    let signed = text(&call(&client, "browser", json!({"action":"eval","js":"sign()"})).await);
+    assert!(
+        signed.contains("signed "),
+        "the stored passkey signs in: {signed}"
+    );
+    let info = call(&client, "state", json!({"action":"info"})).await;
+    let report: serde_json::Value = serde_json::from_str(&text(&info)).expect("info is JSON");
+    assert_eq!(
+        report["secrets"],
+        json!([
+            {"name": "PROOF", "kind": "login", "sites": ["http://localhost:8123"], "username": "teammate", "totp": true},
+            {"name": "PROOF_PASSKEY", "kind": "passkey", "rpId": "localhost", "userName": "teammate"},
+            {"name": "PROOF_TOKEN", "kind": "variable"},
+        ])
+    );
+    assert!(!text(&info).contains("battery"), "info names, never values");
+    let snapshot = text(&call(&client, "browser", json!({"action":"text"})).await);
+    let field = |label: &str| {
+        snapshot
+            .lines()
+            .find(|line| line.starts_with("[e") && line.contains(label))
+            .and_then(|line| line.split(']').next())
+            .map(|reference| reference.trim_start_matches('[').to_owned())
+            .unwrap_or_else(|| panic!("no {label} field in {snapshot}"))
+    };
+    let (user, pass, code) = (field("User"), field("Password"), field("Code"));
+    let filled = call(
+        &client,
+        "browser",
+        json!({"action":"fill","ref":user,"secret":"PROOF.username"}),
+    )
+    .await;
+    assert_eq!(text(&filled), format!("filled {user} with PROOF.username"));
+    let filled = call(
+        &client,
+        "browser",
+        json!({"action":"fill","ref":pass,"secret":"PROOF.password"}),
+    )
+    .await;
+    assert_eq!(text(&filled), format!("filled {pass} with PROOF.password"));
+    let filled = call(
+        &client,
+        "browser",
+        json!({"action":"fill","ref":code,"secret":"PROOF.code"}),
+    )
+    .await;
+    assert_eq!(text(&filled), format!("filled {code} with PROOF.code"));
+    let typed = text(
+        &call(
+            &client,
+            "browser",
+            json!({"action":"eval","js":"[user.value, pass.value, code.value]"}),
+        )
+        .await,
+    );
+    let typed: Vec<String> = serde_json::from_str(&typed).unwrap_or_else(|_| panic!("{typed}"));
+    assert_eq!(typed[0], "teammate");
+    assert_eq!(
+        typed[1], "[redacted PROOF.password]",
+        "a value read back is redacted"
+    );
+    assert!(
+        typed[2].len() == 6 && typed[2].chars().all(|c| c.is_ascii_digit()),
+        "a code is six digits: {}",
+        typed[2]
+    );
+    let both = call(
+        &client,
+        "browser",
+        json!({"action":"fill","ref":user,"secret":"PROOF.username","text":"x"}),
+    )
+    .await;
+    assert!(both.is_error.unwrap_or(false), "{}", text(&both));
+    let unknown = call(
+        &client,
+        "browser",
+        json!({"action":"fill","ref":user,"secret":"PROOF.token"}),
+    )
+    .await;
+    assert!(text(&unknown).contains("not token"), "{}", text(&unknown));
+    let passkey = call(
+        &client,
+        "browser",
+        json!({"action":"fill","ref":user,"secret":"PROOF_PASSKEY"}),
+    )
+    .await;
+    assert!(
+        text(&passkey).contains("signs in by itself"),
+        "{}",
+        text(&passkey)
+    );
+    // The same page by another name is another site.
+    let elsewhere = call(
+        &client,
+        "browser",
+        json!({"action":"navigate","url":"http://127.0.0.1:8123/passkey.html"}),
+    )
+    .await;
+    assert!(!elsewhere.is_error.unwrap_or(false), "{}", text(&elsewhere));
+    let snapshot = text(&call(&client, "browser", json!({"action":"text"})).await);
+    let pass = snapshot
+        .lines()
+        .find(|line| line.starts_with("[e") && line.contains("Password"))
+        .and_then(|line| line.split(']').next())
+        .map(|reference| reference.trim_start_matches('[').to_owned())
+        .expect("password field");
+    let refused = call(
+        &client,
+        "browser",
+        json!({"action":"fill","ref":pass,"secret":"PROOF.password"}),
+    )
+    .await;
+    assert!(refused.is_error.unwrap_or(false), "{}", text(&refused));
+    assert!(
+        text(&refused).contains("typed only on http://localhost:8123")
+            && text(&refused).contains("http://127.0.0.1:8123"),
+        "{}",
+        text(&refused)
+    );
+    let variable = call(
+        &client,
+        "browser",
+        json!({"action":"fill","ref":pass,"secret":"PROOF_TOKEN"}),
+    )
+    .await;
+    assert_eq!(
+        text(&variable),
+        format!("filled {pass} with PROOF_TOKEN"),
+        "a variable has no site to keep to"
+    );
+    let nothing_leaked = text(
+        &call(
+            &client,
+            "browser",
+            json!({"action":"eval","js":"pass.value"}),
+        )
+        .await,
+    );
+    assert_eq!(nothing_leaked, "\"[redacted PROOF_TOKEN]\"");
+    // Revoked, the passkey is gone from the browser at once.
+    let revoked = http
+        .put(&door)
+        .bearer_auth(&token)
+        .json(&json!({}))
+        .send()
+        .await
+        .expect("revoke everything");
+    assert_eq!(revoked.status(), 204);
+    let navigated = call(
+        &client,
+        "browser",
+        json!({"action":"navigate","url":"http://localhost:8123/passkey.html"}),
+    )
+    .await;
+    assert!(!navigated.is_error.unwrap_or(false), "{}", text(&navigated));
+    let unsigned = text(&call(&client, "browser", json!({"action":"eval","js":"sign()"})).await);
+    assert!(
+        unsigned.contains("refused"),
+        "a revoked passkey no longer signs: {unsigned}"
+    );
+    assert!(!unsigned.contains(&credential_id), "{unsigned}");
+    let stopped = call(
+        &client,
+        "shell",
+        json!({"action":"cancel","job_id":serde_json::from_str::<serde_json::Value>(&text(&server)).map(|job| job["id"].as_str().unwrap_or_default().to_owned()).unwrap_or_default()}),
+    )
+    .await;
+    assert!(!stopped.is_error.unwrap_or(false), "{}", text(&stopped));
     let ws_base = base.replacen("http", "ws", 1);
     if !token.is_empty() {
         let refused = tokio_tungstenite::connect_async(format!("{ws_base}/ws")).await;

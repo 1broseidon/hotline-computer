@@ -1,3 +1,4 @@
+use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
 use std::pin::Pin;
 use std::sync::Arc;
@@ -5,14 +6,24 @@ use std::time::Duration;
 
 use chromiumoxide::cdp::browser_protocol::dom::SetFileInputFilesParams;
 use chromiumoxide::cdp::browser_protocol::network::CookieParam;
-use chromiumoxide::cdp::browser_protocol::page::HandleJavaScriptDialogParams;
+use chromiumoxide::cdp::browser_protocol::page::{
+    AddScriptToEvaluateOnNewDocumentParams, HandleJavaScriptDialogParams,
+    RemoveScriptToEvaluateOnNewDocumentParams, ScriptIdentifier,
+};
+use chromiumoxide::cdp::browser_protocol::web_authn::{
+    AddCredentialParams, AddVirtualAuthenticatorParams, AuthenticatorId, AuthenticatorProtocol,
+    AuthenticatorTransport, Credential, Ctap2Version, EnableParams, GetCredentialsParams,
+    RemoveCredentialParams, VirtualAuthenticatorOptions,
+};
 use chromiumoxide::cdp::js_protocol::runtime::RemoteObjectType;
-use chromiumoxide::{Browser, BrowserConfig, Page};
+use chromiumoxide::{Binary, Browser, BrowserConfig, Page};
 use futures_util::StreamExt;
 use serde_json::{Value, json};
 use tokio::sync::Mutex;
 
 use crate::Config;
+use crate::passkeys::Passkeys;
+use crate::secrets::{Filled, Origin, Passkey, Secrets};
 
 pub const NO_BROWSER: &str = "This computer has no browser installed.";
 
@@ -23,23 +34,45 @@ const LIVENESS: Duration = Duration::from_secs(3);
 const ACTION_DEADLINE: Duration = Duration::from_secs(60);
 /// How long a fresh Chromium gets to report its first tab.
 const INITIAL_TAB: Duration = Duration::from_secs(2);
+/// How long a passkey delivery waits for a browser action in flight before
+/// leaving the tabs to the next action's own look.
+const SYNC_PATIENCE: Duration = Duration::from_secs(5);
 
 #[derive(Clone)]
 pub struct BrowserManager {
     config: Arc<Config>,
+    secrets: Secrets,
+    passkeys: Passkeys,
     session: Arc<Mutex<Option<BrowserSession>>>,
 }
 
 struct BrowserSession {
     browser: Browser,
     current: usize,
+    secrets: Secrets,
+    passkeys: Passkeys,
+    /// What the guard script wants before it lets a passkey be made: made
+    /// for this browser at launch, and never on a page.
+    token: String,
+    /// The tabs that carry the teammate's passkeys, by target.
+    authenticators: HashMap<String, TabAuthenticator>,
     _handler: tokio::task::JoinHandle<()>,
 }
 
+/// A tab's virtual authenticator and the guard installed in its documents.
+struct TabAuthenticator {
+    id: AuthenticatorId,
+    guard: ScriptIdentifier,
+    /// The site the installed guard is armed for.
+    armed: Option<String>,
+}
+
 impl BrowserManager {
-    pub fn new(config: Arc<Config>) -> Self {
+    pub fn new(config: Arc<Config>, secrets: Secrets, passkeys: Passkeys) -> Self {
         Self {
             config,
+            secrets,
+            passkeys,
             session: Arc::new(Mutex::new(None)),
         }
     }
@@ -176,8 +209,69 @@ impl BrowserManager {
         Ok(BrowserSession {
             browser,
             current: 0,
+            secrets: self.secrets.clone(),
+            passkeys: self.passkeys.clone(),
+            token: session_token()?,
+            authenticators: HashMap::new(),
             _handler: handler,
         })
+    }
+
+    /// Puts the teammate's passkeys into every tab and the arming, if any,
+    /// into every guard: after a delivery, at each look while armed, and
+    /// when the arming ends. With `launch`, a browser is started when none
+    /// is up, since the person is about to make a passkey in it, and it
+    /// opens on the armed site. Without, a browser that is busy with an
+    /// action is left alone: that action's own look at its tab, and the
+    /// next one's, carry the change.
+    pub async fn sync_passkeys(&self, launch: bool) -> Result<(), String> {
+        let mut session = if launch {
+            self.session.lock().await
+        } else {
+            match tokio::time::timeout(SYNC_PATIENCE, self.session.lock()).await {
+                Ok(session) => session,
+                Err(_) => return Ok(()),
+            }
+        };
+        if let Some(current) = session.as_ref()
+            && !alive(&current.browser).await
+        {
+            reap(session.take().expect("checked above")).await;
+        }
+        let fresh = session.is_none();
+        if fresh {
+            if !launch {
+                return Ok(());
+            }
+            *session = Some(self.launch().await?);
+        }
+        let session = session.as_mut().expect("created above");
+        let synced = async {
+            let pages = session.browser.pages().await.map_err(browser_error)?;
+            let open: HashSet<String> = pages
+                .iter()
+                .map(|page| page.target_id().inner().clone())
+                .collect();
+            session
+                .authenticators
+                .retain(|target, _| open.contains(target));
+            for page in &pages {
+                passkey_sync(session, page).await?;
+            }
+            if fresh
+                && let Some((rp_id, _)) = session.passkeys.armed()
+                && let Some(page) = pages.first()
+            {
+                page.bring_to_front().await.map_err(browser_error)?;
+                page.goto(format!("https://{rp_id}/"))
+                    .await
+                    .map_err(browser_error)?;
+            }
+            Ok(())
+        };
+        tokio::time::timeout(ACTION_DEADLINE, synced)
+            .await
+            .unwrap_or_else(|_| Err("browser: the tabs did not answer in time".to_owned()))
     }
 
     pub async fn navigate(&self, url: &str) -> Result<String, String> {
@@ -282,6 +376,44 @@ impl BrowserManager {
         self.form_action(reference, "fill", json!(text)).await
     }
 
+    /// Types a stored secret's value into a field, and answers its name,
+    /// never the value. A login's field goes only onto a page whose origin,
+    /// as the browser reports it, is one of the login's sites or lies under
+    /// one: the page a password is typed into can read it, so which page is
+    /// the whole protection.
+    pub async fn fill_secret(&self, reference: &str, filled: Filled) -> Result<String, String> {
+        let selector = ref_selector(reference)?;
+        let reference = reference.to_owned();
+        self.with_session(|session| {
+            Box::pin(async move {
+                let page = current_page(session).await?;
+                if let Some(sites) = &filled.sites {
+                    let url = page.url().await.map_err(browser_error)?.unwrap_or_default();
+                    let allowed = sites
+                        .iter()
+                        .map(ToString::to_string)
+                        .collect::<Vec<_>>()
+                        .join(", ");
+                    let origin = Origin::of_page(&url).map_err(|_| {
+                        format!(
+                            "{} is typed only on {allowed}, and this page has no site",
+                            filled.label
+                        )
+                    })?;
+                    if !sites.iter().any(|site| site.allows(&origin)) {
+                        return Err(format!(
+                            "{} is typed only on {allowed}; this page is {origin}",
+                            filled.label
+                        ));
+                    }
+                }
+                form_action_on(&page, &selector, "fill", json!(filled.value)).await?;
+                Ok(format!("filled {reference} with {}", filled.label))
+            })
+        })
+        .await
+    }
+
     pub async fn select(&self, reference: &str, values: &[String]) -> Result<String, String> {
         self.form_action(reference, "select", json!(values)).await
     }
@@ -297,19 +429,11 @@ impl BrowserManager {
         requested: Value,
     ) -> Result<String, String> {
         let selector = ref_selector(reference)?;
-        let script = format!(
-            "({})(document.querySelector({}),{}, {})",
-            include_str!("../assets/browser-form.js"),
-            json!(selector),
-            json!(action),
-            requested
-        );
+        let action = action.to_owned();
         self.with_session(|session| {
             Box::pin(async move {
-                let value = evaluate_value(&current_page(session).await?, &script).await?;
-                if value.get("ok").and_then(Value::as_bool) != Some(true) {
-                    return Err(value.to_string());
-                }
+                let page = current_page(session).await?;
+                let value = form_action_on(&page, &selector, &action, requested).await?;
                 Ok(value.to_string())
             })
         })
@@ -358,15 +482,17 @@ impl BrowserManager {
         let url = url.to_owned();
         self.with_session(|session| {
             Box::pin(async move {
+                // The tab opens blank and takes the passkeys and their guard
+                // before any site's script runs in it.
                 let page = session
                     .browser
-                    .new_page(if url.is_empty() {
-                        "about:blank"
-                    } else {
-                        url.as_str()
-                    })
+                    .new_page("about:blank")
                     .await
                     .map_err(browser_error)?;
+                passkey_sync(session, &page).await?;
+                if !url.is_empty() {
+                    page.goto(url.as_str()).await.map_err(browser_error)?;
+                }
                 let pages = session.browser.pages().await.map_err(browser_error)?;
                 session.current = pages
                     .iter()
@@ -566,17 +692,225 @@ async fn reap(mut session: BrowserSession) {
     session._handler.abort();
 }
 
+/// The tab the agent drives, carrying the teammate's passkeys and their
+/// guard before anything is done on it.
 async fn current_page(session: &mut BrowserSession) -> Result<Page, String> {
     let pages = session.browser.pages().await.map_err(browser_error)?;
-    if pages.is_empty() {
-        return session
+    let page = if pages.is_empty() {
+        session
             .browser
             .new_page("about:blank")
             .await
-            .map_err(browser_error);
+            .map_err(browser_error)?
+    } else {
+        session.current = session.current.min(pages.len() - 1);
+        pages[session.current].clone()
+    };
+    passkey_sync(session, &page).await?;
+    Ok(page)
+}
+
+/// Brings one tab's authenticator to the granted set, and its guard to the
+/// arming. A tab is left untouched until there is a passkey to carry or an
+/// arming to honour, and then it gets a virtual authenticator — internal,
+/// resident, user-verifying, presence simulated, so a passkey signs in
+/// without a prompt — and the guard in every document. Each look compares
+/// what the authenticator holds with what it should: a granted or awaited
+/// passkey missing is added, one the page minted under the arming is kept
+/// for the desk, and anything else is removed, so a passkey made outside
+/// an arming never survives the next look.
+async fn passkey_sync(session: &mut BrowserSession, page: &Page) -> Result<(), String> {
+    let granted = session.secrets.passkeys();
+    let armed = session.passkeys.armed().map(|(rp_id, _)| rp_id);
+    let target = page.target_id().inner().clone();
+    if granted.is_empty() && armed.is_none() && !session.authenticators.contains_key(&target) {
+        return Ok(());
     }
-    session.current = session.current.min(pages.len() - 1);
-    Ok(pages[session.current].clone())
+    if !session.authenticators.contains_key(&target) {
+        page.execute(EnableParams::default())
+            .await
+            .map_err(browser_error)?;
+        let mut options = VirtualAuthenticatorOptions::new(
+            AuthenticatorProtocol::Ctap2,
+            AuthenticatorTransport::Internal,
+        );
+        options.ctap2_version = Some(Ctap2Version::Ctap21);
+        options.has_resident_key = Some(true);
+        options.has_user_verification = Some(true);
+        options.is_user_verified = Some(true);
+        options.automatic_presence_simulation = Some(true);
+        options.default_backup_eligibility = Some(true);
+        options.default_backup_state = Some(true);
+        let id = page
+            .execute(AddVirtualAuthenticatorParams::new(options))
+            .await
+            .map_err(browser_error)?
+            .result
+            .authenticator_id;
+        let guard = install_guard(page, &session.token, armed.as_deref()).await?;
+        session.authenticators.insert(
+            target.clone(),
+            TabAuthenticator {
+                id,
+                guard,
+                armed: armed.clone(),
+            },
+        );
+    }
+    let tab = session
+        .authenticators
+        .get_mut(&target)
+        .expect("inserted above");
+    if tab.armed != armed {
+        page.execute(RemoveScriptToEvaluateOnNewDocumentParams::new(
+            tab.guard.clone(),
+        ))
+        .await
+        .map_err(browser_error)?;
+        tab.guard = install_guard(page, &session.token, armed.as_deref()).await?;
+        tab.armed = armed.clone();
+    }
+    // The document already open learns the arming too; one that has no
+    // guard, such as a browser page of Chromium's own, has nothing to learn.
+    let _ = page
+        .evaluate(format!(
+            "typeof __hotlineArm === 'function' && __hotlineArm({}, {})",
+            json!(session.token),
+            json!(armed)
+        ))
+        .await;
+    let held = page
+        .execute(GetCredentialsParams::new(tab.id.clone()))
+        .await
+        .map_err(browser_error)?
+        .result
+        .credentials;
+    let mut wanted: Vec<Passkey> = granted.into_iter().map(|(_, passkey)| passkey).collect();
+    wanted.extend(session.passkeys.minted());
+    let held_ids: HashSet<String> = held
+        .iter()
+        .map(|credential| String::from(credential.credential_id.clone()))
+        .collect();
+    for credential in held {
+        let id = String::from(credential.credential_id.clone());
+        if wanted.iter().any(|passkey| passkey.credential_id == id) {
+            continue;
+        }
+        // Not one this computer added: the page minted it. Under an arming
+        // for its site, it is the one the desk is waiting for.
+        let minted = passkey_from(credential, armed.as_deref());
+        if session.passkeys.keep(minted.clone()) {
+            wanted.push(minted);
+            continue;
+        }
+        page.execute(RemoveCredentialParams::new(
+            tab.id.clone(),
+            Binary::from(id),
+        ))
+        .await
+        .map_err(browser_error)?;
+    }
+    for passkey in wanted {
+        if held_ids.contains(&passkey.credential_id) {
+            continue;
+        }
+        page.execute(AddCredentialParams::new(
+            tab.id.clone(),
+            credential_from(&passkey),
+        ))
+        .await
+        .map_err(|error| format!("browser: {}: {error}", passkey.rp_id))?;
+    }
+    Ok(())
+}
+
+/// Installs the guard for every document the tab opens from now, and the
+/// one open now, armed for `armed`.
+async fn install_guard(
+    page: &Page,
+    token: &str,
+    armed: Option<&str>,
+) -> Result<ScriptIdentifier, String> {
+    let source = include_str!("../assets/browser-passkey-guard.js")
+        .replace("__TOKEN__", &json!(token).to_string())
+        .replace("__ARMED__", &json!(armed).to_string());
+    let mut install = AddScriptToEvaluateOnNewDocumentParams::new(source);
+    install.run_immediately = Some(true);
+    Ok(page
+        .execute(install)
+        .await
+        .map_err(browser_error)?
+        .result
+        .identifier)
+}
+
+/// A stored passkey as the authenticator takes it: resident, backed up as
+/// far as the site is told, and with a signature counter that stays at
+/// zero, since a counter that goes backwards would lock the account after
+/// the credential is put into a second tab.
+fn credential_from(passkey: &Passkey) -> Credential {
+    let mut credential = Credential::new(
+        Binary::from(passkey.credential_id.clone()),
+        true,
+        Binary::from(passkey.private_key.clone()),
+        0,
+    );
+    credential.rp_id = Some(passkey.rp_id.clone());
+    credential.user_handle = passkey.user_handle.clone().map(Binary::from);
+    credential.user_name = passkey.user_name.clone();
+    credential.user_display_name = passkey.user_display_name.clone();
+    credential.backup_eligibility = Some(true);
+    credential.backup_state = Some(true);
+    credential
+}
+
+/// A credential the authenticator reports, as the desk stores it.
+fn passkey_from(credential: Credential, armed: Option<&str>) -> Passkey {
+    Passkey {
+        rp_id: credential
+            .rp_id
+            .or_else(|| armed.map(str::to_owned))
+            .unwrap_or_default(),
+        credential_id: String::from(credential.credential_id),
+        private_key: String::from(credential.private_key),
+        user_handle: credential.user_handle.map(String::from),
+        user_name: credential.user_name,
+        user_display_name: credential.user_display_name,
+    }
+}
+
+/// Sixteen random bytes, in hex: what the guard script wants before it
+/// changes the armed site on a document that is already open.
+fn session_token() -> Result<String, String> {
+    let mut bytes = [0_u8; 16];
+    std::io::Read::read_exact(
+        &mut std::fs::File::open("/dev/urandom").map_err(|error| format!("browser: {error}"))?,
+        &mut bytes,
+    )
+    .map_err(|error| format!("browser: {error}"))?;
+    Ok(bytes.iter().map(|byte| format!("{byte:02x}")).collect())
+}
+
+/// Runs the form script on one element, and answers what it reports when
+/// it reports success.
+async fn form_action_on(
+    page: &Page,
+    selector: &str,
+    action: &str,
+    requested: Value,
+) -> Result<Value, String> {
+    let script = format!(
+        "({})(document.querySelector({}),{}, {})",
+        include_str!("../assets/browser-form.js"),
+        json!(selector),
+        json!(action),
+        requested
+    );
+    let value = evaluate_value(page, &script).await?;
+    if value.get("ok").and_then(Value::as_bool) != Some(true) {
+        return Err(value.to_string());
+    }
+    Ok(value)
 }
 
 async fn evaluate_value(page: &Page, script: &str) -> Result<Value, String> {
