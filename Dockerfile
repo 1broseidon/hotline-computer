@@ -84,7 +84,8 @@ ENV HOTLINE_COMPUTER_ADDR=0.0.0.0:8787 \
     ELECTRON_DISABLE_SANDBOX=1 \
     GDK_BACKEND=x11 \
     APPIMAGE_EXTRACT_AND_RUN=1 \
-    BROWSER="hotline-computer open"
+    BROWSER="hotline-computer open" \
+    SHELL=/bin/bash
 RUN install -d /home/agent/src && nix-store --init
 # The base's closure ships as a signed binary cache outside /nix, not as
 # store contents: the desk mounts /nix as a shared volume that already holds

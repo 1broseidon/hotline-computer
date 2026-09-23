@@ -351,12 +351,8 @@ async fn state_message(app: &App, holder: &str, driving: bool) -> String {
         None => "none",
     };
     let jobs = app.jobs.list().await.unwrap_or_default();
-    let running = jobs.iter().filter(|job| job.state == "running").count();
-    let completed = jobs
-        .iter()
-        .filter(|job| job.state == "exited" && job.exit_code == Some(0))
-        .count();
-    json!({"t":"state","holder":who,"driving":driving,"running":running,"completed":completed,"failed":jobs.len() - running - completed})
+    let [running, completed, failed] = crate::jobs::counts(&jobs, crate::jobs::now());
+    json!({"t":"state","holder":who,"driving":driving,"running":running,"completed":completed,"failed":failed})
         .to_string()
 }
 

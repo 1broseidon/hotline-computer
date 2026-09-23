@@ -154,10 +154,13 @@
     if (driving) { status.textContent = "You’re in control"; sub.textContent = ""; hint.textContent = (mac ? "⌥⌘V" : "Ctrl+Alt+V") + " pastes from your computer"; return; }
     if (held) { status.textContent = "Someone else has the screen"; sub.textContent = ""; return; }
     status.textContent = "Watching";
-    const jobs = machine.running ? `${machine.running} ${machine.running === 1 ? "job" : "jobs"}` : "";
-    const failed = machine.failed ? `${machine.failed} failed` : "";
+    // The same words as the desktop's bar.
+    const { running, completed, failed } = machine;
+    const jobs = failed ? `${failed} failed · ${running} running`
+      : running ? `${running} running · ${completed} done`
+      : completed ? `${completed} done` : "no jobs";
     const doing = machine.holder === "agent" ? "agent in control" : "agent at work";
-    sub.textContent = "· " + [doing, jobs, failed].filter(Boolean).join(", ");
+    sub.textContent = `· ${doing} · ${jobs}`;
   }
 
   function fit() {

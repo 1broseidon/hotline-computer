@@ -75,7 +75,15 @@ The bar counted every retained job that had not exited 0 as failed, across resta
 someone cancelled, jobs a restart cut short, and failures long since fixed. The person's
 machine showed "14 failed" with nothing wrong. It now counts a failure only while it is
 under an hour old and nothing has run the same command since; cancelled and interrupted jobs
-never count. The jobs list still shows every job as it ended.
+never count. The jobs list still shows every job as it ended. The viewer's floating control
+bar counted the old way on its own; it now takes the same counts and the same words as the
+desktop's bar.
+
+## Apps find a login shell
+
+The image set no `SHELL`, so apps that read the person's login-shell `PATH` at startup fell
+back to `/bin/zsh`, which is not installed, and logged "could not read shell PATH: No such
+file or directory". The image now sets `SHELL=/bin/bash`, as a desktop session would.
 
 ## Checks
 

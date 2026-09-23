@@ -88,18 +88,31 @@ const ATTENTION_MS: u64 = 60 * 60 * 1000;
 
 /// A failure the person should look at: it failed or timed out on its own
 /// (a job someone cancelled, or one a restart cut short, did not), within the
-/// last hour, and nothing has run the same command since. `records` is newest
-/// first.
-pub fn needs_attention(records: &[Record], index: usize, now: u64) -> bool {
-    let record = &records[index];
+/// last hour, and nothing has run the same command since.
+pub fn needs_attention(records: &[Record], record: &Record, now: u64) -> bool {
     matches!(record.state.as_str(), "failed" | "timed_out")
         && record
             .finished_at
             .is_some_and(|finished| now.saturating_sub(finished) < ATTENTION_MS)
         && (record.fingerprint.is_empty()
-            || !records[..index]
-                .iter()
-                .any(|later| later.fingerprint == record.fingerprint))
+            || !records.iter().any(|later| {
+                later.fingerprint == record.fingerprint && later.started_at > record.started_at
+            }))
+}
+
+/// What the desktop's bar and the viewer's control bar count: jobs running,
+/// jobs that exited cleanly, and failures that need attention.
+pub fn counts(records: &[Record], now: u64) -> [usize; 3] {
+    let running = records.iter().filter(|job| job.state == "running").count();
+    let completed = records
+        .iter()
+        .filter(|job| job.state == "exited" && job.exit_code == Some(0))
+        .count();
+    let failed = records
+        .iter()
+        .filter(|job| needs_attention(records, job, now))
+        .count();
+    [running, completed, failed]
 }
 
 impl Record {
@@ -475,13 +488,14 @@ impl Jobs {
                 .then_with(|| b.id.cmp(&a.id))
         });
         let now = now();
-        let summaries: Vec<_> = (0..records.len())
-            .map(|index| Summary {
-                attention: needs_attention(&records, index, now),
-                id: records[index].id.clone(),
-                label: records[index].label.clone(),
-                state: records[index].state.clone(),
-                exit_code: records[index].exit_code,
+        let summaries: Vec<_> = records
+            .iter()
+            .map(|record| Summary {
+                attention: needs_attention(&records, record, now),
+                id: record.id.clone(),
+                label: record.label.clone(),
+                state: record.state.clone(),
+                exit_code: record.exit_code,
             })
             .collect();
         let _ = crate::x11::publish_jobs(&self.display, &summaries);
@@ -896,7 +910,7 @@ mod tests {
             cwd: "/home/agent".into(),
             holder: "agent".into(),
             state: state.into(),
-            exit_code: None,
+            exit_code: (state == "exited").then_some(0),
             signal: None,
             started_at: now - finished_ago - 1,
             finished_at: Some(now - finished_ago),
@@ -908,7 +922,6 @@ mod tests {
             fingerprint: command.into(),
             artifact_staging: None,
         };
-        // Newest first, as the bar publishes them.
         let records = [
             job("test", "exited", 1_000),
             job("build", "failed", 2_000),
@@ -918,11 +931,13 @@ mod tests {
             job("test", "failed", 6_000),
             job("fetch", "failed", ATTENTION_MS + 1),
         ];
-        let flagged: Vec<_> = (0..records.len())
-            .filter(|&index| needs_attention(&records, index, now))
-            .map(|index| records[index].command.as_str())
+        let flagged: Vec<_> = records
+            .iter()
+            .filter(|record| needs_attention(&records, record, now))
+            .map(|record| record.command.as_str())
             .collect();
         assert_eq!(flagged, ["build", "lint"]);
+        assert_eq!(counts(&records, now), [0, 1, 2]);
     }
 
     #[test]
