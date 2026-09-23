@@ -15,7 +15,7 @@ use chromiumoxide::cdp::browser_protocol::web_authn::{
     AuthenticatorTransport, Credential, Ctap2Version, EnableParams, GetCredentialsParams,
     RemoveCredentialParams, VirtualAuthenticatorOptions,
 };
-use chromiumoxide::cdp::js_protocol::runtime::RemoteObjectType;
+use chromiumoxide::cdp::js_protocol::runtime::{RemoteObjectSubtype, RemoteObjectType};
 use chromiumoxide::{Binary, Browser, BrowserConfig, Page};
 use futures_util::StreamExt;
 use serde_json::{Value, json};
@@ -1015,7 +1015,11 @@ async fn form_action_on(
 async fn evaluate_value(page: &Page, script: &str) -> Result<Value, String> {
     let result = page.evaluate(script).await.map_err(browser_error)?;
     // Valid statements such as focus() have no JavaScript return value.
-    if result.object().r#type == RemoteObjectType::Undefined {
+    // null carries no value either, only its subtype.
+    let object = result.object();
+    if object.r#type == RemoteObjectType::Undefined
+        || object.subtype == Some(RemoteObjectSubtype::Null)
+    {
         return Ok(Value::Null);
     }
     result.into_value().map_err(browser_error)

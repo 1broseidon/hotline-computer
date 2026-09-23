@@ -29,6 +29,9 @@ const SUPER: Keysym = 0xffeb;
 /// client that reads its queue in order still sees two events.
 const KEY_GAP: Duration = Duration::from_millis(2);
 const CLICK_GAP: Duration = Duration::from_millis(60);
+/// After a keycode is remapped, before it is pressed: clients reload their
+/// keymap on MappingNotify, and a press that arrives first types nothing.
+const REMAP_SETTLE: Duration = Duration::from_millis(100);
 
 pub struct Hands {
     connection: RustConnection,
@@ -38,6 +41,8 @@ pub struct Hands {
     keysyms: Vec<Keysym>,
     spare: Vec<Keycode>,
     remapped: HashMap<Keysym, Keycode>,
+    /// A keycode was remapped since the last key press.
+    unsettled: bool,
     /// Where the pointer was last put, so a button event can say where.
     at: (i16, i16),
     /// Keys put down one at a time and not yet let go, so that a viewer
@@ -89,6 +94,7 @@ impl Hands {
             keysyms: mapping.keysyms,
             spare,
             remapped: HashMap::new(),
+            unsettled: false,
             at: (0, 0),
             held: HashSet::new(),
             gestures: tokio::sync::broadcast::channel(256).0,
@@ -170,15 +176,19 @@ impl Hands {
     /// Text as a person would type it, one character at a time, Shift held
     /// for the characters that need it. A newline is Return and a tab is Tab.
     pub fn type_text(&mut self, text: &str) -> Result<(), String> {
-        for character in text.chars() {
-            let keysym = match character {
-                '\n' => 0xff0d,
-                '\t' => 0xff09,
-                other => match keysym_for(&other.to_string()) {
-                    Some(keysym) => keysym,
-                    None => continue,
-                },
-            };
+        let keysyms: Vec<Keysym> = text
+            .chars()
+            .filter_map(|character| match character {
+                '\n' => Some(0xff0d),
+                '\t' => Some(0xff09),
+                other => keysym_for(&other.to_string()),
+            })
+            .collect();
+        // Map every character first, so clients reload their keymap once.
+        for keysym in &keysyms {
+            self.key_for(*keysym)?;
+        }
+        for keysym in keysyms {
             let (keycode, shifted) = self.key_for(keysym)?;
             let shift = if shifted {
                 Some(self.keycode_for(SHIFT)?)
@@ -244,10 +254,13 @@ impl Hands {
         Ok(())
     }
 
-    fn fake(&self, kind: u8, detail: u8, x: i16, y: i16) -> Result<(), String> {
+    fn fake(&mut self, kind: u8, detail: u8, x: i16, y: i16) -> Result<(), String> {
         // MappingNotify reaches every client; unread, it would pile up in the
         // socket for the life of the session.
         while let Ok(Some(_)) = self.connection.poll_for_event() {}
+        if kind == KEY_PRESS_EVENT && std::mem::take(&mut self.unsettled) {
+            std::thread::sleep(REMAP_SETTLE);
+        }
         self.connection
             .xtest_fake_input(kind, detail, x11rb::CURRENT_TIME, self.root, x, y, 0)
             .map_err(|error| error.to_string())?;
@@ -296,6 +309,7 @@ impl Hands {
         let start = usize::from(keycode - self.min_keycode) * self.per_keycode;
         self.keysyms[start..start + self.per_keycode].copy_from_slice(&columns);
         self.remapped.insert(keysym, keycode);
+        self.unsettled = true;
         Ok((keycode, false))
     }
 }

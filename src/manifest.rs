@@ -93,6 +93,10 @@ pub struct Manifest {
     /// Runtime support the image provides by name, such as gl, gtk or webkit.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub platform: Vec<String>,
+    /// Nixpkgs attributes whose libraries go on the library path, for what a
+    /// prebuilt binary loads beyond its platforms.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub libraries: Vec<String>,
     #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
     pub env: BTreeMap<String, EnvValue>,
     #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
@@ -212,7 +216,7 @@ pub fn parse(text: &str) -> Result<Manifest, String> {
 }
 
 /// Said with every shape error, because the error is the documentation.
-pub const SHAPE: &str = "A manifest is a JSON object with any of: packages (Nixpkgs attribute names), flake (a local flake instead of packages), platform (gl, gtk, gtk4, qt, native, webkit, prebuilt, qt-wheel), env (NAME: \"value\", or NAME: [\"path\", ...] to extend a search path), services (NAME: {\"enable\": true}), hooks ({\"create\": {NAME: [argv]}, \"start\": {NAME: [argv]}}), runs (NAME: {\"command\": [argv], \"cwd\": \"subdir\", \"kind\": \"task\" | \"desktop\" | \"web\", \"env\": {}, \"label\": \"...\"}). state manifest shows an example and what this image offers.";
+pub const SHAPE: &str = "A manifest is a JSON object with any of: packages (Nixpkgs attribute names), flake (a local flake instead of packages), platform (gl, gtk, gtk4, qt, native, webkit, prebuilt, qt-wheel), libraries (Nixpkgs attribute names put on the library path, for what a prebuilt binary loads beyond its platforms), env (NAME: \"value\", or NAME: [\"path\", ...] to extend a search path), services (NAME: {\"enable\": true}), hooks ({\"create\": {NAME: [argv]}, \"start\": {NAME: [argv]}}), runs (NAME: {\"command\": [argv], \"cwd\": \"subdir\", \"kind\": \"task\" | \"desktop\" | \"web\", \"env\": {}, \"label\": \"...\"}). state manifest shows an example and what this image offers.";
 
 fn concat(mut first: Vec<String>, second: Vec<String>) -> Vec<String> {
     for item in second {
@@ -244,6 +248,7 @@ pub fn merge(lower: Manifest, upper: Manifest) -> Manifest {
         packages: concat(lower.packages, upper.packages),
         flake: upper.flake.or(lower.flake),
         platform: concat(lower.platform, upper.platform),
+        libraries: concat(lower.libraries, upper.libraries),
         env,
         services,
         hooks,
@@ -314,7 +319,7 @@ fn validate(composed: &Composed) -> Result<(), String> {
     if base.nixpkgs.len() != 40 || !base.nixpkgs.bytes().all(|c| c.is_ascii_hexdigit()) {
         return Err("the image base's nixpkgs pin must be a 40-character Git revision".into());
     }
-    for package in &m.packages {
+    for package in m.packages.iter().chain(&m.libraries) {
         if !crate::workspace::attribute(package) {
             return Err(format!(
                 "package {package:?} is not a Nixpkgs attribute path, such as python312 or nodePackages.typescript"
@@ -340,9 +345,10 @@ fn validate(composed: &Composed) -> Result<(), String> {
     if m.flake.is_some()
         && (!m.packages.is_empty()
             || !m.platform.is_empty()
+            || !m.libraries.is_empty()
             || enabled_services(composed).next().is_some())
     {
-        return Err("flake replaces packages: with a flake, declare packages, platform and services in the flake itself, or drop flake and list them here".into());
+        return Err("flake replaces packages: with a flake, declare packages, platform, libraries and services in the flake itself, or drop flake and list them here".into());
     }
     if packages(composed).len() > 128 {
         return Err(
@@ -434,6 +440,7 @@ pub fn platforms(composed: &Composed) -> Vec<(&String, &Platform)> {
 /// Every Nixpkgs attribute the environment brings, sorted.
 pub fn packages(composed: &Composed) -> Vec<String> {
     let mut all = composed.manifest.packages.clone();
+    all.extend(composed.manifest.libraries.iter().cloned());
     for (_, platform) in platforms(composed) {
         all.extend(platform.packages.iter().cloned());
         all.extend(platform.libraries.iter().cloned());
@@ -497,7 +504,7 @@ pub fn render(composed: &Composed) -> Result<String, String> {
     }
     let platforms = platforms(composed);
     let mut platform_packages: Vec<String> = Vec::new();
-    let mut libraries: Vec<String> = Vec::new();
+    let mut libraries = composed.manifest.libraries.clone();
     let mut env: BTreeMap<&str, &str> = BTreeMap::new();
     for (_, platform) in &platforms {
         platform_packages.extend(platform.packages.iter().cloned());
@@ -512,16 +519,16 @@ pub fn render(composed: &Composed) -> Result<String, String> {
     libraries.sort();
     libraries.dedup();
     let mut runtime = String::new();
+    if !libraries.is_empty() {
+        runtime.push_str(&format!(
+            "        LD_LIBRARY_PATH = lib.makeLibraryPath [ {} ];\n",
+            list(&libraries)
+        ));
+    }
     if !platforms.is_empty() {
         runtime.push_str(
             "        XDG_DATA_DIRS = lib.concatStringsSep \":\" ((map (p: \"${p}/share/gsettings-schemas/${p.name}\") platform) ++ (map (p: \"${p}/share\") platform) ++ [ \"/usr/local/share\" \"/usr/share\" ]);\n        GIO_EXTRA_MODULES = lib.concatMapStringsSep \":\" (p: \"${p}/lib/gio/modules\") platform;\n",
         );
-        if !libraries.is_empty() {
-            runtime.push_str(&format!(
-                "        LD_LIBRARY_PATH = lib.makeLibraryPath [ {} ];\n",
-                list(&libraries)
-            ));
-        }
         for (k, v) in env {
             if !variable(k) {
                 return Err(format!(
@@ -1124,6 +1131,20 @@ mod tests {
             !flake.contains("LD_LIBRARY_PATH") && !flake.contains("XDG_DATA_DIRS"),
             "{flake}"
         );
+        let extra = compose(
+            embedded(),
+            manifest(json!({"packages": ["python312"], "libraries": ["unixODBC"]})),
+        )
+        .unwrap();
+        let flake = render(&extra).unwrap();
+        assert!(
+            flake.contains("LD_LIBRARY_PATH = lib.makeLibraryPath [ pkgs.unixODBC ];")
+                && flake.contains("pkgs.unixODBC")
+                && !flake.contains("XDG_DATA_DIRS"),
+            "{flake}"
+        );
+        let bad = compose(embedded(), manifest(json!({"libraries": ["no such"]})));
+        assert!(bad.and_then(|c| render(&c)).is_err());
     }
 
     #[test]

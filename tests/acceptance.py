@@ -865,6 +865,37 @@ def native_controls(c):
             c.call('shell',{'action':'cancel','job_id':app['id']})
 
 
+# Qt 6.8's AT-SPI bridge crashed its application on the GetAll a cached
+# property read sends. The project declares PySide only in setup.py, so the
+# same case covers drafting, a first prepare and the qt-wheel platform.
+def qt_wheel(c):
+    root = '/home/agent/qa/qt-wheel-' + c.run_id
+    c.call('files', {'action':'put','path':root+'/setup.py','content':"from setuptools import setup\nsetup(name='qt-wheel-acceptance', version='0.1', py_modules=['main'], install_requires=['PySide6-Essentials==6.8.1'])\n"})
+    c.call('files', {'action':'put','path':root+'/main.py','content':'from PySide6.QtWidgets import QApplication, QLabel, QPushButton, QVBoxLayout, QWidget\napp = QApplication([])\nw = QWidget(); w.setWindowTitle("Qt wheel acceptance")\nlabel = QLabel("Count: 0"); button = QPushButton("Add one")\nn = [0]\ndef add():\n    n[0] += 1; label.setText(f"Count: {n[0]}")\nbutton.clicked.connect(add)\nlay = QVBoxLayout(w); lay.addWidget(label); lay.addWidget(button)\nw.resize(320, 160); w.show(); app.exec()\n'})
+    draft = c.call('state', {'action':'manifest','workspace':root})['draft']['manifest']
+    assert draft['platform'] == ['prebuilt', 'qt-wheel'] and draft['runs']['app']['command'] == ['python', 'main.py'], draft
+    prepare(c, None, root, manifest=draft)
+    installed = execute(c, 'bash', ['-c', 'for i in $(seq 150); do [ -d .venv/lib/python3.12/site-packages/PySide6 ] && echo installed && exit; sleep 2; done'], cwd=root, timeout=320)
+    assert 'installed' in installed, installed
+    app = c.call('shell', {'action':'run','cwd':root,'name':'app'})
+    try:
+        for _ in range(3):
+            capture = str(c.call('capture',{}))
+        assert c.call('shell',{'action':'status','job_id':app['id']})['state'] == 'running', 'capture crashed the Qt application'
+        tree = capture.split('Qt wheel acceptance',1)[1].split('\n[0x',1)[0]
+        assert '[label] Count: 0' in tree, tree
+        button = re.search(r'\[button\] Add one (-?\d+),(-?\d+) (\d+)x(\d+)', tree)
+        assert button, tree
+        x,y,w,h = map(int, button.groups())
+        c.call('input',{'action':'click','x':x+w//2,'y':y+h//2})
+        capture = str(c.call('capture',{}))
+        assert '[label] Count: 1' in capture, capture
+        c.screenshot('13-qt-wheel.png')
+    finally:
+        if c.call('shell',{'action':'status','job_id':app['id']})['state']=='running':
+            c.call('shell',{'action':'cancel','job_id':app['id']})
+
+
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('--url', required=True)
@@ -881,11 +912,11 @@ def main():
     assert hashlib.sha256(guide['skill'].encode()).hexdigest() == guide['sha256']
     cases = [('browser forms', browser), ('three-step browser wizard', wizard), ('public Selenium form', public_form), ('no save-password bubble', password_prompt), ('managed jobs and observer', jobs), ('desktop job menu', desktop_job_menu), ('clipboard between apps', clipboard_between_apps), ('tray counts match live jobs', tray_counts), ('Nix failure diagnostics', nix_failure), ('verified script execution', artifacts), ('artifact failure recovery', download_failures), ('rootless by design', rootless), ('a folder opens in a terminal', open_folder), ('secrets have a home from boot', secrets), ('the keyboard has a map', keyboard)]
     if options.suite == 'full':
-        cases += [('package workspaces', workspaces), ('second repository tests', second_repository), ('Ketch installation and scraping', ketch), ('job durability and responsiveness', durability), ('native Hotline build and screens', native), ('native controls and window identity', native_controls), ('legacy Xterm title', legacy_window)]
+        cases += [('package workspaces', workspaces), ('second repository tests', second_repository), ('Ketch installation and scraping', ketch), ('job durability and responsiveness', durability), ('native Hotline build and screens', native), ('native controls and window identity', native_controls), ('Qt wheel drafted and read', qt_wheel), ('legacy Xterm title', legacy_window)]
     elif options.suite == 'workspaces':
         cases = [('package workspaces', workspaces), ('second repository tests', second_repository), ('Ketch installation and scraping', ketch), ('job durability and responsiveness', durability)]
     elif options.suite == 'native':
-        cases = [('native Hotline build and screens', native), ('native controls and window identity', native_controls), ('legacy Xterm title', legacy_window)]
+        cases = [('native Hotline build and screens', native), ('native controls and window identity', native_controls), ('Qt wheel drafted and read', qt_wheel), ('legacy Xterm title', legacy_window)]
     for name, case in cases:
         started = time.monotonic()
         try:

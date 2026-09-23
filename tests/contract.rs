@@ -67,17 +67,13 @@ async fn image_honors_the_computer_contract() {
     let navigated = call(
         &client,
         "browser",
-        json!({"action":"navigate","url":"data:text/html,<title>Proof</title><h1>Rust computer proof</h1>"}),
+        json!({"action":"navigate","url":"data:text/html,<title>Proof</title><h1>Rust computer proof</h1><button>Proof control</button>"}),
     )
     .await;
     assert!(!navigated.is_error.unwrap_or(false), "{}", text(&navigated));
-    let page = call(&client, "browser", json!({"action":"text"})).await;
-    assert!(
-        text(&page).contains("Rust computer proof"),
-        "{}",
-        text(&page)
-    );
 
+    // Capture comes first: Chromium builds its tree only when a client asks,
+    // and nothing else may have asked yet.
     let capture = call(&client, "capture", json!({})).await;
     assert!(
         capture
@@ -86,9 +82,16 @@ async fn image_honors_the_computer_contract() {
             .any(|block| block.as_image().is_some())
     );
     assert!(
-        text(&capture).contains("Rust computer proof"),
+        text(&capture).contains("Rust computer proof")
+            && text(&capture).contains("[button] Proof control"),
         "the accessibility tree reaches into the page:\n{}",
         text(&capture)
+    );
+    let page = call(&client, "browser", json!({"action":"text"})).await;
+    assert!(
+        text(&page).contains("Rust computer proof"),
+        "{}",
+        text(&page)
     );
     let windows = call(&client, "windows", json!({"action":"list"})).await;
     let window_list: Vec<serde_json::Value> =
@@ -1053,11 +1056,12 @@ async fn image_honors_the_computer_contract() {
     tokio::time::sleep(Duration::from_millis(500)).await;
 
     // The agent types through XTEST: lower case, shifted letters, symbols on
-    // shifted keys, and a character with no key of its own.
+    // shifted keys, and characters with no key of their own, typed on a
+    // keymap that has not been remapped yet.
     let typed = call(
         &client,
         "input",
-        json!({"action":"type","text":"Hi! a_b@c é"}),
+        json!({"action":"type","text":"Hi! a_b@c é ΩЖ漢"}),
     )
     .await;
     assert!(!typed.is_error.unwrap_or(false), "{}", text(&typed));
@@ -1068,9 +1072,15 @@ async fn image_honors_the_computer_contract() {
     )
     .await;
     assert!(
-        text(&value).contains("Hi! a_b@c é"),
+        text(&value).contains("Hi! a_b@c é ΩЖ漢"),
         "the agent's typing reached the page: {}",
         text(&value)
+    );
+    let null = call(&client, "browser", json!({"action":"eval","js":"null"})).await;
+    assert!(
+        !null.is_error.unwrap_or(false) && text(&null).trim() == "null",
+        "an explicit null is a value: {}",
+        text(&null)
     );
     // A chord: select all, then a clipboard copy Chromium serves.
     let all = call(&client, "input", json!({"action":"key","combo":"Ctrl+A"})).await;
@@ -1080,7 +1090,7 @@ async fn image_honors_the_computer_contract() {
     tokio::time::sleep(Duration::from_millis(300)).await;
     let read = call(&client, "input", json!({"action":"clipboard_read"})).await;
     assert!(
-        text(&read).contains("Hi! a_b@c é"),
+        text(&read).contains("Hi! a_b@c é ΩЖ漢"),
         "the agent reads what Chromium put on the clipboard: {}",
         text(&read)
     );

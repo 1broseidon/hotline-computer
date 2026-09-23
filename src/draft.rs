@@ -361,7 +361,16 @@ fn python(root: &Path, b: &mut Builder) {
         return;
     }
     b.packages(&["python312"]);
-    let text = read(root, Path::new("pyproject.toml")) + &read(root, Path::new("requirements.txt"));
+    // Declared dependencies, read as text: setup.py is never run to find them.
+    let text = [
+        "pyproject.toml",
+        "requirements.txt",
+        "setup.py",
+        "setup.cfg",
+    ]
+    .into_iter()
+    .map(|file| read(root, Path::new(file)))
+    .collect::<String>();
     if root.join("uv.lock").is_file() {
         b.packages(&["uv"]);
         b.hook("sync", argv(&["uv", "sync"]));
@@ -731,6 +740,18 @@ mod tests {
         assert_eq!(pyside.manifest.runs["app"].command, ["python", "main.py"]);
         assert_eq!(pyside.manifest.runs["app"].kind, Kind::Desktop);
         composes(&pyside);
+        let setup = super::draft(
+            repo(&[
+                (
+                    "setup.py",
+                    "from setuptools import setup\nsetup(name='q', install_requires=['PySide6==6.8.1'])\n",
+                ),
+                ("main.py", "from PySide6.QtWidgets import QApplication\n"),
+            ])
+            .path(),
+        );
+        assert_eq!(setup.manifest.platform, ["prebuilt", "qt-wheel"]);
+        assert_eq!(setup.manifest.runs["app"].command, ["python", "main.py"]);
         let tk = super::draft(
             repo(&[
                 ("pyproject.toml", "[project]\nname = \"tkapp\"\n"),

@@ -45,3 +45,28 @@ The contract test passes against the running image.
 
 - Tk and Fyne still expose no accessibility tree; screenshots and input work.
 - A workspace whose manifest already names `prebuilt` for a Qt wheel needs `qt-wheel` added.
+
+## Independent review (Ada) and fixes
+
+Ada ran the image on fresh volumes and drove it over MCP. She confirmed the platform split
+and the accessibility change on Qt, Electron, GTK 3, WebKitGTK and Chromium, with zero GetAll
+calls over a full bus trace. She found three problems, all now fixed and retested by her on
+the rebuilt image:
+
+- The drafter read no toolkit declared in `setup.py` or `setup.cfg`. Both are now read as
+  text (never run).
+- The first character typed through a freshly remapped keycode could be lost: the press
+  arrived before the client reloaded its keymap. Typing now maps every new character first,
+  and the first press after a remap waits 100 ms. This is a tested mitigation, not an
+  acknowledgement from the client; five fresh containers typed `ΩЖ漢` intact on first use.
+- A wheel needing a library outside the manylinux set (pyodbc: `libodbc.so.2`) had no remedy
+  short of a flake. Manifests take `libraries`, Nixpkgs attributes put on the library path;
+  `"libraries": ["unixODBC"]` alone makes pyodbc's test pass.
+
+Also from her review: `browser eval` of `null` returned an error instead of null.
+
+Regressions: the contract test captures a fresh Chromium page before anything else reads it
+and expects a button in the tree, types `ΩЖ漢` on a fresh keymap, and evaluates `null`. The
+native acceptance suite gains a PySide6 6.8.1 case declared only in setup.py: drafted, prepared,
+captured three times without a crash, its tree read, and a click counted. The contract test
+passed on its first run against a fresh container, and the Qt case passed.
