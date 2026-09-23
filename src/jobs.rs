@@ -335,11 +335,12 @@ impl Jobs {
                 }
             }
         }
-        let mut environment = if start.skip_workspace_environment {
-            BTreeMap::new()
-        } else {
-            crate::workspace::environment(&self.home, &cwd)?
-        };
+        // Parallelism from the container's limits first; a workspace or the
+        // job itself may still say otherwise.
+        let mut environment = crate::limits::environment();
+        if !start.skip_workspace_environment {
+            environment.append(&mut crate::workspace::environment(&self.home, &cwd)?);
+        }
         if start.secrets {
             // After the workspace, so the person's stored value beats a
             // repository's placeholder; before the agent's own entries, so

@@ -53,6 +53,9 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && chown -R agent:agent /nix \
     && chown -R agent:agent /home/agent
 COPY assets/alacritty.toml /etc/hotline-computer/alacritty.toml
+# The base every workspace manifest composes over: the Nixpkgs pin and the
+# platforms and services this image provides. An image release is a new one.
+COPY assets/base.json /etc/hotline-computer/base.json
 COPY assets/chromium-policy.json /etc/chromium/policies/managed/hotline.json
 COPY assets/bashrc /etc/bash.bashrc
 # "Show in folder" in the browser, and xdg-open on a folder, open the
@@ -73,5 +76,17 @@ ENV HOTLINE_COMPUTER_ADDR=0.0.0.0:8787 \
     GDK_BACKEND=x11 \
     APPIMAGE_EXTRACT_AND_RUN=1
 RUN install -d /home/agent/src && nix-store --init
+# The base's closure ships pre-realised, as a cache rather than baked-in
+# files: the pinned Nixpkgs source and the standard environment every
+# prepared shell starts from. HOTLINE_PREREALISE names platforms to realise
+# too (for example "webkit"), at the cost of image size.
+ARG HOTLINE_PREREALISE=""
+RUN rev=$(jq -r .nixpkgs /etc/hotline-computer/base.json) \
+    && nix flake prefetch "github:NixOS/nixpkgs/$rev" \
+    && nix build --no-link "github:NixOS/nixpkgs/$rev#stdenv" "github:NixOS/nixpkgs/$rev#bashInteractive" \
+    && for platform in $HOTLINE_PREREALISE; do \
+         nix build --no-link $(jq -r --arg p "$platform" '.platforms as $all | def need($n): ($all[$n].requires // [] | map(need(.)) | add // []) + [$n]; [need($p)[] | $all[.] | (.packages + .libraries)[]] | unique | .[]' /etc/hotline-computer/base.json | sed "s|^|github:NixOS/nixpkgs/$rev#|"); \
+       done \
+    && nix-store --optimise
 EXPOSE 8787
 ENTRYPOINT ["/usr/bin/hotline-computer", "boot"]

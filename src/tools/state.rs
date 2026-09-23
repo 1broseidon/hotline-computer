@@ -18,6 +18,9 @@ struct Input {
     workspace: Option<PathBuf>,
     packages: Option<Vec<String>>,
     flake: Option<String>,
+    manifest: Option<Value>,
+    #[serde(default)]
+    upgrade: bool,
 }
 
 #[derive(Serialize, Deserialize)]
@@ -37,20 +40,48 @@ pub async fn call(app: &App, arguments: Value, holder: &str) -> ToolResult {
         "guide" => json_text(crate::guide::manifest()),
         "catalog" => json_text(crate::workspace::catalog()),
         "prepare" if !input.name.is_empty() => Err(
-            "environment presets have been replaced: pass packages or flake instead of name".into(),
+            "environment presets have been replaced: pass a manifest, or packages or flake, instead of name".into(),
         ),
-        "prepare" => json_text(
-            crate::workspace::prepare(
-                app,
-                input.packages,
-                input.flake,
-                input.workspace.as_deref().ok_or("workspace is required")?,
-                holder,
+        "prepare" => {
+            let manifest = input
+                .manifest
+                .map(|value| crate::workspace::manifest_patch(&value))
+                .transpose()?;
+            json_text(
+                crate::workspace::prepare(
+                    app,
+                    crate::workspace::Request {
+                        packages: input.packages,
+                        flake: input.flake,
+                        manifest,
+                        upgrade: input.upgrade,
+                    },
+                    input.workspace.as_deref().ok_or("workspace is required")?,
+                    holder,
+                )
+                .await?,
             )
-            .await?,
-        ),
+        }
+        "manifest" => {
+            let workspace = input.workspace.as_deref().ok_or(
+                "workspace is required: the directory whose .hotline/manifest.json to describe",
+            )?;
+            let home = app.config.home.canonicalize().map_err(|e| e.to_string())?;
+            let workspace = if workspace.is_absolute() {
+                workspace.to_path_buf()
+            } else {
+                home.join(workspace)
+            };
+            let workspace = workspace
+                .canonicalize()
+                .map_err(|e| format!("{}: {e}", workspace.display()))?;
+            if !workspace.starts_with(&home) {
+                return Err("workspace must be under the computer home".into());
+            }
+            json_text(crate::manifest::describe(app, &workspace).await?)
+        }
         "info" => json_text(
-            json!({"version":env!("CARGO_PKG_VERSION"),"build":crate::guide::identity(),"architecture":std::env::consts::ARCH,"home":app.config.home,"display":app.config.display,"nixpkgs":crate::workspace::NIXPKGS,"catalog":crate::workspace::catalog(),"executables":executables(),"capabilities":crate::tools::NAMES,"secrets":app.secrets.catalog(),"skill_sha256":crate::guide::manifest()["sha256"],"jobs":app.jobs.list().await?,"terminal":"Alacritty","graphics":"Mesa software rendering"}),
+            json!({"version":env!("CARGO_PKG_VERSION"),"build":crate::guide::identity(),"architecture":std::env::consts::ARCH,"home":app.config.home,"display":app.config.display,"nixpkgs":crate::workspace::NIXPKGS,"base":crate::manifest::base().map(|b| b.version).ok(),"parallelism":crate::limits::environment(),"catalog":crate::workspace::catalog(),"executables":executables(),"capabilities":crate::tools::NAMES,"secrets":app.secrets.catalog(),"skill_sha256":crate::guide::manifest()["sha256"],"jobs":app.jobs.list().await?,"terminal":"Alacritty","graphics":"Mesa software rendering"}),
         ),
         "control" => control(app, holder, input.duration).await,
         "release" => release(app, holder).await,
@@ -78,6 +109,7 @@ pub async fn call(app: &App, arguments: Value, holder: &str) -> ToolResult {
                 "guide",
                 "catalog",
                 "prepare",
+                "manifest",
                 "control",
                 "release",
                 "login_save",

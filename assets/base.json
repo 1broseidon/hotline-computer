@@ -1,0 +1,53 @@
+{
+  "version": "0.10.0",
+  "nixpkgs": "ef34387ddd751e1ab8857adf4676492d32eb24ec",
+  "manifest": {},
+  "platforms": {
+    "gl": {
+      "description": "Software OpenGL and EGL through Mesa, for anything that draws with a GPU API",
+      "packages": ["mesa", "libglvnd"],
+      "libraries": ["mesa", "libglvnd"],
+      "env": {
+        "__EGL_VENDOR_LIBRARY_FILENAMES": "${mesa}/share/glvnd/egl_vendor.d/50_mesa.json",
+        "LIBGL_DRIVERS_PATH": "${mesa}/lib/dri",
+        "GBM_BACKENDS_PATH": "${mesa}/lib/gbm",
+        "LIBGL_ALWAYS_SOFTWARE": "1"
+      }
+    },
+    "gtk": {
+      "description": "GTK 3 apps: schemas, GIO modules, TLS and the tray library GTK apps load at run time",
+      "requires": ["gl"],
+      "packages": ["gtk3", "glib", "glib-networking", "gsettings-desktop-schemas", "libayatana-appindicator", "librsvg", "pkg-config"],
+      "libraries": ["libayatana-appindicator"],
+      "env": {}
+    },
+    "webkit": {
+      "description": "WebKitGTK 4.1 and libsoup 3, which Tauri and other webview shells embed",
+      "requires": ["gtk"],
+      "packages": ["webkitgtk_4_1", "libsoup_3"],
+      "libraries": [],
+      "env": {}
+    }
+  },
+  "services": {
+    "postgres": {
+      "description": "PostgreSQL on a unix socket in the service directory; user postgres, no password",
+      "packages": ["postgresql"],
+      "command": ["bash", "-c", "test -f \"$SERVICE_DIR/data/PG_VERSION\" || initdb -D \"$SERVICE_DIR/data\" -U postgres --auth=trust >/dev/null || exit 1; exec postgres -D \"$SERVICE_DIR/data\" -k \"$SERVICE_DIR\" -c listen_addresses="],
+      "env": {
+        "PGHOST": "$SERVICE_DIR",
+        "PGUSER": "postgres",
+        "DATABASE_URL": "postgresql://postgres@localhost/postgres?host=$SERVICE_DIR"
+      }
+    },
+    "redis": {
+      "description": "Redis on a unix socket in the service directory, without persistence",
+      "packages": ["redis"],
+      "command": ["bash", "-c", "exec redis-server --port 0 --unixsocket \"$SERVICE_DIR/redis.sock\" --dir \"$SERVICE_DIR\" --save ''"],
+      "env": {
+        "REDIS_URL": "unix://$SERVICE_DIR/redis.sock",
+        "REDIS_SOCKET": "$SERVICE_DIR/redis.sock"
+      }
+    }
+  }
+}

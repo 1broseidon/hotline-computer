@@ -18,6 +18,29 @@ pub enum Definition {
     Flake {
         flake: String,
     },
+    /// A composed project manifest: the image base, the repository layer, the result.
+    Manifest(Box<crate::manifest::Composed>),
+}
+
+impl Definition {
+    fn flake(&self) -> Option<&str> {
+        match self {
+            Definition::Flake { flake } => Some(flake),
+            Definition::Manifest(composed) => composed.manifest.flake.as_deref(),
+            Definition::Packages { .. } => None,
+        }
+    }
+
+    /// The generated flake, for definitions that are not a repository flake.
+    fn recipe(&self) -> Result<Option<String>, String> {
+        match self {
+            Definition::Packages { packages, nixpkgs } => recipe(packages, nixpkgs).map(Some),
+            Definition::Manifest(composed) if composed.manifest.flake.is_none() => {
+                crate::manifest::render(composed).map(Some)
+            }
+            _ => Ok(None),
+        }
+    }
 }
 
 #[derive(Clone, Serialize, Deserialize)]
@@ -28,7 +51,7 @@ struct Environment {
     env: BTreeMap<String, String>,
 }
 
-fn attribute(value: &str) -> bool {
+pub(crate) fn attribute(value: &str) -> bool {
     !value.is_empty()
         && value.len() <= 200
         && value.split('.').all(|part| {
@@ -267,7 +290,12 @@ pub async fn prepare_here(
 ) -> Result<(), String> {
     let home = home.canonicalize().map_err(|e| e.to_string())?;
     let workspace = resolve_workspace(&home, workspace)?;
-    let definition = definition(&home, &workspace, packages, flake)?;
+    let request = Request {
+        packages,
+        flake,
+        ..Request::default()
+    };
+    let definition = definition(&home, &workspace, request)?;
     write_json(
         &workspace.join(".hotline/environment-request.json"),
         &definition,
@@ -339,15 +367,81 @@ fn flake_path(home: &Path, workspace: &Path, flake: &str) -> Result<(PathBuf, St
     Ok((directory, shell.to_owned()))
 }
 
-fn definition(
-    home: &Path,
-    workspace: &Path,
-    packages: Option<Vec<String>>,
-    flake: Option<String>,
-) -> Result<Definition, String> {
-    if packages.is_some() && flake.is_some() {
+/// A manifest passed to prepare, read with the same self-describing errors as the file.
+pub fn manifest_patch(value: &Value) -> Result<crate::manifest::Manifest, String> {
+    crate::manifest::parse(&value.to_string()).map_err(|e| format!("manifest: {e}"))
+}
+
+/// What the teammate asked prepare for, beyond the workspace.
+#[derive(Default)]
+pub struct Request {
+    pub packages: Option<Vec<String>>,
+    pub flake: Option<String>,
+    /// Merged into the repository's manifest file, which is then prepared.
+    pub manifest: Option<crate::manifest::Manifest>,
+    /// Take the image's current base instead of the one the workspace was composed against.
+    pub upgrade: bool,
+}
+
+fn composed(home: &Path, workspace: &Path, request: Request) -> Result<Definition, String> {
+    use crate::manifest::{self, Manifest};
+    let file = workspace.join(manifest::FILE);
+    let repository = if file.exists() {
+        manifest::read(&file)?
+    } else {
+        Manifest::default()
+    };
+    let mut patch = request.manifest.unwrap_or_default();
+    if let Some(packages) = request.packages {
+        patch = manifest::merge(
+            patch,
+            Manifest {
+                packages,
+                ..Manifest::default()
+            },
+        );
+    }
+    if let Some(flake) = request.flake {
+        patch.flake = Some(flake);
+    }
+    let repository = manifest::merge(repository, patch);
+    let saved = workspace.join(".hotline/environment-spec.json");
+    let previous = match saved.exists().then(|| read_json::<Definition>(&saved)) {
+        Some(Ok(Definition::Manifest(composed))) => Some(composed.base),
+        _ => None,
+    };
+    let current = manifest::base()?;
+    // A workspace keeps the base it was composed against until it asks for the new one.
+    let base = match previous {
+        Some(previous) if !request.upgrade && previous.version != current.version => previous,
+        _ => current,
+    };
+    let composed = manifest::compose(base, repository)?;
+    if let Some(flake) = &composed.manifest.flake {
+        flake_path(home, workspace, flake)?;
+    }
+    if composed.manifest.flake.is_none() {
+        manifest::render(&composed)?;
+    }
+    let text = serde_json::to_vec_pretty(&composed.repository).map_err(|e| e.to_string())?;
+    if std::fs::read(&file).ok().as_deref() != Some(text.as_slice()) {
+        std::fs::create_dir_all(file.parent().ok_or("manifest path has no parent")?)
+            .map_err(|e| e.to_string())?;
+        std::fs::write(&file, text).map_err(|e| format!("{}: {e}", file.display()))?;
+    }
+    Ok(Definition::Manifest(Box::new(composed)))
+}
+
+fn definition(home: &Path, workspace: &Path, request: Request) -> Result<Definition, String> {
+    if request.packages.is_some() && request.flake.is_some() {
         return Err("choose packages or flake, not both".into());
     }
+    if request.manifest.is_some() || workspace.join(crate::manifest::FILE).exists() {
+        return composed(home, workspace, request);
+    }
+    let Request {
+        packages, flake, ..
+    } = request;
     let saved = workspace.join(".hotline/environment-spec.json");
     let definition = if let Some(mut packages) = packages {
         packages.sort();
@@ -382,15 +476,20 @@ fn definition(
         Definition::Flake { flake } => {
             flake_path(home, workspace, flake)?;
         }
+        Definition::Manifest(_) => {}
     }
     Ok(definition)
 }
 
 fn cache(home: &Path, workspace: &Path, definition: &Definition) -> Result<PathBuf, String> {
     use sha2::{Digest, Sha256};
-    let key = match definition {
-        Definition::Packages { packages, nixpkgs } => recipe(packages, nixpkgs)?,
-        Definition::Flake { flake } => format!("{}:{flake}", workspace.display()),
+    let key = match definition.recipe()? {
+        Some(recipe) => recipe,
+        None => format!(
+            "{}:{}",
+            workspace.display(),
+            definition.flake().unwrap_or(".")
+        ),
     };
     Ok(home.join(".cache/hotline/environments").join(format!(
         "v{FORMAT}-{}-{:x}",
@@ -410,16 +509,21 @@ fn paths_exist(env: &BTreeMap<String, String>) -> bool {
 fn cached(directory: &Path, definition: &Definition) -> Option<Environment> {
     // Repository expressions and shell hooks can change independently of flake.lock.
     // Re-evaluate them on prepare; Nix still reuses downloaded and built packages.
-    if matches!(definition, Definition::Flake { .. }) {
+    if definition.flake().is_some() {
         return None;
     }
-    let environment: Environment = read_json(&directory.join("environment.json")).ok()?;
+    let mut environment: Environment = read_json(&directory.join("environment.json")).ok()?;
+    // Runs, hooks and variables change without a rebuild: the same generated
+    // flake is the same environment, and the new definition is attached to it.
     (environment.format == FORMAT
         && environment.architecture == std::env::consts::ARCH
-        && &environment.definition == definition
+        && environment.definition.recipe().ok()? == definition.recipe().ok()?
         && paths_exist(&environment.env)
         && directory.join("profile").exists())
-    .then_some(environment)
+    .then(|| {
+        environment.definition = definition.clone();
+        environment
+    })
 }
 
 fn attach(workspace: &Path, directory: &Path, environment: &Environment) -> Result<(), String> {
@@ -429,7 +533,7 @@ fn attach(workspace: &Path, directory: &Path, environment: &Environment) -> Resu
             "a newer preparation replaced this request; previous environment retained".into(),
         );
     }
-    if matches!(environment.definition, Definition::Packages { .. }) {
+    if environment.definition.flake().is_none() {
         let target = workspace.join(".hotline/nix");
         std::fs::create_dir_all(&target).map_err(|e| e.to_string())?;
         for file in ["flake.nix", "flake.lock"] {
@@ -445,15 +549,14 @@ fn attach(workspace: &Path, directory: &Path, environment: &Environment) -> Resu
 
 pub async fn prepare(
     app: &App,
-    packages: Option<Vec<String>>,
-    flake: Option<String>,
+    request: Request,
     workspace: &Path,
     holder: &str,
 ) -> Result<Value, String> {
     let guard = app.access.mutate(holder).await?;
     let home = app.config.home.canonicalize().map_err(|e| e.to_string())?;
     let workspace = resolve_workspace(&home, workspace)?;
-    let definition = definition(&home, &workspace, packages, flake)?;
+    let definition = definition(&home, &workspace, request)?;
     let directory = cache(&home, &workspace, &definition)?;
     write_json(
         &workspace.join(".hotline/environment-request.json"),
@@ -461,9 +564,10 @@ pub async fn prepare(
     )?;
     if let Some(environment) = cached(&directory, &definition) {
         attach(&workspace, &directory, &environment)?;
-        return Ok(
-            json!({"ready":true,"cached":true,"workspace":workspace,"definition":definition}),
-        );
+        drop(guard);
+        let mut result = json!({"ready":true,"cached":true,"workspace":workspace,"definition":summary(&definition)});
+        activate(app, &workspace, &definition, holder, None, &mut result);
+        return Ok(result);
     }
     let executable = std::env::current_exe().map_err(|e| e.to_string())?;
     let job = app
@@ -491,9 +595,58 @@ pub async fn prepare(
     } else {
         None
     };
-    Ok(
-        json!({"ready":false,"cached":false,"workspace":workspace,"definition":definition,"job":job,"observer_error":observer_error}),
-    )
+    let mut result = json!({"ready":false,"cached":false,"workspace":workspace,"definition":summary(&definition),"job":job,"observer_error":observer_error});
+    activate(
+        app,
+        &workspace,
+        &definition,
+        holder,
+        Some(job.id.clone()),
+        &mut result,
+    );
+    Ok(result)
+}
+
+/// A manifest answer says what was composed and what happens next, not the
+/// whole image base it was composed against.
+fn summary(definition: &Definition) -> Value {
+    match definition {
+        Definition::Manifest(composed) => json!({
+            "source": "manifest",
+            "file": crate::manifest::FILE,
+            "base": composed.base.version,
+            "nixpkgs": composed.base.nixpkgs,
+            "packages": crate::manifest::packages(composed),
+            "platform": crate::manifest::platforms(composed).iter().map(|(n, _)| n).collect::<Vec<_>>(),
+        }),
+        other => serde_json::to_value(other).unwrap_or(Value::Null),
+    }
+}
+
+fn activate(
+    app: &App,
+    workspace: &Path,
+    definition: &Definition,
+    holder: &str,
+    preparation: Option<String>,
+    result: &mut Value,
+) {
+    let Definition::Manifest(composed) = definition else {
+        return;
+    };
+    result["then"] = crate::manifest::plan(composed);
+    result["next"] = json!(if preparation.is_some() {
+        "wait for the job; then shell run NAME in this workspace. state manifest shows hooks and services as they start"
+    } else {
+        "shell run NAME in this workspace. state manifest shows hooks and services as they start"
+    });
+    tokio::spawn(crate::manifest::activate(
+        app.clone(),
+        workspace.to_path_buf(),
+        (**composed).clone(),
+        holder.to_owned(),
+        preparation,
+    ));
 }
 
 pub async fn build(home: &Path, specification: &str, workspace: &Path) -> Result<(), String> {
@@ -527,17 +680,17 @@ pub async fn build(home: &Path, specification: &str, workspace: &Path) -> Result
     );
     let mut command = tokio::process::Command::new("nix");
     let capture = directory.join("captured-env.json");
-    match &definition {
-        Definition::Packages { packages, nixpkgs } => {
-            std::fs::write(directory.join("flake.nix"), recipe(packages, nixpkgs)?)
-                .map_err(|e| e.to_string())?;
+    let generated = definition.recipe()?;
+    match (&generated, definition.flake()) {
+        (Some(recipe), _) => {
+            std::fs::write(directory.join("flake.nix"), recipe).map_err(|e| e.to_string())?;
             command
                 .args(["print-dev-env", "--json", "--profile"])
                 .arg(directory.join("profile"))
                 .arg(format!("path:{}", directory.display()));
         }
-        Definition::Flake { flake } => {
-            let (path, shell) = flake_path(&home, &workspace, flake)?;
+        (None, flake) => {
+            let (path, shell) = flake_path(&home, &workspace, flake.unwrap_or("."))?;
             // Existing locks must not change silently. A first preparation may create one.
             command.arg("develop");
             if path.join("flake.lock").exists() {
@@ -557,7 +710,7 @@ pub async fn build(home: &Path, specification: &str, workspace: &Path) -> Result
                 .arg(&capture);
         }
     }
-    let stdout = if matches!(definition, Definition::Packages { .. }) {
+    let stdout = if generated.is_some() {
         std::process::Stdio::piped()
     } else {
         std::process::Stdio::inherit()
@@ -576,7 +729,7 @@ pub async fn build(home: &Path, specification: &str, workspace: &Path) -> Result
         return Err(format!("Nix preparation failed: {}", output.status));
     }
     let mut env = BTreeMap::new();
-    if matches!(definition, Definition::Packages { .. }) {
+    if generated.is_some() {
         let result: Value = serde_json::from_slice(&output.stdout).map_err(|e| e.to_string())?;
         for (name, variable) in result["variables"]
             .as_object()
@@ -606,6 +759,8 @@ pub async fn build(home: &Path, specification: &str, workspace: &Path) -> Result
         "TEMPDIR",
         "NIX_BUILD_TOP",
         "NIX_LOG_FD",
+        // Parallelism comes from the container's limits at job start.
+        "NIX_BUILD_CORES",
         "SHLVL",
         "SHELL",
         "DISPLAY",
@@ -658,6 +813,11 @@ pub fn environment(home: &Path, cwd: &Path) -> Result<BTreeMap<String, String>, 
                     "workspace Nix store paths are missing; run state prepare again".into(),
                 );
             }
+            if let Ok(Definition::Manifest(composed)) =
+                serde_json::from_value::<Definition>(saved["definition"].clone())
+            {
+                crate::manifest::apply(&mut env, &composed, directory);
+            }
             env.insert("NIX_BUILD_TOP".into(), cwd.to_string_lossy().into_owned());
             return Ok(env);
         }
@@ -667,6 +827,14 @@ pub fn environment(home: &Path, cwd: &Path) -> Result<BTreeMap<String, String>, 
 
 #[cfg(test)]
 mod tests {
+    fn req(packages: Option<Vec<String>>, flake: Option<String>) -> super::Request {
+        super::Request {
+            packages,
+            flake,
+            ..super::Request::default()
+        }
+    }
+
     #[test]
     fn the_catalog_names_are_attribute_paths_and_read_well() {
         for (_, names) in super::PACKAGES {
@@ -754,8 +922,7 @@ mod tests {
         let selected = definition(
             &home,
             &home,
-            Some(vec!["jq".into(), "hello".into(), "jq".into()]),
-            None,
+            req(Some(vec!["jq".into(), "hello".into(), "jq".into()]), None),
         )
         .unwrap();
         assert_eq!(
@@ -769,12 +936,18 @@ mod tests {
             definition(
                 &home,
                 &home,
-                Some(vec!["hello]; builtins.abort \"oops\"".into()]),
-                None
+                req(Some(vec!["hello]; builtins.abort \"oops\"".into()]), None)
             )
             .is_err()
         );
-        assert!(definition(&home, &home, Some(vec!["hello".into()]), Some(".".into())).is_err());
+        assert!(
+            definition(
+                &home,
+                &home,
+                req(Some(vec!["hello".into()]), Some(".".into()))
+            )
+            .is_err()
+        );
         assert!(
             recipe(
                 &["python312Packages.requests".into(), "pkg-config".into()],
@@ -866,9 +1039,14 @@ mod tests {
         };
         write_json(&directory.join("environment.json"), &environment).unwrap();
         let app = app(&home);
-        let result = prepare(&app, Some(vec!["hello".into()]), None, &workspace, "tester")
-            .await
-            .unwrap();
+        let result = prepare(
+            &app,
+            req(Some(vec!["hello".into()]), None),
+            &workspace,
+            "tester",
+        )
+        .await
+        .unwrap();
         assert_eq!(result["ready"], true);
         assert_eq!(result["cached"], true);
         assert!(workspace.join(".hotline/nix/flake.lock").exists());
@@ -888,7 +1066,7 @@ mod tests {
         let done = app.jobs.wait(&job.id, 5000).await.unwrap();
         assert_eq!(done.exit_code, Some(0));
         assert_eq!(
-            prepare(&app, None, None, &workspace, "tester")
+            prepare(&app, req(None, None), &workspace, "tester")
                 .await
                 .unwrap()["cached"],
             true

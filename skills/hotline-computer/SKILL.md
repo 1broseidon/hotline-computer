@@ -13,23 +13,49 @@ This guide ships with Hotline Computer {{version}}, channel `{{channel}}`, revis
 - CLI installation or native app QA: use `shell` and workspace preparation below. The desktop is a Linux glibc container; its CPU architecture is reported by `state info`. Do not install host macOS artifacts into it.
 - Native screens: `capture` supplies a screenshot and window-scoped accessibility nodes. Use `input` for mouse/keyboard work and `windows` to focus or arrange apps. To place an app beside its observer, call `windows tile` with `primary_id` and `observer_id` from `windows list`; the result verifies work-area geometry and respects app minimum sizes. When accessibility is unavailable, use screenshot coordinates; never assume another window's tree belongs to this app.
 
-## Build and run a repository
+## Build and run a repository: write a manifest, then run names
 
-Read the repository's build instructions and manifests before choosing dependencies. Use its existing Nix flake when available. Otherwise select the packages needed by that project; Computer has no framework presets.
+Describe the project once in `.hotline/manifest.json` and run what it names. Do not guess build or launch commands in the shell: when you are about to type one, add it to the manifest's `runs` instead, prepare, and run it by name. The manifest is the project's record of how it is built, so the next teammate, and the next image, start from it.
 
-- Existing flake: `state {"action":"prepare","workspace":"/home/agent/src/project","flake":"."}`. A named dev shell uses `"flake":".#dev"`; a flake in a subdirectory uses that relative path.
-- Package list, for a project whose instructions require Node and pnpm: `state {"action":"prepare","workspace":"/home/agent/src/project","packages":["nodejs","pnpm"]}`. These are Nixpkgs attribute names, not Debian package names. Choose dependencies from the project rather than copying this example for unrelated builds.
-- Saved environment: `state {"action":"prepare","workspace":"/home/agent/src/project"}`. This reuses the saved definition, or discovers a root `flake.nix` on first use.
+1. Read the repository's build instructions, then `state {"action":"manifest","workspace":"/home/agent/src/project"}`. With no manifest yet it returns an example, the shape, and what this image offers: its platforms (`gl`, `gtk`, `webkit`) and services (`postgres`, `redis`).
+2. Prepare with the manifest. `state {"action":"prepare","workspace":"/home/agent/src/project","manifest":{...}}` merges what you pass into the file and prepares it; editing the file and preparing without `manifest` does the same. For example, for a Tauri app:
 
-If preparation returns `ready:false`, follow its job with `shell wait` and `shell read` until it succeeds. Downloads, build failures, and repository shell-hook output belong to that job; `shell cancel` stops it. Then run the project's build with `shell start` and `cwd` inside the prepared workspace. Direct commands and `shell launch` inherit the exported environment; no `nix develop` wrapper is needed. Use direct argv or `bash -c`; a login shell (`bash -lc`) can reset PATH.
+```json
+{
+  "packages": ["cargo", "rustc", "cargo-tauri", "bun", "openssl", "gcc"],
+  "platform": ["webkit"],
+  "env": {"PATH": ["node_modules/.bin"]},
+  "hooks": {"create": {"install": ["bun", "install", "--cwd", "ui"]}},
+  "runs": {
+    "build": {"command": ["cargo", "build", "-p", "app"]},
+    "test": {"command": ["cargo", "test"]},
+    "app": {"command": ["cargo", "tauri", "dev"], "kind": "desktop"}
+  }
+}
+```
 
-Choose language tools and native dependencies independently: a C/C++ project may need a compiler, pkg-config, a build system, and GTK or Qt development packages; Python, Go, Node, Java, and Rust projects have their own requirements. `state catalog` lists common attribute names by purpose (languages, native builds, desktop apps, tools); it is a place to look, not a preset. If a package name is uncertain, query the pinned Nixpkgs revision from `state catalog` with `nix search github:NixOS/nixpkgs/<revision> <query> --json` through a managed shell job. Missing headers, libraries, or tools should guide the next dependency change.
+3. If preparation returns `ready:false`, follow its job with `shell wait` and `shell read` until it succeeds. Create hooks then run once, and services and start hooks start; `state manifest` shows them as jobs under `activation`.
+4. `shell {"action":"run","name":"build","cwd":"/home/agent/src/project"}` starts the named run in the prepared environment and returns a job. `args` are appended to the run's own. A `web` run receives a free `$PORT` and its answer carries the `url`; a `desktop` run opens windows, so check them with `windows list` and `capture`.
 
-Package definitions and pins are saved in `.hotline/environment-spec.json`; the generated flake and lock are in `.hotline/nix/`. Identical package lists share a cache. New workspaces default to Nixpkgs {{nixpkgs}}; existing definitions keep their pin when Computer changes or packages are added. Rerun preparation after changing dependencies or when store paths are missing.
+The parts of a manifest:
 
-For custom environment variables, library paths, or setup hooks, edit a repository-owned flake (the generated `.hotline/nix/flake.nix` can be a starting point) and prepare that flake. Repository flakes are re-evaluated on each preparation while Nix reuses built packages. An existing `flake.lock` is preserved; update it explicitly when changing its inputs. Shell hooks run during preparation, in the workspace; their exported variables are retained. Shell aliases/functions and per-command hook execution require an explicit `nix develop --command ...` job.
+- `packages`: Nixpkgs attribute names, not Debian package names. Choose them from the project. `state catalog` lists common ones by purpose; if a name is uncertain, query the pinned Nixpkgs with `nix search github:NixOS/nixpkgs/<revision> <query> --json` in a shell job. Missing headers, libraries, or tools should guide the next change.
+- `platform`: runtime support the image provides by name. `gl` is software OpenGL and EGL through Mesa; `gtk` adds GTK schemas, GIO modules and the tray library; `webkit` adds WebKitGTK for Tauri and other webviews. Each includes what it requires. Declare a platform instead of exporting library paths or driver variables yourself.
+- `env`: `"NAME": "value"` sets a variable (`$WORKSPACE` expands); `"NAME": ["dir", ...]` extends a search path, relative entries resolved against the workspace. `PATH` is always a list.
+- `services`: `{"postgres": {"enable": true}}` runs a supervised service on a unix socket under `.hotline/services`, and every job gets its address (`PGHOST`, `DATABASE_URL`, `REDIS_URL`).
+- `hooks`: `create` entries run once per workspace after its first successful preparation, in name order (dependency installs); `start` entries start after each preparation unless already running (watchers).
+- `runs`: `NAME: {"command": [argv], "cwd": "subdir", "kind": "task" | "desktop" | "web", "env": {}, "label": "..."}`.
+- `flake`: a repository flake to take the environment from instead of `packages`, `platform` and `services`; `env`, `hooks` and `runs` still apply.
 
-The computer is rootless by design: every job runs as the normal container user, nothing can elevate, and the image carries no `apt` or `sudo`. Get software in this order: first what the computer prepares (`state prepare`, or `hotline-computer prepare` in a shell), then Nix by hand (`nix shell nixpkgs#<name>` for one tool), then what the image already has (`state info` lists it). A `.deb` or a system-wide install belongs in an image build, not in a job. An AppImage runs without FUSE: the image sets `APPIMAGE_EXTRACT_AND_RUN=1`. A package list supplies build dependencies, while a repository flake can also define the runtime library environment a native app needs. Launch with `shell launch`, keep `cwd` in the workspace, use an isolated app data directory where supported, and inspect startup output and actual windows. Passwords and tokens an app or CLI keeps in the Secret Service (libsecret, `secret-tool store`/`lookup`) work from the start: the keyring is unlocked at boot, never prompts, and lives in the home.
+Layers compose: the image's base first, then the repository's file. Lists concatenate, maps merge, and scalars are last-wins. Errors name the valid choices. A run refuses to start when the manifest file changed after the last preparation; prepare again. Changing only runs, hooks or variables reattaches the same environment without a rebuild.
+
+A workspace keeps the base it was composed against, including its Nixpkgs pin, when the image is updated; `state manifest` reports `update_available`, and `state prepare` with `"upgrade": true` takes the new one. New workspaces start on Nixpkgs {{nixpkgs}}. The composed definition is saved in `.hotline/environment-spec.json` and the generated flake and lock in `.hotline/nix/`.
+
+Every job starts with build parallelism decided from the container's real CPU and memory limits: `CARGO_BUILD_JOBS`, `MAKEFLAGS`, `NIX_BUILD_CORES`, `CMAKE_BUILD_PARALLEL_LEVEL`, `OMP_NUM_THREADS` (which `nproc` reports) and `GOMAXPROCS`. `state info` shows them under `parallelism`. Do not pass `-j` yourself.
+
+Without a manifest, `state prepare` still accepts `packages` (Nixpkgs attribute names) or `flake` (`"."`, `".#dev"`, or a subdirectory) alone, and reuses the saved definition, or a root `flake.nix`, when neither is given. That path names no runs, so prefer a manifest. Repository flakes are re-evaluated on each preparation while Nix reuses built packages; an existing `flake.lock` is preserved. Shell hooks run during preparation, in the workspace; their exported variables are retained. Shell aliases/functions and per-command hook execution require an explicit `nix develop --command ...` job.
+
+The computer is rootless by design: every job runs as the normal container user, nothing can elevate, and the image carries no `apt` or `sudo`. Get software in this order: first what the computer prepares (`state prepare`, or `hotline-computer prepare` in a shell), then Nix by hand (`nix shell nixpkgs#<name>` for one tool), then what the image already has (`state info` lists it). A `.deb` or a system-wide install belongs in an image build, not in a job. An AppImage runs without FUSE: the image sets `APPIMAGE_EXTRACT_AND_RUN=1`. A native app's runtime libraries come from the manifest's `platform`, not from exported paths. Launch it as a `desktop` run (or `shell launch` for a one-off), keep `cwd` in the workspace, use an isolated app data directory where supported, and inspect startup output and actual windows. Passwords and tokens an app or CLI keeps in the Secret Service (libsecret, `secret-tool store`/`lookup`) work from the start: the keyring is unlocked at boot, never prompts, and lives in the home.
 
 ## Commands and artifacts
 

@@ -18,6 +18,7 @@ struct Input {
     cursor: u64,
     wait_ms: Option<u64>,
     max_output: Option<usize>,
+    name: Option<String>,
 }
 
 pub async fn call(app: &App, arguments: Value, holder: &str) -> ToolResult {
@@ -53,6 +54,47 @@ pub async fn call(app: &App, arguments: Value, holder: &str) -> ToolResult {
                     .write(id, input.text.as_deref().unwrap_or(""), input.eof)
                     .await?,
             )
+        }
+        "run" => {
+            let name = input
+                .name
+                .as_deref()
+                .ok_or("run needs name: one of the workspace's runs, which state manifest lists")?;
+            if !input.start.command.is_empty() {
+                return Err(
+                    "run takes a name, not a command; args are appended to the run's own".into(),
+                );
+            }
+            let home = &app.config.home;
+            let cwd = input
+                .start
+                .cwd
+                .as_deref()
+                .map(std::path::PathBuf::from)
+                .map(|p| if p.is_absolute() { p } else { home.join(p) })
+                .unwrap_or_else(|| home.clone());
+            let (workspace, composed) = crate::manifest::find(home, &cwd)?;
+            let kind = composed.manifest.runs.get(name).map(|r| r.kind);
+            let (start, url) = crate::manifest::job(&workspace, &composed, name, input.start)?;
+            let guard = app.access.mutate(holder).await?;
+            let job = app.jobs.start(start, holder).await?;
+            drop(guard);
+            let observer_error = if app.display.is_some() {
+                app.observer.show(false).await.err()
+            } else {
+                None
+            };
+            let mut result = serde_json::to_value(job).map_err(|e| e.to_string())?;
+            result["run"] = json!(name);
+            result["kind"] = json!(kind);
+            result["workspace"] = json!(workspace);
+            if let Some(url) = url {
+                result["url"] = json!(url);
+            }
+            if let Some(error) = observer_error {
+                result["observer_error"] = json!(error);
+            }
+            json_text(result)
         }
         "" | "exec" | "start" | "launch" => {
             let synchronous = input.action.is_empty() || input.action == "exec";
@@ -94,8 +136,8 @@ pub async fn call(app: &App, arguments: Value, holder: &str) -> ToolResult {
             "shell",
             action,
             &[
-                "exec", "start", "launch", "list", "status", "read", "wait", "write", "cancel",
-                "show",
+                "exec", "start", "launch", "run", "list", "status", "read", "wait", "write",
+                "cancel", "show",
             ],
         )),
     }
