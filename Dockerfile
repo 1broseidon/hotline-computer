@@ -24,7 +24,7 @@ FROM debian:trixie-slim@sha256:d7e12182ce18b85b93007c1dedf31f2d29e01ccf3182cc401
 RUN apt-get update && apt-get install -y --no-install-recommends \
     bash git curl wget ca-certificates tar gzip bzip2 xz-utils unzip zip ripgrep jq file \
     nix-bin python3 xvfb xauth x11-xkb-utils dbus at-spi2-core chromium \
-    fonts-dejavu-core fonts-noto-color-emoji xfonts-base alacritty tzdata \
+    fonts-dejavu-core fonts-noto-color-emoji fonts-noto-cjk xfonts-base alacritty tzdata \
     libgl1-mesa-dri libegl-mesa0 libglx-mesa0 mesa-utils \
     libgtk-3-0t64 librsvg2-common \
     # The Secret Service native apps keep passwords in, unlocked from boot,
@@ -58,6 +58,9 @@ COPY assets/alacritty.toml /etc/hotline-computer/alacritty.toml
 # platforms and services this image provides. An image release is a new one.
 COPY assets/base.json /etc/hotline-computer/base.json
 COPY assets/chromium-policy.json /etc/chromium/policies/managed/hotline.json
+# Nix's fontconfig reads /etc/fonts/conf.d but not Debian's font directory, so
+# apps from a workspace see the image's fonts only through this.
+COPY assets/fonts-system.conf /etc/fonts/conf.d/05-hotline-system-fonts.conf
 COPY assets/bashrc /etc/bash.bashrc
 # "Show in folder" in the browser, and xdg-open on a folder, open the
 # person's terminal there.
