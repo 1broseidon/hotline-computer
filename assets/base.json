@@ -71,7 +71,7 @@
       "env": {}
     },
     "qt": {
-      "description": "Qt 6 widgets and QML, with the xcb platform plugin and accessibility on",
+      "description": "Qt 6 widgets and QML, with the xcb platform plugin",
       "requires": [
         "gl"
       ],
