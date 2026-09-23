@@ -7,6 +7,8 @@ use std::path::{Path, PathBuf};
 
 pub const NIXPKGS: &str = "ef34387ddd751e1ab8857adf4676492d32eb24ec";
 const FORMAT: u32 = 1;
+/// Tells the preparation job to read the workspace's pending request.
+const REQUEST: &str = "@request";
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(tag = "source", rename_all = "snake_case", deny_unknown_fields)]
@@ -581,7 +583,9 @@ pub async fn prepare(
                 command: executable.to_string_lossy().into_owned(),
                 args: vec![
                     "prepare".into(),
-                    serde_json::to_string(&definition).map_err(|e| e.to_string())?,
+                    // The definition is in the request file; the job's command line
+                    // stays short enough for a person to read in the jobs list.
+                    REQUEST.into(),
                     workspace.to_string_lossy().into_owned(),
                     home.to_string_lossy().into_owned(),
                 ],
@@ -656,8 +660,11 @@ fn activate(
 pub async fn build(home: &Path, specification: &str, workspace: &Path) -> Result<(), String> {
     let home = home.canonicalize().map_err(|e| e.to_string())?;
     let workspace = resolve_workspace(&home, workspace)?;
-    let definition: Definition =
-        serde_json::from_str(specification).map_err(|e| format!("environment definition: {e}"))?;
+    let definition: Definition = if specification == REQUEST {
+        read_json(&workspace.join(".hotline/environment-request.json"))?
+    } else {
+        serde_json::from_str(specification).map_err(|e| format!("environment definition: {e}"))?
+    };
     let directory = cache(&home, &workspace, &definition)?;
     std::fs::create_dir_all(&directory).map_err(|e| e.to_string())?;
     let lock = std::fs::OpenOptions::new()
