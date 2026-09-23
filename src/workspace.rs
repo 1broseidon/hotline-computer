@@ -383,7 +383,12 @@ pub struct Request {
     pub upgrade: bool,
 }
 
-fn composed(home: &Path, workspace: &Path, request: Request) -> Result<Definition, String> {
+fn composed(
+    home: &Path,
+    workspace: &Path,
+    request: Request,
+    current: crate::manifest::Base,
+) -> Result<Definition, String> {
     use crate::manifest::{self, Manifest};
     let file = workspace.join(manifest::FILE);
     let repository = if file.exists() {
@@ -410,7 +415,6 @@ fn composed(home: &Path, workspace: &Path, request: Request) -> Result<Definitio
         Some(Ok(Definition::Manifest(composed))) => Some(composed.base),
         _ => None,
     };
-    let current = manifest::base()?;
     // A workspace keeps the base it was composed against until it asks for the new one.
     let base = match previous {
         Some(previous) if !request.upgrade && previous.version != current.version => previous,
@@ -437,7 +441,7 @@ fn definition(home: &Path, workspace: &Path, request: Request) -> Result<Definit
         return Err("choose packages or flake, not both".into());
     }
     if request.manifest.is_some() || workspace.join(crate::manifest::FILE).exists() {
-        return composed(home, workspace, request);
+        return composed(home, workspace, request, crate::manifest::base()?);
     }
     let Request {
         packages, flake, ..
@@ -993,6 +997,79 @@ mod tests {
         )
         .await;
         assert!(result.unwrap_err().contains("packages or flake"));
+    }
+
+    #[test]
+    fn a_manifest_workspace_keeps_its_base_until_it_asks_for_the_new_one() {
+        use crate::manifest::{Base, Manifest};
+        let temp = tempfile::tempdir().unwrap();
+        let home = temp.path().canonicalize().unwrap();
+        let old = crate::manifest::base().unwrap();
+        let mut new = old.clone();
+        new.version = "9.9.9".into();
+        new.nixpkgs = "0".repeat(40);
+        let request = |manifest: serde_json::Value, upgrade: bool| Request {
+            manifest: Some(serde_json::from_value::<Manifest>(manifest).unwrap()),
+            upgrade,
+            ..Request::default()
+        };
+        let base_of = |definition: &Definition| -> Base {
+            match definition {
+                Definition::Manifest(composed) => composed.base.clone(),
+                _ => panic!("not a manifest"),
+            }
+        };
+        let first = composed(
+            &home,
+            &home,
+            request(
+                json!({"packages": ["go"], "runs": {"test": {"command": ["go", "test"]}}}),
+                false,
+            ),
+            old.clone(),
+        )
+        .unwrap();
+        write_json(&home.join(".hotline/environment-spec.json"), &first).unwrap();
+        let file = crate::manifest::read(&home.join(crate::manifest::FILE)).unwrap();
+        assert_eq!(file.packages, ["go"]);
+        assert!(file.runs.contains_key("test"));
+        let kept = composed(
+            &home,
+            &home,
+            request(json!({"packages": ["gopls"]}), false),
+            new.clone(),
+        )
+        .unwrap();
+        assert_eq!(base_of(&kept).version, old.version);
+        let Definition::Manifest(kept) = kept else {
+            unreachable!()
+        };
+        assert_eq!(kept.manifest.packages, ["go", "gopls"]);
+        let upgraded = composed(
+            &home,
+            &home,
+            Request {
+                upgrade: true,
+                ..Request::default()
+            },
+            new.clone(),
+        )
+        .unwrap();
+        assert_eq!(base_of(&upgraded).nixpkgs, new.nixpkgs);
+        assert!(
+            composed(
+                &home,
+                &home,
+                request(json!({"platform": ["qt"]}), false),
+                old
+            )
+            .is_err()
+        );
+        let file = crate::manifest::read(&home.join(crate::manifest::FILE)).unwrap();
+        assert!(
+            file.platform.is_empty(),
+            "a refused manifest is not written"
+        );
     }
 
     #[test]

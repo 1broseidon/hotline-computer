@@ -49,7 +49,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && install -d /etc/nix \
     && install -d -m 1777 /tmp/.X11-unix \
     && install -d -o agent -g agent /nix /nix/store /nix/var/nix \
-    && printf 'experimental-features = nix-command flakes\nsandbox = false\nbuild-users-group =\n' > /etc/nix/nix.conf \
+    && printf 'experimental-features = nix-command flakes\nsandbox = false\nbuild-users-group =\n!include /opt/hotline-computer/nix.conf\n' > /etc/nix/nix.conf \
+    && install -d -o agent -g agent /opt/hotline-computer \
     && chown -R agent:agent /nix \
     && chown -R agent:agent /home/agent
 COPY assets/alacritty.toml /etc/hotline-computer/alacritty.toml
@@ -76,17 +77,25 @@ ENV HOTLINE_COMPUTER_ADDR=0.0.0.0:8787 \
     GDK_BACKEND=x11 \
     APPIMAGE_EXTRACT_AND_RUN=1
 RUN install -d /home/agent/src && nix-store --init
-# The base's closure ships pre-realised, as a cache rather than baked-in
-# files: the pinned Nixpkgs source and the standard environment every
-# prepared shell starts from. HOTLINE_PREREALISE names platforms to realise
-# too (for example "webkit"), at the cost of image size.
+# The base's closure ships as a signed binary cache outside /nix, not as
+# store contents: the desk mounts /nix as a shared volume that already holds
+# older images' paths, so only a substituter reaches every computer. Nix
+# takes from it before the network. HOTLINE_PREREALISE names platforms to
+# include too (for example "webkit"), at the cost of image size.
 ARG HOTLINE_PREREALISE=""
 RUN rev=$(jq -r .nixpkgs /etc/hotline-computer/base.json) \
-    && nix flake prefetch "github:NixOS/nixpkgs/$rev" \
-    && nix build --no-link "github:NixOS/nixpkgs/$rev#stdenv" "github:NixOS/nixpkgs/$rev#bashInteractive" \
+    && cache=/opt/hotline-computer/base-cache \
+    && targets="github:NixOS/nixpkgs/$rev#stdenv github:NixOS/nixpkgs/$rev#bashInteractive" \
     && for platform in $HOTLINE_PREREALISE; do \
-         nix build --no-link $(jq -r --arg p "$platform" '.platforms as $all | def need($n): ($all[$n].requires // [] | map(need(.)) | add // []) + [$n]; [need($p)[] | $all[.] | (.packages + .libraries)[]] | unique | .[]' /etc/hotline-computer/base.json | sed "s|^|github:NixOS/nixpkgs/$rev#|"); \
+         targets="$targets $(jq -r --arg p "$platform" '.platforms as $all | def need($n): ($all[$n].requires // [] | map(need(.)) | add // []) + [$n]; [need($p)[] | $all[.] | (.packages + .libraries)[]] | unique | .[]' /etc/hotline-computer/base.json | sed "s|^|github:NixOS/nixpkgs/$rev#|" | tr '\n' ' ')"; \
        done \
-    && nix-store --optimise
+    && nix build --no-link --print-out-paths $targets > /tmp/base-paths \
+    && nix key generate-secret --key-name hotline-computer-base > /tmp/base.key \
+    && nix store sign --key-file /tmp/base.key --recursive $(cat /tmp/base-paths) \
+    && nix copy --to "file://$cache?compression=zstd" $(cat /tmp/base-paths) \
+    && nix flake archive --to "file://$cache?compression=zstd" "github:NixOS/nixpkgs/$rev" \
+    && printf 'extra-substituters = file://%s?priority=10\nextra-trusted-public-keys = %s\n' "$cache" "$(nix key convert-secret-to-public < /tmp/base.key)" > /opt/hotline-computer/nix.conf \
+    && rm -f /tmp/base.key /tmp/base-paths \
+    && nix-collect-garbage -d >/dev/null
 EXPOSE 8787
 ENTRYPOINT ["/usr/bin/hotline-computer", "boot"]

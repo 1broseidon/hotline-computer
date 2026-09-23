@@ -645,6 +645,13 @@ pub fn job(
     env.append(&mut extra.env);
     let mut args: Vec<String> = entry.command[1..].to_vec();
     args.append(&mut extra.args);
+    // Commands are argv, not shell, so the port a web run is given is
+    // substituted where the manifest writes $PORT.
+    if let Some(port) = env.get("PORT").cloned() {
+        for arg in &mut args {
+            *arg = arg.replace("$PORT", &port);
+        }
+    }
     let label = entry.label.clone().unwrap_or_else(|| format!("Run {run}"));
     Ok((
         Start {
@@ -1081,7 +1088,7 @@ mod tests {
             "packages": ["go"],
             "runs": {
                 "test": {"command": ["go", "test", "./..."], "cwd": "server", "env": {"CGO_ENABLED": "0"}},
-                "web": {"command": ["go", "run", "."], "kind": "web"}
+                "web": {"command": ["go", "run", ".", "--port", "$PORT"], "kind": "web"}
             }
         }));
         std::fs::create_dir_all(workspace.join(".hotline")).unwrap();
@@ -1109,6 +1116,10 @@ mod tests {
         assert_eq!(
             url.unwrap(),
             format!("http://127.0.0.1:{}", start.env["PORT"])
+        );
+        assert_eq!(
+            start.args,
+            ["run", ".", "--port", start.env["PORT"].as_str()]
         );
         let error = job(workspace, &composed, "lint", Start::default()).unwrap_err();
         assert!(
