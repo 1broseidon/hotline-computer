@@ -63,13 +63,15 @@ COPY assets/chromium-policy.json /etc/chromium/policies/managed/hotline.json
 COPY assets/fonts-system.conf /etc/fonts/conf.d/05-hotline-system-fonts.conf
 COPY assets/bashrc /etc/bash.bashrc
 # "Show in folder" in the browser, and xdg-open on a folder, open the
-# person's terminal there.
-COPY assets/hotline-open-folder.desktop assets/mimeapps.list /usr/share/applications/
+# person's terminal there. xdg-open on a web address opens it as a tab of the
+# managed browser.
+COPY assets/hotline-open-folder.desktop assets/hotline-open-link.desktop assets/mimeapps.list /usr/share/applications/
 COPY --from=build /usr/local/bin/hotline-computer /usr/bin/hotline-computer
 USER agent
 WORKDIR /home/agent
 # Electron apps abort on their SUID sandbox helper, which the dropped
-# capabilities rule out as they do for Chromium's.
+# capabilities rule out as they do for Chromium's. BROWSER reaches the managed
+# browser from programs whose Nix environment hides /usr/share/applications.
 ENV HOTLINE_COMPUTER_ADDR=0.0.0.0:8787 \
     HOTLINE_COMPUTER_HOME=/home/agent \
     HOTLINE_COMPUTER_SCREEN=1920x1080 \
@@ -81,7 +83,8 @@ ENV HOTLINE_COMPUTER_ADDR=0.0.0.0:8787 \
     LIBGL_ALWAYS_SOFTWARE=1 \
     ELECTRON_DISABLE_SANDBOX=1 \
     GDK_BACKEND=x11 \
-    APPIMAGE_EXTRACT_AND_RUN=1
+    APPIMAGE_EXTRACT_AND_RUN=1 \
+    BROWSER="hotline-computer open"
 RUN install -d /home/agent/src && nix-store --init
 # The base's closure ships as a signed binary cache outside /nix, not as
 # store contents: the desk mounts /nix as a shared volume that already holds

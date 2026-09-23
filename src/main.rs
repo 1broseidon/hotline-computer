@@ -76,11 +76,15 @@ fn main() {
     }
     if arguments.first().map(String::as_str) == Some("open") {
         let Some(target) = arguments.get(1) else {
-            eprintln!("open takes a folder");
+            eprintln!("open takes a folder or a web address");
             std::process::exit(2);
         };
-        let home = Config::from_env().home;
-        if let Err(error) = hotline_computer::observer::open(&home, std::path::Path::new(target)) {
+        let opened = if hotline_computer::links::is_link(target) {
+            hotline_computer::links::send(target)
+        } else {
+            hotline_computer::observer::open(&Config::from_env().home, std::path::Path::new(target))
+        };
+        if let Err(error) = opened {
             eprintln!("{error}");
             std::process::exit(1);
         }

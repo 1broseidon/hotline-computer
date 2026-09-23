@@ -1,2 +1,4 @@
 [Default Applications]
 inode/directory=hotline-open-folder.desktop
+x-scheme-handler/http=hotline-open-link.desktop
+x-scheme-handler/https=hotline-open-link.desktop

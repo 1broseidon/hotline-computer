@@ -215,8 +215,10 @@ fn machine(config: Config, width: u16, height: u16) -> Result<(), String> {
                 }
             }
         };
+        let links = crate::links::serve(app.clone());
         tokio::select! {
             result = serve::run(app) => result,
+            result = links => result,
             status = tokio::task::spawn_blocking(move || xvfb.wait()) => {
                 Err(format!("Xvfb exited: {}", describe(status)))
             }

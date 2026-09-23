@@ -70,3 +70,14 @@ and expects a button in the tree, types `ΩЖ漢` on a fresh keymap, and evaluat
 native acceptance suite gains a PySide6 6.8.1 case declared only in setup.py: drafted, prepared,
 captured three times without a crash, its tree read, and a click counted. The contract test
 passed on its first run against a fresh container, and the Qt case passed.
+
+## Links open in the managed browser
+
+Signing Hotline in to xAI from its dev build did nothing: "Open xAI sign-in" went through
+`xdg-open` to Debian's Chromium entry, which started a second browser without `--no-sandbox`
+that died, and would not have held the person's cookies anyway. Web addresses now go to
+`hotline-computer open`, which hands them over a local socket to the running agent; it opens
+each as a tab of the managed browser, starting it if needed, and raises its window. `BROWSER`
+is set too, for programs whose Nix environment hides `/usr/share/applications`: without it,
+`xdg-open` from Hotline's dev shell finds no handler at all. Checked on a fresh container
+through both routes; the xAI device sign-in completed with the person's session.

@@ -1,0 +1,7 @@
+[Desktop Entry]
+Type=Application
+Name=Open in the browser
+Comment=Open a web address in the person's browser
+Exec=hotline-computer open %u
+NoDisplay=true
+MimeType=x-scheme-handler/http;x-scheme-handler/https;

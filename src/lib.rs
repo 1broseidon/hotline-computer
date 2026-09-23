@@ -9,6 +9,7 @@ pub mod guide;
 pub mod jobs;
 pub mod lease;
 pub mod limits;
+pub mod links;
 pub mod logins;
 pub mod manifest;
 pub mod observer;
