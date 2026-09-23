@@ -83,6 +83,8 @@ pub async fn run(app: App) -> Result<(), String> {
         .await
         .map_err(|error| format!("create {}: {error}", app.config.home.display()))?;
     app.jobs.initialize().await?;
+    // Manifest workspaces get their services and start hooks back.
+    tokio::spawn(crate::manifest::resume(app.clone()));
     let jobs = app.jobs.clone();
     let observer = app.observer.clone();
     let address = app.config.addr.clone();

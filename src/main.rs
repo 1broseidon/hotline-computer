@@ -108,9 +108,10 @@ fn main() {
             .enable_all()
             .build()
             .expect("runtime");
-        // The managed job spells it DEFINITION_JSON WORKSPACE HOME; a person
-        // at the terminal spells it with flags.
-        let internal = arguments.len() == 4 && arguments[1].starts_with('{');
+        // The managed job spells it @request (or DEFINITION_JSON) WORKSPACE
+        // HOME; a person at the terminal spells it with flags.
+        let internal = arguments.len() == 4
+            && (arguments[1].starts_with('{') || arguments[1] == workspace::REQUEST);
         let result = if internal {
             runtime.block_on(workspace::build(
                 std::path::Path::new(&arguments[3]),

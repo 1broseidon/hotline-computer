@@ -8,7 +8,7 @@ use std::path::{Path, PathBuf};
 pub const NIXPKGS: &str = "ef34387ddd751e1ab8857adf4676492d32eb24ec";
 const FORMAT: u32 = 1;
 /// Tells the preparation job to read the workspace's pending request.
-const REQUEST: &str = "@request";
+pub const REQUEST: &str = "@request";
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(tag = "source", rename_all = "snake_case", deny_unknown_fields)]
@@ -642,6 +642,7 @@ fn activate(
     let Definition::Manifest(composed) = definition else {
         return;
     };
+    crate::manifest::remember(&app.config.home, workspace);
     result["then"] = crate::manifest::plan(composed);
     result["next"] = json!(if preparation.is_some() {
         "wait for the job; then shell run NAME in this workspace. state manifest shows hooks and services as they start"

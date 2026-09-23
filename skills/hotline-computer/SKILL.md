@@ -43,7 +43,7 @@ The parts of a manifest:
 - `platform`: runtime support the image provides by name. `gl` is software OpenGL and EGL through Mesa; `gtk` adds GTK schemas, GIO modules and the tray library; `webkit` adds WebKitGTK for Tauri and other webviews. Each includes what it requires. Declare a platform instead of exporting library paths or driver variables yourself.
 - `env`: `"NAME": "value"` sets a variable (`$WORKSPACE` expands); `"NAME": ["dir", ...]` extends a search path, relative entries resolved against the workspace. `PATH` is always a list.
 - `services`: `{"postgres": {"enable": true}}` runs a supervised service on a unix socket under `.hotline/services`, and every job gets its address (`PGHOST`, `DATABASE_URL`, `REDIS_URL`).
-- `hooks`: `create` entries run once per workspace after its first successful preparation, in name order (dependency installs); `start` entries start after each preparation unless already running (watchers).
+- `hooks`: `create` entries run once per workspace after its first successful preparation, in name order (dependency installs); `start` entries start after each preparation unless already running (watchers). Services and start hooks come back by themselves after a computer restart.
 - `runs`: `NAME: {"command": [argv], "cwd": "subdir", "kind": "task" | "desktop" | "web", "env": {}, "label": "..."}`.
 - `flake`: a repository flake to take the environment from instead of `packages`, `platform` and `services`; `env`, `hooks` and `runs` still apply.
 

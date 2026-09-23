@@ -703,6 +703,50 @@ fn save(workspace: &Path, activation: &Activation) {
 
 static ACTIVATING: tokio::sync::Mutex<()> = tokio::sync::Mutex::const_new(());
 
+fn registry(home: &Path) -> PathBuf {
+    home.join(".cache/hotline/manifest-workspaces.json")
+}
+
+/// Remembers a manifest workspace, so its services and start hooks come back after a restart.
+pub fn remember(home: &Path, workspace: &Path) {
+    let path = registry(home);
+    let mut known: Vec<PathBuf> = std::fs::read(&path)
+        .ok()
+        .and_then(|b| serde_json::from_slice(&b).ok())
+        .unwrap_or_default();
+    if known.iter().any(|w| w == workspace) {
+        return;
+    }
+    known.push(workspace.to_path_buf());
+    if let Some(parent) = path.parent() {
+        let _ = std::fs::create_dir_all(parent);
+    }
+    if let Ok(bytes) = serde_json::to_vec_pretty(&known) {
+        let _ = std::fs::write(path, bytes);
+    }
+}
+
+/// At boot: every remembered workspace that is still prepared gets its
+/// services and start hooks again. Create hooks already ran and do not repeat.
+pub async fn resume(app: App) {
+    let Ok(home) = app.config.home.canonicalize() else {
+        return;
+    };
+    let known: Vec<PathBuf> = std::fs::read(registry(&home))
+        .ok()
+        .and_then(|b| serde_json::from_slice(&b).ok())
+        .unwrap_or_default();
+    for workspace in known {
+        let Ok((root, composed)) = find(&home, &workspace) else {
+            continue;
+        };
+        if root != workspace || crate::workspace::environment(&home, &workspace).is_err() {
+            continue;
+        }
+        activate(app.clone(), workspace, composed, "computer".into(), None).await;
+    }
+}
+
 /// What preparation will do next, said in its answer.
 pub fn plan(composed: &Composed) -> Value {
     let m = &composed.manifest;
