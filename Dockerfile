@@ -65,6 +65,8 @@ COPY assets/hotline-open-folder.desktop assets/mimeapps.list /usr/share/applicat
 COPY --from=build /usr/local/bin/hotline-computer /usr/bin/hotline-computer
 USER agent
 WORKDIR /home/agent
+# Electron apps abort on their SUID sandbox helper, which the dropped
+# capabilities rule out as they do for Chromium's.
 ENV HOTLINE_COMPUTER_ADDR=0.0.0.0:8787 \
     HOTLINE_COMPUTER_HOME=/home/agent \
     HOTLINE_COMPUTER_SCREEN=1920x1080 \
@@ -74,6 +76,7 @@ ENV HOTLINE_COMPUTER_ADDR=0.0.0.0:8787 \
     NIX_REMOTE=local \
     NIX_SSL_CERT_FILE=/etc/ssl/certs/ca-certificates.crt \
     LIBGL_ALWAYS_SOFTWARE=1 \
+    ELECTRON_DISABLE_SANDBOX=1 \
     GDK_BACKEND=x11 \
     APPIMAGE_EXTRACT_AND_RUN=1
 RUN install -d /home/agent/src && nix-store --init

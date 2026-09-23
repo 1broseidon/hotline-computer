@@ -1,5 +1,5 @@
 {
-  "version": "0.10.0-rc.2",
+  "version": "0.10.0-rc.3",
   "nixpkgs": "ef34387ddd751e1ab8857adf4676492d32eb24ec",
   "nixpkgs_lock": {
     "narHash": "sha256-eiEK7cKZORNEvX0GeF3RtNEF/JXhgf2RqSp3230q13E=",
@@ -91,7 +91,7 @@
       }
     },
     "native": {
-      "description": "Windowing libraries native toolkits load at run time: X11, XKB and Vulkan, for winit, wgpu, egui, iced, GLFW, SDL, Fyne and Gio",
+      "description": "Windowing libraries native toolkits build against and load at run time: X11, XKB and Vulkan, for winit, wgpu, egui, iced, GLFW, SDL, Fyne and Gio",
       "requires": [
         "gl"
       ],
@@ -100,6 +100,8 @@
         "libxcursor",
         "libxrandr",
         "libxi",
+        "libxinerama",
+        "libxxf86vm",
         "libxkbcommon",
         "vulkan-loader",
         "pkg-config"
@@ -111,6 +113,38 @@
         "libxi",
         "libxkbcommon",
         "vulkan-loader"
+      ],
+      "env": {}
+    },
+    "prebuilt": {
+      "description": "Libraries prebuilt binaries expect from a regular Linux (libstdc++, zlib, X11 and XCB, fonts, D-Bus) on the library path: pip and uv wheels such as numpy, PySide6, PyQt and pygame, and downloaded tools. A Qt wheel brings its own Qt, so leave out the qt platform",
+      "requires": [
+        "gl"
+      ],
+      "packages": [],
+      "libraries": [
+        "stdenv.cc.cc.lib",
+        "zlib",
+        "zstd",
+        "expat",
+        "krb5",
+        "libdrm",
+        "glib",
+        "dbus",
+        "fontconfig",
+        "freetype",
+        "libxkbcommon",
+        "libx11",
+        "libxext",
+        "libxrender",
+        "libxcb",
+        "libxcb-cursor",
+        "libxcb-wm",
+        "libxcb-image",
+        "libxcb-keysyms",
+        "libxcb-render-util",
+        "libice",
+        "libsm"
       ],
       "env": {}
     }

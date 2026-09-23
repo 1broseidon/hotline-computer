@@ -392,12 +392,50 @@ fn python(root: &Path, b: &mut Builder) {
         "VIRTUAL_ENV".into(),
         EnvValue::Text("$WORKSPACE/.venv".into()),
     );
+    b.platform("prebuilt");
+    b.why("wheels from PyPI expect a regular Linux → platform prebuilt, which puts libstdc++, zlib and the X11 libraries they load on the library path");
     if text.contains("pytest") || root.join("tests").is_dir() {
         b.run(
             "test",
             run(argv(&["python", "-m", "pytest"]), ".", Kind::Task),
         );
         b.why("pytest or a tests directory → a test run");
+    }
+    // Tk ships with Python elsewhere; in Nixpkgs it is a package of its own.
+    let sources: String = std::fs::read_dir(root)
+        .into_iter()
+        .flatten()
+        .flatten()
+        .filter(|entry| entry.path().extension().is_some_and(|e| e == "py"))
+        .map(|entry| std::fs::read_to_string(entry.path()).unwrap_or_default())
+        .collect();
+    let tk = sources.contains("import tkinter") || sources.contains("from tkinter");
+    if tk {
+        b.packages(&["python312Packages.tkinter"]);
+        b.why("the code imports tkinter → python312Packages.tkinter");
+    }
+    let lower = text.to_lowercase();
+    let toolkit = [
+        "pyside6",
+        "pyqt6",
+        "pyqt5",
+        "pygame",
+        "kivy",
+        "wxpython",
+        "dearpygui",
+    ]
+    .into_iter()
+    .find(|name| lower.contains(name));
+    if (tk || toolkit.is_some())
+        && let Some(entry) = ["main.py", "app.py", "__main__.py"]
+            .into_iter()
+            .find(|file| root.join(file).is_file())
+    {
+        b.run("app", run(argv(&["python", entry]), ".", Kind::Desktop));
+        b.why(format!(
+            "{} and {entry} → an app run (a toolkit wheel brings its own libraries)",
+            toolkit.unwrap_or("tkinter")
+        ));
     }
 }
 
@@ -419,15 +457,25 @@ fn go(root: &Path, b: &mut Builder) {
         "{} → go, gopls, build and test runs",
         module.display()
     ));
+    // A module that has not been tidied yet names its requirements only in go.mod.
     let sum = read(root, &Path::new(&dir).join("go.sum"));
+    if sum.is_empty() && read(root, &module).contains("require") {
+        let mut tidy = argv(&["go", "mod", "tidy"]);
+        if dir != "." {
+            tidy.splice(1..1, ["-C".to_string(), dir.clone()]);
+        }
+        b.hook("tidy", tidy);
+        b.why("go.mod requires modules but there is no go.sum → a create hook running go mod tidy");
+    }
+    let modules = read(root, &module) + &sum;
     if ["fyne.io/", "gioui.org", "go-gl/glfw", "veandco/go-sdl2"]
         .iter()
-        .any(|m| sum.contains(m))
+        .any(|m| modules.contains(m))
     {
         b.platform("native");
         b.packages(&["gcc"]);
         b.run("app", run(argv(&["go", "run", "."]), &dir, Kind::Desktop));
-        b.why("go.sum uses Fyne, Gio, GLFW or SDL → platform native, gcc for cgo, an app run");
+        b.why("the module uses Fyne, Gio, GLFW or SDL → platform native, gcc for cgo, an app run");
     }
 }
 
@@ -642,6 +690,16 @@ mod tests {
         );
         assert_eq!(fyne.manifest.platform, ["native"]);
         composes(&fyne);
+        let untidy = draft(
+            repo(&[
+                ("go.mod", "module x\n\nrequire fyne.io/fyne/v2 v2.5.4\n"),
+                ("main.go", "package main\n"),
+            ])
+            .path(),
+        );
+        assert_eq!(untidy.manifest.platform, ["native"]);
+        assert_eq!(untidy.manifest.hooks.create["tidy"], ["go", "mod", "tidy"]);
+        composes(&untidy);
     }
 
     #[test]
@@ -655,7 +713,35 @@ mod tests {
         assert_eq!(m.env["PATH"], EnvValue::List(vec![".venv/bin".into()]));
         assert!(m.runs.contains_key("test"));
         assert!(draft.reasons.len() >= 2);
+        assert_eq!(m.platform, ["prebuilt"]);
+        assert!(!m.runs.contains_key("app"));
         composes(&draft);
+        let pyside = super::draft(
+            repo(&[
+                ("requirements.txt", "PySide6-Essentials==6.8.1\n"),
+                ("main.py", "from PySide6.QtWidgets import QApplication\n"),
+            ])
+            .path(),
+        );
+        assert_eq!(pyside.manifest.platform, ["prebuilt"]);
+        assert_eq!(pyside.manifest.runs["app"].command, ["python", "main.py"]);
+        assert_eq!(pyside.manifest.runs["app"].kind, Kind::Desktop);
+        composes(&pyside);
+        let tk = super::draft(
+            repo(&[
+                ("pyproject.toml", "[project]\nname = \"tkapp\"\n"),
+                ("app.py", "import tkinter as tk\n"),
+            ])
+            .path(),
+        );
+        assert!(
+            tk.manifest
+                .packages
+                .iter()
+                .any(|p| p == "python312Packages.tkinter")
+        );
+        assert_eq!(tk.manifest.runs["app"].command, ["python", "app.py"]);
+        composes(&tk);
         let empty = super::draft(repo(&[("README.md", "hi")]).path());
         assert!(empty.reasons[0].contains("no build files"));
     }

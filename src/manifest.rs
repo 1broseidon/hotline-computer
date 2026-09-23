@@ -212,7 +212,7 @@ pub fn parse(text: &str) -> Result<Manifest, String> {
 }
 
 /// Said with every shape error, because the error is the documentation.
-pub const SHAPE: &str = "A manifest is a JSON object with any of: packages (Nixpkgs attribute names), flake (a local flake instead of packages), platform (gl, gtk, gtk4, qt, native, webkit), env (NAME: \"value\", or NAME: [\"path\", ...] to extend a search path), services (NAME: {\"enable\": true}), hooks ({\"create\": {NAME: [argv]}, \"start\": {NAME: [argv]}}), runs (NAME: {\"command\": [argv], \"cwd\": \"subdir\", \"kind\": \"task\" | \"desktop\" | \"web\", \"env\": {}, \"label\": \"...\"}). state manifest shows an example and what this image offers.";
+pub const SHAPE: &str = "A manifest is a JSON object with any of: packages (Nixpkgs attribute names), flake (a local flake instead of packages), platform (gl, gtk, gtk4, qt, native, webkit, prebuilt), env (NAME: \"value\", or NAME: [\"path\", ...] to extend a search path), services (NAME: {\"enable\": true}), hooks ({\"create\": {NAME: [argv]}, \"start\": {NAME: [argv]}}), runs (NAME: {\"command\": [argv], \"cwd\": \"subdir\", \"kind\": \"task\" | \"desktop\" | \"web\", \"env\": {}, \"label\": \"...\"}). state manifest shows an example and what this image offers.";
 
 fn concat(mut first: Vec<String>, second: Vec<String>) -> Vec<String> {
     for item in second {
@@ -1064,7 +1064,7 @@ mod tests {
         );
         let error = compose(embedded(), manifest(json!({"platform": ["cocoa"]}))).unwrap_err();
         assert!(
-            error.contains("gl, gtk, gtk4, native, qt, webkit"),
+            error.contains("gl, gtk, gtk4, native, prebuilt, qt, webkit"),
             "{error}"
         );
         let error = compose(embedded(), manifest(json!({"services": {"mysql": {}}}))).unwrap_err();
