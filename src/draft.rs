@@ -433,7 +433,7 @@ fn python(root: &Path, b: &mut Builder) {
     {
         b.run("app", run(argv(&["python", entry]), ".", Kind::Desktop));
         b.why(format!(
-            "{} and {entry} → an app run (a toolkit wheel brings its own libraries)",
+            "{} and {entry} → an app run",
             toolkit.unwrap_or("tkinter")
         ));
     }
