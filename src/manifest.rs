@@ -672,7 +672,7 @@ pub fn job(
             .map_err(|e| format!("no free port: {e}"))?
             .port();
         env.insert("PORT".into(), port.to_string());
-        url = Some(format!("http://127.0.0.1:{port}"));
+        url = Some(format!("http://localhost:{port}"));
     }
     env.append(&mut extra.env);
     let mut args: Vec<String> = entry.command[1..].to_vec();
@@ -1196,7 +1196,7 @@ mod tests {
         let (start, url) = job(workspace, &composed, "web", Start::default()).unwrap();
         assert_eq!(
             url.unwrap(),
-            format!("http://127.0.0.1:{}", start.env["PORT"])
+            format!("http://localhost:{}", start.env["PORT"])
         );
         assert_eq!(
             start.args,

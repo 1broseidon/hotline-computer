@@ -230,7 +230,7 @@ fn rust(root: &Path, b: &mut Builder, tauri: &[PathBuf]) {
         }
         b.run("app", run(argv(&["cargo", "run"]), &dir, Kind::Desktop));
         b.why(format!(
-            "Cargo.lock uses {evidence} → platform {platform}, and an app run with cargo run"
+            "the crates use {evidence} → platform {platform}, and an app run with cargo run"
         ));
     }
 }

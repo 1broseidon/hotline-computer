@@ -186,7 +186,7 @@ pub async fn wait(
             }
             Kind::Web => {
                 if let Some(port) = pending.port
-                    && tokio::net::TcpStream::connect(("127.0.0.1", port))
+                    && tokio::net::TcpStream::connect(("localhost", port))
                         .await
                         .is_ok()
                 {
