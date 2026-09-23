@@ -1,5 +1,5 @@
 {
-  "version": "0.10.0-rc.3",
+  "version": "0.10.0-rc.4",
   "nixpkgs": "ef34387ddd751e1ab8857adf4676492d32eb24ec",
   "nixpkgs_lock": {
     "narHash": "sha256-eiEK7cKZORNEvX0GeF3RtNEF/JXhgf2RqSp3230q13E=",
@@ -117,7 +117,7 @@
       "env": {}
     },
     "prebuilt": {
-      "description": "Libraries prebuilt binaries expect from a regular Linux (libstdc++, zlib, X11 and XCB, fonts, D-Bus) on the library path: pip and uv wheels such as numpy, PySide6, PyQt and pygame, and downloaded tools. A Qt wheel brings its own Qt, so leave out the qt platform",
+      "description": "The system libraries a manylinux wheel may assume (the auditwheel policy of PEP 600: libstdc++, zlib, expat, GLib, X11, OpenGL) on the library path, for pip and uv wheels such as numpy, pandas and pygame, and for downloaded binaries built the same way",
       "requires": [
         "gl"
       ],
@@ -125,26 +125,39 @@
       "libraries": [
         "stdenv.cc.cc.lib",
         "zlib",
-        "zstd",
         "expat",
-        "krb5",
-        "libdrm",
         "glib",
-        "dbus",
-        "fontconfig",
-        "freetype",
-        "libxkbcommon",
+        "libnsl",
         "libx11",
         "libxext",
         "libxrender",
+        "libice",
+        "libsm"
+      ],
+      "env": {}
+    },
+    "qt-wheel": {
+      "description": "What Qt's own wheels (PySide6, PyQt6, PyQt5) load beyond prebuilt: the xcb platform plugin's libraries from Qt's Linux requirements (XCB and its utilities, XKB, fontconfig, FreeType), and D-Bus, zstd, Brotli, libdrm and Kerberos, which Qt's wheel builds link. The wheel brings its own Qt, so leave out the qt platform",
+      "requires": [
+        "prebuilt"
+      ],
+      "packages": [],
+      "libraries": [
         "libxcb",
+        "libxcb-util",
         "libxcb-cursor",
         "libxcb-wm",
         "libxcb-image",
         "libxcb-keysyms",
         "libxcb-render-util",
-        "libice",
-        "libsm"
+        "libxkbcommon",
+        "fontconfig",
+        "freetype",
+        "dbus",
+        "zstd",
+        "brotli",
+        "libdrm",
+        "krb5"
       ],
       "env": {}
     }

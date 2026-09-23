@@ -393,7 +393,7 @@ fn python(root: &Path, b: &mut Builder) {
         EnvValue::Text("$WORKSPACE/.venv".into()),
     );
     b.platform("prebuilt");
-    b.why("wheels from PyPI expect a regular Linux → platform prebuilt, which puts libstdc++, zlib and the X11 libraries they load on the library path");
+    b.why("wheels from PyPI assume the manylinux system libraries → platform prebuilt, which puts libstdc++, zlib, GLib and X11 on the library path");
     if text.contains("pytest") || root.join("tests").is_dir() {
         b.run(
             "test",
@@ -426,6 +426,10 @@ fn python(root: &Path, b: &mut Builder) {
     ]
     .into_iter()
     .find(|name| lower.contains(name));
+    if toolkit.is_some_and(|name| name.starts_with("pyside") || name.starts_with("pyqt")) {
+        b.platform("qt-wheel");
+        b.why("a Qt wheel loads XCB, XKB, fonts and D-Bus beyond the manylinux set → platform qt-wheel");
+    }
     if (tk || toolkit.is_some())
         && let Some(entry) = ["main.py", "app.py", "__main__.py"]
             .into_iter()
@@ -723,7 +727,7 @@ mod tests {
             ])
             .path(),
         );
-        assert_eq!(pyside.manifest.platform, ["prebuilt"]);
+        assert_eq!(pyside.manifest.platform, ["prebuilt", "qt-wheel"]);
         assert_eq!(pyside.manifest.runs["app"].command, ["python", "main.py"]);
         assert_eq!(pyside.manifest.runs["app"].kind, Kind::Desktop);
         composes(&pyside);

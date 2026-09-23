@@ -2,6 +2,7 @@ use atspi::CoordType;
 use atspi::proxy::accessible::AccessibleProxy;
 use atspi::proxy::bus::BusProxy;
 use atspi::proxy::proxy_ext::ProxyExt;
+use atspi::zbus::proxy::CacheProperties;
 
 use crate::x11::Window;
 
@@ -150,11 +151,14 @@ async fn children(proxy: &AccessibleProxy<'_>) -> Vec<Reference> {
     children
 }
 
+// Properties are read one at a time: Qt's bridge answers no GetAll, which a
+// property cache sends first, and Qt 6.8 crashes the application on it.
 async fn accessible<'a>(
     connection: &'a atspi::zbus::Connection,
     reference: Reference,
 ) -> Result<AccessibleProxy<'a>, String> {
     AccessibleProxy::builder(connection)
+        .cache_properties(CacheProperties::No)
         .destination(reference.0)
         .map_err(|e| e.to_string())?
         .path(reference.1)
@@ -167,6 +171,7 @@ async fn accessible<'a>(
 async fn query(app: &crate::App) -> Result<Vec<WindowTree>, String> {
     let connection = connection(app).await?;
     let registry = AccessibleProxy::builder(connection)
+        .cache_properties(CacheProperties::No)
         .destination("org.a11y.atspi.Registry")
         .map_err(|error| error.to_string())?
         .path("/org/a11y/atspi/accessible/root")
@@ -195,6 +200,8 @@ async fn query(app: &crate::App) -> Result<Vec<WindowTree>, String> {
             if title.is_empty() {
                 continue;
             }
+            // Chromium builds its tree once a client reads a window's attributes.
+            let _ = window.get_attributes().await;
             let descendants = children(&window).await;
             let mut stack: Vec<_> = descendants
                 .into_iter()
