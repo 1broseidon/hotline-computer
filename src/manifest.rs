@@ -140,12 +140,44 @@ pub struct ServiceDefinition {
 pub struct Base {
     pub version: String,
     pub nixpkgs: String,
+    /// What the pinned Nixpkgs hashes to. With it, a first preparation locks
+    /// the input without asking GitHub and takes the source from a cache.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub nixpkgs_lock: Option<Lock>,
     #[serde(default)]
     pub manifest: Manifest,
     #[serde(default)]
     pub platforms: BTreeMap<String, Platform>,
     #[serde(default)]
     pub services: BTreeMap<String, ServiceDefinition>,
+}
+
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields, rename_all = "camelCase")]
+pub struct Lock {
+    pub nar_hash: String,
+    pub last_modified: u64,
+}
+
+/// The flake.lock a generated flake on this pin starts from, when the base knows its hash.
+pub fn lock(base: &Base, nixpkgs: &str) -> Option<String> {
+    let lock = base
+        .nixpkgs_lock
+        .as_ref()
+        .filter(|_| base.nixpkgs == nixpkgs)?;
+    let source = json!({"owner": "NixOS", "repo": "nixpkgs", "rev": nixpkgs, "type": "github"});
+    let mut locked = source.clone();
+    locked["narHash"] = json!(lock.nar_hash);
+    locked["lastModified"] = json!(lock.last_modified);
+    serde_json::to_string_pretty(&json!({
+        "nodes": {
+            "nixpkgs": {"locked": locked, "original": source},
+            "root": {"inputs": {"nixpkgs": "nixpkgs"}}
+        },
+        "root": "root",
+        "version": 7
+    }))
+    .ok()
 }
 
 /// A workspace's environment definition: the base it was composed against,
@@ -180,7 +212,7 @@ pub fn parse(text: &str) -> Result<Manifest, String> {
 }
 
 /// Said with every shape error, because the error is the documentation.
-pub const SHAPE: &str = "A manifest is a JSON object with any of: packages (Nixpkgs attribute names), flake (a local flake instead of packages), platform (gl, gtk, webkit), env (NAME: \"value\", or NAME: [\"path\", ...] to extend a search path), services (NAME: {\"enable\": true}), hooks ({\"create\": {NAME: [argv]}, \"start\": {NAME: [argv]}}), runs (NAME: {\"command\": [argv], \"cwd\": \"subdir\", \"kind\": \"task\" | \"desktop\" | \"web\", \"env\": {}, \"label\": \"...\"}). state manifest shows an example and what this image offers.";
+pub const SHAPE: &str = "A manifest is a JSON object with any of: packages (Nixpkgs attribute names), flake (a local flake instead of packages), platform (gl, gtk, gtk4, qt, native, webkit), env (NAME: \"value\", or NAME: [\"path\", ...] to extend a search path), services (NAME: {\"enable\": true}), hooks ({\"create\": {NAME: [argv]}, \"start\": {NAME: [argv]}}), runs (NAME: {\"command\": [argv], \"cwd\": \"subdir\", \"kind\": \"task\" | \"desktop\" | \"web\", \"env\": {}, \"label\": \"...\"}). state manifest shows an example and what this image offers.";
 
 fn concat(mut first: Vec<String>, second: Vec<String>) -> Vec<String> {
     for item in second {
@@ -929,12 +961,14 @@ pub async fn describe(app: &App, workspace: &Path) -> Result<Value, String> {
     };
     let Some(composed) = prepared else {
         let declared = file.exists().then(|| read(&file)).transpose()?;
+        let draft = declared.is_none().then(|| crate::draft::draft(workspace));
         return Ok(json!({
             "workspace": workspace,
             "file": file,
             "declared": declared,
             "prepared": false,
-            "next": if declared.is_some() {"state prepare with this workspace"} else {"write the manifest file (or pass manifest to state prepare), then prepare"},
+            "draft": draft,
+            "next": if declared.is_some() {"state prepare with this workspace"} else {"review draft.manifest against the README (reasons says why each line is there), correct it, then state prepare with it as manifest"},
             "example": example(),
             "shape": SHAPE,
             "image": offers,
@@ -1028,8 +1062,11 @@ mod tests {
             error.contains("unknown field `run`") && error.contains("runs (NAME:"),
             "{error}"
         );
-        let error = compose(embedded(), manifest(json!({"platform": ["qt"]}))).unwrap_err();
-        assert!(error.contains("gl, gtk, webkit"), "{error}");
+        let error = compose(embedded(), manifest(json!({"platform": ["cocoa"]}))).unwrap_err();
+        assert!(
+            error.contains("gl, gtk, gtk4, native, qt, webkit"),
+            "{error}"
+        );
         let error = compose(embedded(), manifest(json!({"services": {"mysql": {}}}))).unwrap_err();
         assert!(error.contains("postgres, redis"), "{error}");
         let error = compose(embedded(), manifest(json!({"env": {"PATH": "/bin"}}))).unwrap_err();

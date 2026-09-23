@@ -17,8 +17,8 @@ This guide ships with Hotline Computer {{version}}, channel `{{channel}}`, revis
 
 Describe the project once in `.hotline/manifest.json` and run what it names. Do not guess build or launch commands in the shell: when you are about to type one, add it to the manifest's `runs` instead, prepare, and run it by name. The manifest is the project's record of how it is built, so the next teammate, and the next image, start from it.
 
-1. Read the repository's build instructions, then `state {"action":"manifest","workspace":"/home/agent/src/project"}`. With no manifest yet it returns an example, the shape, and what this image offers: its platforms (`gl`, `gtk`, `webkit`) and services (`postgres`, `redis`).
-2. Prepare with the manifest. `state {"action":"prepare","workspace":"/home/agent/src/project","manifest":{...}}` merges what you pass into the file and prepares it; editing the file and preparing without `manifest` does the same. For example, for a Tauri app:
+1. `state {"action":"manifest","workspace":"/home/agent/src/project"}`. With no manifest yet it returns a `draft` made from the repository's own lockfiles, toolchain and build files, with `reasons` saying why each line is there, plus the shape and what this image offers. Check the draft against the README and correct it: remove what the project does not use, add what the README asks for, and name the runs you will need.
+2. Prepare with the corrected manifest. `state {"action":"prepare","workspace":"/home/agent/src/project","manifest":{...}}` merges what you pass into the file and prepares it; editing the file and preparing without `manifest` does the same. For example, for a Tauri app:
 
 ```json
 {
@@ -35,12 +35,12 @@ Describe the project once in `.hotline/manifest.json` and run what it names. Do 
 ```
 
 3. If preparation returns `ready:false`, follow its job with `shell wait` and `shell read` until it succeeds. Create hooks then run once, and services and start hooks start; `state manifest` shows them as jobs under `activation`.
-4. `shell {"action":"run","name":"build","cwd":"/home/agent/src/project"}` starts the named run in the prepared environment and returns a job. `args` are appended to the run's own. A `web` run receives a free `$PORT` and its answer carries the `url`; a `desktop` run opens windows, so check them with `windows list` and `capture`.
+4. `shell {"action":"run","name":"build","cwd":"/home/agent/src/project"}` starts the named run in the prepared environment and returns a job. `args` are appended to the run's own. A `desktop` run answers when its window is up, with the window and a screenshot; a `web` run receives a free `$PORT` and answers when it listens, with its `url`. Both wait up to `wait_ms` (default 45 s); if the app is still building, the answer says so with its latest output, and `shell {"action":"ready","job_id":...}` waits again. If it exits first, the error carries its last output.
 
 The parts of a manifest:
 
 - `packages`: Nixpkgs attribute names, not Debian package names. Choose them from the project. `state catalog` lists common ones by purpose; if a name is uncertain, query the pinned Nixpkgs with `nix search github:NixOS/nixpkgs/<revision> <query> --json` in a shell job. Missing headers, libraries, or tools should guide the next change.
-- `platform`: runtime support the image provides by name. `gl` is software OpenGL and EGL through Mesa; `gtk` adds GTK schemas, GIO modules and the tray library; `webkit` adds WebKitGTK for Tauri and other webviews. Each includes what it requires. Declare a platform instead of exporting library paths or driver variables yourself.
+- `platform`: runtime support the image provides by name. `gl` is software OpenGL and EGL through Mesa; `gtk` (GTK 3) and `gtk4` add schemas, GIO modules and TLS; `webkit` adds WebKitGTK for Tauri and other webviews; `qt` adds Qt 6 with its plugins; `native` adds the X11, XKB and Vulkan libraries winit, wgpu, egui, iced, GLFW, SDL, Fyne and Gio load at run time. Each includes what it requires. Declare a platform instead of exporting library paths or driver variables yourself.
 - `env`: `"NAME": "value"` sets a variable (`$WORKSPACE` expands); `"NAME": ["dir", ...]` extends a search path, relative entries resolved against the workspace. `PATH` is always a list.
 - `services`: `{"postgres": {"enable": true}}` runs a supervised service on a unix socket under `.hotline/services`, and every job gets its address (`PGHOST`, `DATABASE_URL`, `REDIS_URL`).
 - `hooks`: `create` entries run once per workspace after its first successful preparation, in name order (dependency installs); `start` entries start after each preparation unless already running (watchers). Services and start hooks come back by themselves after a computer restart.

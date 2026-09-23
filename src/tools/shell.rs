@@ -76,9 +76,13 @@ pub async fn call(app: &App, arguments: Value, holder: &str) -> ToolResult {
             let (workspace, composed) = crate::manifest::find(home, &cwd)?;
             let kind = composed.manifest.runs.get(name).map(|r| r.kind);
             let (start, url) = crate::manifest::job(&workspace, &composed, name, input.start)?;
+            let before = crate::ready::windows_now(app);
             let guard = app.access.mutate(holder).await?;
             let job = app.jobs.start(start, holder).await?;
             drop(guard);
+            if let Some(kind) = kind.filter(|k| *k != crate::manifest::Kind::Task) {
+                crate::ready::remember(&job.id, kind, url.clone(), before);
+            }
             let observer_error = if app.display.is_some() {
                 app.observer.show(false).await.err()
             } else {
@@ -94,7 +98,24 @@ pub async fn call(app: &App, arguments: Value, holder: &str) -> ToolResult {
             if let Some(error) = observer_error {
                 result["observer_error"] = json!(error);
             }
+            // A desktop or web run answers when it is up, not when it was started.
+            let wait = input.wait_ms.unwrap_or(45_000).min(60_000);
+            if kind.is_some_and(|k| k != crate::manifest::Kind::Task) && wait > 0 {
+                let id = result["id"].as_str().unwrap_or_default().to_owned();
+                let (ready, images) = crate::ready::wait(app, &id, wait).await?;
+                result["ready"] = ready;
+                let mut blocks = json_text(result)?;
+                blocks.extend(images);
+                return Ok(blocks);
+            }
             json_text(result)
+        }
+        "ready" => {
+            let (ready, images) =
+                crate::ready::wait(app, id, input.wait_ms.unwrap_or(45_000).min(60_000)).await?;
+            let mut blocks = json_text(ready)?;
+            blocks.extend(images);
+            Ok(blocks)
         }
         "" | "exec" | "start" | "launch" => {
             let synchronous = input.action.is_empty() || input.action == "exec";
@@ -136,8 +157,8 @@ pub async fn call(app: &App, arguments: Value, holder: &str) -> ToolResult {
             "shell",
             action,
             &[
-                "exec", "start", "launch", "run", "list", "status", "read", "wait", "write",
-                "cancel", "show",
+                "exec", "start", "launch", "run", "ready", "list", "status", "read", "wait",
+                "write", "cancel", "show",
             ],
         )),
     }

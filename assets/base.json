@@ -1,12 +1,22 @@
 {
-  "version": "0.10.0",
+  "version": "0.10.0-rc.2",
   "nixpkgs": "ef34387ddd751e1ab8857adf4676492d32eb24ec",
+  "nixpkgs_lock": {
+    "narHash": "sha256-eiEK7cKZORNEvX0GeF3RtNEF/JXhgf2RqSp3230q13E=",
+    "lastModified": 1789286504
+  },
   "manifest": {},
   "platforms": {
     "gl": {
       "description": "Software OpenGL and EGL through Mesa, for anything that draws with a GPU API",
-      "packages": ["mesa", "libglvnd"],
-      "libraries": ["mesa", "libglvnd"],
+      "packages": [
+        "mesa",
+        "libglvnd"
+      ],
+      "libraries": [
+        "mesa",
+        "libglvnd"
+      ],
       "env": {
         "__EGL_VENDOR_LIBRARY_FILENAMES": "${mesa}/share/glvnd/egl_vendor.d/50_mesa.json",
         "LIBGL_DRIVERS_PATH": "${mesa}/lib/dri",
@@ -16,24 +26,105 @@
     },
     "gtk": {
       "description": "GTK 3 apps: schemas, GIO modules, TLS and the tray library GTK apps load at run time",
-      "requires": ["gl"],
-      "packages": ["gtk3", "glib", "glib-networking", "gsettings-desktop-schemas", "libayatana-appindicator", "librsvg", "pkg-config"],
-      "libraries": ["libayatana-appindicator"],
+      "requires": [
+        "gl"
+      ],
+      "packages": [
+        "gtk3",
+        "glib",
+        "glib-networking",
+        "gsettings-desktop-schemas",
+        "libayatana-appindicator",
+        "librsvg",
+        "pkg-config"
+      ],
+      "libraries": [
+        "libayatana-appindicator"
+      ],
       "env": {}
     },
     "webkit": {
       "description": "WebKitGTK 4.1 and libsoup 3, which Tauri and other webview shells embed",
-      "requires": ["gtk"],
-      "packages": ["webkitgtk_4_1", "libsoup_3"],
+      "requires": [
+        "gtk"
+      ],
+      "packages": [
+        "webkitgtk_4_1",
+        "libsoup_3"
+      ],
       "libraries": [],
+      "env": {}
+    },
+    "gtk4": {
+      "description": "GTK 4 apps: schemas, GIO modules and TLS they load at run time",
+      "requires": [
+        "gl"
+      ],
+      "packages": [
+        "gtk4",
+        "glib",
+        "glib-networking",
+        "gsettings-desktop-schemas",
+        "pkg-config"
+      ],
+      "libraries": [],
+      "env": {}
+    },
+    "qt": {
+      "description": "Qt 6 widgets and QML, with the xcb platform plugin",
+      "requires": [
+        "gl"
+      ],
+      "packages": [
+        "qt6.qtbase",
+        "qt6.qtdeclarative",
+        "libxkbcommon"
+      ],
+      "libraries": [
+        "libxkbcommon"
+      ],
+      "env": {
+        "QT_PLUGIN_PATH": "${qt6.qtbase}/lib/qt-6/plugins",
+        "QML2_IMPORT_PATH": "${qt6.qtdeclarative}/lib/qt-6/qml",
+        "QT_QPA_PLATFORM": "xcb"
+      }
+    },
+    "native": {
+      "description": "Windowing libraries native toolkits load at run time: X11, XKB and Vulkan, for winit, wgpu, egui, iced, GLFW, SDL, Fyne and Gio",
+      "requires": [
+        "gl"
+      ],
+      "packages": [
+        "libx11",
+        "libxcursor",
+        "libxrandr",
+        "libxi",
+        "libxkbcommon",
+        "vulkan-loader",
+        "pkg-config"
+      ],
+      "libraries": [
+        "libx11",
+        "libxcursor",
+        "libxrandr",
+        "libxi",
+        "libxkbcommon",
+        "vulkan-loader"
+      ],
       "env": {}
     }
   },
   "services": {
     "postgres": {
       "description": "PostgreSQL on a unix socket in the service directory; user postgres, no password",
-      "packages": ["postgresql"],
-      "command": ["bash", "-c", "test -f \"$SERVICE_DIR/data/PG_VERSION\" || initdb -D \"$SERVICE_DIR/data\" -U postgres --auth=trust >/dev/null || exit 1; exec postgres -D \"$SERVICE_DIR/data\" -k \"$SERVICE_DIR\" -c listen_addresses="],
+      "packages": [
+        "postgresql"
+      ],
+      "command": [
+        "bash",
+        "-c",
+        "test -f \"$SERVICE_DIR/data/PG_VERSION\" || initdb -D \"$SERVICE_DIR/data\" -U postgres --auth=trust >/dev/null || exit 1; exec postgres -D \"$SERVICE_DIR/data\" -k \"$SERVICE_DIR\" -c listen_addresses="
+      ],
       "env": {
         "PGHOST": "$SERVICE_DIR",
         "PGUSER": "postgres",
@@ -42,8 +133,14 @@
     },
     "redis": {
       "description": "Redis on a unix socket in the service directory, without persistence",
-      "packages": ["redis"],
-      "command": ["bash", "-c", "exec redis-server --port 0 --unixsocket \"$SERVICE_DIR/redis.sock\" --dir \"$SERVICE_DIR\" --save ''"],
+      "packages": [
+        "redis"
+      ],
+      "command": [
+        "bash",
+        "-c",
+        "exec redis-server --port 0 --unixsocket \"$SERVICE_DIR/redis.sock\" --dir \"$SERVICE_DIR\" --save ''"
+      ],
       "env": {
         "REDIS_URL": "unix://$SERVICE_DIR/redis.sock",
         "REDIS_SOCKET": "$SERVICE_DIR/redis.sock"

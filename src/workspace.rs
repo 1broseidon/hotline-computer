@@ -471,7 +471,7 @@ fn definition(home: &Path, workspace: &Path, request: Request) -> Result<Definit
         Definition::Flake { flake: ".".into() }
     } else {
         return Err(
-            "provide packages or a local flake; this workspace has no saved environment definition"
+            "this workspace has no manifest yet: state manifest drafts one from the repository's own files; review it and pass it to state prepare as manifest"
                 .into(),
         );
     };
@@ -696,6 +696,21 @@ pub async fn build(home: &Path, specification: &str, workspace: &Path) -> Result
     match (&generated, definition.flake()) {
         (Some(recipe), _) => {
             std::fs::write(directory.join("flake.nix"), recipe).map_err(|e| e.to_string())?;
+            // A known pin needs no network to lock; its source comes from the image cache.
+            let lock = match &definition {
+                Definition::Manifest(composed) => {
+                    crate::manifest::lock(&composed.base, &composed.base.nixpkgs)
+                }
+                Definition::Packages { nixpkgs, .. } => crate::manifest::base()
+                    .ok()
+                    .and_then(|base| crate::manifest::lock(&base, nixpkgs)),
+                Definition::Flake { .. } => None,
+            };
+            if let Some(lock) = lock
+                && !directory.join("flake.lock").exists()
+            {
+                std::fs::write(directory.join("flake.lock"), lock).map_err(|e| e.to_string())?;
+            }
             command
                 .args(["print-dev-env", "--json", "--profile"])
                 .arg(directory.join("profile"))
@@ -1068,7 +1083,7 @@ mod tests {
             composed(
                 &home,
                 &home,
-                request(json!({"platform": ["qt"]}), false),
+                request(json!({"platform": ["cocoa"]}), false),
                 old
             )
             .is_err()
