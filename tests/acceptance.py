@@ -387,7 +387,7 @@ jobs=json.loads(ast.literal_eval(lines[1].split(' = ',1)[1]))
 assert any(j['label']=='Tray active-job fixture' and j['state']=='running' for j in jobs),jobs
 running=sum(j['state']=='running' for j in jobs)
 completed=sum(j['state']=='exited' and j['exit_code']==0 for j in jobs)
-assert counts==[running,completed,len(jobs)-running-completed],(counts,jobs)
+assert counts==[running,completed,sum(j['attention'] for j in jobs)],(counts,jobs)\nassert not any(j['attention'] and j['state'] in ('cancelled','interrupted') for j in jobs),jobs
 print('Tray counts match live jobs:',counts)
 """
         execute(c,'python3',['-c',code],label='Tray property verification')

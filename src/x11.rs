@@ -560,7 +560,7 @@ pub fn publish_jobs(display: &str, jobs: &[crate::jobs::Summary]) -> Result<(), 
         .iter()
         .filter(|job| job.state == "exited" && job.exit_code == Some(0))
         .count() as u32;
-    let failed = jobs.len() as u32 - running - completed;
+    let failed = jobs.iter().filter(|job| job.attention).count() as u32;
     connection
         .change_property8(
             x11rb::protocol::xproto::PropMode::REPLACE,

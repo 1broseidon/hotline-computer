@@ -78,6 +78,28 @@ pub struct Summary {
     pub label: String,
     pub state: String,
     pub exit_code: Option<i32>,
+    /// Counted in the bar's "failed": see [`needs_attention`].
+    #[serde(default)]
+    pub attention: bool,
+}
+
+/// How long a failure keeps the bar's warning up.
+const ATTENTION_MS: u64 = 60 * 60 * 1000;
+
+/// A failure the person should look at: it failed or timed out on its own
+/// (a job someone cancelled, or one a restart cut short, did not), within the
+/// last hour, and nothing has run the same command since. `records` is newest
+/// first.
+pub fn needs_attention(records: &[Record], index: usize, now: u64) -> bool {
+    let record = &records[index];
+    matches!(record.state.as_str(), "failed" | "timed_out")
+        && record
+            .finished_at
+            .is_some_and(|finished| now.saturating_sub(finished) < ATTENTION_MS)
+        && (record.fingerprint.is_empty()
+            || !records[..index]
+                .iter()
+                .any(|later| later.fingerprint == record.fingerprint))
 }
 
 impl Record {
@@ -452,13 +474,14 @@ impl Jobs {
                 .cmp(&a.started_at)
                 .then_with(|| b.id.cmp(&a.id))
         });
-        let summaries: Vec<_> = records
-            .into_iter()
-            .map(|record| Summary {
-                id: record.id,
-                label: record.label,
-                state: record.state,
-                exit_code: record.exit_code,
+        let now = now();
+        let summaries: Vec<_> = (0..records.len())
+            .map(|index| Summary {
+                attention: needs_attention(&records, index, now),
+                id: records[index].id.clone(),
+                label: records[index].label.clone(),
+                state: records[index].state.clone(),
+                exit_code: records[index].exit_code,
             })
             .collect();
         let _ = crate::x11::publish_jobs(&self.display, &summaries);
@@ -860,6 +883,47 @@ async fn supervise(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn only_fresh_failures_nobody_has_retried_need_attention() {
+        let now = 10 * ATTENTION_MS;
+        let job = |command: &str, state: &str, finished_ago: u64| Record {
+            id: command.into(),
+            pid: None,
+            label: command.into(),
+            command: command.into(),
+            args: Vec::new(),
+            cwd: "/home/agent".into(),
+            holder: "agent".into(),
+            state: state.into(),
+            exit_code: None,
+            signal: None,
+            started_at: now - finished_ago - 1,
+            finished_at: Some(now - finished_ago),
+            error: None,
+            output_bytes: 0,
+            truncated: false,
+            pty: false,
+            request_id: None,
+            fingerprint: command.into(),
+            artifact_staging: None,
+        };
+        // Newest first, as the bar publishes them.
+        let records = [
+            job("test", "exited", 1_000),
+            job("build", "failed", 2_000),
+            job("lint", "timed_out", 3_000),
+            job("app", "cancelled", 4_000),
+            job("dev", "interrupted", 5_000),
+            job("test", "failed", 6_000),
+            job("fetch", "failed", ATTENTION_MS + 1),
+        ];
+        let flagged: Vec<_> = (0..records.len())
+            .filter(|&index| needs_attention(&records, index, now))
+            .map(|index| records[index].command.as_str())
+            .collect();
+        assert_eq!(flagged, ["build", "lint"]);
+    }
 
     #[test]
     fn an_unlabelled_job_is_named_by_its_command_line_cut_to_a_row() {

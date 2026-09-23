@@ -69,6 +69,14 @@ sign-in" now lands in that browser.
 `navigate` and new tabs no longer fail when a page answers with an HTTP error status. The
 page is shown, with a note saying so.
 
+## The bar's "failed" means something to look at
+
+The bar counted every retained job that had not exited 0 as failed, across restarts: jobs
+someone cancelled, jobs a restart cut short, and failures long since fixed. The person's
+machine showed "14 failed" with nothing wrong. It now counts a failure only while it is
+under an hour old and nothing has run the same command since; cancelled and interrupted jobs
+never count. The jobs list still shows every job as it ended.
+
 ## Checks
 
 - `make check`: fmt, clippy and all unit tests pass (new: region clipping, wheel direction,
