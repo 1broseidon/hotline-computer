@@ -20,26 +20,33 @@ pub const NAMES: [&str; 8] = [
 
 pub type ToolResult = Result<Vec<ContentBlock>, String>;
 
+/// The longest any call waits before answering. MCP clients commonly give a
+/// tool a minute; an answer after that is lost, and the agent sees an error
+/// for work that went fine. Longer work is a job to wait on again.
+pub const CALL_BUDGET_MS: u64 = 50_000;
+
 pub fn descriptors(home: &str) -> Vec<Tool> {
     vec![
         Tool::new(
             "capture",
-            "See the screen — the way in for native apps (web content reads better through browser text). Default returns a screenshot plus the AT-SPI accessibility tree as structured text: windows, elements, roles, coordinates, values, and states. mode=png saves a raw image and returns its path. There is no OCR.",
+            "See the screen — the way in for native apps (web content reads better through browser text). Default returns a screenshot plus the AT-SPI accessibility tree as structured text: windows, elements, roles, screen coordinates, values, and states; elements hidden from view and unnamed grouping containers are left out. window (an id, or part of one title) reads only that window and shows only its pixels; region [x, y, width, height] shows only that part of the screen at full size, for reading small text. The line after the image says how its pixels map to screen coordinates. mode=image returns the picture alone; mode=png saves it on the computer and returns the path. There is no OCR.",
             schema(json!({
                 "type":"object","properties":{
-                    "mode":{"type":"string","enum":["tree","png"],"description":"tree (default): screenshot plus accessibility tree; png: save a raw PNG"},
+                    "mode":{"type":"string","enum":["tree","image","png"],"description":"tree (default): screenshot plus accessibility tree; image: screenshot only; png: save a raw PNG on the computer"},
+                    "window":{"type":"string","description":"A window id from windows list, or text from exactly one window's title"},
+                    "region":{"type":"array","items":{"type":"integer"},"minItems":4,"maxItems":4,"description":"x, y, width, height on the screen"},
                     "path":{"type":"string","description":"png only: optional output path"},"settle_ms":{"type":"integer","minimum":0,"maximum":2000,"default":100,"description":"Allow application painting to catch up before grabbing pixels."}
                 },"additionalProperties":false
             })),
         ),
         Tool::new(
             "input",
-            "Drive the mouse, keyboard, and clipboard on the desktop — for native apps, with coordinates from capture. For the web browser, prefer browser text and refs. type is per-character; paste sets the clipboard and presses Ctrl+V. batch runs a short scripted sequence under one machine lock.",
+            "Drive the mouse, keyboard, and clipboard on the desktop — for native apps, with screen coordinates from capture. For the web browser, prefer browser text and refs. type is per-character and returns once the focused field has taken all of it; paste sets the clipboard and presses Ctrl+V, the better way for long text. scroll takes direction (up, down, left, right) and clicks notches, 3 by default. batch runs up to 10 steps, each an object with action and that action's fields, under one machine lock. capture_after returns the focused window's accessibility tree.",
             schema(json!({
                 "type":"object","properties":{
                     "action":{"type":"string","enum":["click","double_click","right_click","move","drag","scroll","type","key","paste","clipboard_read","clipboard_write","batch"]},
                     "x":{"type":"integer"},"y":{"type":"integer"},"x2":{"type":"integer"},"y2":{"type":"integer"},
-                    "clicks":{"type":"integer"},"text":{"type":"string"},"combo":{"type":"string"},
+                    "clicks":{"type":"integer"},"direction":{"type":"string","enum":["up","down","left","right"]},"text":{"type":"string"},"combo":{"type":"string"},
                     "steps":{"type":"array","items":{"type":"object"}},"stop_on_error":{"type":"boolean","default":true},
                     "settle_ms":{"type":"integer","minimum":0,"default":40},"capture_after":{"type":"string","enum":["final","each","none"],"default":"final"},
                     "capture_on_error":{"type":"boolean","default":true}
@@ -59,7 +66,7 @@ pub fn descriptors(home: &str) -> Vec<Tool> {
         ),
         Tool::new(
             "shell",
-            "Run managed commands without holding the desktop while they execute. run starts a named entry from the workspace manifest's runs (name; cwd inside the workspace; args are appended), the way to build, test or launch a prepared project. A desktop run answers when its window is up, with the window and a screenshot; a web run gets $PORT and answers when it listens, with its url; both wait up to wait_ms (default 45000), and ready with the job_id waits again. exec waits up to 60s and retains stdout/stderr even on timeout. start/launch return a durable job ID immediately. list/status/read/wait inspect jobs; write sends stdin (optional EOF); cancel kills and reaps the process group. show opens or focuses the Alacritty observer, with an optional job_id to inspect one job; commands are visible without keyboard simulation. Output is retained across observer closure and reconnect. Use request_id to retry a start safely. pty=true provides a controlling terminal without keyboard simulation.",
+            "Run managed commands without holding the desktop while they execute. run starts a named entry from the workspace manifest's runs (name; cwd inside the workspace; args are appended), the way to build, test or launch a prepared project. A desktop run answers when its window is up, with the window and a screenshot; a web run gets $PORT and answers when it listens, with its url; both wait up to wait_ms (default 45000, at most 50000 so the answer beats a client's one-minute tool timeout), and ready with the job_id waits again. exec runs command with args, or a whole shell line in command alone; it waits up to 45s and retains stdout/stderr even on timeout. start/launch return a durable job ID immediately. list/status/read/wait inspect jobs; write sends stdin (optional EOF); cancel kills and reaps the process group. show opens or focuses the Alacritty observer, with an optional job_id to inspect one job; commands are visible without keyboard simulation. Output is retained across observer closure and reconnect. Use request_id to retry a start safely. pty=true provides a controlling terminal without keyboard simulation.",
             schema(json!({
                 "type":"object","properties":{
                     "action":{"type":"string","enum":["exec","start","launch","run","ready","list","status","read","wait","write","cancel","show"],"default":"exec"},
@@ -68,9 +75,9 @@ pub fn descriptors(home: &str) -> Vec<Tool> {
                     "env":{"type":"object","additionalProperties":{"type":"string"}},
                     "label":{"type":"string","description":"The job's name as a person reads it in the desktop's jobs list and terminal: a short task in plain words, such as 'Run the unit tests' or 'Install Python 3.12', not the command. Without one the job is named by its command line."},
                     "request_id":{"type":"string"},"pty":{"type":"boolean","default":false},
-                    "timeout":{"type":"integer","minimum":1,"description":"Execution deadline in seconds. exec defaults to 30, maximum 60; async jobs have no default deadline."},
+                    "timeout":{"type":"integer","minimum":1,"description":"Execution deadline in seconds. exec defaults to 30, maximum 45; async jobs have no default deadline."},
                     "job_id":{"type":"string"},"text":{"type":"string"},"eof":{"type":"boolean"},"cursor":{"type":"integer","minimum":0},
-                    "wait_ms":{"type":"integer","minimum":0,"maximum":60000},"max_output":{"type":"integer","minimum":1,"maximum":1048576,"default":65536}
+                    "wait_ms":{"type":"integer","minimum":0,"maximum":50000},"max_output":{"type":"integer","minimum":1,"maximum":1048576,"default":65536}
                 },"additionalProperties":false
             })),
         ),
@@ -100,7 +107,7 @@ pub fn descriptors(home: &str) -> Vec<Tool> {
             "wait",
             "Poll every 500ms until text appears in the desktop accessibility tree or the managed browser page. Returns when found or after timeout; use it after input or navigation to verify the expected state.",
             schema(json!({
-                "type":"object","properties":{"text":{"type":"string"},"timeout":{"type":"integer","minimum":1,"maximum":60,"default":10}},
+                "type":"object","properties":{"text":{"type":"string"},"timeout":{"type":"integer","minimum":1,"maximum":50,"default":10}},
                 "required":["text"],"additionalProperties":false
             })),
         ),

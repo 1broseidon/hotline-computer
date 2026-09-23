@@ -6,8 +6,20 @@ use atspi::zbus::proxy::CacheProperties;
 
 use crate::x11::Window;
 
-const MAX_DEPTH: usize = 32;
+const MAX_DEPTH: usize = 64;
 const MAX_NODES: usize = 400;
+/// Folded wrappers are not listed, so this bounds the walk itself.
+const MAX_VISITED: usize = 5000;
+/// Containers that only group: without a name, a value or focus they add a
+/// line and a level of indentation and nothing a reader can act on.
+const WRAPPERS: [&str; 6] = [
+    "panel",
+    "section",
+    "filler",
+    "unknown",
+    "redundant object",
+    "invalid",
+];
 
 #[derive(Debug)]
 struct Node {
@@ -20,7 +32,7 @@ struct Node {
 }
 
 pub async fn tree(app: &crate::App, windows: &[Window]) -> String {
-    let queried = tokio::time::timeout(std::time::Duration::from_secs(5), query(app))
+    let queried = tokio::time::timeout(std::time::Duration::from_secs(5), query(app, windows))
         .await
         .ok()
         .and_then(Result::ok)
@@ -67,6 +79,11 @@ pub async fn tree(app: &crate::App, windows: &[Window]) -> String {
                         .unwrap_or_default()
                 ));
             }
+            if tree.truncated {
+                output.push_str(&format!(
+                    "  [more than {MAX_NODES} elements; the first {MAX_NODES} are listed]\n"
+                ));
+            }
         }
         if candidates.len() != 1 {
             output.push_str(
@@ -86,6 +103,7 @@ struct WindowTree {
     pid: Option<u32>,
     bounds: [i32; 4],
     nodes: Vec<Node>,
+    truncated: bool,
 }
 
 pub async fn connection(app: &crate::App) -> Result<&atspi::zbus::Connection, String> {
@@ -168,7 +186,8 @@ async fn accessible<'a>(
         .map_err(|e| e.to_string())
 }
 
-async fn query(app: &crate::App) -> Result<Vec<WindowTree>, String> {
+/// The trees of the applications that own `windows`; others are not walked.
+async fn query(app: &crate::App, windows: &[Window]) -> Result<Vec<WindowTree>, String> {
     let connection = connection(app).await?;
     let registry = AccessibleProxy::builder(connection)
         .cache_properties(CacheProperties::No)
@@ -189,6 +208,16 @@ async fn query(app: &crate::App) -> Result<Vec<WindowTree>, String> {
             Ok(name) => bus.get_connection_unix_process_id(name).await.ok(),
             Err(_) => None,
         };
+        let owns = |pid: u32| {
+            windows.iter().any(|window| {
+                window
+                    .pid
+                    .is_none_or(|owner| owner == pid || process_descends_from(pid, owner))
+            })
+        };
+        if pid.is_some_and(|pid| !owns(pid)) {
+            continue;
+        }
         let Ok(application) = accessible(connection, application).await else {
             continue;
         };
@@ -206,12 +235,21 @@ async fn query(app: &crate::App) -> Result<Vec<WindowTree>, String> {
             let mut stack: Vec<_> = descendants
                 .into_iter()
                 .rev()
-                .map(|child| (child, 0_usize))
+                .map(|child| (child, 0_usize, 0_usize))
                 .collect();
             let mut nodes = Vec::new();
-            while let Some((reference, depth)) = stack.pop() {
-                if nodes.len() >= MAX_NODES || depth >= MAX_DEPTH {
+            let mut truncated = false;
+            let mut visited = 0;
+            // `level` is how deep the node really is; `depth` how far it is
+            // indented once wrappers are folded.
+            while let Some((reference, level, depth)) = stack.pop() {
+                if level >= MAX_DEPTH {
                     continue;
+                }
+                visited += 1;
+                if nodes.len() >= MAX_NODES || visited > MAX_VISITED {
+                    truncated = true;
+                    break;
                 }
                 let Ok(proxy) = accessible(connection, reference).await else {
                     continue;
@@ -222,18 +260,17 @@ async fn query(app: &crate::App) -> Result<Vec<WindowTree>, String> {
                     .await
                     .map(|role| role.name().to_owned())
                     .unwrap_or_else(|_| "unknown".to_owned());
-                let states = proxy
+                let states: Vec<String> = proxy
                     .get_state()
                     .await
-                    .ok()
-                    .map(|states| {
-                        states
-                            .iter()
-                            .map(|state| state.to_string())
-                            .collect::<Vec<_>>()
-                            .join(",")
-                    })
+                    .map(|states| states.iter().map(|state| state.to_string()).collect())
                     .unwrap_or_default();
+                // Neither on screen nor able to be, as Chromium's whole hidden
+                // toolbars are. What scrolls out of view stays visible. Its
+                // children are still read: WebKit's scroll pane says it is
+                // hidden while the page inside it is on screen.
+                let hidden =
+                    !states.is_empty() && !states.iter().any(|s| s == "showing" || s == "visible");
                 let mut value = None;
                 let bounds = match proxy.proxies().await {
                     Ok(proxies) => {
@@ -263,19 +300,26 @@ async fn query(app: &crate::App) -> Result<Vec<WindowTree>, String> {
                     }
                     Err(_) => [0; 4],
                 };
-                if !name.is_empty() || bounds[2] > 0 || bounds[3] > 0 {
+                let wrapper = hidden
+                    || WRAPPERS.contains(&role.as_str())
+                        && name.is_empty()
+                        && value.is_none()
+                        && !states.iter().any(|s| s == "focusable");
+                let listed = !wrapper && (!name.is_empty() || bounds[2] > 0 || bounds[3] > 0);
+                if listed {
                     nodes.push(Node {
                         depth,
                         role,
                         name,
                         bounds,
-                        states,
+                        states: states.join(","),
                         value,
                     });
                 }
+                let below = if wrapper { depth } else { depth + 1 };
                 let mut children = children(&proxy).await;
                 children.reverse();
-                stack.extend(children.into_iter().map(|child| (child, depth + 1)));
+                stack.extend(children.into_iter().map(|child| (child, level + 1, below)));
             }
             let bounds = match window.proxies().await {
                 Ok(proxies) => match proxies.component().await {
@@ -293,10 +337,98 @@ async fn query(app: &crate::App) -> Result<Vec<WindowTree>, String> {
                 pid,
                 bounds,
                 nodes,
+                truncated,
             });
         }
     }
     Ok(result)
+}
+
+/// Waits until the text field with focus stops changing. An application
+/// that handles each keystroke slowly, such as a development build
+/// re-rendering, can still be working through typed text when the next
+/// click arrives; the click moves focus and the rest of the text is lost.
+/// Where no focused field can be read, it waits briefly instead.
+pub async fn settle_typing(app: &crate::App, windows: &[Window]) {
+    use std::time::Duration;
+    const POLL: Duration = Duration::from_millis(50);
+    const STEADY_POLLS: usize = 3;
+    const LONGEST: Duration = Duration::from_secs(10);
+    let Some(window) = windows.iter().find(|window| window.focused) else {
+        return;
+    };
+    let field = tokio::time::timeout(Duration::from_secs(2), focused_text(app, window))
+        .await
+        .ok()
+        .flatten();
+    let Some(field) = field else {
+        tokio::time::sleep(POLL * STEADY_POLLS as u32).await;
+        return;
+    };
+    let deadline = tokio::time::Instant::now() + LONGEST;
+    let (mut last, mut steady) = (None, 0);
+    while tokio::time::Instant::now() < deadline {
+        let count = field.character_count().await.ok();
+        if count == last {
+            steady += 1;
+            if steady >= STEADY_POLLS {
+                return;
+            }
+        } else {
+            (last, steady) = (count, 0);
+        }
+        tokio::time::sleep(POLL).await;
+    }
+}
+
+/// The editable text with focus in the application that owns `window`.
+async fn focused_text<'a>(
+    app: &'a crate::App,
+    window: &Window,
+) -> Option<atspi::proxy::text::TextProxy<'a>> {
+    use atspi::State;
+    let connection = connection(app).await.ok()?;
+    let registry = accessible(
+        connection,
+        (
+            "org.a11y.atspi.Registry".to_owned(),
+            atspi::zbus::zvariant::OwnedObjectPath::try_from("/org/a11y/atspi/accessible/root")
+                .ok()?,
+        ),
+    )
+    .await
+    .ok()?;
+    let bus = atspi::zbus::fdo::DBusProxy::new(connection).await.ok()?;
+    for application in children(&registry).await {
+        let pid = match atspi::zbus::names::BusName::try_from(application.0.as_str()) {
+            Ok(name) => bus.get_connection_unix_process_id(name).await.ok(),
+            Err(_) => None,
+        };
+        let owns = match (pid, window.pid) {
+            (Some(pid), Some(owner)) => pid == owner || process_descends_from(pid, owner),
+            _ => false,
+        };
+        if !owns {
+            continue;
+        }
+        let mut stack = vec![application];
+        let mut visited = 0;
+        while let Some(reference) = stack.pop() {
+            visited += 1;
+            if visited > MAX_VISITED {
+                break;
+            }
+            let Ok(proxy) = accessible(connection, reference).await else {
+                continue;
+            };
+            let states = proxy.get_state().await.unwrap_or_default();
+            if states.contains(State::Focused) && states.contains(State::Editable) {
+                return proxy.proxies().await.ok()?.text().await.ok();
+            }
+            stack.extend(children(&proxy).await);
+        }
+    }
+    None
 }
 
 fn bounds_match(tree: &WindowTree, window: &Window) -> bool {
@@ -382,6 +514,7 @@ mod tests {
             pid: Some(200),
             bounds: [0, 0, 800, 600],
             nodes: vec![],
+            truncated: false,
         };
         assert!(!matches_window(&tree, &window));
         tree.pid = Some(100);

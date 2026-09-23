@@ -31,6 +31,8 @@ struct Input {
     #[serde(default)]
     combo: String,
     #[serde(default)]
+    direction: String,
+    #[serde(default)]
     steps: Vec<Value>,
     stop_on_error: Option<bool>,
     settle_ms: Option<u64>,
@@ -55,7 +57,8 @@ pub async fn call(app: &App, arguments: Value, holder: &str) -> ToolResult {
         &input.action,
         &json!({
             "x": input.x, "y": input.y, "x2": input.x2, "y2": input.y2,
-            "clicks": input.clicks, "text": input.text, "combo": input.combo
+            "clicks": input.clicks, "text": input.text, "combo": input.combo,
+            "direction": input.direction
         }),
     )
     .await?;
@@ -64,10 +67,51 @@ pub async fn call(app: &App, arguments: Value, holder: &str) -> ToolResult {
     ))
     .await;
     if input.capture_after == "final" || input.capture_after == "each" {
-        let windows = x11::windows(&app.config.display)?;
-        return json_text(json!({"result":result,"capture":a11y::tree(app, &windows).await}));
+        return json_text(json!({"result":result,"capture":focused_tree(app).await}));
     }
     Ok(text(result))
+}
+
+/// After acting, the window acted in is the one worth reading; every
+/// window's tree, with a browser open, is thousands of lines.
+async fn focused_tree(app: &App) -> String {
+    let windows = x11::windows(&app.config.display).unwrap_or_default();
+    let focused: Vec<_> = windows.iter().filter(|w| w.focused).cloned().collect();
+    a11y::tree(
+        app,
+        if focused.is_empty() {
+            &windows
+        } else {
+            &focused
+        },
+    )
+    .await
+}
+
+/// The wheel button and how many notches: `direction` up, down, left or
+/// right with `clicks` notches (3 by default); without a direction, a
+/// positive `clicks` scrolls up and a negative one down.
+fn wheel(direction: &str, clicks: i16) -> Result<(u8, u32), String> {
+    let notches = |default: u32| match clicks.unsigned_abs() {
+        0 => default,
+        count => u32::from(count),
+    };
+    match direction {
+        "up" => Ok((4, notches(3))),
+        "down" => Ok((5, notches(3))),
+        "left" => Ok((6, notches(3))),
+        "right" => Ok((7, notches(3))),
+        "" if clicks != 0 => Ok((if clicks > 0 { 4 } else { 5 }, notches(0))),
+        "" => Err("scroll needs direction (up, down, left or right)".into()),
+        other => Err(format!(
+            "unknown direction {other:?} (one of: up, down, left, right)"
+        )),
+    }
+}
+
+async fn settle_typing(app: &App) {
+    let windows = x11::windows(&app.config.display).unwrap_or_default();
+    a11y::settle_typing(app, &windows).await;
 }
 
 /// X round trips and the pauses between keystrokes happen off the runtime.
@@ -158,11 +202,10 @@ async fn one(app: &App, action: &str, step: &Value) -> Result<String, String> {
             .await
         }
         "scroll" => {
-            let clicks = integer("clicks");
+            let (button, notches) = wheel(&string("direction"), integer("clicks"))?;
             with_hands(app, move |hands| {
                 hands.move_to(x, y)?;
-                let button = if clicks > 0 { 4 } else { 5 };
-                hands.click(button, u32::from(clicks.unsigned_abs()))?;
+                hands.click(button, notches)?;
                 Ok("scrolled".into())
             })
             .await
@@ -171,9 +214,11 @@ async fn one(app: &App, action: &str, step: &Value) -> Result<String, String> {
             let content = string("text");
             with_hands(app, move |hands| {
                 hands.type_text(&content)?;
-                Ok("typed".into())
+                Ok::<_, String>(())
             })
-            .await
+            .await?;
+            settle_typing(app).await;
+            Ok("typed".into())
         }
         "key" => {
             let combo = string("combo");
@@ -196,9 +241,11 @@ async fn one(app: &App, action: &str, step: &Value) -> Result<String, String> {
                     .lock()
                     .map_err(|_| "the hands are poisoned".to_owned())?;
                 hands.combo("ctrl+v")?;
-                Ok("pasted".into())
+                Ok::<_, String>(())
             })
-            .await
+            .await?;
+            settle_typing(app).await;
+            Ok("pasted".into())
         }
         "clipboard_write" => {
             let content = string("text");
@@ -220,7 +267,7 @@ async fn one(app: &App, action: &str, step: &Value) -> Result<String, String> {
                 .get("timeout")
                 .and_then(Value::as_u64)
                 .unwrap_or(10)
-                .min(60);
+                .min(super::CALL_BUDGET_MS / 1000);
             let deadline = tokio::time::Instant::now() + Duration::from_secs(timeout);
             loop {
                 let windows = x11::windows(&app.config.display).unwrap_or_default();
@@ -280,13 +327,11 @@ async fn batch(app: &App, holder: &str, input: Input) -> ToolResult {
         if let Err(error) = &outcome {
             result["error"] = json!(error);
             if capture_on_error {
-                let windows = x11::windows(&app.config.display).unwrap_or_default();
-                final_capture = Some(a11y::tree(app, &windows).await);
+                final_capture = Some(focused_tree(app).await);
             }
         }
         if capture_after == "each" {
-            let windows = x11::windows(&app.config.display).unwrap_or_default();
-            result["capture"] = json!(a11y::tree(app, &windows).await);
+            result["capture"] = json!(focused_tree(app).await);
         }
         results.push(result);
         if outcome.is_err() && stop {
@@ -294,10 +339,25 @@ async fn batch(app: &App, holder: &str, input: Input) -> ToolResult {
         }
     }
     if capture_after == "final" {
-        let windows = x11::windows(&app.config.display).unwrap_or_default();
-        final_capture = Some(a11y::tree(app, &windows).await);
+        final_capture = Some(focused_tree(app).await);
     }
     json_text(
         json!({"steps":results,"capture":final_capture,"total_duration_ms":started.elapsed().as_millis()}),
     )
+}
+
+#[cfg(test)]
+mod tests {
+    use super::wheel;
+
+    #[test]
+    fn the_wheel_scrolls_the_way_it_is_told() {
+        assert_eq!(wheel("down", 0), Ok((5, 3)));
+        assert_eq!(wheel("up", 5), Ok((4, 5)));
+        assert_eq!(wheel("right", -2), Ok((7, 2)));
+        assert_eq!(wheel("", 2), Ok((4, 2)));
+        assert_eq!(wheel("", -4), Ok((5, 4)));
+        assert!(wheel("", 0).is_err());
+        assert!(wheel("sideways", 1).is_err());
+    }
 }

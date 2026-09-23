@@ -875,7 +875,7 @@ def qt_wheel(c):
     draft = c.call('state', {'action':'manifest','workspace':root})['draft']['manifest']
     assert draft['platform'] == ['prebuilt', 'qt-wheel'] and draft['runs']['app']['command'] == ['python', 'main.py'], draft
     prepare(c, None, root, manifest=draft)
-    installed = execute(c, 'bash', ['-c', 'for i in $(seq 150); do [ -d .venv/lib/python3.12/site-packages/PySide6 ] && echo installed && exit; sleep 2; done'], cwd=root, timeout=320)
+    installed = execute(c, 'bash', ['-c', 'for i in $(seq 150); do .venv/bin/python -c "import PySide6.QtWidgets" 2>/dev/null && echo installed && exit; sleep 2; done'], cwd=root, timeout=320)
     assert 'installed' in installed, installed
     app = c.call('shell', {'action':'run','cwd':root,'name':'app'})
     try:
@@ -896,6 +896,42 @@ def qt_wheel(c):
             c.call('shell',{'action':'cancel','job_id':app['id']})
 
 
+def webview_input(c):
+    """Typing outruns a slow WebKitGTK page and a click follows at once;
+    every character still lands. The wheel scrolls the way it is told."""
+    root = '/home/agent/qa/webview-' + c.run_id
+    source = Path(__file__).with_name('fixtures').joinpath('webview.c').read_text()
+    c.call('files', {'action':'put','path':root+'/webview.c','content':source})
+    manifest = {'platform':['webkit'],'packages':['gcc'],'runs':{
+        'build':{'command':['sh','-c','gcc webview.c -o webview $(pkg-config --cflags --libs webkit2gtk-4.1)']},
+        'app':{'command':['./webview'],'kind':'desktop'}}}
+    prepare(c, None, root, manifest=manifest)
+    built = execute(c, 'bash', ['-c', 'gcc webview.c -o webview $(pkg-config --cflags --libs webkit2gtk-4.1) && echo built'], cwd=root, timeout=120)
+    assert 'built' in built, built
+    app = c.call('shell', {'action':'run','cwd':root,'name':'app'})
+    try:
+        assert app['ready']['ready'] and 'screen point' in app['ready']['screenshot'], app
+        window = app['ready']['window']['id']
+        tree = str(c.call('capture', {'window':window}))
+        fields = {name: re.search(r'\[entry\] ' + name + r' (-?\d+),(-?\d+) (\d+)x(\d+)', tree) for name in ['First', 'Second']}
+        assert all(fields.values()), tree
+        at = {name: (int(m[1]) + int(m[3])//2, int(m[2]) + int(m[4])//2) for name, m in fields.items()}
+        text = 'The quick brown fox jumps over the lazy dog, again and again: 0123456789.'
+        c.call('input', {'action':'batch','capture_after':'none','steps':[
+            {'action':'click','x':at['First'][0],'y':at['First'][1]},
+            {'action':'type','text':text},
+            {'action':'click','x':at['Second'][0],'y':at['Second'][1]},
+            {'action':'type','text':'second'}]})
+        tree = str(c.call('capture', {'window':window}))
+        assert 'value="' + text + '"' in tree and 'value="second"' in tree, tree
+        c.call('input', {'action':'scroll','x':at['First'][0],'y':at['First'][1],'direction':'down','clicks':40})
+        tree = str(c.call('capture', {'window':window}))
+        assert re.search(r'\[button\] Bottom button \S+ \S+ states=\[[^\]]*showing', tree), tree
+        c.screenshot('14-webview-input.png')
+    finally:
+        if c.call('shell',{'action':'status','job_id':app['id']})['state']=='running':
+            c.call('shell',{'action':'cancel','job_id':app['id']})
+
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('--url', required=True)
@@ -912,11 +948,11 @@ def main():
     assert hashlib.sha256(guide['skill'].encode()).hexdigest() == guide['sha256']
     cases = [('browser forms', browser), ('three-step browser wizard', wizard), ('public Selenium form', public_form), ('no save-password bubble', password_prompt), ('managed jobs and observer', jobs), ('desktop job menu', desktop_job_menu), ('clipboard between apps', clipboard_between_apps), ('tray counts match live jobs', tray_counts), ('Nix failure diagnostics', nix_failure), ('verified script execution', artifacts), ('artifact failure recovery', download_failures), ('rootless by design', rootless), ('a folder opens in a terminal', open_folder), ('secrets have a home from boot', secrets), ('the keyboard has a map', keyboard)]
     if options.suite == 'full':
-        cases += [('package workspaces', workspaces), ('second repository tests', second_repository), ('Ketch installation and scraping', ketch), ('job durability and responsiveness', durability), ('native Hotline build and screens', native), ('native controls and window identity', native_controls), ('Qt wheel drafted and read', qt_wheel), ('legacy Xterm title', legacy_window)]
+        cases += [('package workspaces', workspaces), ('second repository tests', second_repository), ('Ketch installation and scraping', ketch), ('job durability and responsiveness', durability), ('native Hotline build and screens', native), ('native controls and window identity', native_controls), ('Qt wheel drafted and read', qt_wheel), ('WebKitGTK typing and scrolling', webview_input), ('legacy Xterm title', legacy_window)]
     elif options.suite == 'workspaces':
         cases = [('package workspaces', workspaces), ('second repository tests', second_repository), ('Ketch installation and scraping', ketch), ('job durability and responsiveness', durability)]
     elif options.suite == 'native':
-        cases = [('native Hotline build and screens', native), ('native controls and window identity', native_controls), ('Qt wheel drafted and read', qt_wheel), ('legacy Xterm title', legacy_window)]
+        cases = [('native Hotline build and screens', native), ('native controls and window identity', native_controls), ('Qt wheel drafted and read', qt_wheel), ('WebKitGTK typing and scrolling', webview_input), ('legacy Xterm title', legacy_window)]
     for name, case in cases:
         started = time.monotonic()
         try:

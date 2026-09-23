@@ -18,7 +18,10 @@ pub async fn call(app: &App, arguments: Value) -> ToolResult {
     if input.text.is_empty() {
         return Err("text is required".to_owned());
     }
-    let timeout = input.timeout.unwrap_or(10).min(60);
+    let timeout = input
+        .timeout
+        .unwrap_or(10)
+        .min(super::CALL_BUDGET_MS / 1000);
     let deadline = Instant::now() + Duration::from_secs(timeout);
     loop {
         let windows = x11::windows(&app.config.display).unwrap_or_default();

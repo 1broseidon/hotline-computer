@@ -87,6 +87,40 @@ async fn image_honors_the_computer_contract() {
         "the accessibility tree reaches into the page:\n{}",
         text(&capture)
     );
+    // One window's capture is that window's tree alone, without the parts
+    // Chromium keeps hidden, and says how its pixels map to the screen.
+    let scoped = call(&client, "capture", json!({"window":"Proof"})).await;
+    let scoped_text = text(&scoped);
+    assert!(
+        scoped_text.contains("[button] Proof control")
+            && scoped_text.matches("\n[0x").count() == 1
+            && !scoped_text.contains("[button] Minimize")
+            && scoped_text.contains("screen point ="),
+        "a window's capture:\n{scoped_text}"
+    );
+    let region = call(
+        &client,
+        "capture",
+        json!({"mode":"image","region":[0, 0, 200, 100]}),
+    )
+    .await;
+    assert!(
+        region
+            .content
+            .iter()
+            .any(|block| block.as_image().is_some())
+            && text(&region).contains("0,0 200x100 at full size")
+            && !text(&region).contains("[0x"),
+        "a region's picture:\n{}",
+        text(&region)
+    );
+    let line = call(&client, "shell", json!({"command":"echo one two | wc -w"})).await;
+    assert!(
+        text(&line).contains("\"stdout\":\"2\\n\""),
+        "a whole line in command runs in the shell: {}",
+        text(&line)
+    );
+
     let page = call(&client, "browser", json!({"action":"text"})).await;
     assert!(
         text(&page).contains("Rust computer proof"),

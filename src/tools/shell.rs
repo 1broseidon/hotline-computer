@@ -1,7 +1,10 @@
 use serde::Deserialize;
 use serde_json::{Value, json};
 
-use super::{ToolResult, action_error, json_text};
+use super::{CALL_BUDGET_MS, ToolResult, action_error, json_text};
+
+/// exec's deadline, leaving the rest of the call's budget to drain output.
+const EXEC_LIMIT_MS: u64 = 45_000;
 use crate::{App, jobs::Start};
 
 #[derive(Deserialize)]
@@ -39,7 +42,11 @@ pub async fn call(app: &App, arguments: Value, holder: &str) -> ToolResult {
         "list" => json_text(app.jobs.list().await?),
         "status" => json_text(app.jobs.status(id).await?),
         "read" => json_text(app.jobs.read(id, input.cursor, limit).await?),
-        "wait" => json_text(app.jobs.wait(id, input.wait_ms.unwrap_or(1000)).await?),
+        "wait" => json_text(
+            app.jobs
+                .wait(id, input.wait_ms.unwrap_or(1000).min(CALL_BUDGET_MS))
+                .await?,
+        ),
         "cancel" => {
             // Admission is serialized with desktop input; waiting for exit is not.
             let guard = app.access.mutate(holder).await?;
@@ -99,7 +106,7 @@ pub async fn call(app: &App, arguments: Value, holder: &str) -> ToolResult {
                 result["observer_error"] = json!(error);
             }
             // A desktop or web run answers when it is up, not when it was started.
-            let wait = input.wait_ms.unwrap_or(45_000).min(60_000);
+            let wait = input.wait_ms.unwrap_or(45_000).min(CALL_BUDGET_MS);
             if kind.is_some_and(|k| k != crate::manifest::Kind::Task) && wait > 0 {
                 let id = result["id"].as_str().unwrap_or_default().to_owned();
                 let (ready, images) = crate::ready::wait(app, &id, wait).await?;
@@ -112,7 +119,8 @@ pub async fn call(app: &App, arguments: Value, holder: &str) -> ToolResult {
         }
         "ready" => {
             let (ready, images) =
-                crate::ready::wait(app, id, input.wait_ms.unwrap_or(45_000).min(60_000)).await?;
+                crate::ready::wait(app, id, input.wait_ms.unwrap_or(45_000).min(CALL_BUDGET_MS))
+                    .await?;
             let mut blocks = json_text(ready)?;
             blocks.extend(images);
             Ok(blocks)
@@ -120,10 +128,23 @@ pub async fn call(app: &App, arguments: Value, holder: &str) -> ToolResult {
         "" | "exec" | "start" | "launch" => {
             let synchronous = input.action.is_empty() || input.action == "exec";
             if synchronous {
-                input.start.timeout = Some(input.start.timeout.unwrap_or(30).clamp(1, 60));
+                input.start.timeout = Some(
+                    input
+                        .start
+                        .timeout
+                        .unwrap_or(30)
+                        .clamp(1, EXEC_LIMIT_MS / 1000),
+                );
             }
             // A command the agent runs is offered the person's stored secrets.
             input.start.secrets = true;
+            // A whole line in `command` means what it would at a prompt.
+            if input.start.args.is_empty() && is_command_line(&input.start.command) {
+                let line = std::mem::take(&mut input.start.command);
+                input.start.label.get_or_insert_with(|| line.clone());
+                input.start.args = vec!["-c".into(), line];
+                input.start.command = "bash".into();
+            }
             let guard = app.access.mutate(holder).await?;
             let job = app.jobs.start(input.start, holder).await?;
             drop(guard);
@@ -139,10 +160,13 @@ pub async fn call(app: &App, arguments: Value, holder: &str) -> ToolResult {
                 }
                 return json_text(result);
             }
-            let mut job = app.jobs.wait(&job.id, 60_000).await?;
-            // A 60-second execution may still be draining output at the deadline.
+            let mut job = app.jobs.wait(&job.id, EXEC_LIMIT_MS).await?;
+            // An execution cut off at its deadline may still be draining output.
             if !job.finished() {
-                job = app.jobs.wait(&job.id, 5000).await?;
+                job = app
+                    .jobs
+                    .wait(&job.id, CALL_BUDGET_MS - EXEC_LIMIT_MS)
+                    .await?;
             }
             let (stdout, stderr) = app.jobs.streams(&job.id, limit).await?;
             json_text(json!({
@@ -164,9 +188,26 @@ pub async fn call(app: &App, arguments: Value, holder: &str) -> ToolResult {
     }
 }
 
+/// Whether `command` is a shell line rather than one program's name.
+fn is_command_line(command: &str) -> bool {
+    command
+        .chars()
+        .any(|c| c.is_whitespace() || "|&;<>()$`*?~\"'".contains(c))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_line_goes_to_the_shell_and_a_name_does_not() {
+        assert!(is_command_line("ls -la"));
+        assert!(is_command_line("cat a|wc"));
+        assert!(is_command_line("echo $HOME"));
+        assert!(!is_command_line("ls"));
+        assert!(!is_command_line("/usr/bin/env"));
+        assert!(!is_command_line("cargo"));
+    }
     #[tokio::test]
     async fn a_waiting_command_does_not_lock_out_desktop_takeover() {
         let home = tempfile::tempdir().unwrap();

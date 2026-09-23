@@ -72,14 +72,10 @@ async fn open(app: &App, url: &str) -> Result<(), String> {
     if !is_link(url) {
         return Err(format!("not a web address: {url}"));
     }
-    // A page that answers with an error status still opened in its tab.
     let opened = app.browser.tab_new(url).await;
     let display = app.config.display.clone();
     let _ = tokio::task::spawn_blocking(move || raise_browser(&display)).await;
-    match opened {
-        Err(error) if error.contains("net::ERR_HTTP_RESPONSE_CODE_FAILURE") => Ok(()),
-        other => other.map(|_| ()),
-    }
+    opened.map(|_| ())
 }
 
 fn raise_browser(display: &str) -> Result<(), String> {

@@ -109,31 +109,92 @@ pub fn unpack(
     })
 }
 
-pub fn scaled_png(display: &str, max_edge: u32) -> Result<Vec<u8>, String> {
-    let shot = screenshot(display)?;
-    let longer = shot.width.max(shot.height);
-    let (width, height, pixels) = if longer <= max_edge {
-        (shot.width, shot.height, shot.rgba)
-    } else {
-        let width = (u64::from(shot.width) * u64::from(max_edge) / u64::from(longer)) as u32;
-        let height = (u64::from(shot.height) * u64::from(max_edge) / u64::from(longer)) as u32;
-        (
-            width.max(1),
-            height.max(1),
-            scale(&shot, width.max(1), height.max(1)),
-        )
-    };
-    encode_png(width, height, &pixels, png::Compression::default())
+/// A rectangle of the screen as a PNG, and where it came from.
+pub struct Picture {
+    pub png: Vec<u8>,
+    /// The screen rectangle shown: x, y, width, height.
+    pub rect: [i32; 4],
+    pub width: u32,
+    pub height: u32,
 }
 
-pub fn raw_png(display: &str) -> Result<Vec<u8>, String> {
-    let shot = screenshot(display)?;
-    encode_png(
-        shot.width,
-        shot.height,
-        &shot.rgba,
-        png::Compression::default(),
-    )
+impl Picture {
+    /// How to turn a point in the image into a point on the screen, which
+    /// is what input takes.
+    pub fn describe(&self) -> String {
+        let [x, y, width, height] = self.rect;
+        if self.width as i32 == width {
+            format!(
+                "screenshot of {x},{y} {width}x{height} at full size: screen point = ({x} + image x, {y} + image y)"
+            )
+        } else {
+            let factor = f64::from(width) / f64::from(self.width);
+            format!(
+                "screenshot of {x},{y} {width}x{height} shown at {}x{}: screen point = ({x} + image x × {factor:.3}, {y} + image y × {factor:.3})",
+                self.width, self.height
+            )
+        }
+    }
+}
+
+/// `rect` of the screen (all of it by default), scaled down to fit
+/// `max_edge` when it is larger.
+pub fn picture(
+    display: &str,
+    rect: Option<[i32; 4]>,
+    max_edge: Option<u32>,
+) -> Result<Picture, String> {
+    let (connection, screen_number) =
+        x11rb::connect(Some(display)).map_err(|error| format!("x11 connect: {error}"))?;
+    let screen = &connection.setup().roots[screen_number];
+    let full = [
+        0,
+        0,
+        i32::from(screen.width_in_pixels),
+        i32::from(screen.height_in_pixels),
+    ];
+    let rect = clip(rect.unwrap_or(full), full).ok_or_else(|| {
+        format!(
+            "the region is off the screen, which is {}x{}",
+            full[2], full[3]
+        )
+    })?;
+    let shot = grab(
+        &connection,
+        screen,
+        rect[0] as i16,
+        rect[1] as i16,
+        rect[2] as u16,
+        rect[3] as u16,
+    )?;
+    let longer = shot.width.max(shot.height);
+    let limit = max_edge.unwrap_or(longer);
+    let (width, height, pixels) = if longer <= limit {
+        (shot.width, shot.height, shot.rgba)
+    } else {
+        let width = (u64::from(shot.width) * u64::from(limit) / u64::from(longer)).max(1) as u32;
+        let height = (u64::from(shot.height) * u64::from(limit) / u64::from(longer)).max(1) as u32;
+        (width, height, scale(&shot, width, height))
+    };
+    Ok(Picture {
+        png: encode_png(width, height, &pixels, png::Compression::default())?,
+        rect,
+        width,
+        height,
+    })
+}
+
+/// The part of `rect` inside `screen`, if any.
+fn clip(rect: [i32; 4], screen: [i32; 4]) -> Option<[i32; 4]> {
+    let left = rect[0].max(screen[0]);
+    let top = rect[1].max(screen[1]);
+    let right = (rect[0].saturating_add(rect[2])).min(screen[0] + screen[2]);
+    let bottom = (rect[1].saturating_add(rect[3])).min(screen[1] + screen[3]);
+    (right > left && bottom > top).then_some([left, top, right - left, bottom - top])
+}
+
+pub fn scaled_png(display: &str, max_edge: u32) -> Result<Vec<u8>, String> {
+    picture(display, None, Some(max_edge)).map(|picture| picture.png)
 }
 
 fn scale(source: &Screenshot, width: u32, height: u32) -> Vec<u8> {
@@ -545,4 +606,18 @@ pub fn publish_holder(display: &str, lease: Option<(&str, u64)>) -> Result<(), S
         .map_err(|e| e.to_string())?
         .check()
         .map_err(|e| e.to_string())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn a_region_is_clipped_to_the_screen() {
+        let screen = [0, 0, 1920, 1080];
+        assert_eq!(clip([100, 50, 200, 100], screen), Some([100, 50, 200, 100]));
+        assert_eq!(clip([-10, 1000, 50, 200], screen), Some([0, 1000, 40, 80]));
+        assert_eq!(clip([1920, 0, 10, 10], screen), None);
+        assert_eq!(clip([0, 0, 0, 10], screen), None);
+    }
 }

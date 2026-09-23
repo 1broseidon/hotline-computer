@@ -291,8 +291,7 @@ impl BrowserManager {
                 let page = current_page(session).await?;
                 // The page the agent drives is the page the person sees.
                 page.bring_to_front().await.map_err(browser_error)?;
-                page.goto(url.as_str()).await.map_err(browser_error)?;
-                Ok(format!("navigated to {url}"))
+                landed(page.goto(url.as_str()).await, format!("navigated to {url}"))
             })
         })
         .await
@@ -497,8 +496,9 @@ impl BrowserManager {
                     .await
                     .map_err(browser_error)?;
                 passkey_sync(session, &page).await?;
+                let mut note = String::new();
                 if !url.is_empty() {
-                    page.goto(url.as_str()).await.map_err(browser_error)?;
+                    note = landed(page.goto(url.as_str()).await, String::new())?;
                 }
                 let pages = session.browser.pages().await.map_err(browser_error)?;
                 session.current = pages
@@ -507,8 +507,10 @@ impl BrowserManager {
                     .unwrap_or_else(|| pages.len().saturating_sub(1));
                 Ok(if url.is_empty() {
                     "opened new tab".to_owned()
-                } else {
+                } else if note.is_empty() {
                     format!("opened new tab at {url}")
+                } else {
+                    format!("opened new tab at {url}; {note}")
                 })
             })
         })
@@ -1047,6 +1049,19 @@ fn ref_selector(reference: &str) -> Result<String, String> {
 
 fn browser_error(error: impl std::fmt::Display) -> String {
     format!("browser: {error}")
+}
+
+/// A page that answers with an error status is still a page, open in its
+/// tab, and says why; only a navigation that went nowhere is an error.
+fn landed<T>(outcome: Result<T, impl std::fmt::Display>, done: String) -> Result<String, String> {
+    match outcome {
+        Ok(_) => Ok(done),
+        Err(error) if error.to_string().contains("ERR_HTTP_RESPONSE_CODE_FAILURE") => Ok(format!(
+            "{done}{}the server answered with an error status; browser text shows the page",
+            if done.is_empty() { "" } else { "; " }
+        )),
+        Err(error) => Err(browser_error(error)),
+    }
 }
 
 fn find_on_path(name: &str) -> Option<PathBuf> {

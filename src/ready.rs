@@ -170,15 +170,17 @@ pub async fn wait(
                 });
                 if let Some(window) = found {
                     settle(app).await;
-                    let png = x11::scaled_png(&app.config.display, 1568)?;
+                    let picture =
+                        x11::picture(&app.config.display, Some(window.bounds), Some(1568))?;
                     let value = json!({
                         "ready": true,
                         "job_id": job,
                         "window": window,
+                        "screenshot": picture.describe(),
                         "next": "the screenshot shows it now; capture for its accessibility tree, input to use it",
                     });
                     let image = ContentBlock::image(
-                        base64::engine::general_purpose::STANDARD.encode(png),
+                        base64::engine::general_purpose::STANDARD.encode(&picture.png),
                         "image/png",
                     );
                     return Ok((value, vec![image]));
