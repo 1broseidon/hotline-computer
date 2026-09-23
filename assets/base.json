@@ -71,7 +71,7 @@
       "env": {}
     },
     "qt": {
-      "description": "Qt 6 widgets and QML, with the xcb platform plugin",
+      "description": "Qt 6 widgets and QML, with the xcb platform plugin and accessibility on",
       "requires": [
         "gl"
       ],
@@ -86,7 +86,8 @@
       "env": {
         "QT_PLUGIN_PATH": "${qt6.qtbase}/lib/qt-6/plugins",
         "QML2_IMPORT_PATH": "${qt6.qtdeclarative}/lib/qt-6/qml",
-        "QT_QPA_PLATFORM": "xcb"
+        "QT_QPA_PLATFORM": "xcb",
+        "QT_LINUX_ACCESSIBILITY_ALWAYS_ON": "1"
       }
     },
     "native": {

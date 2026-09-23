@@ -171,7 +171,17 @@ fn rust(root: &Path, b: &mut Builder, tauri: &[PathBuf]) {
         cargo.display()
     ));
     let lock = read(root, &Path::new(&dir).join("Cargo.lock"));
-    let has = |krate: &str| lock.contains(&format!("name = \"{krate}\"\n"));
+    // Without a lock yet, the crates the manifests name directly still count.
+    let declared: String = find(root, "Cargo.toml")
+        .iter()
+        .map(|toml| read(root, toml))
+        .collect();
+    let has = |krate: &str| {
+        lock.contains(&format!("name = \"{krate}\"\n"))
+            || declared
+                .lines()
+                .any(|line| line.trim_start().starts_with(&format!("{krate} =")))
+    };
     for (krate, package) in [
         ("openssl-sys", "openssl"),
         ("libdbus-sys", "dbus"),
