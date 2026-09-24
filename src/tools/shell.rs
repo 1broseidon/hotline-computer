@@ -5,7 +5,15 @@ use super::{CALL_BUDGET_MS, ToolResult, action_error, json_text};
 
 /// exec's deadline, leaving the rest of the call's budget to drain output.
 const EXEC_LIMIT_MS: u64 = 45_000;
-use crate::{App, jobs::Start};
+/// How much of the end of stdout and of stderr exec answers with. A build
+/// says how it went at the end; the rest waits in the job's logs.
+const EXEC_OUTPUT: usize = 8 * 1024;
+/// A read's page when the caller asks for no other size.
+const READ_PAGE: usize = 32 * 1024;
+use crate::{
+    App,
+    jobs::{Record, Start, Tail, plain},
+};
 
 #[derive(Deserialize)]
 struct Input {
@@ -27,7 +35,6 @@ struct Input {
 pub async fn call(app: &App, arguments: Value, holder: &str) -> ToolResult {
     let mut input: Input = serde_json::from_value(arguments).map_err(|error| error.to_string())?;
     let id = input.job_id.as_deref().unwrap_or("");
-    let limit = input.max_output.unwrap_or(65_536).clamp(1, 1_048_576);
     match input.action.as_str() {
         "show" => {
             let _guard = app.access.mutate(holder).await?;
@@ -41,7 +48,12 @@ pub async fn call(app: &App, arguments: Value, holder: &str) -> ToolResult {
         }
         "list" => json_text(app.jobs.list().await?),
         "status" => json_text(app.jobs.status(id).await?),
-        "read" => json_text(app.jobs.read(id, input.cursor, limit).await?),
+        "read" => {
+            let limit = input.max_output.unwrap_or(READ_PAGE);
+            let mut page = app.jobs.read(id, input.cursor, limit).await?;
+            page.output = plain(&page.output);
+            json_text(page)
+        }
         "wait" => json_text(
             app.jobs
                 .wait(id, input.wait_ms.unwrap_or(1000).min(CALL_BUDGET_MS))
@@ -168,14 +180,20 @@ pub async fn call(app: &App, arguments: Value, holder: &str) -> ToolResult {
                     .wait(&job.id, CALL_BUDGET_MS - EXEC_LIMIT_MS)
                     .await?;
             }
-            let (stdout, stderr) = app.jobs.streams(&job.id, limit).await?;
-            json_text(json!({
-                "stdout":stdout,"stderr":stderr,
+            let limit = input.max_output.unwrap_or(EXEC_OUTPUT);
+            let (stdout, stderr) = app.jobs.tails(&job.id, limit).await?;
+            let mut result = json!({
+                "stdout":plain(&stdout.text),"stderr":plain(&stderr.text),
+                "stdout_bytes":stdout.bytes,"stderr_bytes":stderr.bytes,
                 "exit_code":job.exit_code.unwrap_or(if job.state == "timed_out" {255} else {-1}),
                 "duration_ms":job.finished_at.unwrap_or_else(crate::jobs::now).saturating_sub(job.started_at),
-                "truncated":job.truncated || job.output_bytes > stdout.len() + stderr.len(),
+                "truncated":job.truncated || stdout.cut || stderr.cut,
                 "job_id":job.id,"state":job.state,"signal":job.signal,"error":job.error,"observer_error":observer_error
-            }))
+            });
+            if let Some(more) = left_out(&job, &stdout, &stderr) {
+                result["more"] = json!(more);
+            }
+            json_text(result)
         }
         action => Err(action_error(
             "shell",
@@ -186,6 +204,28 @@ pub async fn call(app: &App, arguments: Value, holder: &str) -> ToolResult {
             ],
         )),
     }
+}
+
+/// What an exec answer leaves out, and where it is, when it leaves anything out.
+fn left_out(job: &Record, stdout: &Tail, stderr: &Tail) -> Option<String> {
+    let mut notes = Vec::new();
+    let logs: Vec<_> = [("stdout", stdout), ("stderr", stderr)]
+        .into_iter()
+        .filter(|(_, tail)| tail.cut)
+        .map(|(name, tail)| format!("all of {name} is in {}", tail.path.display()))
+        .collect();
+    if !logs.is_empty() {
+        notes.push(format!(
+            "Only the end of a long stream is here; {}. Search there, or page through the whole output, both streams as they were written, with shell read and this job_id.",
+            logs.join(", and ")
+        ));
+    }
+    if job.truncated {
+        notes.push(
+            "The command wrote more than the 4 MiB a job keeps, and what it wrote after that is gone: these streams end where the kept output does.".into(),
+        );
+    }
+    (!notes.is_empty()).then(|| notes.join(" "))
 }
 
 /// Whether `command` is a shell line rather than one program's name.
@@ -208,6 +248,58 @@ mod tests {
         assert!(!is_command_line("/usr/bin/env"));
         assert!(!is_command_line("cargo"));
     }
+    #[tokio::test]
+    async fn exec_answers_with_the_end_of_a_long_log_and_where_the_rest_is() {
+        let home = tempfile::tempdir().unwrap();
+        let app = App::new(crate::Config {
+            addr: String::new(),
+            token: None,
+            home: home.path().to_owned(),
+            display: ":0".into(),
+            screen: "800x600".into(),
+        });
+        // A megabyte of coloured build log, then the error it ran to find.
+        let build = r"for i in $(seq 16000); do printf '\033[32m   Compiling\033[0m crate-%05d v1.0.0 (/src/crates/crate-%05d)\n' $i $i; done; printf 'error[E0308]: mismatched types\n' >&2; exit 101";
+        let blocks = call(&app, json!({"command":build}), "agent").await.unwrap();
+        let text = &blocks[0].as_text().unwrap().text;
+        let answer: Value = serde_json::from_str(text).unwrap();
+        assert!(text.len() < 12 * 1024, "{} bytes", text.len());
+        assert_eq!(answer["exit_code"], 101);
+        assert_eq!(answer["stderr"], "error[E0308]: mismatched types\n");
+        let stdout = answer["stdout"].as_str().unwrap();
+        assert!(stdout.starts_with("   Compiling crate-"), "{stdout}");
+        assert!(stdout.ends_with("   Compiling crate-16000 v1.0.0 (/src/crates/crate-16000)\n"));
+        assert!(!stdout.contains('\u{1b}'), "{stdout}");
+        assert!(answer["stdout_bytes"].as_u64().unwrap() > 1_000_000);
+        assert_eq!(answer["truncated"], true);
+        // The whole log is where the answer says, for a search or a read.
+        let more = answer["more"].as_str().unwrap();
+        let log = home
+            .path()
+            .join(".hotline/jobs")
+            .join(answer["job_id"].as_str().unwrap());
+        assert!(
+            more.contains(&log.join("stdout.log").display().to_string()),
+            "{more}"
+        );
+        assert!(!more.contains("stderr.log"), "{more}");
+        let first = call(
+            &app,
+            json!({"action":"read","job_id":answer["job_id"],"cursor":0}),
+            "agent",
+        )
+        .await
+        .unwrap();
+        let page: Value = serde_json::from_str(&first[0].as_text().unwrap().text).unwrap();
+        assert_eq!(page["next_cursor"], 32 * 1024);
+        assert!(
+            page["output"]
+                .as_str()
+                .unwrap()
+                .starts_with("   Compiling crate-00001 v1.0.0")
+        );
+    }
+
     #[tokio::test]
     async fn a_waiting_command_does_not_lock_out_desktop_takeover() {
         let home = tempfile::tempdir().unwrap();
