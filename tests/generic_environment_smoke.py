@@ -38,7 +38,7 @@ def main():
         if job['state'] != 'running':
             break
     assert job['state'] == 'failed', job
-    failure_output = c.call('shell', {'action': 'read', 'job_id': job['id']})['output']
+    failure_output = c.call('shell', {'action': 'read', 'job_id': job['id'], 'max_output': 1048576})['output']
     assert 'hotlineSmokePackageDoesNotExist' in failure_output and 'error:' in failure_output, failure_output
     assert 'Hello, world!' in execute(c, 'hello', [], cwd=root+'/packages')
 
@@ -57,7 +57,7 @@ def main():
     repo = root+'/repository'
     c.call('files', {'action': 'put', 'path': repo+'/flake.nix', 'content': flake})
     prepared = prepare(repo, flake='.#dev')
-    hook_output = c.call('shell', {'action': 'read', 'job_id': prepared['job']['id']})['output']
+    hook_output = c.call('shell', {'action': 'read', 'job_id': prepared['job']['id'], 'max_output': 1048576})['output']
     assert 'Repository hook ready' in hook_output, hook_output
     lock = c.call('files', {'action': 'get', 'path': repo+'/flake.lock'})
     c.call('files', {'action': 'put', 'path': repo+'/child/file.txt', 'content': ''})

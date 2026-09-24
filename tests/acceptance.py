@@ -403,7 +403,7 @@ def nix_failure(c):
     job = c.call('shell', {'action':'start','command':'/usr/bin/hotline-computer','args':['prepare',json.dumps({'source':'packages','packages':['python312'],'nixpkgs':c.call('state', {'action':'info'})['nixpkgs']}),workspace,home],'env':{'NIX_REMOTE':'unix:///home/agent/qa/missing-nix-daemon.sock'},'label':'Nix failure diagnostics','timeout':30})
     job = c.call('shell', {'action':'wait','job_id':job['id'],'wait_ms':30000})
     assert job['state']=='failed',job
-    output = c.call('shell', {'action':'read','job_id':job['id']})['output']
+    output = c.call('shell', {'action':'read','job_id':job['id'],'max_output':1048576})['output']
     assert 'missing-nix-daemon.sock' in output and 'Nix preparation failed' in output,output
     c.output.joinpath('nix-failure.txt').write_text(output)
 
