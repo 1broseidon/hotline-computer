@@ -218,6 +218,17 @@ pub struct Output {
     pub eof: bool,
 }
 
+/// The end of one of a job's streams.
+pub struct Tail {
+    pub text: String,
+    /// Every byte of the stream the job kept.
+    pub bytes: u64,
+    /// Whether the text starts after the stream does.
+    pub cut: bool,
+    /// Where the stream is kept, for a search through all of it.
+    pub path: PathBuf,
+}
+
 impl Jobs {
     pub fn new(home: &Path, display: &str, secrets: Secrets) -> Self {
         Self {
@@ -590,14 +601,14 @@ impl Jobs {
         })
     }
 
-    pub async fn streams(&self, id: &str, limit: usize) -> Result<(String, String), String> {
+    /// The last `limit` bytes of the job's stdout and of its stderr, since a
+    /// command says how it went at the end.
+    pub async fn tails(&self, id: &str, limit: usize) -> Result<(Tail, Tail), String> {
         let job = self.job(id).await?;
         let limit = limit.clamp(1, 1_048_576);
         Ok((
-            String::from_utf8_lossy(&read_file(&job.directory.join("stdout.log"), 0, limit)?)
-                .into_owned(),
-            String::from_utf8_lossy(&read_file(&job.directory.join("stderr.log"), 0, limit)?)
-                .into_owned(),
+            read_tail(job.directory.join("stdout.log"), limit)?,
+            read_tail(job.directory.join("stderr.log"), limit)?,
         ))
     }
 
@@ -630,6 +641,111 @@ fn read_file(path: &Path, offset: u64, limit: usize) -> Result<Vec<u8>, String> 
         .read_to_end(&mut bytes)
         .map_err(|e| e.to_string())?;
     Ok(bytes)
+}
+
+/// The last `limit` bytes of a stream's log, starting at a whole character.
+fn read_tail(path: PathBuf, limit: usize) -> Result<Tail, String> {
+    let bytes = match std::fs::metadata(&path) {
+        Ok(metadata) => metadata.len(),
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => 0,
+        Err(e) => return Err(e.to_string()),
+    };
+    let start = bytes.saturating_sub(limit as u64);
+    let mut text = read_file(&path, start, limit)?;
+    if start > 0 {
+        // Open on a whole line when one starts near the cut, and never inside
+        // a character, which would read as a replacement mark.
+        let skip = match text[..text.len() / 2]
+            .iter()
+            .position(|byte| *byte == b'\n')
+        {
+            Some(end) => end + 1,
+            None => text
+                .iter()
+                .take(3)
+                .take_while(|byte| **byte & 0xC0 == 0x80)
+                .count(),
+        };
+        text.drain(..skip);
+    }
+    Ok(Tail {
+        text: String::from_utf8_lossy(&text).into_owned(),
+        bytes,
+        cut: start > 0,
+        path,
+    })
+}
+
+/// Terminal colour, cursor and title codes read as noise outside a terminal,
+/// and a progress bar redraws its line with carriage returns: keep the last
+/// draw.
+pub fn plain(text: &str) -> String {
+    let mut out = String::with_capacity(text.len());
+    let mut chars = text.chars().peekable();
+    while let Some(c) = chars.next() {
+        if c == '\u{1b}' {
+            skip_escape(&mut chars);
+        } else {
+            out.push(c);
+        }
+    }
+    out.split('\n')
+        .map(|line| {
+            line.rsplit('\r')
+                .find(|part| !part.trim().is_empty())
+                .unwrap_or("")
+        })
+        .collect::<Vec<_>>()
+        .join("\n")
+}
+
+/// Consumes the rest of the escape sequence an ESC opened, and nothing after.
+fn skip_escape(chars: &mut std::iter::Peekable<std::str::Chars<'_>>) {
+    match chars.peek() {
+        // A control sequence: parameters, then a final byte from @ to ~.
+        Some('[') => {
+            chars.next();
+            while let Some(&c) = chars.peek() {
+                if !(' '..='~').contains(&c) {
+                    break;
+                }
+                chars.next();
+                if ('@'..='~').contains(&c) {
+                    break;
+                }
+            }
+        }
+        // A string, such as a window title, up to BEL or ESC \.
+        Some(']' | 'P' | 'X' | '^' | '_') => {
+            chars.next();
+            while let Some(&c) = chars.peek() {
+                if c == '\n' {
+                    break;
+                }
+                chars.next();
+                if c == '\u{7}' {
+                    break;
+                }
+                if c == '\u{1b}' {
+                    chars.next_if_eq(&'\\');
+                    break;
+                }
+            }
+        }
+        // Anything shorter, such as a character set: intermediates from
+        // space to /, then one final byte.
+        _ => {
+            while let Some(&c) = chars.peek() {
+                if !(' '..='~').contains(&c) {
+                    break;
+                }
+                chars.next();
+                if !(' '..='/').contains(&c) {
+                    break;
+                }
+            }
+        }
+    }
 }
 
 /// The name a job gets when the teammate gives it none: its command line,
@@ -1007,13 +1123,44 @@ mod tests {
         let job = jobs.start(start, "test").await.unwrap();
         let result = jobs.wait(&job.id, 5000).await.unwrap();
         assert_eq!(result.state, "timed_out");
-        let (out, err) = jobs.streams(&job.id, 65536).await.unwrap();
-        assert_eq!(out, "before timeout");
-        assert_eq!(err, "diagnostic");
+        let (out, err) = jobs.tails(&job.id, 65536).await.unwrap();
+        assert_eq!(out.text, "before timeout");
+        assert_eq!(err.text, "diagnostic");
         assert_eq!(unsafe { libc::kill(job.pid.unwrap() as i32, 0) }, -1);
         let second = jobs.start(command("sleep 30"), "test").await.unwrap();
         assert_eq!(jobs.cancel(&second.id).await.unwrap().state, "cancelled");
         assert_eq!(unsafe { libc::kill(second.pid.unwrap() as i32, 0) }, -1);
+    }
+
+    #[test]
+    fn output_reads_as_plain_text() {
+        let raw = "\u{1b}[1m\u{1b}[92m   Compiling\u{1b}[0m ctor v0.8.0\n\u{1b}[96mBuilding\u{1b}[0m 1/9\rBuilding 2/9\u{1b}[K\n";
+        assert_eq!(plain(raw), "   Compiling ctor v0.8.0\nBuilding 2/9\n");
+        // A terminal's line ends, a title, tput's reset and a key-code final byte.
+        let raw = "\u{1b}]0;make\u{7}one\r\n\u{1b}(B\u{1b}[mtwo\u{1b}[2~\r\n";
+        assert_eq!(plain(raw), "one\ntwo\n");
+        // A lone ESC takes nothing with it.
+        assert_eq!(plain("a\u{1b}\nb\u{1b}"), "a\nb");
+    }
+
+    #[tokio::test]
+    async fn a_long_stream_answers_with_its_end_from_a_whole_character() {
+        let home = tempfile::tempdir().unwrap();
+        let jobs = Jobs::new(home.path(), ":0", Secrets::default());
+        // 100 bytes of start, then a two-byte é the cut lands inside.
+        let job = jobs
+            .start(
+                command("printf 'x%.0s' $(seq 100); printf '\\303\\251the end'; printf short >&2"),
+                "test",
+            )
+            .await
+            .unwrap();
+        assert_eq!(jobs.wait(&job.id, 5000).await.unwrap().exit_code, Some(0));
+        let (out, err) = jobs.tails(&job.id, 8).await.unwrap();
+        assert_eq!(out.text, "the end");
+        assert_eq!((out.bytes, out.cut), (109, true));
+        assert!(out.path.ends_with("stdout.log"));
+        assert_eq!((err.text.as_str(), err.bytes, err.cut), ("short", 5, false));
     }
 
     #[tokio::test]

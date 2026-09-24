@@ -104,35 +104,6 @@ async fn settle(app: &App) {
     }
 }
 
-/// Terminal colour and cursor codes read as noise outside a terminal, and a
-/// progress bar redraws its line with carriage returns: keep the last draw.
-fn plain(text: &str) -> String {
-    let mut out = String::with_capacity(text.len());
-    let mut chars = text.chars().peekable();
-    while let Some(c) = chars.next() {
-        if c == '\u{1b}' {
-            if chars.peek() == Some(&'[') {
-                chars.next();
-                for c in chars.by_ref() {
-                    if c.is_ascii_alphabetic() {
-                        break;
-                    }
-                }
-            }
-            continue;
-        }
-        out.push(c);
-    }
-    out.lines()
-        .map(|line| {
-            line.rsplit('\r')
-                .find(|part| !part.trim().is_empty())
-                .unwrap_or("")
-        })
-        .collect::<Vec<_>>()
-        .join("\n")
-}
-
 async fn tail(app: &App, job: &str) -> String {
     let Ok(record) = app.jobs.status(job).await else {
         return String::new();
@@ -141,7 +112,7 @@ async fn tail(app: &App, job: &str) -> String {
     app.jobs
         .read(job, start, 3000)
         .await
-        .map(|o| plain(&o.output))
+        .map(|o| crate::jobs::plain(&o.output))
         .unwrap_or_default()
 }
 
@@ -228,14 +199,5 @@ pub async fn wait(
             ));
         }
         tokio::time::sleep(std::time::Duration::from_millis(500)).await;
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    #[test]
-    fn output_tails_read_as_plain_text() {
-        let raw = "\u{1b}[1m\u{1b}[92m   Compiling\u{1b}[0m ctor v0.8.0\n\u{1b}[96mBuilding\u{1b}[0m 1/9\rBuilding 2/9\u{1b}[K\n";
-        assert_eq!(super::plain(raw), "   Compiling ctor v0.8.0\nBuilding 2/9");
     }
 }
