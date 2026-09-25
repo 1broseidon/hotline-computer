@@ -52,18 +52,14 @@ pub async fn call(app: &App, arguments: Value, holder: &str) -> ToolResult {
                 )
                 .await
         }
-        "fill" => match (input.secret.as_deref(), input.text.as_deref()) {
-            (Some(_), Some(_)) => Err("fill takes text or secret, not both".to_owned()),
-            (Some(reference), None) => {
+        "fill" => match resolve_fill(input.secret.as_deref(), input.text.as_deref())? {
+            FillWith::Secret(reference) => {
                 // The value is looked up here and typed by the browser; the
                 // answer names it and never carries it.
                 let filled = app.secrets.resolve(reference)?;
                 app.browser.fill_secret(&input.r#ref, filled).await
             }
-            (None, Some(text)) => app.browser.fill(&input.r#ref, text).await,
-            (None, None) => {
-                Err("fill requires text or secret; use text:\"\" to clear a field".to_owned())
-            }
+            FillWith::Text(text) => app.browser.fill(&input.r#ref, text).await,
         },
         "select" => {
             app.browser
@@ -128,6 +124,40 @@ pub async fn call(app: &App, arguments: Value, holder: &str) -> ToolResult {
     Ok(text(result))
 }
 
+/// What `fill` should do once a supplied-but-empty `secret` has been told
+/// apart from an actually-chosen one.
+enum FillWith<'a> {
+    Secret(&'a str),
+    Text(&'a str),
+}
+
+/// The exactly-one rule for `fill`'s `text`/`secret` pair, kept separate from
+/// the browser calls so it can be tested without a live browser.
+///
+/// A model that always emits both keys (some do, to satisfy strict JSON
+/// schemas) sends the unused one as `""`; that must not read as "supplied".
+/// So an empty (or absent) `secret` never counts, no matter what `text`
+/// holds — only a non-empty `secret` alongside a non-empty `text` is the
+/// ambiguous "both" case. `text` itself stays significant when empty:
+/// `text:""` alone is the documented way to clear a field.
+fn resolve_fill<'a>(
+    secret: Option<&'a str>,
+    text: Option<&'a str>,
+) -> Result<FillWith<'a>, String> {
+    let secret = secret.filter(|value| !value.is_empty());
+    let text_in_use = text.filter(|value| !value.is_empty());
+    match (secret, text_in_use) {
+        (Some(_), Some(_)) => Err(
+            "fill takes text or secret, not both; omit whichever one you are not using".to_owned(),
+        ),
+        (Some(reference), None) => Ok(FillWith::Secret(reference)),
+        (None, _) => match text {
+            Some(text) => Ok(FillWith::Text(text)),
+            None => Err("fill requires text or secret; use text:\"\" to clear a field".to_owned()),
+        },
+    }
+}
+
 async fn downloads(app: &App) -> Result<String, String> {
     let path = app.config.home.join("Downloads");
     let mut entries = match tokio::fs::read_dir(&path).await {
@@ -151,4 +181,59 @@ async fn downloads(app: &App) -> Result<String, String> {
     } else {
         names.join("\n")
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{FillWith, resolve_fill};
+
+    #[test]
+    fn text_only_fills_with_text() {
+        assert!(matches!(
+            resolve_fill(None, Some("hi")),
+            Ok(FillWith::Text("hi"))
+        ));
+    }
+
+    #[test]
+    fn secret_only_fills_with_secret() {
+        assert!(matches!(
+            resolve_fill(Some("GITHUB.password"), None),
+            Ok(FillWith::Secret("GITHUB.password"))
+        ));
+    }
+
+    #[test]
+    fn an_unused_empty_secret_alongside_text_still_fills_with_text() {
+        assert!(matches!(
+            resolve_fill(Some(""), Some("hi")),
+            Ok(FillWith::Text("hi"))
+        ));
+    }
+
+    #[test]
+    fn an_unused_empty_text_alongside_a_secret_still_fills_with_the_secret() {
+        assert!(matches!(
+            resolve_fill(Some("GITHUB.password"), Some("")),
+            Ok(FillWith::Secret("GITHUB.password"))
+        ));
+    }
+
+    #[test]
+    fn an_empty_text_alone_clears_the_field() {
+        assert!(matches!(
+            resolve_fill(None, Some("")),
+            Ok(FillWith::Text(""))
+        ));
+    }
+
+    #[test]
+    fn a_real_text_and_a_real_secret_together_is_an_error() {
+        assert!(resolve_fill(Some("GITHUB.password"), Some("hi")).is_err());
+    }
+
+    #[test]
+    fn neither_argument_is_an_error() {
+        assert!(resolve_fill(None, None).is_err());
+    }
 }
