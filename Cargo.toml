@@ -42,8 +42,8 @@ chrono = { version = "0.4", default-features = false, features = ["clock"] }
 hmac = "0.12"
 sha1 = "0.10"
 data-encoding = "2"
+tempfile = "3.27.0"
 
 [dev-dependencies]
-tempfile = "3.27.0"
 # The contract test opens the viewer's WebSocket the way the page does.
 tokio-tungstenite = "0.28"
