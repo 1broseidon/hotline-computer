@@ -152,6 +152,15 @@ where the panel is looking, through `POST /files?path=` with the file as
 the body, written whole or not at all, under the home only. Inside the
 computer, the managed Chromium lists a folder at `file:///home/agent/`.
 
+Desk clients can request `POST /files?path=...&create_only=true` to publish an
+upload only if no destination exists. Publication is atomic; a collision returns
+409 without changing the existing file. Successful authenticated `GET /files`
+replies advertise `x-hotline-upload-create-only: 1`, so a desk can refuse unsafe
+uploads to older computers. Each request stages in a private temporary file,
+removed on a failed body or handler cancellation. Callers that omit `create_only`
+retain the existing replace-on-finish behavior. Both modes require the same bearer
+and home-path checks; publication already dispatched is not rolled back on close.
+
 ## Workspaces and the release guide
 
 Start an agent session with `state info` and `state guide`. The returned skill

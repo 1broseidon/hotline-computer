@@ -81,6 +81,8 @@ pub struct FileRequest {
     token: String,
     #[serde(default)]
     path: String,
+    #[serde(default)]
+    create_only: bool,
 }
 
 /// A caller that can set its own headers — the desk's own HTTP client, not
@@ -139,7 +141,12 @@ pub async fn files(
     };
     match crate::tools::files::entries(&app, &requested(&app, &request.path)).await {
         Ok((path, entries)) => {
-            Json(json!({"path": path, "home": home, "entries": entries})).into_response()
+            let mut response =
+                Json(json!({"path": path, "home": home, "entries": entries})).into_response();
+            response
+                .headers_mut()
+                .insert("x-hotline-upload-create-only", "1".parse().unwrap());
+            response
         }
         Err(error) => refused(error),
     }
@@ -210,33 +217,53 @@ pub async fn upload(
     else {
         return refused("path has no file name".to_owned());
     };
-    let arriving = path.with_file_name(format!(".{name}.hotline-upload"));
-    let written = async {
-        let mut file = tokio::fs::File::create(&arriving)
-            .await
-            .map_err(|error| format!("{}: {error}", arriving.display()))?;
-        let mut reader = tokio_util::io::StreamReader::new(
-            body.into_data_stream()
-                .map_err(|error| std::io::Error::other(error.to_string())),
-        );
-        let bytes = tokio::io::copy(&mut reader, &mut file)
-            .await
-            .map_err(|error| format!("receiving {name}: {error}"))?;
-        file.sync_all()
-            .await
-            .map_err(|error| format!("{}: {error}", arriving.display()))?;
-        tokio::fs::rename(&arriving, &path)
-            .await
-            .map_err(|error| format!("{}: {error}", path.display()))?;
-        Ok::<u64, String>(bytes)
+    let parent = path.parent().unwrap().to_owned();
+    let temporary = match tokio::task::spawn_blocking(move || {
+        tempfile::Builder::new()
+            .prefix(".hotline-upload-")
+            .tempfile_in(parent)
+    })
+    .await
+    {
+        Ok(Ok(file)) => file,
+        Ok(Err(error)) => return refused(format!("staging {name}: {error}")),
+        Err(error) => return refused(error.to_string()),
+    };
+    let (file, arriving) = temporary.into_parts();
+    let mut file = tokio::fs::File::from_std(file);
+    let mut reader = tokio_util::io::StreamReader::new(
+        body.into_data_stream()
+            .map_err(|error| std::io::Error::other(error.to_string())),
+    );
+    let bytes = match tokio::io::copy(&mut reader, &mut file).await {
+        Ok(bytes) => bytes,
+        Err(error) => return refused(format!("receiving {name}: {error}")),
+    };
+    if let Err(error) = file.sync_all().await {
+        return refused(format!("staging {name}: {error}"));
     }
-    .await;
-    match written {
-        Ok(bytes) => Json(json!({"path": path, "bytes": bytes})).into_response(),
-        Err(error) => {
-            let _ = tokio::fs::remove_file(&arriving).await;
-            refused(error)
+    drop(file);
+    let destination = path.clone();
+    // A preflight cannot prevent a competing writer. The final publication is
+    // create-only at the filesystem boundary; older callers retain replacement.
+    // TempPath also removes partial bodies if this handler is cancelled.
+    let published = tokio::task::spawn_blocking(move || {
+        if request.create_only {
+            arriving.persist_noclobber(destination)
+        } else {
+            arriving.persist(destination)
         }
+    })
+    .await;
+    match published {
+        Ok(Ok(())) => Json(json!({"path": path, "bytes": bytes})).into_response(),
+        Ok(Err(error)) if error.error.kind() == std::io::ErrorKind::AlreadyExists => (
+            StatusCode::CONFLICT,
+            Json(json!({"error":"destination already exists"})),
+        )
+            .into_response(),
+        Ok(Err(error)) => refused(error.error.to_string()),
+        Err(error) => refused(error.to_string()),
     }
 }
 
@@ -504,6 +531,7 @@ async fn reaches_the_hands(
 mod tests {
     use super::*;
     use crate::Config;
+    use futures_util::StreamExt;
 
     fn app() -> App {
         app_at(std::env::temp_dir(), None)
@@ -548,6 +576,7 @@ mod tests {
         let app = app_at(home.clone(), None);
         let request = |path: &str| {
             Query(FileRequest {
+                create_only: false,
                 token: String::new(),
                 path: path.to_owned(),
             })
@@ -593,6 +622,7 @@ mod tests {
         let app = app_at(home.clone(), None);
         let request = |path: &str| {
             Query(FileRequest {
+                create_only: false,
                 token: String::new(),
                 path: path.to_owned(),
             })
@@ -641,6 +671,7 @@ mod tests {
         let app = app_at(std::env::temp_dir(), Some("secret"));
         let wrong = || {
             Query(FileRequest {
+                create_only: false,
                 token: "guess".to_owned(),
                 path: "/tmp/x".to_owned(),
             })
@@ -671,6 +702,7 @@ mod tests {
         // No token in the query at all: the header alone must admit it.
         let bare = || {
             Query(FileRequest {
+                create_only: false,
                 token: String::new(),
                 path: "/tmp/x".to_owned(),
             })
@@ -692,6 +724,7 @@ mod tests {
         // A header takes precedence over a query token, right or wrong.
         let wrong_query = || {
             Query(FileRequest {
+                create_only: false,
                 token: "guess".to_owned(),
                 path: "/tmp/x".to_owned(),
             })
@@ -703,6 +736,215 @@ mod tests {
             StatusCode::BAD_REQUEST,
             "the header wins over a mismatched query token"
         );
+    }
+
+    #[tokio::test]
+    async fn http_files_advertises_and_enforces_create_only_with_header_auth() {
+        let home = tempfile::tempdir().unwrap();
+        let app = app_at(home.path().to_owned(), Some("secret"));
+        let router = axum::Router::new()
+            .route("/files", axum::routing::get(files).post(upload))
+            .with_state(app);
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let origin = format!("http://{}", listener.local_addr().unwrap());
+        let server = tokio::spawn(async move {
+            axum::serve(listener, router).await.unwrap();
+        });
+        let http = reqwest::Client::builder().no_proxy().build().unwrap();
+        let listing = http
+            .get(format!("{origin}/files"))
+            .bearer_auth("secret")
+            .send()
+            .await
+            .unwrap();
+        assert_eq!(listing.status().as_u16(), 200);
+        assert_eq!(listing.headers()["x-hotline-upload-create-only"], "1");
+        let target = home.path().join("shared.txt");
+        let mut url = reqwest::Url::parse(&format!("{origin}/files")).unwrap();
+        url.query_pairs_mut()
+            .append_pair("path", target.to_str().unwrap())
+            .append_pair("create_only", "true");
+        let denied = http
+            .post(url.clone())
+            .bearer_auth("wrong")
+            .body("denied")
+            .send()
+            .await
+            .unwrap();
+        assert_eq!(denied.status().as_u16(), 401);
+        assert!(!target.exists());
+        for (body, status) in [("kept", 200), ("replacement", 409)] {
+            let response = http
+                .post(url.clone())
+                .bearer_auth("secret")
+                .body(body)
+                .send()
+                .await
+                .unwrap();
+            assert_eq!(response.status().as_u16(), status);
+        }
+        assert_eq!(std::fs::read_to_string(target).unwrap(), "kept");
+        server.abort();
+        let _ = server.await;
+    }
+
+    #[tokio::test]
+    async fn create_only_uploads_publish_once_and_keep_the_competing_file() {
+        let home = tempfile::tempdir().unwrap();
+        let app = app_at(home.path().to_owned(), Some("secret"));
+        let target = home.path().join("shared.txt");
+        let listed = files(
+            State(app.clone()),
+            bearer("secret"),
+            Query(FileRequest {
+                token: String::new(),
+                path: String::new(),
+                create_only: false,
+            }),
+        )
+        .await;
+        assert_eq!(listed.headers()["x-hotline-upload-create-only"], "1");
+        let denied = upload(
+            State(app.clone()),
+            bearer("wrong"),
+            Query(FileRequest {
+                token: String::new(),
+                path: target.display().to_string(),
+                create_only: true,
+            }),
+            Body::from("denied"),
+        )
+        .await;
+        assert_eq!(denied.status(), StatusCode::UNAUTHORIZED);
+        assert_eq!(std::fs::read_dir(home.path()).unwrap().count(), 0);
+
+        let mut senders = Vec::new();
+        let mut tasks = Vec::new();
+        for value in ["first", "second"] {
+            let (tx, rx) = tokio::sync::oneshot::channel();
+            senders.push(tx);
+            let app = app.clone();
+            let request = Query(FileRequest {
+                token: String::new(),
+                path: target.display().to_string(),
+                create_only: true,
+            });
+            let body = Body::from_stream(futures_util::stream::once(async move {
+                rx.await.unwrap();
+                Ok::<_, std::io::Error>(axum::body::Bytes::from(value))
+            }));
+            tasks.push(tokio::spawn(upload(
+                State(app),
+                bearer("secret"),
+                request,
+                body,
+            )));
+        }
+        tokio::time::timeout(std::time::Duration::from_secs(5), async {
+            while std::fs::read_dir(home.path()).unwrap().count() != 2 {
+                tokio::task::yield_now().await;
+            }
+        })
+        .await
+        .unwrap();
+        assert!(!target.exists(), "neither unfinished body is published");
+        for sender in senders {
+            sender.send(()).unwrap();
+        }
+        let mut statuses = Vec::new();
+        for task in tasks {
+            statuses.push(task.await.unwrap().status().as_u16());
+        }
+        statuses.sort();
+        assert_eq!(statuses, [200, 409]);
+        let kept = std::fs::read_to_string(&target).unwrap();
+        assert!(kept == "first" || kept == "second");
+        assert_eq!(std::fs::read_dir(home.path()).unwrap().count(), 1);
+        let again = upload(
+            State(app.clone()),
+            bearer("secret"),
+            Query(FileRequest {
+                token: String::new(),
+                path: target.display().to_string(),
+                create_only: true,
+            }),
+            Body::from("replacement"),
+        )
+        .await;
+        assert_eq!(again.status(), StatusCode::CONFLICT);
+        assert_eq!(std::fs::read_to_string(&target).unwrap(), kept);
+        // Existing browser/cookie callers did not request create-only.
+        let legacy = upload(
+            State(app),
+            bearer("secret"),
+            Query(FileRequest {
+                token: String::new(),
+                path: target.display().to_string(),
+                create_only: false,
+            }),
+            Body::from("legacy replacement"),
+        )
+        .await;
+        assert_eq!(legacy.status(), StatusCode::OK);
+        assert_eq!(
+            std::fs::read_to_string(&target).unwrap(),
+            "legacy replacement"
+        );
+    }
+
+    #[tokio::test]
+    async fn cancelling_or_failing_an_upload_removes_its_private_spool() {
+        let home = tempfile::tempdir().unwrap();
+        let app = app_at(home.path().to_owned(), Some("secret"));
+        let target = home.path().join("partial.txt");
+        let request = || {
+            Query(FileRequest {
+                token: String::new(),
+                path: target.display().to_string(),
+                create_only: true,
+            })
+        };
+        let stream = futures_util::stream::once(async {
+            Ok::<_, std::io::Error>(axum::body::Bytes::from_static(b"partial"))
+        })
+        .chain(futures_util::stream::pending());
+        let task = tokio::spawn(upload(
+            State(app.clone()),
+            bearer("secret"),
+            request(),
+            Body::from_stream(stream),
+        ));
+        tokio::time::timeout(std::time::Duration::from_secs(5), async {
+            loop {
+                let entries: Vec<_> = std::fs::read_dir(home.path()).unwrap().collect();
+                if entries.len() == 1 && entries[0].as_ref().unwrap().metadata().unwrap().len() > 0
+                {
+                    break;
+                }
+                tokio::task::yield_now().await;
+            }
+        })
+        .await
+        .unwrap();
+        task.abort();
+        assert!(task.await.unwrap_err().is_cancelled());
+        assert!(!target.exists());
+        assert_eq!(std::fs::read_dir(home.path()).unwrap().count(), 0);
+        let stream = futures_util::stream::once(async {
+            Err::<axum::body::Bytes, _>(std::io::Error::other("broken body"))
+        });
+        assert_eq!(
+            upload(
+                State(app),
+                bearer("secret"),
+                request(),
+                Body::from_stream(stream)
+            )
+            .await
+            .status(),
+            StatusCode::BAD_REQUEST
+        );
+        assert_eq!(std::fs::read_dir(home.path()).unwrap().count(), 0);
     }
 
     fn sent(text: &str) -> FromViewer {
