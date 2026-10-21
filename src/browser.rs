@@ -541,8 +541,9 @@ impl BrowserManager {
                     return Err(format!("tab {index} not found"));
                 }
                 pages.remove(index).close().await.map_err(browser_error)?;
-                let remaining = tabs(&session.browser).await?;
-                if remaining.is_empty() {
+                // DevTools can still list the closed tab for a moment, so
+                // count from the tabs that were open, less the one closed.
+                if pages.is_empty() {
                     session
                         .browser
                         .new_page("about:blank")
@@ -550,7 +551,10 @@ impl BrowserManager {
                         .map_err(browser_error)?;
                     session.current = 0;
                 } else {
-                    session.current = session.current.min(remaining.len() - 1);
+                    if index < session.current {
+                        session.current -= 1;
+                    }
+                    session.current = session.current.min(pages.len() - 1);
                 }
                 Ok(format!("closed tab {index}"))
             })
@@ -750,8 +754,6 @@ async fn reap(mut session: BrowserSession) {
     session._handler.abort();
 }
 
-/// The tab the agent drives, carrying the teammate's passkeys and their
-/// guard before anything is done on it.
 /// The tabs a person sees. Chromium's own new-tab page hosts internal
 /// documents (`chrome://newtab-footer/` since 141) that DevTools lists as
 /// pages; driving one of those navigates a hidden strip, not the tab.
@@ -767,6 +769,8 @@ async fn tabs(browser: &Browser) -> Result<Vec<Page>, String> {
     Ok(visible)
 }
 
+/// The tab the agent drives, carrying the teammate's passkeys and their
+/// guard before anything is done on it.
 async fn current_page(session: &mut BrowserSession) -> Result<Page, String> {
     let pages = tabs(&session.browser).await?;
     let page = if pages.is_empty() {
