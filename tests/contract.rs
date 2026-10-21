@@ -1195,20 +1195,22 @@ async fn image_honors_the_computer_contract() {
                     .contains(class)
             })
             .unwrap_or_else(|| panic!("a {class} window: {windows:?}"));
-        (
+        [
             w["bounds"][0].as_i64().expect("x"),
+            w["bounds"][1].as_i64().expect("y"),
             w["bounds"][2].as_i64().expect("width"),
-        )
+            w["bounds"][3].as_i64().expect("height"),
+        ]
     };
-    let (browser_x, browser_width) = bounds("chromium");
-    let (observer_x, _) = bounds("hotlineterminal");
-    assert!(
-        browser_x == 0 && (1240..=1320).contains(&browser_width),
-        "the app takes the left two thirds of a 1920 screen: {windows:?}"
+    assert_eq!(
+        bounds("chromium"),
+        [16, 56, 1248, 1008],
+        "the app takes two thirds inside the 16px gutters: {windows:?}"
     );
     assert_eq!(
-        observer_x, browser_width,
-        "the observer takes the right third: {windows:?}"
+        bounds("hotlineterminal"),
+        [1280, 56, 624, 1008],
+        "the observer takes the right third with a 16px gap: {windows:?}"
     );
     let focused = call(
         &client,

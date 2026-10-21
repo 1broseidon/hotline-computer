@@ -143,7 +143,7 @@ def scene4(client):
         page.close()
         bad = context.new_page()
         bad.goto(ORIGIN + '/')
-        bad.get_by_text('This link is missing its key.', exact=False).wait_for()
+        bad.locator('#placeholder-text').filter(has_text='This link is missing its key.').wait_for()
         bad.screenshot(path=str(OUT / 's4-badtoken.png'))
         bad.close()
         phone = browser.new_context(viewport={'width': 390, 'height': 844}, is_mobile=True, has_touch=True)
