@@ -35,6 +35,7 @@ png = "=0.18.1"
 # PID 1 duties: fork, block and wait on signals, reap what the kernel hands us.
 libc = "0.2"
 sha2 = "0.10"
+ring = "0.17"
 # The bar and its menus are drawn as pixels: antialiased text from the image's
 # Geist rather than X core bitmap fonts.
 fontdue = "0.9.4"

@@ -165,6 +165,9 @@ impl BrowserManager {
             // browser that the agent also drives, so it starts the way a
             // desktop Chromium does, and DevTools is just a port.
             .disable_default_args()
+            // Through the builder: chromiumoxide adds `--disable-extensions`
+            // whenever it has none of its own to load.
+            .extensions(extensions())
             .args([
                 // Chromium does not expose its tree to AT-SPI until forced.
                 "force-renderer-accessibility",
@@ -260,8 +263,11 @@ impl BrowserManager {
                 held.extend(passkey_sync(session, page).await?);
             }
             // Every tab was looked at: a request none holds went with
-            // its document.
-            session.passkeys.reconcile(&held);
+            // its document. With the extension answering, no page holds
+            // one; the bridge withdraws a request whose page gave up.
+            if !crate::bridge::extension_answers() {
+                session.passkeys.reconcile(&held);
+            }
             // A courtesy on a fresh browser: the person is about to sign in
             // there. A site that does not answer is the site's business, not
             // a reason to refuse the arming.
@@ -754,6 +760,16 @@ async fn reap(mut session: BrowserSession) {
     session._handler.abort();
 }
 
+/// The extension that answers passkey requests itself, keys staying in the
+/// service (see `crate::bridge`), when the image carries it.
+fn extensions() -> Vec<String> {
+    if crate::bridge::extension_answers() {
+        vec![crate::bridge::EXTENSION_DIR.to_owned()]
+    } else {
+        Vec::new()
+    }
+}
+
 /// The tabs a person sees. Chromium's own new-tab page hosts internal
 /// documents (`chrome://newtab-footer/` since 141) that DevTools lists as
 /// pages; driving one of those navigates a hidden strip, not the tab.
@@ -800,6 +816,11 @@ async fn current_page(session: &mut BrowserSession) -> Result<Page, String> {
 /// an arming, or without the person's approval, never survives the next
 /// look. Answers the id of the request the tab holds, if it holds one.
 async fn passkey_sync(session: &mut BrowserSession, page: &Page) -> Result<Option<String>, String> {
+    // With the extension answering, Chromium's virtual authenticator and its
+    // guard stay out of the way: two authenticators would race for a page.
+    if crate::bridge::extension_answers() {
+        return Ok(None);
+    }
     let granted = session.secrets.passkeys();
     let armed = session.passkeys.armed().map(|(rp_id, _)| rp_id);
     let target = page.target_id().inner().clone();

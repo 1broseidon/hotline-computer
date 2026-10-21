@@ -713,19 +713,31 @@ async fn image_honors_the_computer_contract() {
     );
     assert!(parked.contains("parked"), "{parked}");
     let again = text(&call(&client, "browser", json!({"action":"eval","js":"make()"})).await);
+    // The extension's authenticator: Chromium refuses a second request
+    // while one is pending. The virtual one: the guard refuses it.
     assert!(
-        again.contains("refused NotAllowedError") && again.contains("waiting"),
+        again.contains("A request is already pending")
+            || (again.contains("refused NotAllowedError") && again.contains("waiting")),
         "one request before the person at a time: {again}"
     );
-    let asked = http
-        .get(&registration)
-        .bearer_auth(&token)
-        .send()
-        .await
-        .expect("registration state")
-        .json::<serde_json::Value>()
-        .await
-        .expect("registration JSON");
+    // The request reaches the service a beat after the page makes it, as
+    // the desk's own polling expects.
+    let mut asked = serde_json::Value::Null;
+    for _ in 0..50 {
+        asked = http
+            .get(&registration)
+            .bearer_auth(&token)
+            .send()
+            .await
+            .expect("registration state")
+            .json::<serde_json::Value>()
+            .await
+            .expect("registration JSON");
+        if asked["state"] == "asked" {
+            break;
+        }
+        tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+    }
     assert_eq!(asked["state"], "asked", "{asked}");
     assert_eq!(asked["rpId"], "localhost");
     assert_eq!(asked["ask"]["rpId"], "localhost");
@@ -801,15 +813,22 @@ async fn image_honors_the_computer_contract() {
         .await,
     );
     assert!(parked.contains("parked"), "{parked}");
-    let asked = http
-        .get(&registration)
-        .bearer_auth(&token)
-        .send()
-        .await
-        .expect("registration state")
-        .json::<serde_json::Value>()
-        .await
-        .expect("registration JSON");
+    let mut asked = serde_json::Value::Null;
+    for _ in 0..50 {
+        asked = http
+            .get(&registration)
+            .bearer_auth(&token)
+            .send()
+            .await
+            .expect("registration state")
+            .json::<serde_json::Value>()
+            .await
+            .expect("registration JSON");
+        if asked["state"] == "asked" {
+            break;
+        }
+        tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+    }
     assert_eq!(asked["state"], "asked", "{asked}");
     let ask_id = asked["ask"]["id"].as_str().expect("ask id").to_owned();
     assert!(

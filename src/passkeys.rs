@@ -111,7 +111,12 @@ pub enum Reported {
 /// The arming, if any, shared between the door the desk uses and the
 /// browser that watches its authenticators.
 #[derive(Clone, Default)]
-pub struct Passkeys(Arc<Mutex<Option<Arming>>>);
+pub struct Passkeys(
+    Arc<Mutex<Option<Arming>>>,
+    /// The person's last answer and the request it was for, kept past the
+    /// arming a denial ends, so a request still waiting hears which it was.
+    Arc<Mutex<Option<(String, bool)>>>,
+);
 
 impl Passkeys {
     /// Arms this computer for `rp_id`, replacing any earlier arming, and
@@ -221,6 +226,30 @@ impl Passkeys {
     }
 
     /// The person approved the request `id`.
+    /// The site gave up on the request it made before the person answered:
+    /// it no longer waits for them, and no longer holds the arming's one place.
+    pub fn withdraw(&self, id: &str) {
+        let mut guard = self.lock();
+        if let Some(arming) = guard.as_mut()
+            && arming
+                .asked
+                .as_ref()
+                .is_some_and(|asked| asked.ask.id == id && asked.answer.is_none())
+        {
+            arming.asked = None;
+        }
+    }
+
+    /// What the person answered to request `id`, even after the arming ended.
+    pub fn decided(&self, id: &str) -> Option<bool> {
+        self.1
+            .lock()
+            .unwrap_or_else(|p| p.into_inner())
+            .as_ref()
+            .filter(|(decided, _)| decided == id)
+            .map(|(_, approved)| *approved)
+    }
+
     pub fn approve(&self, id: &str) -> Result<(), String> {
         self.answer(id, true)
     }
@@ -242,6 +271,7 @@ impl Passkeys {
         match asked.answer {
             None => {
                 asked.answer = Some(approved);
+                *self.1.lock().unwrap_or_else(|p| p.into_inner()) = Some((id.to_owned(), approved));
                 Ok(())
             }
             Some(earlier) if earlier == approved => Ok(()),

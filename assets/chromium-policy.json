@@ -1,5 +1,5 @@
 {
-  "_comment": "The managed Chromium is driven by the agent and watched by a person. Its chrome follows the desktop surface; page colors remain the site's own. Password and autofill prompts stay disabled so they do not cover the page. New tabs open blank: Chromium's new-tab page embeds its own internal frames, and a blank tab is what a person watching expects.",
+  "_comment": "The managed Chromium is driven by the agent and watched by a person. Its chrome follows the desktop surface; page colors remain the site's own. Password and autofill prompts stay disabled so they do not cover the page. New tabs open blank: Chromium's new-tab page embeds its own internal frames, and a blank tab is what a person watching expects. The Hotline extension, which answers passkey requests with keys kept in the computer's service, stays pinned to the toolbar.",
   "PasswordManagerEnabled": false,
   "PasswordLeakDetectionEnabled": false,
   "AutofillAddressEnabled": false,
@@ -9,5 +9,10 @@
   "PromotionalTabsEnabled": false,
   "BrowserThemeColor": "#17171b",
   "NewTabPageLocation": "about:blank",
-  "RestoreOnStartup": 5
+  "RestoreOnStartup": 5,
+  "ExtensionSettings": {
+    "dpikdfaiiigmeafkfiagkcihbioflcfk": {
+      "toolbar_pin": "force_pinned"
+    }
+  }
 }

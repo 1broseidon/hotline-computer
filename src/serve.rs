@@ -119,6 +119,8 @@ pub async fn run(app: App) -> Result<(), String> {
         eprintln!("file windows: {error}");
     }
     tokio::spawn(crate::portal::serve(app.clone()));
+    // The browser extension's passkeys and logins come through here.
+    tokio::spawn(crate::bridge::serve(app.clone()));
     let jobs = app.jobs.clone();
     let observer = app.observer.clone();
     let address = app.config.addr.clone();

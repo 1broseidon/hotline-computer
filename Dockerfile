@@ -74,6 +74,10 @@ COPY assets/hotline-open-folder.desktop assets/hotline-open-link.desktop assets/
 # File choosers go to the computer's own picker; see src/portal.rs.
 COPY assets/hotline.portal /usr/share/xdg-desktop-portal/portals/hotline.portal
 COPY assets/portals.conf /etc/xdg/xdg-desktop-portal/portals.conf
+# The browser extension that answers passkey requests, and its line to the
+# service; see src/bridge.rs.
+COPY assets/extension /usr/share/hotline-computer/extension
+COPY assets/native-host.json /etc/chromium/native-messaging-hosts/dev.hotline.computer.json
 COPY --from=build /usr/local/bin/hotline-computer /usr/bin/hotline-computer
 USER agent
 WORKDIR /home/agent

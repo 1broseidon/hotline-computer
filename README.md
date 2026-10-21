@@ -298,9 +298,12 @@ has a kind that says where it goes:
   which page is the whole protection.
 - A **passkey** (`{"kind":"passkey","rpId":…,"credentialId":…,
   "privateKey":…,"userHandle":…,"userName":…}`) is the teammate's own
-  WebAuthn credential, kept in a virtual authenticator on every tab of the
-  managed browser. It signs in by itself when a site asks the browser for
-  one, without a prompt; nothing types it and no tool answers it.
+  WebAuthn credential. The browser's pinned Hotline extension takes every
+  passkey request a page makes, with the page's origin, and the computer's
+  service signs it; the private key never enters the browser. It signs in
+  by itself when a site asks for one, without a prompt; nothing types it
+  and no tool answers it. A site's passkey autofill is never answered:
+  nothing here picks from autofill, so it would race the passkey button.
 
 One bad entry refuses the whole set with a 400 that names it, keeping the
 last set. Nothing answers a value: there is no `GET`, `state info` lists
@@ -320,32 +323,31 @@ The desk arms this computer for one site with `PUT /passkeys/registration
 {"rpId":"github.com"}` — for ten minutes, one site at a time, answering
 `{"state":"armed","rpId":…,"expiresAt":…}` and starting the browser on
 that site if none is up. While armed, and for that site alone, a call to
-`navigator.credentials.create()` in the managed browser is not answered by
-the browser: a guard installed in every document of every tab that carries
-passkeys parks it and keeps what the site asked for — the site, the
-origin, the account's name and display name — and the next look (every
-action, every poll) records it as the request before the person.
-`GET /passkeys/registration` then answers `asked` with that `ask` (`id`,
-`rpId`, `origin`, `rpName`, `userName`, `userDisplayName`, `askedAt`); the
-desk shows the person a card and carries their answer back with
+`navigator.credentials.create()` in the managed browser waits: the
+extension carries it to the service, which records what the site asked
+for — the site, the origin, the account's name and display name — as the
+request before the person. `GET /passkeys/registration` then answers
+`asked` with that `ask` (`id`, `rpId`, `origin`, `rpName`, `userName`,
+`userDisplayName`, `askedAt`); the desk shows the person a card and
+carries their answer back with
 `POST /passkeys/registration/answer {"id":…,"approved":true}`. Approved,
-the page is told to go ahead, the tab's virtual authenticator mints, and
-`GET` answers `approved` and then `registered` with the minted
-`credential`, until the desk stores it in the vault, delivers the set with
-it, and ends the arming with `DELETE`. Denied, the site gets a
-`NotAllowedError` — as it would from a person cancelling the browser's own
-prompt — and the arming ends with the denial, so neither a site nor a
-teammate can keep asking; an answer to a request that is not waiting is a
-409. The guard rejects `create()` for any other site, or with none armed,
-with a `NotAllowedError` that says so, and holds one request before the
-person at a time. The credential's answer is the one time a private key
-leaves the computer, over the bearer-guarded loopback door the desk
-already uses. A credential the authenticator holds that is neither granted
-nor made under an approved request is removed at the next look, so a
-passkey made outside an arming never survives one, and a revoked passkey
-is gone from every tab as soon as the set without it arrives. DevTools on
-port 9222 inside the container can reach the same authenticators;
-nothing outside the container can.
+the service mints a P-256 key and answers the site, and `GET` answers
+`approved` and then `registered` with the minted `credential`, until the
+desk stores it in the vault, delivers the set with it, and ends the arming
+with `DELETE`. Denied, the site gets a `NotAllowedError` — as it would from
+a person cancelling the browser's own prompt — and the arming ends with the
+denial, so neither a site nor a teammate can keep asking; an answer to a
+request that is not waiting is a 409. A `create()` for any other site, or
+with none armed, is refused with a `NotAllowedError` that says so, and the
+browser holds one request at a time. A site that gives up withdraws its
+request. The credential's answer is the one time a private key leaves the
+computer, over the bearer-guarded loopback door the desk already uses.
+Keys live only in the service, which signs only for the page origin
+Chromium names. The extension's line to it is a socket only this user
+opens; a job runs as this user too, so until jobs and the browser have
+separate identities, that line is a convenience, not a wall.
+`HOTLINE_COMPUTER_PASSKEYS=virtual` keeps the older arrangement: Chromium's
+virtual authenticator, filled over DevTools on port 9222.
 
 `hotline-computer serve` serves on a display that already exists, for running
 the agent outside the container.

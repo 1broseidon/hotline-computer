@@ -1,0 +1,7 @@
+{
+  "name": "dev.hotline.computer",
+  "description": "Hotline Computer: the browser extension's line to this computer's service",
+  "path": "/usr/bin/hotline-computer",
+  "type": "stdio",
+  "allowed_origins": ["chrome-extension://dpikdfaiiigmeafkfiagkcihbioflcfk/"]
+}

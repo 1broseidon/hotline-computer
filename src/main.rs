@@ -41,6 +41,18 @@ fn parse() -> Result<(Command, Config), String> {
 
 fn main() {
     let arguments: Vec<_> = std::env::args().skip(1).collect();
+    // Chromium starts the extension's native messaging host with the
+    // extension's origin as its first argument.
+    if arguments
+        .first()
+        .is_some_and(|first| first.starts_with("chrome-extension://"))
+    {
+        if let Err(error) = hotline_computer::bridge::relay() {
+            eprintln!("{error}");
+            std::process::exit(1);
+        }
+        return;
+    }
     if matches!(arguments.first().map(String::as_str), Some("--version")) {
         println!("hotline-computer {}", env!("CARGO_PKG_VERSION"));
         return;

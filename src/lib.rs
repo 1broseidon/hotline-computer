@@ -1,8 +1,10 @@
 pub mod a11y;
 pub mod activity;
 pub mod agent;
+pub mod authenticator;
 pub mod badge;
 pub mod boot;
+pub mod bridge;
 pub mod browser;
 pub mod clipboard;
 pub mod desktop;
