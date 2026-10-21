@@ -72,20 +72,22 @@ fn required_id(input: &Input) -> Result<&str, String> {
         .ok_or_else(|| "window_id is required".to_owned())
 }
 
+/// Apps share the left pane, stacked in place; the rest form the right
+/// column. With no column the apps take the whole area.
 fn layout(
     windows: &[x11::Window],
     area: [i32; 4],
-    primary: Option<usize>,
+    apps: &[usize],
     gap: i32,
 ) -> Result<Vec<(String, [i32; 4])>, String> {
     let [left, top, width, height] = area;
     let right: Vec<_> = windows
         .iter()
         .enumerate()
-        .filter(|(i, _)| Some(*i) != primary)
+        .filter(|(i, _)| !apps.contains(i))
         .collect();
     let gap = gap.max(0);
-    let across = if primary.is_some() && !right.is_empty() {
+    let across = if !apps.is_empty() && !right.is_empty() {
         gap
     } else {
         0
@@ -95,27 +97,31 @@ fn layout(
         .map(|(_, w)| w.minimum_size[0])
         .max()
         .unwrap_or(0);
-    let primary_min = primary.map(|i| windows[i].minimum_size[0]).unwrap_or(0);
+    let apps_min = apps
+        .iter()
+        .map(|&i| windows[i].minimum_size[0])
+        .max()
+        .unwrap_or(0);
     let impossible = || {
         "selected windows' minimum sizes do not fit the work area; close an observer, choose a smaller pair, or increase the screen size".to_owned()
     };
     if width <= across
-        || primary_min + right_min + across > width
+        || apps_min + right_min + across > width
         || windows.iter().any(|w| w.minimum_size[1] > height)
     {
         return Err(impossible());
     }
-    let split = if primary.is_none() {
+    let split = if apps.is_empty() {
         0
     } else if right.is_empty() {
         width
     } else {
         ((width - across) * 2 / 3)
-            .max(primary_min)
+            .max(apps_min)
             .min(width - across - right_min)
     };
     let mut expected = Vec::new();
-    if let Some(i) = primary {
+    for &i in apps {
         expected.push((windows[i].id.clone(), [left, top, split, height]));
     }
     let (shells, mut column): (Vec<_>, Vec<_>) = right
@@ -177,12 +183,25 @@ fn layout(
 
 async fn tile(app: &App, input: &Input) -> ToolResult {
     let all = x11::windows(&app.config.display)?;
-    let (windows, primary) = match (&input.primary_id, &input.observer_id) {
+    let (windows, apps) = match (&input.primary_id, &input.observer_id) {
         (None, None) => {
-            let primary = all
-                .iter()
-                .position(|w| w.class.to_ascii_lowercase().contains("chromium"));
-            (all, primary)
+            // A shell the person moved into the pane is theirs to move back.
+            let all: Vec<_> = all
+                .into_iter()
+                .filter(|w| !(w.maximized && w.class.to_ascii_lowercase().contains("hotlineshell")))
+                .collect();
+            // Every app goes left. The first is raised last, so it stays on
+            // top: the focused app, else the browser.
+            let mut apps: Vec<usize> = (0..all.len())
+                .filter(|&i| !crate::desktop::in_column(&all[i].class.to_ascii_lowercase()))
+                .collect();
+            apps.sort_by_key(|&i| {
+                (
+                    !all[i].focused,
+                    !all[i].class.to_ascii_lowercase().contains("chromium"),
+                )
+            });
+            (all, apps)
         }
         (Some(primary), Some(observer)) if primary != observer => {
             let mut selected = Vec::new();
@@ -194,7 +213,7 @@ async fn tile(app: &App, input: &Input) -> ToolResult {
                         .ok_or_else(|| format!("window {id} is not present"))?,
                 );
             }
-            (selected, Some(0))
+            (selected, vec![0])
         }
         _ => return Err(
             "tile requires distinct primary_id and observer_id, or neither for automatic layout"
@@ -207,7 +226,7 @@ async fn tile(app: &App, input: &Input) -> ToolResult {
     let expected = layout(
         &windows,
         x11::workarea(&app.config.display)?,
-        primary,
+        &apps,
         i32::from(crate::desktop::gutter()),
     )?;
     for (id, bounds) in &expected {
@@ -283,7 +302,7 @@ mod tests {
         let result = layout(
             &[window("app", [1280, 860]), window("observer", [100, 100])],
             [0, 48, 1920, 1032],
-            Some(0),
+            &[0],
             16,
         )
         .unwrap();
@@ -297,7 +316,7 @@ mod tests {
         let result = layout(
             &[window("app", [500, 87]), window("observer", [1, 1]), shell],
             [16, 56, 1888, 1008],
-            Some(0),
+            &[0],
             16,
         )
         .unwrap();
@@ -316,7 +335,7 @@ mod tests {
         let result = layout(
             &[window("app", [500, 87]), activity, shell, observer],
             [16, 56, 1888, 1008],
-            Some(0),
+            &[0],
             16,
         )
         .unwrap();
@@ -334,7 +353,7 @@ mod tests {
         let result = layout(
             &[window("app", [1, 1]), window("observer", [1, 1])],
             [0, 40, 1920, 1040],
-            Some(0),
+            &[0],
             0,
         )
         .unwrap();
@@ -344,11 +363,28 @@ mod tests {
             layout(
                 &[window("a", [1, 510]), window("b", [1, 510])],
                 [16, 56, 1888, 1020],
-                None,
+                &[],
                 16
             )
             .is_err()
         );
+    }
+
+    #[test]
+    fn every_app_shares_the_left_pane_and_takes_the_area_without_a_column() {
+        let mut observer = window("observer", [1, 1]);
+        observer.class = "HotlineTerminal".into();
+        let windows = [
+            window("browser", [500, 87]),
+            observer,
+            window("editor", [1, 1]),
+        ];
+        let result = layout(&windows, [16, 56, 1888, 1008], &[0, 2], 16).unwrap();
+        assert_eq!(result[0], ("browser".into(), [16, 56, 1248, 1008]));
+        assert_eq!(result[1], ("editor".into(), [16, 56, 1248, 1008]));
+        assert_eq!(result[2], ("observer".into(), [1280, 56, 624, 1008]));
+        let alone = layout(&[window("editor", [1, 1])], [16, 56, 1888, 1008], &[0], 16).unwrap();
+        assert_eq!(alone[0].1, [16, 56, 1888, 1008]);
     }
 
     #[test]
@@ -357,7 +393,7 @@ mod tests {
             layout(
                 &[window("a", [1280, 860]), window("b", [800, 100])],
                 [0, 48, 1920, 1032],
-                Some(0),
+                &[0],
                 16
             )
             .is_err()
@@ -366,7 +402,7 @@ mod tests {
             layout(
                 &[window("a", [100, 600]), window("b", [100, 600])],
                 [0, 48, 1920, 1032],
-                None,
+                &[],
                 16
             )
             .is_err()

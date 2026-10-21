@@ -3,7 +3,8 @@
 //!
 //! Chromium needs no decorations and the agent already speaks EWMH, so the
 //! agent is the window manager. A normal window opens maximized into the
-//! work area below the bar; a dialog opens centered at its own size. Focus
+//! work area below the bar, or into the left two thirds while the right
+//! column is open; a dialog opens centered at its own size. Focus
 //! follows a click, so a person driving the screen reaches the window they
 //! see. `_NET_CLIENT_LIST`, `_NET_ACTIVE_WINDOW` and `_NET_WM_STATE` are kept
 //! current because the `windows` tool reads them.
@@ -24,7 +25,7 @@ use x11rb::connection::Connection;
 use x11rb::protocol::Event;
 use x11rb::protocol::shape::{ConnectionExt as _, SK, SO};
 use x11rb::protocol::xproto::{
-    Allow, Atom, AtomEnum, ButtonIndex, ButtonPressEvent, CONFIGURE_NOTIFY_EVENT,
+    Allow, Atom, AtomEnum, BackPixmap, ButtonIndex, ButtonPressEvent, CONFIGURE_NOTIFY_EVENT,
     ChangeWindowAttributesAux, ClientMessageData, ClientMessageEvent, ConfigWindow,
     ConfigureNotifyEvent, ConfigureRequestEvent, ConfigureWindowAux, ConnectionExt, CreateGCAux,
     CreateWindowAux, EventMask, Gcontext, GrabMode, ImageFormat, InputFocus, KeyPressEvent,
@@ -52,6 +53,8 @@ pub enum Request {
 }
 
 const MARK: &[u8] = include_bytes!("../assets/wallpaper-mark.png");
+/// Room on the shell's bar pill for its place toggle.
+const PLACE_WIDTH: i32 = 26;
 const BROWSER_CLASS: &str = "chromium";
 /// Window corners. Cut with SHAPE (one bit), then the wallpaper's antialiased
 /// ring hugs the curve, so the stair-step never meets the ground.
@@ -142,6 +145,31 @@ fn column_rect(
     } else {
         (x, top, width, height)
     }
+}
+
+/// The observer, activity and the person's shell share the right column.
+pub(crate) fn in_column(class: &str) -> bool {
+    class.contains("hotlineshell")
+        || class.contains("hotlineterminal")
+        || class.contains("hotlineactivity")
+}
+
+/// In the right column now. The person's shell can leave it for the app
+/// pane: maximized is what puts it there.
+fn docked(client: &Client) -> bool {
+    in_column(&client.class) && !client.maximized
+}
+
+/// The space left of the column, where the app being watched goes while
+/// the observer, activity or the person's shell is open.
+fn main_rect(area: (i16, i16, u16, u16), gap: u16) -> (i16, i16, u16, u16) {
+    let (left, top, width, height) = area;
+    (
+        left,
+        top,
+        (width.saturating_sub(gap) * 2 / 3).max(1),
+        height,
+    )
 }
 
 pub(crate) fn activity_rect(
@@ -243,6 +271,8 @@ struct Layout {
     lease: Rect,
     tray: Vec<Rect>,
     clock: Rect,
+    /// The layout glyph on the shell's pill: column or pane.
+    shell_place: Option<(Rect, Window)>,
 }
 
 enum Popup {
@@ -427,6 +457,9 @@ struct Desktop {
     requests: UnboundedSender<Request>,
     tray: Vec<Window>,
     popup: Option<Open>,
+    /// Each client's corner caps, kept directly beneath it: they show the
+    /// wallpaper through its cut corners, not the window stacked below.
+    caps: HashMap<Window, [Window; 4]>,
     fonts: Fonts,
     mark: Image,
     layout: Layout,
@@ -508,6 +541,7 @@ impl Desktop {
             active: None,
             requests,
             tray: Vec::new(),
+            caps: HashMap::new(),
             popup: None,
             fonts,
             mark,
@@ -547,6 +581,26 @@ impl Desktop {
         column_rect(self.work_rect(), self.gutter, shell, shell_open)
     }
 
+    fn main_area(&self) -> (i16, i16, u16, u16) {
+        main_rect(self.work_rect(), self.gutter)
+    }
+
+    /// Whether anything holds the right column, so a normal window opens
+    /// beside it rather than over it.
+    fn column_open(&self) -> bool {
+        self.clients.values().any(docked)
+    }
+
+    /// Where apps live: left of the column while it is open, else the whole
+    /// work area. A maximized app fills this, not the screen.
+    fn pane(&self) -> (i16, i16, u16, u16) {
+        if self.column_open() {
+            self.main_area()
+        } else {
+            self.work_rect()
+        }
+    }
+
     fn activity_column(&self, activity: bool, shell_open: bool) -> (i16, i16, u16, u16) {
         let area = self.column(false, shell_open);
         if self.client_with_class("hotlineactivity").is_some()
@@ -561,15 +615,14 @@ impl Desktop {
     /// Restacks the right column after the observer or the shell opens or
     /// closes, so the observer takes the whole column when it is alone.
     fn stack_column(&mut self) -> Result<(), String> {
-        let shell_open = self.client_with_class("hotlineshell").is_some();
+        let shell_open = self
+            .clients
+            .values()
+            .any(|c| docked(c) && c.class.contains("hotlineshell"));
         let column: Vec<(Window, bool, bool)> = self
             .clients
             .iter()
-            .filter(|(_, c)| {
-                c.class.contains("hotlineshell")
-                    || c.class.contains("hotlineterminal")
-                    || c.class.contains("hotlineactivity")
-            })
+            .filter(|(_, c)| docked(c))
             .map(|(id, c)| {
                 (
                     *id,
@@ -587,13 +640,66 @@ impl Desktop {
             let Some(client) = self.clients.get_mut(&id) else {
                 continue;
             };
-            if client.maximized || client.saved != bounds {
-                client.maximized = false;
+            if client.saved != bounds {
                 client.saved = bounds;
                 self.apply_geometry(id)?;
             }
         }
         Ok(())
+    }
+
+    /// After the column gains or loses a window: restack it, then move the
+    /// apps. A column that opens squeezes what filled the work area into
+    /// the pane; one that closes gives the work area back to what sits in
+    /// the pane. A window moved since stays where it was put.
+    fn column_changed(&mut self, was_open: bool) -> Result<(), String> {
+        self.stack_column()?;
+        let open = self.column_open();
+        if open == was_open {
+            return Ok(());
+        }
+        let main = self.main_area();
+        let apps: Vec<Window> = self
+            .clients
+            .iter()
+            .filter(|(_, c)| !docked(c))
+            .map(|(id, _)| *id)
+            .collect();
+        for id in apps {
+            let Some(client) = self.clients.get_mut(&id) else {
+                continue;
+            };
+            let before = (client.maximized, client.saved);
+            // The shell in the pane stays maximized: that is what puts it there.
+            if !in_column(&client.class) {
+                if open && client.maximized {
+                    client.maximized = false;
+                    client.saved = main;
+                } else if !open && client.saved == main {
+                    client.maximized = true;
+                }
+            }
+            if client.maximized || (client.maximized, client.saved) != before {
+                self.apply_geometry(id)?;
+            }
+        }
+        Ok(())
+    }
+
+    /// Moves the person's shell between its place in the column and the app
+    /// pane, and brings it forward either way.
+    fn place_shell(&mut self, window: Window, in_pane: bool) -> Result<(), String> {
+        let was_open = self.column_open();
+        let Some(client) = self.clients.get_mut(&window) else {
+            return Ok(());
+        };
+        if client.maximized == in_pane {
+            return self.focus(window);
+        }
+        client.maximized = in_pane;
+        self.apply_geometry(window)?;
+        self.column_changed(was_open)?;
+        self.focus(window)
     }
 
     fn announce(&self) -> Result<(), String> {
@@ -780,6 +886,11 @@ impl Desktop {
         self.connection
             .clear_area(false, self.root, 0, 0, 0, 0)
             .map_err(|e| e.to_string())?;
+        for cap in self.caps.values().flatten() {
+            self.connection
+                .clear_area(false, *cap, 0, 0, 0, 0)
+                .map_err(|e| e.to_string())?;
+        }
         // X keeps the background reference; releasing our ID prevents a leak
         // each time a client moves and the wallpaper is replaced.
         self.connection
@@ -1188,10 +1299,18 @@ impl Desktop {
         for window in self.order.clone() {
             let title = self.title_of(window)?;
             let text = sans.fit(&title, PILL_MAX - 22 - i32::from(APP_ICON) - 8);
+            let shell = self
+                .clients
+                .get(&window)
+                .is_some_and(|c| c.class.contains("hotlineshell"));
             let pill = Rect {
                 x,
                 y: 6,
-                w: 22 + i32::from(APP_ICON) + 8 + sans.width(&text),
+                w: 22
+                    + i32::from(APP_ICON)
+                    + 8
+                    + sans.width(&text)
+                    + if shell { PLACE_WIDTH } else { 0 },
                 h: 28,
             };
             if pill.x + pill.w > right {
@@ -1253,6 +1372,33 @@ impl Desktop {
                 &text,
                 if active { INK } else { PILL_INK },
             );
+            if shell {
+                // A small map of the screen with the shell's place filled
+                // in. Clicking it moves the shell to the other place.
+                let place = Rect {
+                    x: pill.x + pill.w - PLACE_WIDTH - 4,
+                    y: pill.y,
+                    w: PLACE_WIDTH,
+                    h: pill.h,
+                };
+                let ground = if active || self.hovered_app == Some(window) {
+                    BAR_RAISED
+                } else {
+                    BAR_FILL
+                };
+                let ink = if active { INK } else { PILL_INK };
+                let in_pane = self.clients.get(&window).is_some_and(|c| c.maximized);
+                let (gx, gy) = (place.x + 4, place.y + 8);
+                canvas.round_rect(gx, gy, 18, 12, 2.5, ink);
+                canvas.round_rect(gx + 1, gy + 1, 16, 10, 1.5, ground);
+                canvas.fill_rect(gx + 12, gy + 1, 1, 10, ink);
+                if in_pane {
+                    canvas.fill_rect(gx + 3, gy + 3, 7, 6, ink);
+                } else {
+                    canvas.fill_rect(gx + 14, gy + 6, 2, 3, ink);
+                }
+                layout.shell_place = Some((place, window));
+            }
             layout.apps.push((pill, window));
             x += pill.w + 8;
         }
@@ -1276,6 +1422,7 @@ impl Desktop {
             "lease": self.layout.lease.json(),
             "tray": self.layout.tray.iter().map(Rect::json).collect::<Vec<_>>(),
             "clock": self.layout.clock.json(),
+            "shell_place": self.layout.shell_place.as_ref().map(|(rect, window)| json!({"window": window, "rect": rect.json()})),
             "popup": {
                 "x": POPUP_X,
                 "y": POPUP_Y,
@@ -2037,18 +2184,18 @@ impl Desktop {
             // The observer, activity and the person's shell share the right column:
             // the shell takes its bottom third when it is open, under a
             // gap, so whatever is on the left stays out of their way.
-            Kind::Normal
-                if class.contains("hotlineshell")
-                    || class.contains("hotlineterminal")
-                    || class.contains("hotlineactivity") =>
-            {
-                Client {
-                    maximized: false,
-                    saved: self.column(class.contains("hotlineshell"), true),
-                    class,
-                    icon,
-                }
-            }
+            Kind::Normal if in_column(&class) => Client {
+                maximized: false,
+                saved: self.column(class.contains("hotlineshell"), true),
+                class,
+                icon,
+            },
+            Kind::Normal if self.column_open() => Client {
+                maximized: false,
+                saved: self.main_area(),
+                class,
+                icon,
+            },
             Kind::Normal => Client {
                 maximized: true,
                 saved: (geometry.x, geometry.y, geometry.width, geometry.height),
@@ -2056,7 +2203,7 @@ impl Desktop {
                 icon,
             },
             Kind::Dialog => {
-                let (left, top, work_width, work_height) = self.work_rect();
+                let (left, top, work_width, work_height) = self.pane();
                 let width = geometry.width.min(work_width);
                 let height = geometry.height.min(work_height);
                 Client {
@@ -2072,24 +2219,9 @@ impl Desktop {
                 }
             }
         };
-        // The terminal keeps the right third; the app being watched keeps the rest.
-        if client.class.contains("hotlineterminal") || client.class.contains("hotlineactivity") {
-            let (left, top, work_width, height) = self.work_rect();
-            let width = work_width.saturating_sub(self.gutter) * 2 / 3;
-            let others: Vec<_> = self
-                .clients
-                .iter()
-                .filter(|(_, c)| c.maximized)
-                .map(|(id, _)| *id)
-                .collect();
-            for id in others {
-                if let Some(other) = self.clients.get_mut(&id) {
-                    other.maximized = false;
-                    other.saved = (left, top, width, height);
-                }
-                self.apply_geometry(id)?;
-            }
-        }
+        // The column keeps the right third; the app being watched keeps the rest.
+        let column = in_column(&client.class);
+        let was_open = self.column_open();
         self.connection
             .change_window_attributes(
                 window,
@@ -2102,7 +2234,9 @@ impl Desktop {
         self.clients.insert(window, client);
         self.order.push(window);
         self.apply_geometry(window)?;
-        self.stack_column()?;
+        if column {
+            self.column_changed(was_open)?;
+        }
         self.property32(
             window,
             self.atoms.net_frame_extents,
@@ -2190,11 +2324,8 @@ impl Desktop {
         let Some(client) = self.clients.get(&window) else {
             return Ok(());
         };
-        let (x, y, width, height) = if client.maximized {
-            self.work_rect()
-        } else {
-            client.saved
-        };
+        let maximized = client.maximized;
+        let (x, y, width, height) = if maximized { self.pane() } else { client.saved };
         self.connection
             .configure_window(
                 window,
@@ -2207,6 +2338,7 @@ impl Desktop {
             )
             .map_err(|error| error.to_string())?;
         self.round_corners(window, width, height)?;
+        self.place_caps(window, (x, y, width, height))?;
         let notify = ConfigureNotifyEvent {
             response_type: CONFIGURE_NOTIFY_EVENT,
             sequence: 0,
@@ -2223,7 +2355,7 @@ impl Desktop {
         self.connection
             .send_event(false, window, EventMask::STRUCTURE_NOTIFY, notify)
             .map_err(|error| error.to_string())?;
-        let state: Vec<Atom> = if client.maximized {
+        let state: Vec<Atom> = if maximized {
             vec![self.atoms.maximized_vert, self.atoms.maximized_horz]
         } else {
             Vec::new()
@@ -2291,6 +2423,103 @@ impl Desktop {
         Ok(())
     }
 
+    /// Puts four corner-sized windows under a client's corners. Their
+    /// background is the wallpaper itself (`ParentRelative`), ring included,
+    /// so what shows through a cut corner is the ground, never the window
+    /// stacked below: two apps share the pane at the same bounds, and
+    /// Chromium's own corners are square at the bottom.
+    fn place_caps(&mut self, owner: Window, bounds: (i16, i16, u16, u16)) -> Result<(), String> {
+        let (x, y, width, height) = bounds;
+        if self.gutter == 0 || width < CORNER * 4 || height < CORNER * 4 {
+            return self.drop_caps(owner);
+        }
+        let fresh = !self.caps.contains_key(&owner);
+        if fresh {
+            let mut caps = [NONE; 4];
+            for cap in &mut caps {
+                *cap = self.connection.generate_id().map_err(|e| e.to_string())?;
+                self.connection
+                    .create_window(
+                        self.depth,
+                        *cap,
+                        self.root,
+                        0,
+                        0,
+                        CORNER,
+                        CORNER,
+                        0,
+                        WindowClass::INPUT_OUTPUT,
+                        0,
+                        &CreateWindowAux::new()
+                            .override_redirect(1)
+                            .background_pixmap(u32::from(BackPixmap::PARENT_RELATIVE)),
+                    )
+                    .map_err(|e| e.to_string())?;
+                // An empty input shape: a click on a cap reaches what is under it.
+                self.connection
+                    .shape_rectangles(
+                        SO::SET,
+                        SK::INPUT,
+                        x11rb::protocol::xproto::ClipOrdering::UNSORTED,
+                        *cap,
+                        0,
+                        0,
+                        &[],
+                    )
+                    .map_err(|e| e.to_string())?;
+            }
+            self.caps.insert(owner, caps);
+        }
+        let caps = self.caps[&owner];
+        let right = x + (width - CORNER) as i16;
+        let bottom = y + (height - CORNER) as i16;
+        for (cap, (left, top)) in
+            caps.iter()
+                .zip([(x, y), (right, y), (x, bottom), (right, bottom)])
+        {
+            self.connection
+                .configure_window(
+                    *cap,
+                    &ConfigureWindowAux::new()
+                        .x(i32::from(left))
+                        .y(i32::from(top))
+                        .sibling(owner)
+                        .stack_mode(StackMode::BELOW),
+                )
+                .map_err(|e| e.to_string())?;
+            if fresh {
+                self.connection
+                    .map_window(*cap)
+                    .map_err(|e| e.to_string())?;
+            }
+        }
+        Ok(())
+    }
+
+    /// Keeps a client's caps directly beneath it after it moves in the stack.
+    fn restack_caps(&self, owner: Window) -> Result<(), String> {
+        for cap in self.caps.get(&owner).into_iter().flatten() {
+            self.connection
+                .configure_window(
+                    *cap,
+                    &ConfigureWindowAux::new()
+                        .sibling(owner)
+                        .stack_mode(StackMode::BELOW),
+                )
+                .map_err(|e| e.to_string())?;
+        }
+        Ok(())
+    }
+
+    fn drop_caps(&mut self, owner: Window) -> Result<(), String> {
+        for cap in self.caps.remove(&owner).into_iter().flatten() {
+            self.connection
+                .destroy_window(cap)
+                .map_err(|e| e.to_string())?;
+        }
+        Ok(())
+    }
+
     fn configure_request(&mut self, event: ConfigureRequestEvent) -> Result<(), String> {
         if self.clients.contains_key(&event.window) {
             self.wallpaper_dirty = true;
@@ -2313,14 +2542,15 @@ impl Desktop {
                 if event.value_mask.contains(ConfigWindow::HEIGHT) {
                     client.saved.3 = event.height;
                 }
-                let (width, height) = (client.saved.2, client.saved.3);
+                let saved = client.saved;
                 self.connection
                     .configure_window(
                         event.window,
                         &ConfigureWindowAux::from_configure_request(&event),
                     )
                     .map_err(|error| error.to_string())?;
-                self.round_corners(event.window, width, height)
+                self.round_corners(event.window, saved.2, saved.3)?;
+                self.place_caps(event.window, saved)
             }
             None => {
                 self.connection
@@ -2358,6 +2588,13 @@ impl Desktop {
         if maximized == client.maximized {
             return Ok(());
         }
+        if in_column(&client.class) {
+            return if client.class.contains("hotlineshell") {
+                self.place_shell(window, maximized)
+            } else {
+                Ok(())
+            };
+        }
         if maximized {
             let geometry = self
                 .connection
@@ -2382,6 +2619,7 @@ impl Desktop {
                 &ConfigureWindowAux::new().stack_mode(StackMode::ABOVE),
             )
             .map_err(|error| error.to_string())?;
+        self.restack_caps(window)?;
         self.connection
             .configure_window(
                 self.bar,
@@ -2408,16 +2646,15 @@ impl Desktop {
 
     fn forget(&mut self, window: Window) -> Result<(), String> {
         self.wallpaper_dirty = true;
+        let was_open = self.column_open();
         let Some(client) = self.clients.remove(&window) else {
             return Ok(());
         };
+        self.drop_caps(window)?;
         self.order.retain(|client| *client != window);
         self.publish_client_list()?;
-        if client.class.contains("hotlineshell")
-            || client.class.contains("hotlineterminal")
-            || client.class.contains("hotlineactivity")
-        {
-            self.stack_column()?;
+        if in_column(&client.class) {
+            self.column_changed(was_open)?;
         }
         if client.class.contains(BROWSER_CLASS) && self.client_with_class(BROWSER_CLASS).is_none() {
             let _ = self.requests.send(Request::BrowserClosed);
@@ -2527,6 +2764,14 @@ impl Desktop {
             }
             if self.layout.jobs.contains(x, y) {
                 return self.open_jobs();
+            }
+            if let Some((place, window)) = &self.layout.shell_place
+                && place.contains(x, y)
+                && event.detail == 1
+            {
+                let window = *window;
+                let in_pane = self.clients.get(&window).is_some_and(|c| c.maximized);
+                return self.place_shell(window, !in_pane);
             }
             if let Some((_, window)) = self
                 .layout
@@ -2897,6 +3142,26 @@ mod tests {
         );
         let (_, _, w, h) = work_area(80, 60, u16::MAX);
         assert!(w > 0 && h > 0);
+    }
+
+    #[test]
+    fn a_window_beside_the_column_ends_one_gutter_short_of_it() {
+        // The same split the windows tool tiles to, so a tiled browser and
+        // a reopened one land in the same place.
+        assert_eq!(
+            main_rect(work_area(1920, 1080, 16), 16),
+            (16, 56, 1248, 1008)
+        );
+        assert_eq!(main_rect(work_area(1920, 1080, 0), 0), (0, 40, 1280, 1040));
+        for gap in [0, 16] {
+            let (x, _, width, _) = main_rect(work_area(1920, 1080, gap), gap);
+            let (column, ..) = column_rect(work_area(1920, 1080, gap), gap, false, false);
+            assert_eq!(x + width as i16 + gap as i16, column);
+        }
+        assert!(in_column("hotlineshell.hotlineshell"));
+        assert!(!in_column(
+            "chromium (/home/agent/.hotline/browser).chromium"
+        ));
     }
 
     #[test]

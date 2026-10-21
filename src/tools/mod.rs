@@ -96,7 +96,7 @@ pub fn descriptors(home: &str) -> Vec<Tool> {
         ),
         Tool::new(
             "windows",
-            "Manage desktop windows: list them with IDs, classes, bounds, and focus; focus, close, maximize or restore; tile a primary_id/observer_id pair, or auto-tile with Chromium left and the rest stacked right. Tiling respects minimum sizes and the desktop work area and verifies the resulting geometry.",
+            "Manage desktop windows: list them with IDs, classes, bounds, and focus; focus, close, maximize or restore; tile a primary_id/observer_id pair, or auto-tile with every app sharing the left pane and the observer, activity and shell stacked right (apps take the whole area when none of those is open). Maximizing the person's shell moves it into the app pane; restoring it returns it to the column; auto-tile leaves a shell in the pane where it is. Tiling respects minimum sizes and the desktop work area and verifies the resulting geometry.",
             schema(json!({
                 "type":"object","properties":{
                     "action":{"type":"string","enum":["list","focus","close","maximize","tile"]},"window_id":{"type":"string"},"unmaximize":{"type":"boolean"},"primary_id":{"type":"string"},"observer_id":{"type":"string"}
