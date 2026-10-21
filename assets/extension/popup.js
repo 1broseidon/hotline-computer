@@ -62,7 +62,6 @@ function showPasskey(arming) {
   $('passkey').hidden = !shown;
   if (!shown) return;
   const ask = arming.ask || {};
-  $('passkey').className = arming.state;
   $('passkey-title').textContent = shown[0];
   $('passkey-rp').textContent = arming.rpId;
   $('passkey-text').textContent = shown[1] ||
