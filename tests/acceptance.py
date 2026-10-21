@@ -311,7 +311,7 @@ def desktop_job_menu(c):
     c.call('input',{'action':'key','combo':'Escape'})
     c.screenshot('03g-menus-closed.png')
     # T opens the person's own shell: the bottom third of the observer's
-    # column, under a line, so the app on the left is not covered.
+    # column, with a gutter, so the app on the left is not covered.
     c.call('input',{'action':'click','x':mark_x,'y':mark_y})
     c.call('input',{'action':'key','combo':'t'})
     deadline = time.monotonic()+10
@@ -321,11 +321,11 @@ def desktop_job_menu(c):
         time.sleep(.2)
     assert shell, c.call('windows',{'action':'list'})
     x, y, w, h = shell['bounds']
-    assert x == 1280 and w == 640 and y + h == 1080 and h == 340, shell
+    assert x == 1280 and w == 624 and y + h == 1064 and h == 320, shell
     observer = next((w for w in c.call('windows',{'action':'list'}) if 'hotlineterminal' in w['class'].lower()), None)
     if observer:
         ox, oy, ow, oh = observer['bounds']
-        assert ox == 1280 and oy == 40 and oy + oh + 8 == y, (observer, shell)
+        assert ox == 1280 and oy == 56 and oy + oh + 16 == y, (observer, shell)
     c.screenshot('03h-person-shell.png', settle_ms=500)
     c.call('windows',{'action':'close','window_id':shell['id']})
 

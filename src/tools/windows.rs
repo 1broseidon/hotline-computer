@@ -72,82 +72,86 @@ fn required_id(input: &Input) -> Result<&str, String> {
         .ok_or_else(|| "window_id is required".to_owned())
 }
 
-/// The line between the observer and the person's shell, as on the desktop.
-const STACK_GAP: i32 = 8;
-
 fn layout(
     windows: &[x11::Window],
     area: [i32; 4],
     primary: Option<usize>,
+    gap: i32,
 ) -> Result<Vec<(String, [i32; 4])>, String> {
     let [left, top, width, height] = area;
     let right: Vec<_> = windows
         .iter()
         .enumerate()
-        .filter(|(index, _)| Some(*index) != primary)
+        .filter(|(i, _)| Some(*i) != primary)
         .collect();
+    let gap = gap.max(0);
+    let across = if primary.is_some() && !right.is_empty() {
+        gap
+    } else {
+        0
+    };
     let right_min = right
         .iter()
         .map(|(_, w)| w.minimum_size[0])
         .max()
         .unwrap_or(0);
-    let primary_min = primary
-        .map(|index| windows[index].minimum_size[0])
-        .unwrap_or(0);
-    if primary_min + right_min > width
+    let primary_min = primary.map(|i| windows[i].minimum_size[0]).unwrap_or(0);
+    let impossible = || {
+        "selected windows' minimum sizes do not fit the work area; close an observer, choose a smaller pair, or increase the screen size".to_owned()
+    };
+    if width <= across
+        || primary_min + right_min + across > width
         || windows.iter().any(|w| w.minimum_size[1] > height)
-        || right
-            .iter()
-            .map(|(_, w)| i64::from(w.minimum_size[1]))
-            .sum::<i64>()
-            > i64::from(height)
     {
-        return Err("selected windows' minimum sizes do not fit the work area; close an observer, choose a smaller pair, or increase the screen size".into());
+        return Err(impossible());
     }
-    let split = if primary.is_some() {
-        if right.is_empty() {
-            width
-        } else {
-            // The observer column is a third of the screen, as when the
-            // terminal opens on its own; the app under test keeps two thirds.
-            (width * 2 / 3).max(primary_min).min(width - right_min)
-        }
-    } else {
+    let split = if primary.is_none() {
         0
+    } else if right.is_empty() {
+        width
+    } else {
+        ((width - across) * 2 / 3)
+            .max(primary_min)
+            .min(width - across - right_min)
     };
     let mut expected = Vec::new();
-    if let Some(index) = primary {
-        expected.push((windows[index].id.clone(), [left, top, split, height]));
+    if let Some(i) = primary {
+        expected.push((windows[i].id.clone(), [left, top, split, height]));
     }
-    // The person's shell keeps the bottom third of the column under a line,
-    // as the desktop places it; the rest of the column is shared above it.
     let (shells, column): (Vec<_>, Vec<_>) = right
         .iter()
         .partition(|(_, w)| w.class.to_ascii_lowercase().contains("hotlineshell"));
     let shell_height = if shells.is_empty() { 0 } else { height / 3 };
     let column_height = height - shell_height;
-    let mut y = top;
-    let mut available = column_height - column.iter().map(|(_, w)| w.minimum_size[1]).sum::<i32>();
-    for (position, (_, window)) in column.iter().enumerate() {
-        let extra = available / (column.len() - position) as i32;
-        available -= extra;
-        let row_height = window.minimum_size[1] + extra;
-        expected.push((
-            window.id.clone(),
-            [left + split, y, width - split, row_height],
-        ));
-        y += row_height;
-    }
-    for (_, window) in shells {
-        expected.push((
-            window.id.clone(),
-            [
-                left + split,
-                top + column_height + STACK_GAP,
-                width - split,
-                shell_height - STACK_GAP,
-            ],
-        ));
+    let column_width = width - split - across;
+    // Validate every row before moving anything. Gaps consume space just as
+    // client minimum sizes do; multiple shells must never overlap.
+    for (rows, mut y, room) in [
+        (&column, top, column_height),
+        (&shells, top + column_height + gap, shell_height - gap),
+    ] {
+        if rows.is_empty() {
+            continue;
+        }
+        let gaps = gap * (rows.len() as i32 - 1);
+        let minimum = rows
+            .iter()
+            .map(|(_, w)| w.minimum_size[1].max(1))
+            .sum::<i32>();
+        let mut extra = room - gaps - minimum;
+        if extra < 0 || column_width < 1 {
+            return Err(impossible());
+        }
+        for (position, (_, window)) in rows.iter().enumerate() {
+            let share = extra / (rows.len() - position) as i32;
+            extra -= share;
+            let row_height = window.minimum_size[1].max(1) + share;
+            expected.push((
+                window.id.clone(),
+                [left + split + across, y, column_width, row_height],
+            ));
+            y += row_height + gap;
+        }
     }
     Ok(expected)
 }
@@ -181,7 +185,12 @@ async fn tile(app: &App, input: &Input) -> ToolResult {
     if windows.is_empty() {
         return Ok(text("no windows"));
     }
-    let expected = layout(&windows, x11::workarea(&app.config.display)?, primary)?;
+    let expected = layout(
+        &windows,
+        x11::workarea(&app.config.display)?,
+        primary,
+        i32::from(crate::desktop::gutter()),
+    )?;
     for (id, bounds) in &expected {
         x11::maximize(&app.config.display, id, false)?;
         x11::place(
@@ -256,10 +265,11 @@ mod tests {
             &[window("app", [1280, 860]), window("observer", [100, 100])],
             [0, 48, 1920, 1032],
             Some(0),
+            16,
         )
         .unwrap();
         assert_eq!(result[0].1, [0, 48, 1280, 1032]);
-        assert_eq!(result[1].1, [1280, 48, 640, 1032]);
+        assert_eq!(result[1].1, [1296, 48, 624, 1032]);
     }
     #[test]
     fn the_persons_shell_takes_the_bottom_third_of_the_column_under_a_line() {
@@ -267,21 +277,45 @@ mod tests {
         shell.class = "HotlineShell.HotlineShell".into();
         let result = layout(
             &[window("app", [500, 87]), window("observer", [1, 1]), shell],
+            [16, 56, 1888, 1008],
+            Some(0),
+            16,
+        )
+        .unwrap();
+        assert_eq!(result[0].1, [16, 56, 1248, 1008]);
+        assert_eq!(result[1].1, [1280, 56, 624, 672]);
+        assert_eq!(result[2].1, [1280, 744, 624, 320]);
+    }
+    #[test]
+    fn opting_out_removes_both_outer_and_inner_gaps() {
+        let result = layout(
+            &[window("app", [1, 1]), window("observer", [1, 1])],
             [0, 40, 1920, 1040],
             Some(0),
+            0,
         )
         .unwrap();
         assert_eq!(result[0].1, [0, 40, 1280, 1040]);
-        assert_eq!(result[1].1, [1280, 40, 640, 694]);
-        assert_eq!(result[2].1, [1280, 742, 640, 338]);
+        assert_eq!(result[1].1, [1280, 40, 640, 1040]);
+        assert!(
+            layout(
+                &[window("a", [1, 510]), window("b", [1, 510])],
+                [16, 56, 1888, 1020],
+                None,
+                16
+            )
+            .is_err()
+        );
     }
+
     #[test]
     fn impossible_layouts_fail_before_moving_any_windows() {
         assert!(
             layout(
                 &[window("a", [1280, 860]), window("b", [800, 100])],
                 [0, 48, 1920, 1032],
-                Some(0)
+                Some(0),
+                16
             )
             .is_err()
         );
@@ -289,7 +323,8 @@ mod tests {
             layout(
                 &[window("a", [100, 600]), window("b", [100, 600])],
                 [0, 48, 1920, 1032],
-                None
+                None,
+                16
             )
             .is_err()
         );

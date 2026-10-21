@@ -27,7 +27,7 @@ use x11rb::protocol::xproto::{
     ChangeWindowAttributesAux, ClientMessageData, ClientMessageEvent, ConfigWindow,
     ConfigureNotifyEvent, ConfigureRequestEvent, ConfigureWindowAux, ConnectionExt, CreateGCAux,
     CreateWindowAux, EventMask, Gcontext, GrabMode, ImageFormat, InputFocus, KeyPressEvent,
-    MapState, ModMask, Pixmap, PropMode, Rectangle, StackMode, Window, WindowClass,
+    MapState, ModMask, Pixmap, PropMode, StackMode, Window, WindowClass,
 };
 use x11rb::rust_connection::RustConnection;
 use x11rb::wrapper::ConnectionExt as _;
@@ -88,8 +88,52 @@ const TRAY_ICON: i32 = 18;
 const APP_ICON: u16 = 16;
 const PILL_MAX: i32 = 220;
 const KEYSYM_ESCAPE: u32 = 0xff1b;
-/// The line between the observer and the person's shell in the right column.
-const STACK_GAP: u16 = 8;
+pub const GUTTER: u16 = 16;
+
+pub fn gutter() -> u16 {
+    std::env::var("HOTLINE_COMPUTER_GUTTER")
+        .ok()
+        .and_then(|v| v.parse().ok())
+        .unwrap_or(GUTTER)
+}
+
+fn work_area(width: u16, height: u16, gap: u16) -> (i16, i16, u16, u16) {
+    // An oversized setting must still leave a usable pixel on a small screen.
+    let gap = gap
+        .min(width.saturating_sub(1) / 2)
+        .min(height.saturating_sub(BAR_HEIGHT + 1) / 2);
+    (
+        gap as i16,
+        (BAR_HEIGHT + gap) as i16,
+        width.saturating_sub(2 * gap).max(1),
+        height.saturating_sub(BAR_HEIGHT + 2 * gap).max(1),
+    )
+}
+
+fn column_rect(
+    area: (i16, i16, u16, u16),
+    gap: u16,
+    shell: bool,
+    shell_open: bool,
+) -> (i16, i16, u16, u16) {
+    let (left, top, width, height) = area;
+    let split = width.saturating_sub(gap) * 2 / 3;
+    let x = left + (split + gap) as i16;
+    let width = width.saturating_sub(split + gap).max(1);
+    let shell_height = height / 3;
+    if shell {
+        (
+            x,
+            top + (height - shell_height + gap) as i16,
+            width,
+            shell_height.saturating_sub(gap).max(1),
+        )
+    } else if shell_open {
+        (x, top, width, height - shell_height)
+    } else {
+        (x, top, width, height)
+    }
+}
 
 pub fn run(
     display: &str,
@@ -362,6 +406,9 @@ struct Desktop {
     /// What the bar last showed of the clock and the lease, so a tick that
     /// changes neither draws nothing.
     shown: String,
+    gutter: u16,
+    wallpaper_dirty: bool,
+    wallpaper_painted: Instant,
 }
 
 impl Desktop {
@@ -434,6 +481,9 @@ impl Desktop {
             keysyms,
             started: Instant::now(),
             shown: String::new(),
+            gutter: work_area(screen.width_in_pixels, screen.height_in_pixels, gutter()).0 as u16,
+            wallpaper_dirty: true,
+            wallpaper_painted: Instant::now(),
         };
         desktop.announce()?;
         desktop.paint_wallpaper()?;
@@ -448,32 +498,13 @@ impl Desktop {
         Ok(desktop)
     }
 
-    /// The bar always retains its own work area.
-    fn work_height(&self) -> u16 {
-        self.height.saturating_sub(BAR_HEIGHT)
+    fn work_rect(&self) -> (i16, i16, u16, u16) {
+        work_area(self.width, self.height, self.gutter)
     }
 
-    /// Where a window of the right column goes: the observer above, the
-    /// person's shell in the bottom third under a line, or either one alone
-    /// when the other is closed. `shell_open` says whether the shell is or
-    /// is about to be there.
+    /// The observer and shell keep the same column when tiled by a tool.
     fn column(&self, shell: bool, shell_open: bool) -> (i16, i16, u16, u16) {
-        let x = self.width * 2 / 3;
-        let width = self.width - x;
-        let work = self.work_height();
-        let shell_height = work / 3;
-        if shell {
-            (
-                x as i16,
-                (BAR_HEIGHT + work - shell_height + STACK_GAP) as i16,
-                width,
-                shell_height.saturating_sub(STACK_GAP).max(1),
-            )
-        } else if shell_open {
-            (x as i16, BAR_HEIGHT as i16, width, work - shell_height)
-        } else {
-            (x as i16, BAR_HEIGHT as i16, width, work)
-        }
+        column_rect(self.work_rect(), self.gutter, shell, shell_open)
     }
 
     /// Restacks the right column after the observer or the shell opens or
@@ -565,17 +596,10 @@ impl Desktop {
             AtomEnum::CARDINAL,
             &[0, 0],
         )?;
-        self.property32(
-            root,
-            atoms.net_workarea,
-            AtomEnum::CARDINAL,
-            &[
-                0,
-                u32::from(BAR_HEIGHT),
-                u32::from(self.width),
-                u32::from(self.work_height()),
-            ],
-        )?;
+        self.property32(root, atoms.net_workarea, AtomEnum::CARDINAL, &{
+            let (x, y, w, h) = self.work_rect();
+            [x as u32, y as u32, u32::from(w), u32::from(h)]
+        })?;
         self.property32(root, atoms.net_client_list, AtomEnum::WINDOW, &[])?;
         self.property32(root, atoms.net_active_window, AtomEnum::WINDOW, &[])?;
         Ok(())
@@ -607,29 +631,73 @@ impl Desktop {
         Ok(())
     }
 
-    /// Black, with the mark centred in the work area below the bar.
-    fn paint_wallpaper(&self) -> Result<(), String> {
-        let pixmap: Pixmap = self
-            .connection
-            .generate_id()
-            .map_err(|error| error.to_string())?;
+    /// Paint separation on the root, without frames or a compositor. Only
+    /// managed, visible clients contribute; popups and tray windows never do.
+    fn paint_wallpaper(&mut self) -> Result<(), String> {
+        let mut canvas = Canvas::new(self.width, self.height, BACKGROUND);
+        let mark = decode_png(MARK)?;
+        let x = (self.width.saturating_sub(mark.width) / 2) as i32;
+        let y = i32::from(BAR_HEIGHT + self.height.saturating_sub(BAR_HEIGHT + mark.height) / 2);
+        canvas.blit(x, y, &mark);
+        let mut rects = Vec::new();
+        for window in &self.order {
+            let attributes = self
+                .connection
+                .get_window_attributes(*window)
+                .map_err(|e| e.to_string())?
+                .reply();
+            if !attributes.is_ok_and(|a| a.map_state == MapState::VIEWABLE && !a.override_redirect)
+            {
+                continue;
+            }
+            if let Ok(g) = self
+                .connection
+                .get_geometry(*window)
+                .map_err(|e| e.to_string())?
+                .reply()
+            {
+                if g.x == 0 && g.y == 0 && g.width >= self.width && g.height >= self.height {
+                    continue;
+                }
+                rects.push((
+                    i32::from(g.x),
+                    i32::from(g.y),
+                    i32::from(g.width),
+                    i32::from(g.height),
+                ));
+            }
+        }
+        for &(x, y, w, h) in &rects {
+            canvas.shadow(x, y, w, h);
+        }
+        // Rings go last so a neighbour's shadow cannot dim their one-pixel edge.
+        for (x, y, w, h) in rects {
+            canvas.fill_rect(x - 1, y - 1, w + 2, 1, RULE);
+            canvas.fill_rect(x - 1, y + h, w + 2, 1, RULE);
+            canvas.fill_rect(x - 1, y, 1, h, RULE);
+            canvas.fill_rect(x + w, y, 1, h, RULE);
+        }
+        let pixmap: Pixmap = self.connection.generate_id().map_err(|e| e.to_string())?;
         self.connection
             .create_pixmap(self.depth, pixmap, self.root, self.width, self.height)
-            .map_err(|error| error.to_string())?;
-        self.fill(pixmap, BACKGROUND, 0, 0, self.width, self.height)?;
-        let mark = decode_png(MARK)?;
-        let x = (self.width.saturating_sub(mark.width) / 2) as i16;
-        let y = (BAR_HEIGHT + self.work_height().saturating_sub(mark.height) / 2) as i16;
-        self.put_image(pixmap, &mark, x, y, BACKGROUND)?;
+            .map_err(|e| e.to_string())?;
+        self.put_image(pixmap, &canvas.image, 0, 0, BACKGROUND)?;
         self.connection
             .change_window_attributes(
                 self.root,
                 &ChangeWindowAttributesAux::new().background_pixmap(pixmap),
             )
-            .map_err(|error| error.to_string())?;
+            .map_err(|e| e.to_string())?;
         self.connection
             .clear_area(false, self.root, 0, 0, 0, 0)
-            .map_err(|error| error.to_string())?;
+            .map_err(|e| e.to_string())?;
+        // X keeps the background reference; releasing our ID prevents a leak
+        // each time a client moves and the wallpaper is replaced.
+        self.connection
+            .free_pixmap(pixmap)
+            .map_err(|e| e.to_string())?;
+        self.wallpaper_dirty = false;
+        self.wallpaper_painted = Instant::now();
         Ok(())
     }
 
@@ -973,8 +1041,11 @@ impl Desktop {
         self.property_text(self.root, self.atoms.layout, &layout.to_string())
     }
 
-    /// A second has passed: redraw only if the bar would read differently.
+    /// Coalesce layout bursts; the bar redraws only when its words change.
     fn tick(&mut self) -> Result<(), String> {
+        if self.wallpaper_dirty && self.wallpaper_painted.elapsed() >= Duration::from_millis(50) {
+            self.paint_wallpaper()?;
+        }
         let now = format!("{}|{:?}", self.clock(), self.holding());
         if now != self.shown {
             self.draw_bar()?;
@@ -1097,7 +1168,7 @@ impl Desktop {
             serde_json::from_slice(&reply.value).unwrap_or_default();
         let visible = jobs
             .len()
-            .min(usize::from(self.work_height().saturating_sub(30) / 30).min(12));
+            .min(usize::from(self.work_rect().3.saturating_sub(30) / 30).min(12));
         self.open_popup(Popup::Jobs {
             jobs,
             first: 0,
@@ -1449,38 +1520,6 @@ impl Desktop {
 
     // ---- pixels to the server ----------------------------------------------
 
-    fn fill(
-        &self,
-        drawable: u32,
-        color: u32,
-        x: i16,
-        y: i16,
-        width: u16,
-        height: u16,
-    ) -> Result<(), String> {
-        self.connection
-            .change_gc(
-                self.gc,
-                &x11rb::protocol::xproto::ChangeGCAux::new().foreground(color),
-            )
-            .map_err(|error| error.to_string())?;
-        self.connection
-            .poly_fill_rectangle(
-                drawable,
-                self.gc,
-                &[Rectangle {
-                    x,
-                    y,
-                    width,
-                    height,
-                }],
-            )
-            .map_err(|error| error.to_string())?;
-        Ok(())
-    }
-
-    /// Composite an RGBA image onto a solid colour and send it as 24-bit
-    /// ZPixmap rows, in chunks small enough for any server's request limit.
     fn put_image(
         &self,
         drawable: u32,
@@ -1540,7 +1579,14 @@ impl Desktop {
 
     fn handle(&mut self, event: Event) -> Result<(), String> {
         match event {
-            Event::MapRequest(event) => self.manage(event.window),
+            Event::MapRequest(event) => {
+                self.wallpaper_dirty = true;
+                self.manage(event.window)
+            }
+            Event::ConfigureNotify(event) if self.clients.contains_key(&event.window) => {
+                self.wallpaper_dirty = true;
+                Ok(())
+            }
             Event::ConfigureRequest(event) => self.configure_request(event),
             Event::UnmapNotify(event) => self.forget(event.window),
             Event::DestroyNotify(event) if self.tray.contains(&event.window) => {
@@ -1668,13 +1714,14 @@ impl Desktop {
                 icon,
             },
             Kind::Dialog => {
-                let width = geometry.width.min(self.width);
-                let height = geometry.height.min(self.work_height());
+                let (left, top, work_width, work_height) = self.work_rect();
+                let width = geometry.width.min(work_width);
+                let height = geometry.height.min(work_height);
                 Client {
                     maximized: false,
                     saved: (
-                        ((self.width - width) / 2) as i16,
-                        (BAR_HEIGHT + (self.work_height() - height) / 2) as i16,
+                        left + ((work_width - width) / 2) as i16,
+                        top + ((work_height - height) / 2) as i16,
                         width,
                         height,
                     ),
@@ -1685,8 +1732,8 @@ impl Desktop {
         };
         // The terminal keeps the right third; the app being watched keeps the rest.
         if client.class.contains("hotlineterminal") {
-            let width = self.width * 2 / 3;
-            let height = self.work_height();
+            let (left, top, work_width, height) = self.work_rect();
+            let width = work_width.saturating_sub(self.gutter) * 2 / 3;
             let others: Vec<_> = self
                 .clients
                 .iter()
@@ -1696,7 +1743,7 @@ impl Desktop {
             for id in others {
                 if let Some(other) = self.clients.get_mut(&id) {
                     other.maximized = false;
-                    other.saved = (0, BAR_HEIGHT as i16, width, height);
+                    other.saved = (left, top, width, height);
                 }
                 self.apply_geometry(id)?;
             }
@@ -1793,12 +1840,13 @@ impl Desktop {
 
     /// Put the window where its state says, tell it so, and record the
     /// state where other clients read it.
-    fn apply_geometry(&self, window: Window) -> Result<(), String> {
+    fn apply_geometry(&mut self, window: Window) -> Result<(), String> {
+        self.wallpaper_dirty = true;
         let Some(client) = self.clients.get(&window) else {
             return Ok(());
         };
         let (x, y, width, height) = if client.maximized {
-            (0, BAR_HEIGHT as i16, self.width, self.work_height())
+            self.work_rect()
         } else {
             client.saved
         };
@@ -1838,6 +1886,9 @@ impl Desktop {
     }
 
     fn configure_request(&mut self, event: ConfigureRequestEvent) -> Result<(), String> {
+        if self.clients.contains_key(&event.window) {
+            self.wallpaper_dirty = true;
+        }
         if self.tray.contains(&event.window) {
             return self.layout_tray();
         }
@@ -1914,6 +1965,7 @@ impl Desktop {
     }
 
     fn focus(&mut self, window: Window) -> Result<(), String> {
+        self.wallpaper_dirty = true;
         self.connection
             .set_input_focus(InputFocus::POINTER_ROOT, window, CURRENT_TIME)
             .map_err(|error| error.to_string())?;
@@ -1948,6 +2000,7 @@ impl Desktop {
     }
 
     fn forget(&mut self, window: Window) -> Result<(), String> {
+        self.wallpaper_dirty = true;
         let Some(client) = self.clients.remove(&window) else {
             return Ok(());
         };
@@ -2214,8 +2267,8 @@ fn best_icon(data: &[u32], size: u16) -> Option<Image> {
     Image::from_argb_scaled(width, height, pixels, size)
 }
 
-/// Once a second a property on the root changes, so the desktop's event loop
-/// wakes to move the clock and let a lapsed lease fade from the bar.
+/// A 50ms tick coalesces layout changes while the event loop sleeps on X.
+/// The clock and lease still paint only when their displayed value changes.
 fn spawn_ticker(display: String) {
     let _ = std::thread::Builder::new()
         .name("desktop-tick".to_owned())
@@ -2232,7 +2285,7 @@ fn spawn_ticker(display: String) {
             };
             let mut count: u32 = 0;
             loop {
-                std::thread::sleep(Duration::from_secs(1));
+                std::thread::sleep(Duration::from_millis(50));
                 count = count.wrapping_add(1);
                 if connection
                     .change_property32(
@@ -2308,6 +2361,30 @@ fn decode_png(bytes: &[u8]) -> Result<Image, String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn work_area_and_column_share_gutters_including_the_opt_out() {
+        assert_eq!(work_area(1920, 1080, 16), (16, 56, 1888, 1008));
+        assert_eq!(
+            column_rect(work_area(1920, 1080, 16), 16, false, false),
+            (1280, 56, 624, 1008)
+        );
+        assert_eq!(
+            column_rect(work_area(1920, 1080, 16), 16, false, true),
+            (1280, 56, 624, 672)
+        );
+        assert_eq!(
+            column_rect(work_area(1920, 1080, 16), 16, true, true),
+            (1280, 744, 624, 320)
+        );
+        assert_eq!(work_area(1920, 1080, 0), (0, 40, 1920, 1040));
+        assert_eq!(
+            column_rect(work_area(1920, 1080, 0), 0, false, false),
+            (1280, 40, 640, 1040)
+        );
+        let (_, _, w, h) = work_area(80, 60, u16::MAX);
+        assert!(w > 0 && h > 0);
+    }
 
     #[test]
     fn the_mark_decodes_and_blends_onto_ground() {

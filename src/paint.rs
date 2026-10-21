@@ -203,6 +203,40 @@ impl Canvas {
         }
     }
 
+    /// Three radius-eight box passes give a 24px soft edge. The alpha mask
+    /// is clipped to the screen, so an offscreen client cannot allocate an
+    /// unbounded image. Only its shadow, offset down ten pixels, is blended.
+    pub fn shadow(&mut self, x: i32, y: i32, width: i32, height: i32) {
+        let (left, top) = ((x - 24).max(0), (y + 10 - 24).max(0));
+        let (right, bottom) = (
+            (x + width + 24).min(self.width()),
+            (y + 10 + height + 24).min(self.height()),
+        );
+        if right <= left || bottom <= top {
+            return;
+        }
+        let (w, h) = ((right - left) as usize, (bottom - top) as usize);
+        let mut mask = vec![0.0f32; w * h];
+        for py in (y + 10).max(top)..(y + 10 + height).min(bottom) {
+            for px in x.max(left)..(x + width).min(right) {
+                mask[(py - top) as usize * w + (px - left) as usize] = 1.0;
+            }
+        }
+        let mut scratch = vec![0.0f32; mask.len()];
+        for _ in 0..3 {
+            box_pass(&mask, &mut scratch, w, h, true);
+            box_pass(&scratch, &mut mask, w, h, false);
+        }
+        for (index, alpha) in mask.into_iter().enumerate() {
+            self.plot(
+                left + (index % w) as i32,
+                top + (index / w) as i32,
+                [0, 0, 0],
+                (alpha * 0.45 * 255.0).round() as u32,
+            );
+        }
+    }
+
     pub fn dot(&mut self, cx: f32, cy: f32, radius: f32, color: u32) {
         let color = channels(color);
         let (x0, y0) = (
@@ -282,6 +316,28 @@ impl Canvas {
     }
 }
 
+// A sliding sum makes each blur pass linear in the number of pixels.
+fn box_pass(source: &[f32], target: &mut [f32], width: usize, height: usize, horizontal: bool) {
+    let (lines, length, step) = if horizontal {
+        (height, width, 1)
+    } else {
+        (width, height, width)
+    };
+    for line in 0..lines {
+        let base = if horizontal { line * width } else { line };
+        let mut sum: f32 = (0..9.min(length)).map(|i| source[base + i * step]).sum();
+        for i in 0..length {
+            target[base + i * step] = sum / 17.0;
+            if i >= 8 {
+                sum -= source[base + (i - 8) * step];
+            }
+            if i + 9 < length {
+                sum += source[base + (i + 9) * step];
+            }
+        }
+    }
+}
+
 /// Resample an RGBA image to `width`×`height` with a box filter.
 pub fn resample(image: &Image, width: u16, height: u16) -> Image {
     let (sw, sh) = (u32::from(image.width), u32::from(image.height));
@@ -352,6 +408,22 @@ mod tests {
         dark.text(&face, 4, 20, "G", 0);
         assert_eq!(dark.image.rgba[at], 255 - coverage[edge]);
         assert_eq!(blend(0x8fb8ff, 0x111114, 0.16), 0x252c3a);
+    }
+
+    #[test]
+    fn shadows_are_soft_offset_and_bounded() {
+        let mut canvas = Canvas::new(180, 180, 0xffffff);
+        canvas.shadow(50, 40, 80, 80);
+        let pixel = |x: usize, y: usize| canvas.image.rgba[(y * 180 + x) * 4];
+        assert_eq!(pixel(0, 0), 255);
+        assert_eq!(pixel(90, 90), 140, "45 percent maximum alpha");
+        assert!(pixel(49, 90) > pixel(50, 90));
+        assert!(
+            pixel(90, 135) < pixel(90, 25),
+            "shadow is lower than the window"
+        );
+        assert_eq!(pixel(25, 90), 255, "three passes stop at 24 pixels");
+        canvas.shadow(-100_000, -100_000, 10, 10);
     }
 
     #[test]
