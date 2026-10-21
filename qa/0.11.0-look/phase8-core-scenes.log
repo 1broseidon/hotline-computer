@@ -1,0 +1,30 @@
+{
+  "muted/bar": 5.792,
+  "muted/surface": 5.493,
+  "ink-2/chip": 8.488,
+  "pixel (960, 20) 111114": [
+    17,
+    17,
+    20
+  ],
+  "pixel (960, 39) 222227": [
+    34,
+    34,
+    39
+  ],
+  "pixel (8, 540) 0b0b0d": [
+    10,
+    10,
+    11
+  ],
+  "pixel (15, 560) 2a2a30": [
+    42,
+    42,
+    48
+  ],
+  "viewer font": "Geist, sans-serif",
+  "S4": "passed",
+  "fc-match sans-serif": "Geist",
+  "fc-match monospace": "Geist Mono",
+  "make contract": 0
+}

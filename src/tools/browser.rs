@@ -68,7 +68,22 @@ pub async fn call(app: &App, arguments: Value, holder: &str) -> ToolResult {
                 // The value is looked up here and typed by the browser; the
                 // answer names it and never carries it.
                 let filled = app.secrets.resolve(reference)?;
-                app.browser.fill_secret(&input.r#ref, filled).await
+                let origin_matched = filled.sites.is_some();
+                let label = app.secrets.redact(&filled.label).into_owned();
+                let result = app.browser.fill_secret(&input.r#ref, filled).await;
+                if result.is_ok()
+                    && let Ok(Some((_, bounds))) = tokio::time::timeout(
+                        std::time::Duration::from_millis(200),
+                        crate::a11y::focused_metadata(app),
+                    )
+                    .await
+                {
+                    // Variables have no site restriction, so their receipt
+                    // must not claim that an origin was checked.
+                    app.badges
+                        .show(&app.config.display, bounds, label, origin_matched);
+                }
+                result
             }
             FillWith::Text(text) => app.browser.fill(&input.r#ref, text).await,
         },

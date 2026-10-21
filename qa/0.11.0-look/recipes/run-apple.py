@@ -35,7 +35,8 @@ subprocess.run(['container', 'run', '-d', '--name', NAME, '--cap-drop', 'ALL',
                 '-e', 'HOTLINE_COMPUTER_TOKEN', '-e', 'TZ=UTC',
                 '--entrypoint', 'python3', IMAGE, '-c', ENTRY],
                env=environment, check=True)
-fd = os.open(ROOT / '.token', os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+fd = os.open(ROOT / '.token', os.O_WRONLY | os.O_CREAT | os.O_TRUNC | os.O_NOFOLLOW, 0o600)
+os.fchmod(fd, 0o600)
 with os.fdopen(fd, 'w') as stream:
     stream.write(token + '\n')
 deadline = time.monotonic() + 90

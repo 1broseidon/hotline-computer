@@ -1,6 +1,6 @@
 # 0.11 look
 
-Phases **1–7 landed** on `look/0.11`; none reverted. **8 not started yet**. Apple container is available at the operator's request. Nothing pushed, published, tagged or merged; version remains 0.10.3.
+Phases **1–8 landed** on `look/0.11`; none reverted. All phases are started and verified. Apple container is used at the operator's request. Nothing pushed, published, tagged or merged; version remains 0.10.3.
 
 | Phase | Status / commit | Screenshots | What to inspect |
 | --- | --- | --- | --- |
@@ -11,8 +11,8 @@ Phases **1–7 landed** on `look/0.11`; none reverted. **8 not started yet**. Ap
 | 4 Terminals | Passed · `b0177d9` | S3: verified with Apple container | Geist Mono, line spacing, colored job markers |
 | 5 Viewer | Passed · `740b92c` | S4: verified with Apple container | Real viewer screenshots plus browser fixtures |
 | 6 Chromium | Passed · `1ec8bfd` | S2: verified with Apple container | Dark chrome and a normal light page |
-| 7 Activity | Passed · this phase commit | s7-activity.png, s7-with-shell.png | 60/40 observer/activity split, shell below, bounded display log |
-| 8 Badge | Not started | S5: not run yet | Sealed-fill badge |
+| 7 Activity | Passed · `dd3a60e` | s7-activity.png, s7-with-shell.png | 60/40 observer/activity split, shell below, bounded display log |
+| 8 Badge | Passed · this phase commit | s5-badge.png | Sealed-fill receipt below the password field |
 
 ## Evidence
 
@@ -63,3 +63,9 @@ On this Mac, use `container build -c 4 -m 6g -t hotline-computer:look-0.11 .`, t
 ## Phase 7
 
 Native checks passed with **118 tests** (`phase7-check.log`); Apple image built, live contract and S1–S4 passed again. `phase7-scenes.json` verifies 500-entry retention, exclusion of file/command/JS/invalid-action payloads, failed-call markers, 60/40 geometry, shell preservation and observer restoration. Unit checks also cover redaction before truncation and refusing to follow a log symlink. Activity uses **V** because **A** remains About. Targets are URL host/path (no credentials, query or fragment), explicit job labels, window titles and focused field names when AT-SPI answers within 200 ms. Other actions keep a generic sentence. Each atomic rewrite retains the newest 500 records; this is an agent-editable display, not an audit log.
+
+## Phase 8
+
+Native and Linux checks passed with **119 tests**. The live contract and S1–S4 passed again. `phase8-scenes.json` verifies the receipt is override-redirect, has **zero input rectangles**, leaves the field focused, passes a click through to Sign in, and adds no page DOM. The successful fill took **94 ms**; S5 was captured **1.107 s** after the reply; the receipt disappeared after **4.062 s**. A rejected origin produced no badge. The activity file contained the secret name but no secret value. The worker and queue are bounded.
+
+Decisions: variables are not origin-bound, so their receipt omits “origin matched”; login receipts show it only after the existing origin check succeeds. Missing AT-SPI extents or insufficient space below the field means no receipt. The fixture uses `FIELDNOTE`, since the existing API requires uppercase secret names, and expects its unchanged 204 delivery response. One clippy correction and one fixture correction preceded the passing gate; auth and secret delivery behavior were preserved.

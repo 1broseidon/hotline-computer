@@ -18,9 +18,12 @@ def current(name):
     return (ROOT / name).read_text()
 
 
-for name in ['Cargo.toml', 'Cargo.lock', 'src/browser.rs', 'src/passkeys.rs', 'src/logins.rs', 'src/lease.rs']:
+for name in ['Cargo.lock', 'src/browser.rs', 'src/passkeys.rs', 'src/logins.rs', 'src/lease.rs']:
     assert before(name) == current(name), name
     RESULTS[name] = 'unchanged'
+cargo = current('Cargo.toml').replace('["damage", "shm", "xtest", "shape"]', '["damage", "shm", "xtest"]').replace('# Geist rather than X core bitmap fonts.', '# DejaVu Sans rather than X core bitmap fonts.')
+assert cargo == before('Cargo.toml')
+RESULTS['Cargo.toml'] = 'only the specified x11rb shape feature and stale font comment changed'
 old = json.loads(before('assets/chromium-policy.json'))
 new = json.loads(current('assets/chromium-policy.json'))
 assert new.pop('BrowserThemeColor') == '#17171b'

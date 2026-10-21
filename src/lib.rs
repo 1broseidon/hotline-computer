@@ -1,6 +1,7 @@
 pub mod a11y;
 pub mod activity;
 pub mod agent;
+pub mod badge;
 pub mod boot;
 pub mod browser;
 pub mod clipboard;
@@ -74,6 +75,7 @@ pub struct App {
     pub passkeys: passkeys::Passkeys,
     pub observer: observer::Observer,
     pub activity: activity::Log,
+    pub badges: badge::Badges,
     pub a11y: Arc<tokio::sync::OnceCell<atspi::zbus::Connection>>,
     /// The screen stream, the hands, and the clipboard; `None` until a display is up.
     pub display: Option<Arc<display::Display>>,
@@ -90,6 +92,7 @@ impl App {
             jobs: jobs::Jobs::new(&config.home, &config.display, secrets.clone()),
             browser: BrowserManager::new(Arc::clone(&config), secrets.clone(), passkeys.clone()),
             activity: activity::Log::new(&config.home, secrets.clone()),
+            badges: badge::Badges::default(),
             secrets,
             passkeys,
             observer: observer::Observer::new(&config.home, &config.display),

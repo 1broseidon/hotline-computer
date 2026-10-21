@@ -1,0 +1,18 @@
+{
+  "fill seconds": 0.094,
+  "capture after fill seconds": 1.107,
+  "X11 receipt": {
+    "input_rectangles": 0,
+    "override_redirect": true,
+    "bounds": [
+      810,
+      697,
+      429,
+      34
+    ]
+  },
+  "click passes through / focus / no DOM injection": "passed",
+  "disappeared after fill seconds": 4.062,
+  "rejected origin has no receipt": "passed",
+  "activity receipt contains no secret value": "passed"
+}

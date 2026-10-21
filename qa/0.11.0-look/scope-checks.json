@@ -1,10 +1,10 @@
 {
-  "Cargo.toml": "unchanged",
   "Cargo.lock": "unchanged",
   "src/browser.rs": "unchanged",
   "src/passkeys.rs": "unchanged",
   "src/logins.rs": "unchanged",
   "src/lease.rs": "unchanged",
+  "Cargo.toml": "only the specified x11rb shape feature and stale font comment changed",
   "Chromium policy": "only theme and comment changed",
   "README security and tool wording": "unchanged",
   "MCP descriptors and required arguments": "unchanged (8 tools)",
