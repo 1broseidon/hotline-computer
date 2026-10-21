@@ -1,0 +1,13 @@
+{
+  "Cargo.toml": "unchanged",
+  "Cargo.lock": "unchanged",
+  "src/browser.rs": "unchanged",
+  "src/passkeys.rs": "unchanged",
+  "src/logins.rs": "unchanged",
+  "src/lease.rs": "unchanged",
+  "Chromium policy": "only theme and comment changed",
+  "README security and tool wording": "unchanged",
+  "MCP descriptors and required arguments": "unchanged (8 tools)",
+  "Bearer gate": "only the specified public font prefix added",
+  "Secret storage and redaction": "unchanged; HTTP replacement only publishes a count"
+}
