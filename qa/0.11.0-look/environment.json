@@ -1,0 +1,8 @@
+{
+  "host": "Darwin arm64",
+  "docker": null,
+  "rustc": "rustc 1.99.0 (b940084d7 2026-09-28)",
+  "font_asset_bytes": 923831,
+  "container_checks": "not run: no Docker",
+  "screenshots": "viewer-fixture-* are local mock-screen browser captures; S1-S5 not run: no Docker"
+}

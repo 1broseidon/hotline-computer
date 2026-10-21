@@ -10,7 +10,7 @@ Phases **1–6 landed** on `look/0.11`; none reverted. **7–8 not started**, fo
 | 3 Bar | Passed · `fc19d14` | S3/S4: not run: no Docker | Agent identity/task, sealed count, jobs, amber person control |
 | 4 Terminals | Passed · `b0177d9` | S3: not run: no Docker | Geist Mono, line spacing, colored job markers |
 | 5 Viewer | Passed · `740b92c` | S4: not run: no Docker | Separate browser fixtures linked below |
-| 6 Chromium | Passed · PHASE6_COMMIT | S2: not run: no Docker | Theme policy only; verify light page stays light |
+| 6 Chromium | Passed · `1ec8bfd` | S2: not run: no Docker | Theme policy only; verify light page stays light |
 | 7–8 Stretch | Not started | S5: not run: no Docker | Activity window and sealed-fill badge deferred |
 
 ## Evidence
