@@ -1,6 +1,6 @@
 # 0.11 look
 
-Phases 1–3 landed on `look/0.11`; no phases reverted. Phases 7–8 will not start: no Docker.
+Phases 1–4 landed on `look/0.11`; no phases reverted. Phases 7–8 will not start: no Docker.
 
 | Phase | Status | Commit | Screenshots | What to inspect |
 | --- | --- | --- | --- | --- |
@@ -12,8 +12,11 @@ Phases 1–3 landed on `look/0.11`; no phases reverted. Phases 7–8 will not st
 
 | 3 Bar metadata and layout | Passed native gate | `The bar names the agent and distinguishes work from person control.` | S3, S4: not run: no Docker | Identity, active pills, sealed count, colored job/lease chips, square hover menus. |
 
+| 4 Observer and terminals | Passed native gate | `Terminals use Geist Mono and color each job by its state.` | S3: not run: no Docker | 10.5pt medium/regular faces, more line space, colored markers and periwinkle prompt. |
+
 ## Checks
 
+- Phase 4: `make check` passed, 112 library tests; see `phase4-check.log`. Updated the old prompt-color expectation after the first run. Running-marker assertion and Alacritty TOML parsing passed.
 - Phase 3: `make check` passed, 111 library tests; see `phase3-check.log`. Corrected test-module placement after the first clippy run. Tests cover name precedence, authenticated metadata updates, read/action distinction and ten-second expiry.
 - Static QA passed: muted/bar **5.792:1**, muted/surface **5.493:1**, ink-2/chip **8.488:1**. See `static-checks.json`. Recipe syntax checked; live scenes are not run.
 - Phase 2: `make check` passed, 107 library tests; see `phase2-check.log`. Removed one obsolete painter after the first clippy run. Tests cover 16px and zero gutters, small screens, minimum-size rejection, bounded/offset shadow alpha.

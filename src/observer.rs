@@ -530,11 +530,12 @@ pub fn run(home: &Path) -> Result<(), String> {
     }
 }
 const RESET: &str = "\x1b[0m";
-const INK: &str = "\x1b[1;38;2;232;232;234m";
-const INK_2: &str = "\x1b[38;2;170;170;174m";
-const MUTED: &str = "\x1b[38;2;125;125;130m";
-const OK: &str = "\x1b[38;2;134;214;156m";
-const WARN: &str = "\x1b[38;2;240;194;122m";
+const INK: &str = "\x1b[97m";
+const INK_2: &str = "\x1b[38;2;180;180;186m";
+const MUTED: &str = "\x1b[90m";
+const OK: &str = "\x1b[32m";
+const AGENT: &str = "\x1b[34m";
+const FAIL: &str = "\x1b[31m";
 
 /// The top of the window: its name, and a note only when it is narrowed
 /// to one job, since then the rest are missing on purpose.
@@ -548,12 +549,19 @@ fn banner(selection: Option<&str>) -> String {
 
 /// A job's opening: its name, then the facts the tools need, then the command.
 fn header(record: &Record) -> String {
+    let (color, marker) = if record.state == "running" {
+        (AGENT, "●")
+    } else if record.state == "exited" && record.exit_code == Some(0) {
+        (OK, "✓")
+    } else {
+        (FAIL, "✗")
+    };
     let command = std::iter::once(quoted(&record.command))
         .chain(record.args.iter().map(|s| quoted(s)))
         .collect::<Vec<_>>()
         .join(" ");
     format!(
-        "\r\n{INK}▎ {}{RESET}\r\n{MUTED}  job {} · started {} · {}{RESET}\r\n{INK_2}  $ {}{RESET}\r\n",
+        "\r\n{color}{marker}{RESET} {INK}{}{RESET}\r\n{MUTED}  job {} · started {} · {}{RESET}\r\n{INK_2}  $ {}{RESET}\r\n",
         record.label,
         record.id,
         clock(record.started_at),
@@ -570,7 +578,7 @@ fn footer(record: &Record) -> String {
         .unwrap_or_else(crate::jobs::now)
         .saturating_sub(record.started_at) as f64
         / 1000.0;
-    let mut facts = vec![record.label.clone()];
+    let mut facts = Vec::new();
     if !ok || record.state != "exited" {
         facts.push(record.state.replace('_', " "));
     }
@@ -585,9 +593,10 @@ fn footer(record: &Record) -> String {
         facts.push("output capped".to_owned());
     }
     format!(
-        "\r\n{}{} {}{RESET}\r\n",
-        if ok { OK } else { WARN },
+        "\r\n{}{}{RESET} {INK}{}{RESET}{MUTED} · {}{RESET}\r\n",
+        if ok { OK } else { FAIL },
         if ok { "✓" } else { "✗" },
+        record.label,
         facts.join(" · ")
     )
 }
@@ -619,7 +628,7 @@ mod tests {
     #[test]
     fn the_rc_file_sets_the_prompt_and_leaves_room_for_the_operators_own() {
         let rc = super::BASHRC;
-        assert!(rc.contains("PS1='\\[\\e[38;2;127;196;240m\\]\\w\\[\\e[0m\\] $ '"));
+        assert!(rc.contains("PS1='\\[\\e[38;2;143;184;255m\\]\\w\\[\\e[0m\\] $ '"));
         assert!(
             !rc.contains("export PS1"),
             "an exported prompt reaches sh as text"
@@ -672,9 +681,9 @@ mod tests {
 
     #[test]
     fn a_job_is_named_first_and_identified_underneath() {
-        let text = header(&record("Run the unit tests", "running", None));
+        let text = crate::jobs::plain(&header(&record("Run the unit tests", "running", None)));
         let lines: Vec<&str> = text.lines().filter(|l| !l.is_empty()).collect();
-        assert!(lines[0].contains("▎ Run the unit tests"), "{text}");
+        assert!(lines[0].contains("● Run the unit tests"), "{text}");
         assert!(
             lines[1].contains("job 0800001a0a5ee4cb4-f789fa4d · started "),
             "{text}"
@@ -684,18 +693,29 @@ mod tests {
     }
 
     #[test]
+    fn running_headers_use_the_agent_marker_and_a_white_label() {
+        let header = header(&record("pnpm dev", "running", None));
+        assert!(header.starts_with(&format!("\r\n{AGENT}●{RESET} {INK}pnpm dev")));
+        assert!(header.contains(&format!("{MUTED}  job ")));
+    }
+
+    #[test]
     fn the_ending_names_the_job_again_and_says_how_it_went() {
         let ok = footer(&record("Run the unit tests", "exited", Some(0)));
-        assert!(ok.contains("✓ Run the unit tests · exit 0 · 2.5 s"), "{ok}");
+        assert!(
+            crate::jobs::plain(&ok).contains("✓ Run the unit tests · exit 0 · 2.5 s"),
+            "{ok}"
+        );
         assert!(ok.starts_with(&format!("\r\n{OK}")), "{ok}");
         let failed = footer(&record("Run the unit tests", "failed", Some(101)));
         assert!(
-            failed.contains("✗ Run the unit tests · failed · exit 101 · 2.5 s"),
+            crate::jobs::plain(&failed)
+                .contains("✗ Run the unit tests · failed · exit 101 · 2.5 s"),
             "{failed}"
         );
         let cancelled = footer(&record("Serve the app", "cancelled", None));
         assert!(
-            cancelled.contains("✗ Serve the app · cancelled · 2.5 s"),
+            crate::jobs::plain(&cancelled).contains("✗ Serve the app · cancelled · 2.5 s"),
             "{cancelled}"
         );
     }
