@@ -42,8 +42,29 @@ pub async fn call(app: &App, arguments: Value) -> ToolResult {
             // Capture afterwards so the pixels are at least as recent as that read.
             let tree = if input.mode == "image" {
                 None
-            } else {
+            } else if input.window.is_some() {
                 Some(a11y::tree(app, &windows).await)
+            } else {
+                // Unasked, a window under another is noise: two apps share
+                // the pane, and the one beneath has the larger tree. Name it
+                // so it can be asked for.
+                let hidden = x11::hidden(&app.config.display, &windows).unwrap_or_default();
+                let (behind, shown): (Vec<_>, Vec<_>) = windows
+                    .iter()
+                    .cloned()
+                    .partition(|w| hidden.contains(&w.id));
+                let mut tree = a11y::tree(app, &shown).await;
+                if !behind.is_empty() {
+                    let names: Vec<String> = behind
+                        .iter()
+                        .map(|w| format!("{} {}", w.id, w.title))
+                        .collect();
+                    tree.push_str(&format!(
+                        "Behind other windows, not read (pass `window` to read one): {}\n",
+                        names.join("; ")
+                    ));
+                }
+                Some(tree)
             };
             let picture = x11::picture(&app.config.display, rect, Some(MAX_EDGE))?;
             let mut blocks = vec![

@@ -443,6 +443,55 @@ pub fn place(
     connection.flush().map_err(|error| error.to_string())
 }
 
+/// The listed windows nothing on screen shows: every part of them lies under
+/// listed windows stacked higher, as two apps sharing a pane do.
+pub fn hidden(display: &str, windows: &[Window]) -> Result<Vec<String>, String> {
+    let (connection, root) = connect(display)?;
+    let order = connection
+        .query_tree(root)
+        .map_err(|e| e.to_string())?
+        .reply()
+        .map_err(|e| e.to_string())?
+        .children;
+    let stack: Vec<(usize, [i32; 4], String)> = windows
+        .iter()
+        .filter_map(|window| {
+            let id = window_id(&window.id).ok()?;
+            let rank = order.iter().position(|child| *child == id)?;
+            Some((rank, window.bounds, window.id.clone()))
+        })
+        .collect();
+    Ok(covered(&stack))
+}
+
+/// Of windows given as (stacking rank, bounds, id), bottom rank lowest, the
+/// ids whose every sampled point lies under a higher window.
+pub(crate) fn covered(stack: &[(usize, [i32; 4], String)]) -> Vec<String> {
+    const STEPS: i32 = 8;
+    stack
+        .iter()
+        .filter(|(rank, [x, y, width, height], _)| {
+            let above: Vec<[i32; 4]> = stack
+                .iter()
+                .filter(|(other, ..)| other > rank)
+                .map(|(_, bounds, _)| *bounds)
+                .collect();
+            if above.is_empty() || *width <= 0 || *height <= 0 {
+                return false;
+            }
+            (0..=STEPS).all(|i| {
+                (0..=STEPS).all(|j| {
+                    let (px, py) = (x + (width - 1) * i / STEPS, y + (height - 1) * j / STEPS);
+                    above.iter().any(|[ax, ay, aw, ah]| {
+                        px >= *ax && py >= *ay && px < ax + aw && py < ay + ah
+                    })
+                })
+            })
+        })
+        .map(|(_, _, id)| id.clone())
+        .collect()
+}
+
 fn connect(display: &str) -> Result<(RustConnection, XWindow), String> {
     let (connection, screen_number) =
         x11rb::connect(Some(display)).map_err(|error| format!("x11 connect: {error}"))?;
@@ -661,6 +710,24 @@ pub fn publish_holder(display: &str, lease: Option<(&str, u64)>) -> Result<(), S
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn a_window_under_another_is_covered_and_a_peeking_one_is_not() {
+        let at = |rank, bounds, id: &str| (rank, bounds, id.to_owned());
+        let stack = [
+            at(1, [16, 56, 1248, 1008], "browser"),
+            at(2, [16, 56, 1248, 1008], "editor"),
+            at(3, [1280, 56, 624, 1008], "observer"),
+            at(4, [100, 100, 300, 200], "dialog"),
+            at(0, [16, 56, 1888, 1008], "wide"),
+        ];
+        assert_eq!(covered(&stack), ["browser", "wide"].map(String::from));
+        // A window that reaches past everything above it still shows.
+        let peeking = [
+            at(1, [0, 0, 500, 500], "low"),
+            at(2, [0, 0, 499, 500], "high"),
+        ];
+        assert!(covered(&peeking).is_empty());
+    }
 
     #[test]
     fn a_region_is_clipped_to_the_screen() {
