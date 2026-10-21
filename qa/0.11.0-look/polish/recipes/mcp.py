@@ -8,7 +8,9 @@ import base64, json, os, pathlib, sys, time, urllib.request
 ROOT = pathlib.Path(__file__).resolve().parents[4]
 URL = os.environ.get("HC_URL", "http://127.0.0.1:18787") + "/mcp"
 TOKEN = pathlib.Path(os.environ.get("HC_TOKEN_FILE", ROOT / ".token")).read_text().strip()
-HOLDER = os.environ.get("HC_HOLDER", "Tad")
+# No holder header unless asked: the desktop then names the client itself,
+# as it would a real harness. The demo scene asks for "Tad" by name.
+HOLDER = os.environ.get("HC_HOLDER", "")
 OUT = pathlib.Path(os.environ.get("HC_OUT", pathlib.Path(__file__).resolve().parent.parent / "local"))
 OUT.mkdir(parents=True, exist_ok=True)
 _opener = urllib.request.build_opener(urllib.request.ProxyHandler({}))
@@ -19,8 +21,9 @@ def _rpc(payload, session=None):
         "Authorization": "Bearer " + TOKEN,
         "Content-Type": "application/json",
         "Accept": "application/json, text/event-stream",
-        "X-Computer-Holder": HOLDER,
     }
+    if HOLDER:
+        headers["X-Computer-Holder"] = HOLDER
     if session:
         headers["Mcp-Session-Id"] = session
     req = urllib.request.Request(URL, data=json.dumps(payload).encode(), headers=headers)

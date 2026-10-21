@@ -1,6 +1,8 @@
 """Shoot the viewer page while the agent acts. Usage: python3 viewer.py PREFIX"""
 import json, sys, threading, time
 from playwright.sync_api import sync_playwright
+import os
+os.environ.setdefault("HC_HOLDER", "Tad")  # the demo's persona
 import mcp
 
 PREFIX = sys.argv[1] if len(sys.argv) > 1 else "v"

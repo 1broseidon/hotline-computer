@@ -3,6 +3,8 @@
 Usage: python3 scene.py PREFIX
 """
 import json, pathlib, sys, time, urllib.request
+import os
+os.environ.setdefault("HC_HOLDER", "Tad")  # the demo's persona
 import mcp
 
 PREFIX = sys.argv[1] if len(sys.argv) > 1 else "x"
