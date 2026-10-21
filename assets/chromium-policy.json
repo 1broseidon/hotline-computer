@@ -1,5 +1,5 @@
 {
-  "_comment": "The managed Chromium is driven by the agent and watched by a person. Its chrome follows the desktop surface; page colors remain the site's own. Password and autofill prompts stay disabled so they do not cover the page.",
+  "_comment": "The managed Chromium is driven by the agent and watched by a person. Its chrome follows the desktop surface; page colors remain the site's own. Password and autofill prompts stay disabled so they do not cover the page. New tabs open blank: Chromium's new-tab page embeds its own internal frames, and a blank tab is what a person watching expects.",
   "PasswordManagerEnabled": false,
   "PasswordLeakDetectionEnabled": false,
   "AutofillAddressEnabled": false,
@@ -7,5 +7,7 @@
   "BrowserSignin": 0,
   "DefaultBrowserSettingEnabled": false,
   "PromotionalTabsEnabled": false,
-  "BrowserThemeColor": "#17171b"
+  "BrowserThemeColor": "#17171b",
+  "NewTabPageLocation": "about:blank",
+  "RestoreOnStartup": 5
 }

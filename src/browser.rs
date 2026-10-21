@@ -196,7 +196,7 @@ impl BrowserManager {
         // Creating another before it shows up leaves two tabs, and the one
         // the agent drives is not the one on screen.
         let started = std::time::Instant::now();
-        while browser.pages().await.map_err(browser_error)?.is_empty() {
+        while tabs(&browser).await?.is_empty() {
             if started.elapsed() > INITIAL_TAB {
                 browser
                     .new_page("about:blank")
@@ -247,7 +247,7 @@ impl BrowserManager {
         }
         let session = session.as_mut().expect("created above");
         let synced = async {
-            let pages = session.browser.pages().await.map_err(browser_error)?;
+            let pages = tabs(&session.browser).await?;
             let open: HashSet<String> = pages
                 .iter()
                 .map(|page| page.target_id().inner().clone())
@@ -468,7 +468,7 @@ impl BrowserManager {
     pub async fn tabs(&self) -> Result<String, String> {
         self.with_session(|session| {
             Box::pin(async move {
-                let pages = session.browser.pages().await.map_err(browser_error)?;
+                let pages = tabs(&session.browser).await?;
                 let mut tabs = Vec::new();
                 for (index, page) in pages.iter().enumerate() {
                     tabs.push(json!({
@@ -500,7 +500,7 @@ impl BrowserManager {
                 if !url.is_empty() {
                     note = landed(page.goto(url.as_str()).await, String::new())?;
                 }
-                let pages = session.browser.pages().await.map_err(browser_error)?;
+                let pages = tabs(&session.browser).await?;
                 session.current = pages
                     .iter()
                     .position(|candidate| candidate.target_id() == page.target_id())
@@ -520,7 +520,7 @@ impl BrowserManager {
     pub async fn tab_select(&self, index: usize) -> Result<String, String> {
         self.with_session(|session| {
             Box::pin(async move {
-                let pages = session.browser.pages().await.map_err(browser_error)?;
+                let pages = tabs(&session.browser).await?;
                 let page = pages
                     .get(index)
                     .ok_or_else(|| format!("tab {index} not found"))?;
@@ -536,12 +536,12 @@ impl BrowserManager {
         self.with_session(|session| {
             Box::pin(async move {
                 let index = index.unwrap_or(session.current);
-                let mut pages = session.browser.pages().await.map_err(browser_error)?;
+                let mut pages = tabs(&session.browser).await?;
                 if index >= pages.len() {
                     return Err(format!("tab {index} not found"));
                 }
                 pages.remove(index).close().await.map_err(browser_error)?;
-                let remaining = session.browser.pages().await.map_err(browser_error)?;
+                let remaining = tabs(&session.browser).await?;
                 if remaining.is_empty() {
                     session
                         .browser
@@ -752,8 +752,23 @@ async fn reap(mut session: BrowserSession) {
 
 /// The tab the agent drives, carrying the teammate's passkeys and their
 /// guard before anything is done on it.
+/// The tabs a person sees. Chromium's own new-tab page hosts internal
+/// documents (`chrome://newtab-footer/` since 141) that DevTools lists as
+/// pages; driving one of those navigates a hidden strip, not the tab.
+async fn tabs(browser: &Browser) -> Result<Vec<Page>, String> {
+    let mut visible = Vec::new();
+    for page in browser.pages().await.map_err(browser_error)? {
+        let url = page.url().await.ok().flatten().unwrap_or_default();
+        if url.starts_with("chrome://newtab-footer") || url.starts_with("chrome-untrusted://") {
+            continue;
+        }
+        visible.push(page);
+    }
+    Ok(visible)
+}
+
 async fn current_page(session: &mut BrowserSession) -> Result<Page, String> {
-    let pages = session.browser.pages().await.map_err(browser_error)?;
+    let pages = tabs(&session.browser).await?;
     let page = if pages.is_empty() {
         session
             .browser

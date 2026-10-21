@@ -22,6 +22,7 @@ use serde_json::json;
 use tokio::sync::mpsc::UnboundedSender;
 use x11rb::connection::Connection;
 use x11rb::protocol::Event;
+use x11rb::protocol::shape::{ConnectionExt as _, SK, SO};
 use x11rb::protocol::xproto::{
     Allow, Atom, AtomEnum, ButtonIndex, ButtonPressEvent, CONFIGURE_NOTIFY_EVENT,
     ChangeWindowAttributesAux, ClientMessageData, ClientMessageEvent, ConfigWindow,
@@ -52,6 +53,9 @@ pub enum Request {
 
 const MARK: &[u8] = include_bytes!("../assets/wallpaper-mark.png");
 const BROWSER_CLASS: &str = "chromium";
+/// Window corners. Cut with SHAPE (one bit), then the wallpaper's antialiased
+/// ring hugs the curve, so the stair-step never meets the ground.
+const CORNER: u16 = 10;
 const BACKGROUND: u32 = 0x0b0b0d;
 /// The bar's height in pixels; the work area starts below it.
 pub const BAR_HEIGHT: u16 = 40;
@@ -60,6 +64,8 @@ const BAR_RAISED: u32 = 0x1f1f25;
 const RAISED_EDGE: u32 = 0x2e2e35;
 const PILL_INK: u32 = 0xa2a2a9;
 const BAR_HOVER: u32 = 0x1f1f25;
+/// The wallpaper mark: one step above the ground.
+const WATERMARK: u32 = 0x1a1a1f;
 const RULE: u32 = 0x2a2a30;
 const INK: u32 = 0xececef;
 const INK_2: u32 = 0xb4b4ba;
@@ -692,10 +698,14 @@ impl Desktop {
     /// managed, visible clients contribute; popups and tray windows never do.
     fn paint_wallpaper(&mut self) -> Result<(), String> {
         let mut canvas = Canvas::new(self.width, self.height, BACKGROUND);
-        let mark = decode_png(MARK)?;
+        // The mark is a watermark, not a logo on a splash screen: a shade
+        // above the ground, at a third of its source size.
+        let source = decode_png(MARK)?;
+        let mark = resample(&source, source.width / 3, source.height / 3);
         let x = (self.width.saturating_sub(mark.width) / 2) as i32;
-        let y = i32::from(BAR_HEIGHT + self.height.saturating_sub(BAR_HEIGHT + mark.height) / 2);
-        canvas.blit(x, y, &mark);
+        let y =
+            i32::from(BAR_HEIGHT + self.height.saturating_sub(BAR_HEIGHT + mark.height) / 2) - 28;
+        canvas.stamp(x, y, &mark, WATERMARK);
         let mut rects = Vec::new();
         for window in &self.order {
             let attributes = self
@@ -724,15 +734,37 @@ impl Desktop {
                 ));
             }
         }
+        if rects.is_empty() {
+            let title = Face::new(&self.fonts.semibold, 15.0);
+            let note = Face::new(&self.fonts.sans, 13.0);
+            let line = format!("{}'s computer", self.agent.name);
+            let center = i32::from(self.width) / 2;
+            let top = y + i32::from(mark.height) + 14;
+            canvas.text(
+                &title,
+                center - title.width(&line) / 2,
+                top + 14,
+                &line,
+                INK_2,
+            );
+            let hint = "Windows open here as the agent works.";
+            canvas.text(&note, center - note.width(hint) / 2, top + 38, hint, MUTED);
+        }
         for &(x, y, w, h) in &rects {
             canvas.shadow(x, y, w, h);
         }
-        // Rings go last so a neighbour's shadow cannot dim their one-pixel edge.
+        // Rings go last so a neighbour's shadow cannot dim their one-pixel
+        // edge. Each is a rounded rectangle one pixel larger than its window,
+        // filled back with the ground inside, so the antialiased curve sits
+        // exactly where SHAPE cut the window's corner.
+        let radius = if self.gutter == 0 {
+            0.0
+        } else {
+            f32::from(CORNER)
+        };
         for (x, y, w, h) in rects {
-            canvas.fill_rect(x - 1, y - 1, w + 2, 1, RULE);
-            canvas.fill_rect(x - 1, y + h, w + 2, 1, RULE);
-            canvas.fill_rect(x - 1, y, 1, h, RULE);
-            canvas.fill_rect(x + w, y, 1, h, RULE);
+            canvas.round_rect(x - 1, y - 1, w + 2, h + 2, radius + 1.0, RULE);
+            canvas.round_rect(x, y, w, h, radius, BACKGROUND);
         }
         let pixmap: Pixmap = self.connection.generate_id().map_err(|e| e.to_string())?;
         self.connection
@@ -1185,26 +1217,33 @@ impl Desktop {
             match client.and_then(|c| c.icon.as_ref()) {
                 Some(icon) => canvas.blit(icon_x, icon_y, icon),
                 None => {
-                    canvas.round_rect(icon_x, icon_y, 16, 16, 4.0, BAR_HOVER);
-                    let glyph = if client.is_some_and(|c| c.class.contains("hotlineterminal")) {
-                        ">_".to_owned()
-                    } else if client.is_some_and(|c| c.class.contains("hotlineshell")) {
-                        "$".to_owned()
+                    let ground = if active || self.hovered_app == Some(window) {
+                        BAR_RAISED
                     } else {
-                        title
+                        BAR_FILL
+                    };
+                    let ink = if active { INK } else { PILL_INK };
+                    let class = client.map_or("", |c| c.class.as_str());
+                    if class.contains("hotlineterminal") || class.contains("hotlineshell") {
+                        canvas.terminal_icon(icon_x, icon_y, ink, ground);
+                    } else if class.contains("hotlineactivity") {
+                        canvas.list_icon(icon_x, icon_y, ink);
+                    } else {
+                        canvas.round_rect(icon_x, icon_y, 16, 16, 4.0, BAR_HOVER);
+                        let glyph = title
                             .chars()
                             .next()
                             .map(|c| c.to_uppercase().to_string())
-                            .unwrap_or_default()
-                    };
-                    let glyph_width = mono.width(&glyph);
-                    canvas.text(
-                        &mono,
-                        icon_x + (16 - glyph_width) / 2,
-                        mono.baseline_in(icon_y, 16),
-                        &glyph,
-                        INK,
-                    );
+                            .unwrap_or_default();
+                        let glyph_width = mono.width(&glyph);
+                        canvas.text(
+                            &mono,
+                            icon_x + (16 - glyph_width) / 2,
+                            mono.baseline_in(icon_y, 16),
+                            &glyph,
+                            INK,
+                        );
+                    }
                 }
             }
             canvas.text(
@@ -1829,9 +1868,25 @@ impl Desktop {
                 self.draw_bar()
             }
             Event::DestroyNotify(event) => self.forget(event.window),
+            Event::ShapeNotify(event)
+                if event.shape_kind == SK::BOUNDING
+                    && self.clients.contains_key(&event.affected_window) =>
+            {
+                self.keep_corners(
+                    event.affected_window,
+                    event.extents_width,
+                    event.extents_height,
+                )
+            }
             Event::PropertyNotify(event) if event.window == self.root => {
                 if event.atom == self.atoms.agent || event.atom == self.atoms.sealed {
+                    let named = self.agent.name.clone();
                     self.read_identity()?;
+                    // The empty desktop names the agent; activity alone
+                    // must not repaint the whole wallpaper.
+                    if self.agent.name != named {
+                        self.wallpaper_dirty = true;
+                    }
                     self.draw_bar()
                 } else if event.atom == self.atoms.jobs_running {
                     self.draw_bar()
@@ -2041,6 +2096,9 @@ impl Desktop {
                 &ChangeWindowAttributesAux::new().event_mask(EventMask::PROPERTY_CHANGE),
             )
             .map_err(|e| e.to_string())?;
+        // Apps that draw their own frame (Chromium) reset their bounding
+        // shape after a resize; hearing about it lets the corners come back.
+        let _ = self.connection.shape_select_input(window, true);
         self.clients.insert(window, client);
         self.order.push(window);
         self.apply_geometry(window)?;
@@ -2148,6 +2206,7 @@ impl Desktop {
                     .border_width(0),
             )
             .map_err(|error| error.to_string())?;
+        self.round_corners(window, width, height)?;
         let notify = ConfigureNotifyEvent {
             response_type: CONFIGURE_NOTIFY_EVENT,
             sequence: 0,
@@ -2172,6 +2231,66 @@ impl Desktop {
         self.property32(window, self.atoms.net_wm_state, AtomEnum::ATOM, &state)
     }
 
+    /// Rounds a managed window's corners with a bounding shape. Edge to
+    /// edge (no gutter) keeps square corners, since the screen edge is the frame.
+    fn round_corners(&self, window: Window, width: u16, height: u16) -> Result<(), String> {
+        if self.gutter == 0
+            || width < CORNER * 4
+            || height < CORNER * 4
+            || self.draws_own_frame(window)
+        {
+            return Ok(());
+        }
+        let rects = corner_rects(width, height, CORNER);
+        self.connection
+            .shape_rectangles(
+                SO::SET,
+                SK::BOUNDING,
+                x11rb::protocol::xproto::ClipOrdering::UNSORTED,
+                window,
+                0,
+                0,
+                &rects,
+            )
+            .map_err(|error| error.to_string())?;
+        Ok(())
+    }
+
+    /// Chromium draws its own frame and shape, and stops repainting its
+    /// toolbar if the window manager keeps replacing that shape.
+    fn draws_own_frame(&self, window: Window) -> bool {
+        self.clients
+            .get(&window)
+            .is_some_and(|client| client.class.contains(BROWSER_CLASS))
+    }
+
+    /// Re-cuts the corners when a client replaced its bounding shape with
+    /// its own. Our own shape also notifies; its row count tells them apart,
+    /// so this never loops.
+    fn keep_corners(&self, window: Window, width: u16, height: u16) -> Result<(), String> {
+        if self.gutter == 0 || self.draws_own_frame(window) {
+            return Ok(());
+        }
+        // The server normalises rectangles, so compare what matters: a
+        // rounded shape leaves its top-left pixel out; the app's own
+        // rectangle covers it.
+        let square = self
+            .connection
+            .shape_get_rectangles(window, SK::BOUNDING)
+            .map_err(|e| e.to_string())?
+            .reply()
+            .is_ok_and(|reply| {
+                reply
+                    .rectangles
+                    .iter()
+                    .any(|r| r.x <= 0 && r.y <= 0 && r.width > 0 && r.height > 0)
+            });
+        if square && width >= CORNER * 4 && height >= CORNER * 4 {
+            self.round_corners(window, width, height)?;
+        }
+        Ok(())
+    }
+
     fn configure_request(&mut self, event: ConfigureRequestEvent) -> Result<(), String> {
         if self.clients.contains_key(&event.window) {
             self.wallpaper_dirty = true;
@@ -2194,13 +2313,14 @@ impl Desktop {
                 if event.value_mask.contains(ConfigWindow::HEIGHT) {
                     client.saved.3 = event.height;
                 }
+                let (width, height) = (client.saved.2, client.saved.3);
                 self.connection
                     .configure_window(
                         event.window,
                         &ConfigureWindowAux::from_configure_request(&event),
                     )
                     .map_err(|error| error.to_string())?;
-                Ok(())
+                self.round_corners(event.window, width, height)
             }
             None => {
                 self.connection
@@ -2529,7 +2649,11 @@ fn jobs_chip(canvas: &mut Canvas, face: &Face, right: i32, counts: (u32, u32, u3
     let (label, suffix, color, dot) = if failed > 0 {
         (
             format!("{failed} failed"),
-            format!(" · {running} running"),
+            if running > 0 {
+                format!(" · {running} running")
+            } else {
+                String::new()
+            },
             FAIL,
             FAIL,
         )
@@ -2575,6 +2699,38 @@ fn jobs_chip(canvas: &mut Canvas, face: &Face, right: i32, counts: (u32, u32, u3
         MUTED,
     );
     rect
+}
+
+/// One-pixel rows that fill a rounded rectangle: the curve rows top and
+/// bottom, then one rectangle for the straight middle.
+fn corner_rects(width: u16, height: u16, radius: u16) -> Vec<x11rb::protocol::xproto::Rectangle> {
+    use x11rb::protocol::xproto::Rectangle;
+    let r = f32::from(radius);
+    let mut rects = Vec::with_capacity(usize::from(radius) * 2 + 1);
+    for row in 0..radius {
+        let dy = r - (f32::from(row) + 0.5);
+        let inset = (r - (r * r - dy * dy).max(0.0).sqrt()).round() as u16;
+        let w = width.saturating_sub(inset * 2);
+        rects.push(Rectangle {
+            x: inset as i16,
+            y: row as i16,
+            width: w,
+            height: 1,
+        });
+        rects.push(Rectangle {
+            x: inset as i16,
+            y: (height - 1 - row) as i16,
+            width: w,
+            height: 1,
+        });
+    }
+    rects.push(Rectangle {
+        x: 0,
+        y: radius as i16,
+        width,
+        height: height.saturating_sub(radius * 2),
+    });
+    rects
 }
 
 fn recently_active(last_action_ms: u64, now: u64) -> bool {

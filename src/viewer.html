@@ -228,8 +228,8 @@ button svg { width:16px; height:16px; flex:none; fill:none; stroke:currentColor;
     const rect = canvas.getBoundingClientRect();
     const x = rect.left + hands.x * rect.width / canvas.width, y = rect.top + hands.y * rect.height / canvas.height;
     pointer.style.transform = `translate(${x}px,${y}px)`;
-    intent.style.left = Math.max(8, Math.min(x + 22, innerWidth - intent.offsetWidth - 8)) + 'px';
-    intent.style.top = Math.max(8, Math.min(y - 2, innerHeight - 36)) + 'px';
+    intent.style.left = Math.max(8, Math.min(x + 14, innerWidth - intent.offsetWidth - 8)) + 'px';
+    intent.style.top = Math.max(8, Math.min(y + 30, innerHeight - 36)) + 'px';
     return [x,y];
   }
   function showHands(message) {

@@ -45,10 +45,37 @@ pub async fn call(app: &App, arguments: Value, holder: &str) -> ToolResult {
     } else {
         super::gesture_intent(&input.action)
     };
-    if let (Some(intent), Some(display)) = (intent, &app.display)
-        && let Ok(hands) = display.hands.lock()
-    {
-        hands.announce(Some(app.secrets.redact(intent).into_owned()));
+    // CDP acts on the element without moving the X pointer, so the viewer's
+    // agent cursor would point wherever the last native input left it. Put
+    // the real pointer on the element first: the cursor, its label and the
+    // page's own hover state then all agree with what is being acted on.
+    let target = if matches!(
+        input.action.as_str(),
+        "click_ref" | "fill" | "hover" | "check" | "select"
+    ) {
+        element_point(app, &input.r#ref).await
+    } else {
+        None
+    };
+    if let (Some(intent), Some(display)) = (intent, app.display.clone()) {
+        // "clicking Sign in": the verb, then what a person would call the
+        // element. Page text, so it is redacted like any other output.
+        let intent = match &target {
+            Some((_, _, label)) if !label.is_empty() => format!("{intent} {label}"),
+            _ => intent.to_owned(),
+        };
+        let intent = app.secrets.redact(&intent).into_owned();
+        let _ = tokio::task::spawn_blocking(move || {
+            if let Ok(mut hands) = display.hands.lock() {
+                match target {
+                    Some((x, y, _)) => {
+                        let _ = hands.with_intent(Some(intent), |hands| hands.move_to(x, y));
+                    }
+                    None => hands.announce(Some(intent)),
+                }
+            }
+        })
+        .await;
     }
     let result = match input.action.as_str() {
         "navigate" => app.browser.navigate(&input.url).await,
@@ -80,8 +107,16 @@ pub async fn call(app: &App, arguments: Value, holder: &str) -> ToolResult {
                 {
                     // Variables have no site restriction, so their receipt
                     // must not claim that an origin was checked.
+                    let area = crate::x11::windows(&app.config.display)
+                        .ok()
+                        .and_then(|windows| {
+                            windows
+                                .into_iter()
+                                .find(|w| w.class.to_ascii_lowercase().contains("chromium"))
+                        })
+                        .map(|window| window.bounds);
                     app.badges
-                        .show(&app.config.display, bounds, label, origin_matched);
+                        .show(&app.config.display, bounds, area, label, origin_matched);
                 }
                 result
             }
@@ -207,6 +242,72 @@ async fn downloads(app: &App) -> Result<String, String> {
     } else {
         names.join("\n")
     })
+}
+
+/// Where an element referenced by the last snapshot sits on the screen, in
+/// X coordinates, scrolled into view. Refs are generated tokens; anything
+/// else is refused rather than spliced into script.
+async fn element_point(app: &App, reference: &str) -> Option<(i16, i16, String)> {
+    if reference.is_empty()
+        || !reference
+            .chars()
+            .all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_')
+    {
+        return None;
+    }
+    let js = format!(
+        "(()=>{{const e=document.querySelector('[data-hotline-ref=\"{reference}\"]');\
+         if(!e)return null;e.scrollIntoView({{block:'nearest',inline:'nearest'}});\
+         const r=e.getBoundingClientRect();\
+         const l=e.labels&&e.labels[0];\
+         const t=((l&&l.innerText)||e.getAttribute('aria-label')||e.innerText||\
+         e.getAttribute('placeholder')||'').trim().split('\\n')[0].slice(0,32);\
+         return [[r.left+Math.min(r.width/2,r.width-12),r.top+r.height/2,\
+         window.outerWidth-window.innerWidth,window.outerHeight-window.innerHeight,\
+         window.devicePixelRatio||1],t]}})()"
+    );
+    let raw = tokio::time::timeout(std::time::Duration::from_millis(500), app.browser.eval(&js))
+        .await
+        .ok()?
+        .ok()?;
+    let (v, label): (Vec<f64>, String) = serde_json::from_str(&raw).ok()?;
+    let [x, y, chrome_x, chrome_y, scale] = v.as_slice() else {
+        return None;
+    };
+    let window = crate::x11::windows(&app.config.display)
+        .ok()?
+        .into_iter()
+        .find(|w| w.class.to_ascii_lowercase().contains("chromium"))?;
+    let [wx, wy, ww, wh] = window.bounds.map(f64::from);
+    let sx = wx + (chrome_x / 2.0 + x) * scale;
+    let sy = wy + (chrome_y + y) * scale;
+    (sx >= wx && sx < wx + ww && sy >= wy && sy < wy + wh).then_some((sx as i16, sy as i16, label))
+}
+
+/// What a person would call the element a ref points at: its label, text or
+/// placeholder, short. For the Activity window only; it is page text, so it
+/// passes the same redaction as everything else there.
+pub(super) async fn element_label(app: &App, reference: &str) -> Option<String> {
+    if reference.is_empty()
+        || !reference
+            .chars()
+            .all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_')
+    {
+        return None;
+    }
+    let js = format!(
+        "(()=>{{const e=document.querySelector('[data-hotline-ref=\"{reference}\"]');\
+         if(!e)return null;const l=e.labels&&e.labels[0];\
+         return ((l&&l.innerText)||e.getAttribute('aria-label')||e.innerText||\
+         e.getAttribute('placeholder')||e.getAttribute('title')||'').trim().split('\\n')[0]}})()"
+    );
+    let raw = tokio::time::timeout(std::time::Duration::from_millis(300), app.browser.eval(&js))
+        .await
+        .ok()?
+        .ok()?;
+    let label: String = serde_json::from_str::<Option<String>>(&raw).ok()??;
+    let label: String = label.chars().take(40).collect();
+    (!label.is_empty()).then_some(label)
 }
 
 #[cfg(test)]

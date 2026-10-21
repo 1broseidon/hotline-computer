@@ -253,6 +253,52 @@ impl Canvas {
         }
     }
 
+    /// An antialiased stroke with round caps, for small vector icons.
+    pub fn segment(&mut self, from: (f32, f32), to: (f32, f32), width: f32, color: u32) {
+        let color = channels(color);
+        let half = width / 2.0;
+        let (x0, y0) = (
+            (from.0.min(to.0) - half - 1.0).floor() as i32,
+            (from.1.min(to.1) - half - 1.0).floor() as i32,
+        );
+        let (x1, y1) = (
+            (from.0.max(to.0) + half + 1.0).ceil() as i32,
+            (from.1.max(to.1) + half + 1.0).ceil() as i32,
+        );
+        let (dx, dy) = (to.0 - from.0, to.1 - from.1);
+        let length = (dx * dx + dy * dy).max(f32::EPSILON);
+        for py in y0..=y1 {
+            for px in x0..=x1 {
+                let (cx, cy) = (px as f32 + 0.5, py as f32 + 0.5);
+                let t = (((cx - from.0) * dx + (cy - from.1) * dy) / length).clamp(0.0, 1.0);
+                let (nx, ny) = (from.0 + t * dx - cx, from.1 + t * dy - cy);
+                let coverage = (half + 0.5 - (nx * nx + ny * ny).sqrt()).clamp(0.0, 1.0);
+                if coverage > 0.0 {
+                    self.plot(px, py, color, (coverage * 255.0) as u32);
+                }
+            }
+        }
+    }
+
+    /// A 16px terminal: a rounded frame, a prompt chevron and a cursor bar.
+    pub fn terminal_icon(&mut self, x: i32, y: i32, color: u32, fill: u32) {
+        self.round_rect(x + 1, y + 2, 14, 12, 3.0, color);
+        self.round_rect(x + 2, y + 3, 12, 10, 2.0, fill);
+        let (x, y) = (x as f32, y as f32);
+        self.segment((x + 4.5, y + 6.0), (x + 6.5, y + 8.0), 1.3, color);
+        self.segment((x + 6.5, y + 8.0), (x + 4.5, y + 10.0), 1.3, color);
+        self.segment((x + 8.5, y + 10.0), (x + 11.5, y + 10.0), 1.3, color);
+    }
+
+    /// A 16px list: three rows, each led by a dot.
+    pub fn list_icon(&mut self, x: i32, y: i32, color: u32) {
+        let (x, y) = (x as f32, y as f32);
+        for row in [4.0, 8.0, 12.0] {
+            self.dot(x + 3.0, y + row, 1.1, color);
+            self.segment((x + 6.5, y + row), (x + 13.5, y + row), 1.3, color);
+        }
+    }
+
     pub fn dot(&mut self, cx: f32, cy: f32, radius: f32, color: u32) {
         let color = channels(color);
         let (x0, y0) = (

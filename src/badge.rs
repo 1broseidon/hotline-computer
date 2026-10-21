@@ -22,6 +22,8 @@ const HEIGHT: u16 = 34;
 struct Request {
     display: String,
     bounds: [i32; 4],
+    /// The window holding the field: the receipt stays inside it.
+    area: Option<[i32; 4]>,
     name: String,
     origin_matched: bool,
 }
@@ -30,7 +32,14 @@ struct Request {
 pub struct Badges(Arc<Mutex<Option<mpsc::SyncSender<Request>>>>);
 
 impl Badges {
-    pub fn show(&self, display: &str, bounds: [i32; 4], name: String, origin_matched: bool) {
+    pub fn show(
+        &self,
+        display: &str,
+        bounds: [i32; 4],
+        area: Option<[i32; 4]>,
+        name: String,
+        origin_matched: bool,
+    ) {
         let mut sender = self.0.lock().unwrap();
         if sender.is_none() {
             let (tx, rx) = mpsc::sync_channel(1);
@@ -49,6 +58,7 @@ impl Badges {
             let _ = sender.try_send(Request {
                 display: display.into(),
                 bounds,
+                area,
                 name,
                 origin_matched,
             });
@@ -83,19 +93,27 @@ fn worker(receiver: mpsc::Receiver<Request>) {
     }
 }
 
-fn position(bounds: [i32; 4], screen: [u16; 2], width: u16) -> Option<(i16, i16)> {
+fn position(bounds: [i32; 4], area: [i32; 4], width: u16) -> Option<(i16, i16)> {
     let [x, y, w, h] = bounds.map(i64::from);
-    let [sw, sh] = screen.map(i64::from);
-    if w <= 0 || h <= 0 || x + w <= 0 || x >= sw || y + h <= 0 || y >= sh || i64::from(width) > sw {
+    let [ax, ay, aw, ah] = area.map(i64::from);
+    let (right, bottom) = (ax + aw, ay + ah);
+    let (bw, bh) = (i64::from(width), i64::from(HEIGHT));
+    if w <= 0 || h <= 0 || x + w <= ax || x >= right || y + h <= ay || y >= bottom || bw > aw {
         return None;
+    }
+    // Beside the field first: below it is usually the form's next control,
+    // often the submit button the agent is about to press.
+    let middle = (y + (h - bh) / 2).clamp(ay, bottom - bh);
+    if x + w + 10 + bw <= right - 8 {
+        return Some(((x + w + 10) as i16, middle as i16));
+    }
+    // Then above, over the field's own label, then below as a last resort.
+    let x = x.clamp(ax, right - bw);
+    if y - 8 - bh >= ay {
+        return Some((x as i16, (y - 8 - bh) as i16));
     }
     let below = y + h + 6;
-    // No room below the field means no badge, rather than covering the field
-    // or placing a receipt somewhere unrelated to the successful fill.
-    if below + i64::from(HEIGHT) > sh {
-        return None;
-    }
-    Some((x.clamp(0, sw - i64::from(width)) as i16, below as i16))
+    (below + bh <= bottom).then_some((x as i16, below as i16))
 }
 
 /// Keeping this connection alive keeps the window/pixmap alive. Dropping it
@@ -118,15 +136,20 @@ fn draw(request: &Request, face: &Face) -> Result<Overlay, String> {
         ""
     };
     let limit = i32::from(screen.width_in_pixels).saturating_sub(40 + face.width(matched));
-    let label = face.fit(&format!("Typed from sealed secret {name}"), limit);
+    let label = face.fit(&format!("Sealed secret {name}"), limit);
     let width =
-        (40 + face.width(&label) + face.width(matched)).clamp(1, i32::from(u16::MAX)) as u16;
+        (42 + face.width(&label) + face.width(matched)).clamp(1, i32::from(u16::MAX)) as u16;
     let (x, y) = position(
         request.bounds,
-        [screen.width_in_pixels, screen.height_in_pixels],
+        request.area.unwrap_or([
+            0,
+            0,
+            i32::from(screen.width_in_pixels),
+            i32::from(screen.height_in_pixels),
+        ]),
         width,
     )
-    .ok_or("no room below the focused field")?;
+    .ok_or("no room beside the focused field")?;
     let window = connection.generate_id().map_err(|e| e.to_string())?;
     let pixmap = connection.generate_id().map_err(|e| e.to_string())?;
     let gc = connection.generate_id().map_err(|e| e.to_string())?;
@@ -136,12 +159,47 @@ fn draw(request: &Request, face: &Face) -> Result<Overlay, String> {
     connection
         .create_gc(gc, pixmap, &CreateGCAux::new())
         .map_err(|e| e.to_string())?;
-    let mut canvas = Canvas::new(width, HEIGHT, RULE);
-    canvas.fill_rect(1, 1, i32::from(width) - 2, i32::from(HEIGHT) - 2, SURFACE);
-    canvas.padlock(10, 10, OK);
+    // Start from what is on screen beneath the receipt, so its rounded
+    // corners antialias against the real page rather than a guessed colour.
+    let mut canvas = Canvas::new(width, HEIGHT, SURFACE);
+    if let Ok(under) = connection
+        .get_image(
+            ImageFormat::Z_PIXMAP,
+            screen.root,
+            x,
+            y,
+            width,
+            HEIGHT,
+            u32::MAX,
+        )
+        .map_err(|e| e.to_string())
+        .and_then(|cookie| cookie.reply().map_err(|e| e.to_string()))
+        && under.data.len() >= usize::from(width) * usize::from(HEIGHT) * 4
+    {
+        for (pixel, bgrx) in canvas
+            .image
+            .rgba
+            .as_chunks_mut::<4>()
+            .0
+            .iter_mut()
+            .zip(under.data.as_chunks::<4>().0)
+        {
+            *pixel = [bgrx[2], bgrx[1], bgrx[0], 255];
+        }
+    }
+    canvas.round_rect(0, 0, i32::from(width), i32::from(HEIGHT), 9.0, RULE);
+    canvas.round_rect(
+        1,
+        1,
+        i32::from(width) - 2,
+        i32::from(HEIGHT) - 2,
+        8.0,
+        SURFACE,
+    );
+    canvas.padlock(11, 10, OK);
     let baseline = face.baseline_in(0, i32::from(HEIGHT));
-    let advance = canvas.text(face, 30, baseline, &label, INK);
-    canvas.text(face, 30 + advance, baseline, matched, OK);
+    let advance = canvas.text(face, 31, baseline, &label, INK);
+    canvas.text(face, 31 + advance, baseline, matched, OK);
     // Xvfb uses the same packed BGRX root visual as the desktop painter.
     let pixels: Vec<u8> = canvas
         .image
@@ -225,22 +283,29 @@ fn draw(request: &Request, face: &Face) -> Result<Overlay, String> {
 mod tests {
     use super::*;
     #[test]
-    fn a_badge_stays_below_a_real_visible_field() {
+    fn a_badge_sits_beside_the_field_and_never_on_the_next_control() {
+        // Beside a login field, centred on it, clear of the button below.
         assert_eq!(
-            position([490, 648, 300, 44], [1920, 1080], 480),
-            Some((490, 698))
+            position([490, 648, 300, 44], [0, 0, 1920, 1080], 480),
+            Some((800, 653))
         );
+        // No room to the right: above, over the field's own label.
         assert_eq!(
-            position([1880, 50, 40, 30], [1920, 1080], 480),
-            Some((1440, 86))
+            position([1600, 400, 300, 44], [0, 0, 1920, 1080], 480),
+            Some((1440, 358))
         );
-        for bounds in [
-            [0, 0, 0, 0],
-            [-500, 50, 40, 30],
-            [0, 1070, 100, 10],
-            [i32::MAX; 4],
-        ] {
-            assert_eq!(position(bounds, [1920, 1080], 480), None);
+        // Inside a window narrower than the screen, the window is the limit.
+        assert_eq!(
+            position([438, 657, 404, 42], [16, 56, 1248, 1008], 430),
+            Some((438, 615))
+        );
+        // Neither: below, as a last resort.
+        assert_eq!(
+            position([1880, 20, 40, 30], [0, 0, 1920, 1080], 480),
+            Some((1440, 56))
+        );
+        for bounds in [[0, 0, 0, 0], [-500, 50, 40, 30], [i32::MAX; 4]] {
+            assert_eq!(position(bounds, [0, 0, 1920, 1080], 480), None);
         }
     }
 }

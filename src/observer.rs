@@ -579,18 +579,45 @@ fn header(record: &Record) -> String {
     } else {
         (FAIL, "✗")
     };
-    let command = std::iter::once(quoted(&record.command))
-        .chain(record.args.iter().map(|s| quoted(s)))
-        .collect::<Vec<_>>()
-        .join(" ");
+    let command = one_line(
+        &std::iter::once(quoted(&record.command))
+            .chain(record.args.iter().map(|s| quoted(s)))
+            .collect::<Vec<_>>()
+            .join(" "),
+    );
     format!(
         "\r\n{color}{marker}{RESET} {INK}{}{RESET}\r\n{MUTED}  job {} · started {} · {}{RESET}\r\n{INK_2}  $ {}{RESET}\r\n",
         record.label,
         record.id,
         clock(record.started_at),
-        record.cwd,
+        home_relative(&record.cwd),
         command
     )
+}
+
+/// `~/src/app` reads at a glance and keeps the line from wrapping.
+fn home_relative(path: &str) -> String {
+    let home = std::env::var("HOTLINE_COMPUTER_HOME").unwrap_or_else(|_| "/home/agent".into());
+    match path.strip_prefix(&home) {
+        Some("") => "~".into(),
+        Some(rest) if rest.starts_with('/') => format!("~{rest}"),
+        _ => path.to_owned(),
+    }
+}
+
+/// A command as one readable line. A script passed inline (`python3 -c
+/// '...'`) would otherwise wrap across the whole panel; the label already
+/// says what it is for, and the job log keeps the full command.
+fn one_line(command: &str) -> String {
+    const LIMIT: usize = 72;
+    let mut lines = command.lines();
+    let first = lines.next().unwrap_or("").trim_end();
+    let more = lines.next().is_some();
+    let mut shown: String = first.chars().take(LIMIT).collect();
+    if more || first.chars().count() > LIMIT {
+        shown.push('…');
+    }
+    shown
 }
 
 /// A job's close: how it ended, named again so a long output still reads.
@@ -703,6 +730,16 @@ mod tests {
     }
 
     #[test]
+    fn an_inline_script_shows_as_one_line() {
+        assert_eq!(one_line("sh -c 'echo hi'"), "sh -c 'echo hi'");
+        assert_eq!(
+            one_line("python3 -c 'import time\nfor _ in range(9): pass'"),
+            "python3 -c 'import time…"
+        );
+        assert_eq!(one_line(&"x".repeat(100)).chars().count(), 73);
+    }
+
+    #[test]
     fn a_job_is_named_first_and_identified_underneath() {
         let text = crate::jobs::plain(&header(&record("Run the unit tests", "running", None)));
         let lines: Vec<&str> = text.lines().filter(|l| !l.is_empty()).collect();
@@ -711,7 +748,7 @@ mod tests {
             lines[1].contains("job 0800001a0a5ee4cb4-f789fa4d · started "),
             "{text}"
         );
-        assert!(lines[1].contains("· /home/agent/src/app"), "{text}");
+        assert!(lines[1].contains("· ~/src/app"), "{text}");
         assert!(lines[2].contains("$ bash -c 'cargo test'"), "{text}");
     }
 

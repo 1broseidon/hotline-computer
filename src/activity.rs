@@ -117,6 +117,16 @@ impl Entry {
             ("shell", "exec" | "start" | "launch" | "run") => {
                 arguments["label"].as_str().unwrap_or("").to_owned()
             }
+            // Key names only ("ctrl+s", "Enter"): never typed text.
+            ("input", "key") => arguments["combo"]
+                .as_str()
+                .filter(|combo| combo.len() <= 24)
+                .unwrap_or("")
+                .to_owned(),
+            ("files", "put") => arguments["path"]
+                .as_str()
+                .map(|path| path.replace("/home/agent/", "~/"))
+                .unwrap_or_default(),
             _ => String::new(),
         };
         Self {
@@ -145,7 +155,25 @@ impl Entry {
             ("shell", "exec" | "start" | "launch" | "run") => "Started",
             ("windows", "focus") => "Focused",
             ("windows", "close") => "Closed",
-            ("windows", "tile") => "Tiled windows",
+            ("windows", "tile") => "Tiled the windows",
+            ("windows", "maximize") => "Maximized",
+            ("input", "key") => "Pressed",
+            ("input", "drag") => "Dragged",
+            ("input", "clipboard_write") => "Copied to the clipboard",
+            ("browser", "eval") => "Ran a script on the page",
+            ("browser", "back") => "Went back",
+            ("browser", "forward") => "Went forward",
+            ("browser", "reload") => "Reloaded the page",
+            ("browser", "hover") => "Pointed at",
+            ("browser", "check") => "Checked",
+            ("browser", "select") => "Chose an option in",
+            ("browser", "upload") => "Attached a file",
+            ("browser", "tab_close") => "Closed a tab",
+            ("browser", "tab_select") => "Switched tabs",
+            ("files", "put") => "Saved",
+            ("files", "download") => "Downloaded",
+            ("files", "extract") => "Unpacked an archive",
+            ("state", "prepare") => "Prepared the workspace",
             ("capture", _) => "Captured the desktop",
             ("browser", "text") => "Read the page",
             _ => {

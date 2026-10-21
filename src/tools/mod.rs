@@ -136,6 +136,7 @@ fn schema(value: Value) -> Arc<JsonObject> {
 
 pub async fn call(app: &App, name: &str, arguments: Value, holder: &str) -> ToolResult {
     let moved = moves_something(name, &arguments);
+    let arguments_for_log = json!({"action": arguments["action"].clone()});
     let mut activity = crate::activity::Entry::new(name, &arguments);
     let secret_name = arguments["secret"].as_str().map(str::to_owned);
     if name == "windows"
@@ -145,6 +146,16 @@ pub async fn call(app: &App, name: &str, arguments: Value, holder: &str) -> Tool
             .ok()
             .and_then(|windows| windows.into_iter().find(|w| w.id == id).map(|w| w.title))
             .unwrap_or_default();
+    }
+    if name == "browser"
+        && matches!(
+            activity.action.as_str(),
+            "click_ref" | "check" | "select" | "hover"
+        )
+        && let Some(reference) = arguments["ref"].as_str()
+        && let Some(label) = browser::element_label(app, reference).await
+    {
+        activity.target = label;
     }
     let result = match name {
         "capture" => capture::call(app, arguments).await,
@@ -181,19 +192,32 @@ pub async fn call(app: &App, name: &str, arguments: Value, holder: &str) -> Tool
                 .push_str(&format!(" from sealed secret {secret}"));
         }
     }
-    // A display failure must never turn a completed operation into a retry.
-    let log = app.activity.clone();
-    let ok = result.is_ok();
-    let _ = tokio::task::spawn_blocking(move || log.complete(activity, ok)).await;
+    // Reads (captures, snapshots, listings) happen every few seconds and
+    // would bury what the agent did; the window shows only changes.
+    if worth_showing(name, &arguments_for_log) {
+        // A display failure must never turn a completed operation into a retry.
+        let log = app.activity.clone();
+        let ok = result.is_ok();
+        let _ = tokio::task::spawn_blocking(move || log.complete(activity, ok)).await;
+    }
     // Every answer leaves through here, so this is where the value of a
     // secret the person stored is taken out of it (see `crate::secrets`).
     app.secrets.redact_result(result)
 }
 
+fn worth_showing(tool: &str, arguments: &Value) -> bool {
+    let action = arguments["action"].as_str().unwrap_or("");
+    moves_something(tool, arguments)
+        || matches!(
+            (tool, action),
+            ("files", "put" | "download" | "extract" | "run") | ("state", "prepare")
+        )
+}
+
 fn moves_something(tool: &str, arguments: &Value) -> bool {
     let action = arguments["action"].as_str().unwrap_or("");
     match tool {
-        "input" => true,
+        "input" => action != "clipboard_read",
         "browser" => !matches!(action, "snapshot" | "text" | "tabs"),
         "windows" => action != "list",
         "shell" => matches!(action, "start" | "exec" | ""),
