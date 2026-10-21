@@ -44,6 +44,7 @@ pub enum Request {
     /// pages outlive a destroyed window, so the agent has to be told.
     BrowserClosed,
     OpenTerminal,
+    OpenActivity,
     /// The person asked for a shell of their own.
     OpenShell,
     OpenJob(String),
@@ -134,6 +135,22 @@ fn column_rect(
         (x, top, width, height - shell_height)
     } else {
         (x, top, width, height)
+    }
+}
+
+pub(crate) fn activity_rect(
+    area: (i16, i16, u16, u16),
+    gap: u16,
+    activity: bool,
+) -> (i16, i16, u16, u16) {
+    let (x, y, w, h) = area;
+    let gap = gap.min(h.saturating_sub(2));
+    let available = h.saturating_sub(gap).max(2);
+    let observer = (available * 3 / 5).max(1);
+    if activity {
+        (x, y + (observer + gap) as i16, w, available - observer)
+    } else {
+        (x, y, w, observer)
     }
 }
 
@@ -408,7 +425,7 @@ struct Desktop {
     mark: Image,
     layout: Layout,
     lease: Option<Lease>,
-    /// The first keysym of every keycode, so a menu can read B, T, O, A and Escape.
+    /// The first keysym of every keycode, so a menu can read B, T, O, V, A and Escape.
     keysyms: (u8, usize, Vec<u32>),
     started: Instant,
     /// What the bar last showed of the clock and the lease, so a tick that
@@ -524,20 +541,43 @@ impl Desktop {
         column_rect(self.work_rect(), self.gutter, shell, shell_open)
     }
 
+    fn activity_column(&self, activity: bool, shell_open: bool) -> (i16, i16, u16, u16) {
+        let area = self.column(false, shell_open);
+        if self.client_with_class("hotlineactivity").is_some()
+            && self.client_with_class("hotlineterminal").is_some()
+        {
+            activity_rect(area, self.gutter, activity)
+        } else {
+            area
+        }
+    }
+
     /// Restacks the right column after the observer or the shell opens or
     /// closes, so the observer takes the whole column when it is alone.
     fn stack_column(&mut self) -> Result<(), String> {
         let shell_open = self.client_with_class("hotlineshell").is_some();
-        let column: Vec<(Window, bool)> = self
+        let column: Vec<(Window, bool, bool)> = self
             .clients
             .iter()
             .filter(|(_, c)| {
-                c.class.contains("hotlineshell") || c.class.contains("hotlineterminal")
+                c.class.contains("hotlineshell")
+                    || c.class.contains("hotlineterminal")
+                    || c.class.contains("hotlineactivity")
             })
-            .map(|(id, c)| (*id, c.class.contains("hotlineshell")))
+            .map(|(id, c)| {
+                (
+                    *id,
+                    c.class.contains("hotlineshell"),
+                    c.class.contains("hotlineactivity"),
+                )
+            })
             .collect();
-        for (id, shell) in column {
-            let bounds = self.column(shell, shell_open);
+        for (id, shell, activity) in column {
+            let bounds = if shell {
+                self.column(true, shell_open)
+            } else {
+                self.activity_column(activity, shell_open)
+            };
             let Some(client) = self.clients.get_mut(&id) else {
                 continue;
             };
@@ -1231,7 +1271,7 @@ impl Desktop {
         self.close_popup()?;
         self.hovered_row = None;
         let (width, height) = match &kind {
-            Popup::Menu => (MENU_WIDTH, (PAD + 4 * ROW + 11 + 22 + PAD) as u16),
+            Popup::Menu => (MENU_WIDTH, (PAD + 5 * ROW + 11 + 22 + PAD) as u16),
             Popup::Jobs { visible, .. } => (
                 self.width.saturating_sub(16).min(640),
                 ((*visible as i32 + 1) * ROW + 2 * PAD) as u16,
@@ -1364,10 +1404,11 @@ impl Desktop {
         let mut canvas = Canvas::new(open.width, open.height, SURFACE);
         match &open.kind {
             Popup::Menu => {
-                let rows: [(&str, &str, &str); 4] = [
+                let rows: [(&str, &str, &str); 5] = [
                     ("Browser", "open or focus", "B"),
                     ("Terminal", "a shell of your own", "T"),
                     ("Observe", "the agent's jobs", "O"),
+                    ("Activity", "recent actions", "V"),
                     ("About this computer", "", "A"),
                 ];
                 for (index, (label, note, key)) in rows.iter().enumerate() {
@@ -1396,7 +1437,7 @@ impl Desktop {
                         INK_2,
                     );
                 }
-                canvas.fill_rect(PAD + 4, PAD + 3 * ROW + 5, width - 2 * PAD - 8, 1, RULE);
+                canvas.fill_rect(PAD + 4, PAD + 4 * ROW + 5, width - 2 * PAD - 8, 1, RULE);
                 let foot = format!(
                     "hotline-computer {} · {}",
                     env!("CARGO_PKG_VERSION"),
@@ -1405,7 +1446,7 @@ impl Desktop {
                 canvas.text(
                     &mono,
                     PAD + 10,
-                    mono.baseline_in(PAD + 4 * ROW + 11, 22),
+                    mono.baseline_in(PAD + 5 * ROW + 11, 22),
                     &foot,
                     MUTED,
                 );
@@ -1522,7 +1563,7 @@ impl Desktop {
         self.put_image(open.window, &canvas.image, 0, 0, SURFACE)
     }
 
-    /// The menu's letter or click: B, T, O, A.
+    /// The menu's letter or click: B, T, O, V, A.
     fn menu_pick(&mut self, index: usize) -> Result<(), String> {
         match index {
             0 => {
@@ -1537,7 +1578,11 @@ impl Desktop {
                 self.close_popup()?;
                 self.dock_action(Request::OpenTerminal)
             }
-            3 => self.open_popup(Popup::About),
+            3 => {
+                self.close_popup()?;
+                self.dock_action(Request::OpenActivity)
+            }
+            4 => self.open_popup(Popup::About),
             _ => Ok(()),
         }
     }
@@ -1574,7 +1619,7 @@ impl Desktop {
         let y = i32::from(event.event_y);
         match &mut open.kind {
             Popup::Menu => {
-                let index = (0..4)
+                let index = (0..MENU_KEYS.len())
                     .find(|index| (menu_row_y(*index)..menu_row_y(*index) + ROW).contains(&y));
                 match index {
                     Some(index) => self.menu_pick(index),
@@ -1849,9 +1894,8 @@ impl Desktop {
                 let y = i32::from(event.event_y);
                 let open = self.popup.as_ref().unwrap();
                 let hovered = match &open.kind {
-                    Popup::Menu => {
-                        (0..4).find(|i| (menu_row_y(*i)..menu_row_y(*i) + ROW).contains(&y))
-                    }
+                    Popup::Menu => (0..MENU_KEYS.len())
+                        .find(|i| (menu_row_y(*i)..menu_row_y(*i) + ROW).contains(&y)),
                     Popup::Jobs { visible, .. } => (PAD..PAD + (*visible as i32 + 1) * ROW)
                         .contains(&y)
                         .then(|| ((y - PAD) / ROW) as usize),
@@ -1920,7 +1964,10 @@ impl Desktop {
             .reply()
             .map_err(|error| error.to_string())?;
         let class = self.class_of(window)?;
-        let icon = if class.contains("hotlineterminal") || class.contains("hotlineshell") {
+        let icon = if class.contains("hotlineterminal")
+            || class.contains("hotlineactivity")
+            || class.contains("hotlineshell")
+        {
             None
         } else {
             self.icon_of(window)
@@ -1932,10 +1979,14 @@ impl Desktop {
                     .map_err(|error| error.to_string())?;
                 return Ok(());
             }
-            // The observer and the person's shell share the right column:
+            // The observer, activity and the person's shell share the right column:
             // the shell takes its bottom third when it is open, under a
-            // line, so whatever is on the left stays out of their way.
-            Kind::Normal if class.contains("hotlineshell") || class.contains("hotlineterminal") => {
+            // gap, so whatever is on the left stays out of their way.
+            Kind::Normal
+                if class.contains("hotlineshell")
+                    || class.contains("hotlineterminal")
+                    || class.contains("hotlineactivity") =>
+            {
                 Client {
                     maximized: false,
                     saved: self.column(class.contains("hotlineshell"), true),
@@ -1967,7 +2018,7 @@ impl Desktop {
             }
         };
         // The terminal keeps the right third; the app being watched keeps the rest.
-        if client.class.contains("hotlineterminal") {
+        if client.class.contains("hotlineterminal") || client.class.contains("hotlineactivity") {
             let (left, top, work_width, height) = self.work_rect();
             let width = work_width.saturating_sub(self.gutter) * 2 / 3;
             let others: Vec<_> = self
@@ -2242,7 +2293,10 @@ impl Desktop {
         };
         self.order.retain(|client| *client != window);
         self.publish_client_list()?;
-        if client.class.contains("hotlineshell") || client.class.contains("hotlineterminal") {
+        if client.class.contains("hotlineshell")
+            || client.class.contains("hotlineterminal")
+            || client.class.contains("hotlineactivity")
+        {
             self.stack_column()?;
         }
         if client.class.contains(BROWSER_CLASS) && self.client_with_class(BROWSER_CLASS).is_none() {
@@ -2387,7 +2441,10 @@ impl Desktop {
                 let _ = self.requests.send(request);
                 Ok(())
             }
-            Request::OpenTerminal | Request::OpenShell | Request::OpenJob(_) => {
+            Request::OpenTerminal
+            | Request::OpenActivity
+            | Request::OpenShell
+            | Request::OpenJob(_) => {
                 let _ = self.requests.send(request);
                 Ok(())
             }
@@ -2422,15 +2479,15 @@ impl Desktop {
     }
 }
 
-/// The letter that picks each menu row: the row's own initial.
-const MENU_KEYS: &str = "btoa";
+/// Stable menu shortcuts. V opens Activity so A still opens About.
+const MENU_KEYS: &str = "btova";
 
-/// The top of menu row `index`: three rows, a separator, then About.
+/// The top of menu row `index`: four rows, a separator, then About.
 fn menu_row_y(index: usize) -> i32 {
-    if index < 3 {
+    if index < 4 {
         PAD + index as i32 * ROW
     } else {
-        PAD + 3 * ROW + 11
+        PAD + 4 * ROW + 11
     }
 }
 
@@ -2738,7 +2795,8 @@ mod tests {
     fn menu_rows_leave_room_for_the_separator() {
         assert_eq!(menu_row_y(0), PAD);
         assert_eq!(menu_row_y(2), PAD + 2 * ROW);
-        assert_eq!(menu_row_y(3), PAD + 3 * ROW + 11);
-        assert_eq!(MENU_KEYS.len(), 4, "one letter per row");
+        assert_eq!(menu_row_y(3), PAD + 3 * ROW);
+        assert_eq!(menu_row_y(4), PAD + 4 * ROW + 11);
+        assert_eq!(MENU_KEYS.len(), 5, "one letter per row");
     }
 }

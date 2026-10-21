@@ -140,6 +140,29 @@ impl Observer {
         crate::x11::activate(&self.display, &window)
     }
 
+    pub async fn open_activity(&self) -> Result<(), String> {
+        let mut active = self.child.lock().await;
+        let socket = self.daemon(&mut active).await?;
+        if let Some(window) = window_of_class(&self.display, "HotlineActivity")? {
+            return crate::x11::activate(&self.display, &window);
+        }
+        let executable = std::env::current_exe().map_err(|e| e.to_string())?;
+        self.create_window(
+            &socket,
+            "Activity",
+            "HotlineActivity",
+            &[],
+            &[
+                executable.as_os_str(),
+                "activity".as_ref(),
+                self.home.as_os_str(),
+            ],
+        )
+        .await?;
+        let window = self.wait_for_window(&active, "HotlineActivity").await?;
+        crate::x11::activate(&self.display, &window)
+    }
+
     /// The Alacritty daemon every terminal window comes from, started if it
     /// is not running; returns its socket once it answers.
     async fn daemon(&self, active: &mut Option<TerminalProcess>) -> Result<PathBuf, String> {

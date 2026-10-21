@@ -386,6 +386,17 @@ async fn focused_text<'a>(
     app: &'a crate::App,
     window: &Window,
 ) -> Option<atspi::proxy::text::TextProxy<'a>> {
+    focused_element(app, window)
+        .await?
+        .proxies()
+        .await
+        .ok()?
+        .text()
+        .await
+        .ok()
+}
+
+async fn focused_element<'a>(app: &'a crate::App, window: &Window) -> Option<AccessibleProxy<'a>> {
     use atspi::State;
     let connection = connection(app).await.ok()?;
     let registry = accessible(
@@ -423,12 +434,34 @@ async fn focused_text<'a>(
             };
             let states = proxy.get_state().await.unwrap_or_default();
             if states.contains(State::Focused) && states.contains(State::Editable) {
-                return proxy.proxies().await.ok()?.text().await.ok();
+                return Some(proxy);
             }
             stack.extend(children(&proxy).await);
         }
     }
     None
+}
+
+/// The focused field's name and screen rectangle, without its text/value.
+/// Callers bound the D-Bus walk so a missing accessibility provider is harmless.
+pub async fn focused_metadata(app: &crate::App) -> Option<(String, [i32; 4])> {
+    let window = crate::x11::windows(&app.config.display)
+        .ok()?
+        .into_iter()
+        .find(|w| w.focused)?;
+    let proxy = focused_element(app, &window).await?;
+    let name = proxy.name().await.ok()?;
+    let bounds = proxy
+        .proxies()
+        .await
+        .ok()?
+        .component()
+        .await
+        .ok()?
+        .get_extents(CoordType::Screen)
+        .await
+        .ok()?;
+    Some((name, [bounds.0, bounds.1, bounds.2, bounds.3]))
 }
 
 fn bounds_match(tree: &WindowTree, window: &Window) -> bool {

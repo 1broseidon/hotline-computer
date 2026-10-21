@@ -1,4 +1,5 @@
 pub mod a11y;
+pub mod activity;
 pub mod agent;
 pub mod boot;
 pub mod browser;
@@ -72,6 +73,7 @@ pub struct App {
     /// The arming under which the browser may mint a passkey.
     pub passkeys: passkeys::Passkeys,
     pub observer: observer::Observer,
+    pub activity: activity::Log,
     pub a11y: Arc<tokio::sync::OnceCell<atspi::zbus::Connection>>,
     /// The screen stream, the hands, and the clipboard; `None` until a display is up.
     pub display: Option<Arc<display::Display>>,
@@ -87,6 +89,7 @@ impl App {
             a11y: Arc::new(tokio::sync::OnceCell::new()),
             jobs: jobs::Jobs::new(&config.home, &config.display, secrets.clone()),
             browser: BrowserManager::new(Arc::clone(&config), secrets.clone(), passkeys.clone()),
+            activity: activity::Log::new(&config.home, secrets.clone()),
             secrets,
             passkeys,
             observer: observer::Observer::new(&config.home, &config.display),

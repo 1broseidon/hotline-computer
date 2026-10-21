@@ -1,6 +1,6 @@
 # 0.11 look
 
-Phases **1–6 landed** on `look/0.11`; none reverted. **7–8 not started yet**. Apple container is now available at the operator's request, so the stretch phases can proceed. Nothing pushed, published, tagged or merged; version remains 0.10.3.
+Phases **1–7 landed** on `look/0.11`; none reverted. **8 not started yet**. Apple container is available at the operator's request. Nothing pushed, published, tagged or merged; version remains 0.10.3.
 
 | Phase | Status / commit | Screenshots | What to inspect |
 | --- | --- | --- | --- |
@@ -11,7 +11,8 @@ Phases **1–6 landed** on `look/0.11`; none reverted. **7–8 not started yet**
 | 4 Terminals | Passed · `b0177d9` | S3: verified with Apple container | Geist Mono, line spacing, colored job markers |
 | 5 Viewer | Passed · `740b92c` | S4: verified with Apple container | Real viewer screenshots plus browser fixtures |
 | 6 Chromium | Passed · `1ec8bfd` | S2: verified with Apple container | Dark chrome and a normal light page |
-| 7–8 Stretch | Not started | S5: not run yet | Activity window and sealed-fill badge deferred |
+| 7 Activity | Passed · this phase commit | s7-activity.png, s7-with-shell.png | 60/40 observer/activity split, shell below, bounded display log |
+| 8 Badge | Not started | S5: not run yet | Sealed-fill badge |
 
 ## Evidence
 
@@ -58,3 +59,7 @@ printf 'http://127.0.0.1:8787/#%s\n' "$(cat .token)"
 Open the printed viewer URL. The token stays in `.token`, never this report. Recipes, logs and fixture images are committed alongside it.
 
 On this Mac, use `container build -c 4 -m 6g -t hotline-computer:look-0.11 .`, then `python3 qa/0.11.0-look/recipes/run-apple.py`. Run `PORT=18787 make contract` and `PORT=18787 python3 qa/0.11.0-look/recipes/look-qa.py`; open `http://127.0.0.1:18787/#<token from .token>`. The recipe refuses to replace an existing QA instance.
+
+## Phase 7
+
+Native checks passed with **118 tests** (`phase7-check.log`); Apple image built, live contract and S1–S4 passed again. `phase7-scenes.json` verifies 500-entry retention, exclusion of file/command/JS/invalid-action payloads, failed-call markers, 60/40 geometry, shell preservation and observer restoration. Unit checks also cover redaction before truncation and refusing to follow a log symlink. Activity uses **V** because **A** remains About. Targets are URL host/path (no credentials, query or fragment), explicit job labels, window titles and focused field names when AT-SPI answers within 200 ms. Other actions keep a generic sentence. Each atomic rewrite retains the newest 500 records; this is an agent-editable display, not an audit log.

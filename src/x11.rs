@@ -585,6 +585,23 @@ pub fn publish_jobs(display: &str, jobs: &[crate::jobs::Summary]) -> Result<(), 
 }
 
 /// Identity is public display metadata, independent of the control lease.
+pub fn read_agent(display: &str) -> Option<crate::agent::Agent> {
+    let (connection, root) = connect(display).ok()?;
+    let reply = connection
+        .get_property(
+            false,
+            root,
+            atom(&connection, b"_HOTLINE_AGENT").ok()?,
+            atom(&connection, b"UTF8_STRING").ok()?,
+            0,
+            1024,
+        )
+        .ok()?
+        .reply()
+        .ok()?;
+    serde_json::from_slice(&reply.value).ok()
+}
+
 pub fn publish_agent(display: &str, agent: &crate::agent::Agent) -> Result<(), String> {
     use x11rb::wrapper::ConnectionExt as _;
     let (connection, root) = connect(display)?;

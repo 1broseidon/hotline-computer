@@ -118,17 +118,32 @@ fn layout(
     if let Some(i) = primary {
         expected.push((windows[i].id.clone(), [left, top, split, height]));
     }
-    let (shells, column): (Vec<_>, Vec<_>) = right
+    let (shells, mut column): (Vec<_>, Vec<_>) = right
         .iter()
         .partition(|(_, w)| w.class.to_ascii_lowercase().contains("hotlineshell"));
+    let activity_pair = column.len() == 2
+        && column
+            .iter()
+            .any(|(_, w)| w.class.to_ascii_lowercase().contains("hotlineactivity"))
+        && column
+            .iter()
+            .any(|(_, w)| w.class.to_ascii_lowercase().contains("hotlineterminal"));
+    if activity_pair {
+        column.sort_by_key(|(_, w)| w.class.to_ascii_lowercase().contains("hotlineactivity"));
+    }
     let shell_height = if shells.is_empty() { 0 } else { height / 3 };
     let column_height = height - shell_height;
     let column_width = width - split - across;
     // Validate every row before moving anything. Gaps consume space just as
     // client minimum sizes do; multiple shells must never overlap.
-    for (rows, mut y, room) in [
-        (&column, top, column_height),
-        (&shells, top + column_height + gap, shell_height - gap),
+    for (rows, mut y, room, split_activity) in [
+        (&column, top, column_height, activity_pair),
+        (
+            &shells,
+            top + column_height + gap,
+            shell_height - gap,
+            false,
+        ),
     ] {
         if rows.is_empty() {
             continue;
@@ -143,7 +158,11 @@ fn layout(
             return Err(impossible());
         }
         for (position, (_, window)) in rows.iter().enumerate() {
-            let share = extra / (rows.len() - position) as i32;
+            let share = if split_activity && position == 0 {
+                ((room - gaps) * 3 / 5 - window.minimum_size[1].max(1)).clamp(0, extra)
+            } else {
+                extra / (rows.len() - position) as i32
+            };
             extra -= share;
             let row_height = window.minimum_size[1].max(1) + share;
             expected.push((
@@ -286,6 +305,30 @@ mod tests {
         assert_eq!(result[1].1, [1280, 56, 624, 672]);
         assert_eq!(result[2].1, [1280, 744, 624, 320]);
     }
+    #[test]
+    fn activity_splits_the_observer_space_above_the_persons_shell() {
+        let mut observer = window("observer", [1, 1]);
+        observer.class = "HotlineTerminal".into();
+        let mut activity = window("activity", [1, 1]);
+        activity.class = "HotlineActivity".into();
+        let mut shell = window("shell", [1, 1]);
+        shell.class = "HotlineShell".into();
+        let result = layout(
+            &[window("app", [500, 87]), activity, shell, observer],
+            [16, 56, 1888, 1008],
+            Some(0),
+            16,
+        )
+        .unwrap();
+        assert_eq!(result[1], ("observer".into(), [1280, 56, 624, 393]));
+        assert_eq!(result[2], ("activity".into(), [1280, 465, 624, 263]));
+        assert_eq!(result[3], ("shell".into(), [1280, 744, 624, 320]));
+        assert_eq!(
+            crate::desktop::activity_rect((1280, 56, 624, 672), 16, true),
+            (1280, 465, 624, 263)
+        );
+    }
+
     #[test]
     fn opting_out_removes_both_outer_and_inner_gaps() {
         let result = layout(

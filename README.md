@@ -86,7 +86,7 @@ run slot; an absent header means `anonymous`.
 The 40px top bar starts with the Hotline mark and the agent's identity and
 current job. `HOTLINE_COMPUTER_AGENT` names the agent; otherwise the latest
 named MCP holder does. The mark opens a menu: **B** the browser, **T** a shell
-of your own, **O** the agent's job observer, **A** About; Escape closes it.
+of your own, **O** the agent's job observer, **V** recent activity, **A** About; Escape closes it.
 Window pills show each app's icon and title; click to focus, right-click to
 close. The right side shows the stored-secret count when nonzero, jobs
 (`no jobs · 0 done`, `2 running · 5 done`, `1 failed · 2 running`), and
@@ -97,7 +97,7 @@ including `agent` and `sealed`, for tools and tests.
 
 Normal apps occupy the work area inside 16px gutters, with a painted ring
 and subtle shadow. `HOTLINE_COMPUTER_GUTTER=0` restores edge-to-edge layout.
-The observer uses the right third of the usable width; `windows tile`
+The observer and Activity use the right third, split 60/40 when both are open; `windows tile`
 reserves the same gap. The person's terminal takes the bottom third of
 that column with a 16px gap, so it never covers
 the app on the left: an interactive bash in the mounted workspace with the
@@ -112,6 +112,11 @@ the way the teammate's job would, and `hotline-computer packages` lists common
 Nixpkgs names to choose from. What the person installs for themselves runs
 by name: `~/.local/bin`, `~/go/bin` and `~/.cargo/bin` lead the shell's PATH.
 The computer has no file manager; a folder opens as a fresh terminal in it.
+
+`hotline-computer activity` displays the newest 500 completed tool calls from
+`~/.hotline/activity.jsonl`, with short redacted targets and success markers.
+It omits typed text, scripts, file contents and command lines. The file lives
+in the agent's home and the agent can edit it: display only, not an audit log.
 The browser's **Show in folder**, `xdg-open` on a folder, and
 `hotline-computer open DIR` all do that, through the image's desktop entry for
 `inode/directory`, titled with the folder (`~/Downloads`).

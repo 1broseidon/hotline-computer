@@ -136,6 +136,16 @@ fn schema(value: Value) -> Arc<JsonObject> {
 
 pub async fn call(app: &App, name: &str, arguments: Value, holder: &str) -> ToolResult {
     let moved = moves_something(name, &arguments);
+    let mut activity = crate::activity::Entry::new(name, &arguments);
+    let secret_name = arguments["secret"].as_str().map(str::to_owned);
+    if name == "windows"
+        && let Some(id) = arguments["window_id"].as_str()
+    {
+        activity.target = crate::x11::windows(&app.config.display)
+            .ok()
+            .and_then(|windows| windows.into_iter().find(|w| w.id == id).map(|w| w.title))
+            .unwrap_or_default();
+    }
     let result = match name {
         "capture" => capture::call(app, arguments).await,
         "input" => input::call(app, arguments, holder).await,
@@ -150,6 +160,31 @@ pub async fn call(app: &App, name: &str, arguments: Value, holder: &str) -> Tool
     if moved && result.is_ok() {
         app.jobs.agent.acted();
     }
+    if result.is_ok()
+        && ((name == "browser" && activity.action == "fill")
+            || (name == "input" && matches!(activity.action.as_str(), "type" | "paste")))
+    {
+        if let Ok(Some((name, _))) = tokio::time::timeout(
+            std::time::Duration::from_millis(200),
+            crate::a11y::focused_metadata(app),
+        )
+        .await
+        {
+            activity.target = name;
+        }
+        if let Some(secret) = secret_name {
+            if activity.target.is_empty() {
+                activity.target = "field".into();
+            }
+            activity
+                .target
+                .push_str(&format!(" from sealed secret {secret}"));
+        }
+    }
+    // A display failure must never turn a completed operation into a retry.
+    let log = app.activity.clone();
+    let ok = result.is_ok();
+    let _ = tokio::task::spawn_blocking(move || log.complete(activity, ok)).await;
     // Every answer leaves through here, so this is where the value of a
     // secret the person stored is taken out of it (see `crate::secrets`).
     app.secrets.redact_result(result)

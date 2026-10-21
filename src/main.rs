@@ -2,7 +2,7 @@ use hotline_computer::display::Display;
 use hotline_computer::{App, Config, boot, serve};
 
 fn usage() -> &'static str {
-    "Usage: hotline-computer <boot|serve> [--addr ADDRESS] [--token TOKEN] [--home PATH] [--display DISPLAY] [--screen WIDTHxHEIGHT]\n\n  boot   start the display, the session bus and the desktop, then serve; the container entrypoint\n  serve  serve on a display that already exists\n\nAt the person's terminal:\n  hotline-computer prepare [--workspace DIR] [--packages NAME... | --flake DIR]\n  hotline-computer packages   common Nixpkgs names to choose from\n  hotline-computer open DIR   a fresh terminal in that folder; what the browser's Show in folder does"
+    "Usage: hotline-computer <boot|serve> [--addr ADDRESS] [--token TOKEN] [--home PATH] [--display DISPLAY] [--screen WIDTHxHEIGHT]\n\n  boot   start the display, the session bus and the desktop, then serve; the container entrypoint\n  serve  serve on a display that already exists\n\nAt the person's terminal:\n  hotline-computer prepare [--workspace DIR] [--packages NAME... | --flake DIR]\n  hotline-computer activity   the recent activity display\n  hotline-computer packages   common Nixpkgs names to choose from\n  hotline-computer open DIR   a fresh terminal in that folder; what the browser's Show in folder does"
 }
 
 enum Command {
@@ -51,12 +51,20 @@ fn main() {
         println!("{}", usage());
         return;
     }
-    if arguments.first().map(String::as_str) == Some("observe") {
+    if matches!(
+        arguments.first().map(String::as_str),
+        Some("observe" | "activity")
+    ) {
         let home = arguments
             .get(1)
             .map(std::path::PathBuf::from)
             .unwrap_or_else(|| Config::from_env().home);
-        if let Err(error) = hotline_computer::observer::run(&home) {
+        let run = if arguments[0] == "activity" {
+            hotline_computer::activity::run
+        } else {
+            hotline_computer::observer::run
+        };
+        if let Err(error) = run(&home) {
             eprintln!("{error}");
             std::process::exit(1);
         }
