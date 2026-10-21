@@ -203,6 +203,22 @@ impl Canvas {
         }
     }
 
+    /// A small vector lock stays sharp without depending on a font glyph.
+    pub fn padlock(&mut self, x: i32, y: i32, color: u32) {
+        self.round_rect(x + 1, y + 6, 11, 7, 2.0, color);
+        self.fill_rect(x + 3, y + 4, 2, 3, color);
+        self.fill_rect(x + 8, y + 4, 2, 3, color);
+        for step in 0..=16 {
+            let angle = std::f32::consts::PI * (1.0 + step as f32 / 16.0);
+            self.dot(
+                x as f32 + 6.5 + 2.5 * angle.cos(),
+                y as f32 + 4.5 + 2.5 * angle.sin(),
+                0.85,
+                color,
+            );
+        }
+    }
+
     /// Three radius-eight box passes give a 24px soft edge. The alpha mask
     /// is clipped to the screen, so an offscreen client cannot allocate an
     /// unbounded image. Only its shadow, offset down ten pixels, is blended.

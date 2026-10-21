@@ -1,4 +1,5 @@
 pub mod a11y;
+pub mod agent;
 pub mod boot;
 pub mod browser;
 pub mod clipboard;

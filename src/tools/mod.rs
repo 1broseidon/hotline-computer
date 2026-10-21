@@ -135,6 +135,7 @@ fn schema(value: Value) -> Arc<JsonObject> {
 }
 
 pub async fn call(app: &App, name: &str, arguments: Value, holder: &str) -> ToolResult {
+    let moved = moves_something(name, &arguments);
     let result = match name {
         "capture" => capture::call(app, arguments).await,
         "input" => input::call(app, arguments, holder).await,
@@ -146,9 +147,23 @@ pub async fn call(app: &App, name: &str, arguments: Value, holder: &str) -> Tool
         "state" => state::call(app, arguments, holder).await,
         _ => Err(format!("unknown tool {name:?}")),
     };
+    if moved && result.is_ok() {
+        app.jobs.agent.acted();
+    }
     // Every answer leaves through here, so this is where the value of a
     // secret the person stored is taken out of it (see `crate::secrets`).
     app.secrets.redact_result(result)
+}
+
+fn moves_something(tool: &str, arguments: &Value) -> bool {
+    let action = arguments["action"].as_str().unwrap_or("");
+    match tool {
+        "input" => true,
+        "browser" => !matches!(action, "snapshot" | "text" | "tabs"),
+        "windows" => action != "list",
+        "shell" => matches!(action, "start" | "exec" | ""),
+        _ => false,
+    }
 }
 
 pub fn text(value: impl Into<String>) -> Vec<ContentBlock> {
@@ -163,4 +178,29 @@ pub fn json_text(value: impl serde::Serialize) -> ToolResult {
 
 pub fn action_error(tool: &str, action: &str, actions: &[&str]) -> String {
     format!("{tool}: unknown action {action:?} (one of: {actions:?})")
+}
+
+#[cfg(test)]
+mod activity_tests {
+    use super::*;
+    #[test]
+    fn reads_do_not_make_the_agent_look_busy() {
+        for (tool, action) in [
+            ("capture", ""),
+            ("browser", "snapshot"),
+            ("browser", "text"),
+            ("windows", "list"),
+            ("shell", "status"),
+        ] {
+            assert!(!moves_something(tool, &json!({"action": action})));
+        }
+        for (tool, action) in [
+            ("input", "click"),
+            ("browser", "navigate"),
+            ("windows", "tile"),
+            ("shell", "start"),
+        ] {
+            assert!(moves_something(tool, &json!({"action": action})));
+        }
+    }
 }

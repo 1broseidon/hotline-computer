@@ -56,6 +56,8 @@ const BACKGROUND: u32 = 0x0b0b0d;
 pub const BAR_HEIGHT: u16 = 40;
 const BAR_FILL: u32 = 0x111114;
 const BAR_RAISED: u32 = 0x1f1f25;
+const RAISED_EDGE: u32 = 0x2e2e35;
+const PILL_INK: u32 = 0xa2a2a9;
 const BAR_HOVER: u32 = 0x1f1f25;
 const RULE: u32 = 0x2a2a30;
 const INK: u32 = 0xececef;
@@ -80,7 +82,7 @@ const POPUP_Y: i16 = 40;
 /// The jobs list hangs from its chip instead, so it is where the eye
 /// already is; its right edge lines up with the chip's.
 const EDGE: i32 = 8;
-const ROW: i32 = 30;
+const ROW: i32 = 32;
 const PAD: i32 = 6;
 const MENU_WIDTH: u16 = 252;
 const ABOUT_WIDTH: u16 = 300;
@@ -212,6 +214,8 @@ impl Rect {
 struct Layout {
     mark: Rect,
     apps: Vec<(Rect, Window)>,
+    agent: Rect,
+    sealed: Rect,
     jobs: Rect,
     lease: Rect,
     tray: Vec<Rect>,
@@ -298,6 +302,8 @@ struct Atoms {
     tray_selection: Atom,
     tray_opcode: Atom,
     xembed: Atom,
+    agent: Atom,
+    sealed: Atom,
     jobs_running: Atom,
     jobs_summary: Atom,
     holder: Atom,
@@ -347,6 +353,8 @@ impl Atoms {
             tray_selection: atom(format!("_NET_SYSTEM_TRAY_S{screen_number}").as_bytes())?,
             tray_opcode: atom(b"_NET_SYSTEM_TRAY_OPCODE")?,
             xembed: atom(b"_XEMBED")?,
+            agent: atom(b"_HOTLINE_AGENT")?,
+            sealed: atom(b"_HOTLINE_SEALED")?,
             jobs_running: atom(b"_HOTLINE_JOBS_RUNNING")?,
             jobs_summary: atom(b"_HOTLINE_JOB_SUMMARY")?,
             holder: atom(b"_HOTLINE_HOLDER")?,
@@ -400,12 +408,16 @@ struct Desktop {
     mark: Image,
     layout: Layout,
     lease: Option<Lease>,
-    /// The first keysym of every keycode, so a menu can read A to D and Escape.
+    /// The first keysym of every keycode, so a menu can read B, T, O, A and Escape.
     keysyms: (u8, usize, Vec<u32>),
     started: Instant,
     /// What the bar last showed of the clock and the lease, so a tick that
     /// changes neither draws nothing.
     shown: String,
+    agent: crate::agent::Agent,
+    sealed: u32,
+    hovered_app: Option<Window>,
+    hovered_row: Option<usize>,
     gutter: u16,
     wallpaper_dirty: bool,
     wallpaper_painted: Instant,
@@ -481,11 +493,16 @@ impl Desktop {
             keysyms,
             started: Instant::now(),
             shown: String::new(),
+            agent: crate::agent::Agent::default(),
+            sealed: 0,
+            hovered_app: None,
+            hovered_row: None,
             gutter: work_area(screen.width_in_pixels, screen.height_in_pixels, gutter()).0 as u16,
             wallpaper_dirty: true,
             wallpaper_painted: Instant::now(),
         };
         desktop.announce()?;
+        desktop.read_identity()?;
         desktop.paint_wallpaper()?;
         desktop.create_bar(screen.root_visual)?;
         desktop.own_tray()?;
@@ -717,7 +734,12 @@ impl Desktop {
                 &CreateWindowAux::new()
                     .override_redirect(1)
                     .background_pixel(BAR_FILL)
-                    .event_mask(EventMask::EXPOSURE | EventMask::BUTTON_PRESS),
+                    .event_mask(
+                        EventMask::EXPOSURE
+                            | EventMask::BUTTON_PRESS
+                            | EventMask::POINTER_MOTION
+                            | EventMask::LEAVE_WINDOW,
+                    ),
             )
             .map_err(|error| error.to_string())?;
         self.connection
@@ -748,6 +770,45 @@ impl Desktop {
             counts.get(1).copied().unwrap_or(0),
             counts.get(2).copied().unwrap_or(0),
         )
+    }
+
+    fn read_identity(&mut self) -> Result<(), String> {
+        let identity = self
+            .connection
+            .get_property(
+                false,
+                self.root,
+                self.atoms.agent,
+                self.atoms.utf8_string,
+                0,
+                4096,
+            )
+            .map_err(|e| e.to_string())?
+            .reply();
+        self.agent = identity
+            .ok()
+            .and_then(|p| serde_json::from_slice(&p.value).ok())
+            .unwrap_or_default();
+        self.sealed = self
+            .connection
+            .get_property(
+                false,
+                self.root,
+                self.atoms.sealed,
+                AtomEnum::CARDINAL,
+                0,
+                1,
+            )
+            .map_err(|e| e.to_string())?
+            .reply()
+            .ok()
+            .and_then(|p| p.value32().and_then(|mut v| v.next()))
+            .unwrap_or(0);
+        Ok(())
+    }
+
+    fn agent_working(&self) -> bool {
+        self.job_counts().0 > 0 || recently_active(self.agent.last_action_ms, now_ms())
     }
 
     fn read_lease(&mut self) -> Result<(), String> {
@@ -848,8 +909,11 @@ impl Desktop {
     fn draw_bar(&mut self) -> Result<(), String> {
         let width = i32::from(self.width);
         let height = i32::from(BAR_HEIGHT);
-        let sans = Face::new(&self.fonts.sans, 13.0);
-        let small = Face::new(&self.fonts.sans, 12.0);
+        let sans = Face::new(&self.fonts.sans, 12.5);
+        let small = sans.clone();
+        let name_face = Face::new(&self.fonts.semibold, 13.0);
+        let initial_face = Face::new(&self.fonts.semibold, 11.5);
+        let clock_face = Face::new(&self.fonts.sans, 13.0);
         let mono = Face::new(&self.fonts.mono, 10.0);
         let mut canvas = Canvas::new(self.width, BAR_HEIGHT, BAR_FILL);
         canvas.fill_rect(0, height - 1, width, 1, BAR_RULE);
@@ -857,7 +921,7 @@ impl Desktop {
         let mut layout = Layout {
             mark: Rect {
                 x: 8,
-                y: 5,
+                y: 7,
                 w: 28,
                 h: 26,
             },
@@ -883,21 +947,44 @@ impl Desktop {
 
         // The right cluster is laid out from the edge inwards.
         let clock = self.clock();
-        let clock_width = sans.width(&clock);
-        let mut right = width - 10;
+        let digit = (0..=9)
+            .map(|n| clock_face.width(&n.to_string()))
+            .max()
+            .unwrap_or(8);
+        let clock_width: i32 = clock
+            .chars()
+            .map(|c| {
+                if c.is_ascii_digit() {
+                    digit
+                } else {
+                    clock_face.width(&c.to_string())
+                }
+            })
+            .sum();
+        let mut right = width - 8;
         layout.clock = Rect {
-            x: right - clock_width - 4,
+            x: right - clock_width,
             y: 0,
-            w: clock_width + 8,
+            w: clock_width,
             h: height,
         };
-        canvas.text(
-            &sans,
-            layout.clock.x + 4,
-            sans.baseline_in(0, height),
-            &clock,
-            INK,
-        );
+        let mut clock_x = layout.clock.x;
+        for c in clock.chars() {
+            let text = c.to_string();
+            let w = if c.is_ascii_digit() {
+                digit
+            } else {
+                clock_face.width(&text)
+            };
+            canvas.text(
+                &clock_face,
+                clock_x + (w - clock_face.width(&text)) / 2,
+                clock_face.baseline_in(0, height),
+                &text,
+                INK,
+            );
+            clock_x += w;
+        }
         right = layout.clock.x - 4;
         if !self.tray.is_empty() {
             let count = self.tray.len() as i32;
@@ -915,66 +1002,144 @@ impl Desktop {
             }
             right = left - 6;
         }
+        let (running, completed, failed) = self.job_counts();
+        let working = running > 0 || recently_active(self.agent.last_action_ms, now_ms());
         let (text, color, fill) = match self.holding() {
             Holding::Person => (
-                "person in control",
+                "you're driving",
                 YOU,
                 Some(crate::paint::blend(YOU, BAR_FILL, 0.16)),
             ),
-            Holding::Agent => ("agent in control", INK_2, None),
-            Holding::Nobody => ("agent at work", MUTED, None),
+            _ if working => (
+                "agent at work",
+                AGENT,
+                Some(crate::paint::blend(AGENT, BAR_FILL, 0.16)),
+            ),
+            _ => ("agent idle", MUTED, None),
         };
         layout.lease = chip(&mut canvas, &small, right, text, color, color, fill);
-        right = layout.lease.x - 4;
-        let (running, completed, failed) = self.job_counts();
-        let jobs_text = if failed > 0 {
-            format!("{failed} failed · {running} running")
-        } else if running > 0 {
-            format!("{running} running · {completed} done")
-        } else if completed > 0 {
-            format!("{completed} done")
-        } else {
-            "no jobs".to_owned()
-        };
-        let (jobs_color, jobs_dot) = if failed > 0 {
-            (FAIL, FAIL)
-        } else if running > 0 {
-            (INK, AGENT)
-        } else {
-            (MUTED, MUTED)
-        };
-        layout.jobs = chip(
-            &mut canvas,
-            &small,
-            right,
-            &jobs_text,
-            jobs_color,
-            jobs_dot,
-            None,
-        );
-        right = layout.jobs.x - 16;
+        right = layout.lease.x - 8;
+        layout.jobs = jobs_chip(&mut canvas, &small, right, (running, completed, failed));
+        right = layout.jobs.x - 8;
+        if self.sealed > 0 {
+            let text = format!("{} sealed", self.sealed);
+            let w = small.width(&text) + 38;
+            layout.sealed = Rect {
+                x: right - w,
+                y: 7,
+                w,
+                h: 26,
+            };
+            canvas.round_rect(right - w, 7, w, 26, 8.0, CHIP_EDGE);
+            canvas.round_rect(right - w + 1, 8, w - 2, 24, 7.0, CHIP);
+            canvas.padlock(right - w + 9, 13, INK_2);
+            canvas.text(
+                &small,
+                right - w + 28,
+                small.baseline_in(7, 26),
+                &text,
+                INK_2,
+            );
+            right = layout.sealed.x - 8;
+        }
+        right -= 8;
 
-        // The middle is every managed window, in mapping order, as far as fits.
-        canvas.fill_rect(44, 9, 1, 18, RULE);
+        // Identity yields space to status chips on narrow screens. The task
+        // is a label, never command output, and is bounded before pixel fitting.
+        let room = (right - 52 - 16).clamp(0, 440);
+        let name = name_face.fit(&self.agent.name, (room - 30).clamp(0, 180));
+        let name_width = name_face.width(&name);
+        let task: String = self.agent.task.chars().take(40).collect();
+        let task = if self.agent.task.chars().count() > 40 {
+            format!("{}…", task.chars().take(39).collect::<String>())
+        } else {
+            task
+        };
+        let task_room = room - 30 - name_width - 8;
+        let task = if task_room >= 20 {
+            small.fit(&task, task_room)
+        } else {
+            String::new()
+        };
+        let task_width = if task.is_empty() {
+            0
+        } else {
+            8 + small.width(&task)
+        };
         let mut x = 52;
+        if room >= 60 {
+            layout.agent = Rect {
+                x,
+                y: 6,
+                w: 30 + name_width + task_width,
+                h: 28,
+            };
+            canvas.dot(
+                (x + 11) as f32,
+                20.0,
+                11.0,
+                crate::paint::blend(AGENT, BAR_FILL, 0.16),
+            );
+            let initial = self
+                .agent
+                .name
+                .chars()
+                .next()
+                .unwrap_or('A')
+                .to_uppercase()
+                .to_string();
+            canvas.text(
+                &initial_face,
+                x + (22 - initial_face.width(&initial)) / 2,
+                initial_face.baseline_in(9, 22),
+                &initial,
+                AGENT,
+            );
+            canvas.text(
+                &name_face,
+                x + 30,
+                name_face.baseline_in(0, height),
+                &name,
+                INK,
+            );
+            canvas.text(
+                &small,
+                x + 30 + name_width + 8,
+                small.baseline_in(0, height),
+                &task,
+                MUTED,
+            );
+            x += layout.agent.w + 12;
+        }
+        canvas.fill_rect(x, 11, 1, 18, RULE);
+        x += 12;
         for window in self.order.clone() {
             let title = self.title_of(window)?;
-            let text = sans.fit(&title, PILL_MAX - 8 - i32::from(APP_ICON) - 7 - 10);
+            let text = sans.fit(&title, PILL_MAX - 22 - i32::from(APP_ICON) - 8);
             let pill = Rect {
                 x,
-                y: 5,
-                w: 8 + i32::from(APP_ICON) + 7 + sans.width(&text) + 10,
-                h: 26,
+                y: 6,
+                w: 22 + i32::from(APP_ICON) + 8 + sans.width(&text),
+                h: 28,
             };
             if pill.x + pill.w > right {
                 break;
             }
             let active = self.active == Some(window);
             if active {
-                canvas.round_rect(pill.x, pill.y, pill.w, pill.h, 6.0, BAR_RAISED);
-                canvas.fill_rect(pill.x + 6, pill.y + pill.h - 2, pill.w - 12, 2, INK_2);
+                canvas.round_rect(pill.x, pill.y, pill.w, pill.h, 8.0, RAISED_EDGE);
+                canvas.round_rect(
+                    pill.x + 1,
+                    pill.y + 1,
+                    pill.w - 2,
+                    pill.h - 2,
+                    7.0,
+                    BAR_RAISED,
+                );
+            } else if self.hovered_app == Some(window) {
+                canvas.round_rect(pill.x, pill.y, pill.w, pill.h, 8.0, BAR_RAISED);
             }
-            let icon_x = pill.x + 8;
+            let icon_x = pill.x + 11;
             let icon_y = pill.y + (pill.h - i32::from(APP_ICON)) / 2;
             let client = self.clients.get(&window);
             match client.and_then(|c| c.icon.as_ref()) {
@@ -1004,18 +1169,18 @@ impl Desktop {
             }
             canvas.text(
                 &sans,
-                icon_x + i32::from(APP_ICON) + 7,
+                icon_x + i32::from(APP_ICON) + 8,
                 sans.baseline_in(pill.y, pill.h),
                 &text,
-                if active { INK } else { INK_2 },
+                if active { INK } else { PILL_INK },
             );
             layout.apps.push((pill, window));
-            x += pill.w + 2;
+            x += pill.w + 8;
         }
 
         self.put_image(self.bar, &canvas.image, 0, 0, BAR_FILL)?;
         self.layout = layout;
-        self.shown = format!("{clock}|{:?}", self.holding());
+        self.shown = format!("{clock}|{:?}|{working}", self.holding());
         self.layout_tray()?;
         self.publish_layout()
     }
@@ -1025,6 +1190,8 @@ impl Desktop {
         let layout = json!({
             "height": BAR_HEIGHT,
             "mark": self.layout.mark.json(),
+            "agent": self.layout.agent.json(),
+            "sealed": self.layout.sealed.json(),
             "apps": self.layout.apps.iter().map(|(rect, window)| json!({"window": window, "rect": rect.json()})).collect::<Vec<_>>(),
             "jobs": self.layout.jobs.json(),
             "lease": self.layout.lease.json(),
@@ -1046,7 +1213,12 @@ impl Desktop {
         if self.wallpaper_dirty && self.wallpaper_painted.elapsed() >= Duration::from_millis(50) {
             self.paint_wallpaper()?;
         }
-        let now = format!("{}|{:?}", self.clock(), self.holding());
+        let now = format!(
+            "{}|{:?}|{}",
+            self.clock(),
+            self.holding(),
+            self.agent_working()
+        );
         if now != self.shown {
             self.draw_bar()?;
         }
@@ -1057,6 +1229,7 @@ impl Desktop {
 
     fn open_popup(&mut self, kind: Popup) -> Result<(), String> {
         self.close_popup()?;
+        self.hovered_row = None;
         let (width, height) = match &kind {
             Popup::Menu => (MENU_WIDTH, (PAD + 4 * ROW + 11 + 22 + PAD) as u16),
             Popup::Jobs { visible, .. } => (
@@ -1084,10 +1257,14 @@ impl Desktop {
                 0,
                 &CreateWindowAux::new()
                     .override_redirect(1)
-                    .background_pixel(BAR_FILL)
+                    .background_pixel(SURFACE)
                     .border_pixel(RULE)
                     .event_mask(
-                        EventMask::EXPOSURE | EventMask::BUTTON_PRESS | EventMask::KEY_PRESS,
+                        EventMask::EXPOSURE
+                            | EventMask::BUTTON_PRESS
+                            | EventMask::KEY_PRESS
+                            | EventMask::POINTER_MOTION
+                            | EventMask::LEAVE_WINDOW,
                     ),
             )
             .map_err(|e| e.to_string())?;
@@ -1168,7 +1345,7 @@ impl Desktop {
             serde_json::from_slice(&reply.value).unwrap_or_default();
         let visible = jobs
             .len()
-            .min(usize::from(self.work_rect().3.saturating_sub(30) / 30).min(12));
+            .min(usize::from(self.work_rect().3.saturating_sub(ROW as u16) / ROW as u16).min(12));
         self.open_popup(Popup::Jobs {
             jobs,
             first: 0,
@@ -1181,7 +1358,7 @@ impl Desktop {
             return Ok(());
         };
         let sans = Face::new(&self.fonts.sans, 13.0);
-        let small = Face::new(&self.fonts.sans, 12.0);
+        let small = Face::new(&self.fonts.sans, 13.0);
         let mono = Face::new(&self.fonts.mono, 11.0);
         let width = i32::from(open.width);
         let mut canvas = Canvas::new(open.width, open.height, SURFACE);
@@ -1190,11 +1367,14 @@ impl Desktop {
                 let rows: [(&str, &str, &str); 4] = [
                     ("Browser", "open or focus", "B"),
                     ("Terminal", "a shell of your own", "T"),
-                    ("Observe", "the teammate's jobs", "O"),
+                    ("Observe", "the agent's jobs", "O"),
                     ("About this computer", "", "A"),
                 ];
                 for (index, (label, note, key)) in rows.iter().enumerate() {
                     let y = menu_row_y(index);
+                    if self.hovered_row == Some(index) {
+                        canvas.fill_rect(PAD, y, width - 2 * PAD, ROW, BAR_RAISED);
+                    }
                     let baseline = sans.baseline_in(y, ROW);
                     let advance = canvas.text(&sans, PAD + 10, baseline, label, INK);
                     if !note.is_empty() {
@@ -1235,13 +1415,20 @@ impl Desktop {
                 first,
                 visible,
             } => {
+                if self.hovered_row == Some(0) {
+                    canvas.fill_rect(PAD, PAD, width - 2 * PAD, ROW, BAR_RAISED);
+                }
                 let baseline = sans.baseline_in(PAD, ROW);
                 let advance = canvas.text(&sans, PAD + 10, baseline, "Jobs", INK);
                 canvas.text(
                     &small,
                     PAD + 10 + advance + 8,
                     baseline,
-                    "click a job to inspect it · scroll for more",
+                    if jobs.len() > *visible {
+                        "click a job to inspect it · scroll for more"
+                    } else {
+                        "click a job to inspect it"
+                    },
                     MUTED,
                 );
                 let open_terminal = "open terminal";
@@ -1254,10 +1441,13 @@ impl Desktop {
                 );
                 for (row, job) in jobs.iter().skip(*first).take(*visible).enumerate() {
                     let y = PAD + (row as i32 + 1) * ROW;
+                    if self.hovered_row == Some(row + 1) {
+                        canvas.fill_rect(PAD, y, width - 2 * PAD, ROW, BAR_RAISED);
+                    }
                     let (dot, note) = if job.state == "running" {
-                        (OK, "running".to_owned())
+                        (AGENT, "running".to_owned())
                     } else if job.exit_code == Some(0) {
-                        (MUTED, "exit 0".to_owned())
+                        (OK, "exit 0".to_owned())
                     } else {
                         (
                             FAIL,
@@ -1329,10 +1519,10 @@ impl Desktop {
                 }
             }
         }
-        self.put_image(open.window, &canvas.image, 0, 0, BAR_FILL)
+        self.put_image(open.window, &canvas.image, 0, 0, SURFACE)
     }
 
-    /// The menu's letter or click: A to D.
+    /// The menu's letter or click: B, T, O, A.
     fn menu_pick(&mut self, index: usize) -> Result<(), String> {
         match index {
             0 => {
@@ -1595,7 +1785,10 @@ impl Desktop {
             }
             Event::DestroyNotify(event) => self.forget(event.window),
             Event::PropertyNotify(event) if event.window == self.root => {
-                if event.atom == self.atoms.jobs_running {
+                if event.atom == self.atoms.agent || event.atom == self.atoms.sealed {
+                    self.read_identity()?;
+                    self.draw_bar()
+                } else if event.atom == self.atoms.jobs_running {
                     self.draw_bar()
                 } else if event.atom == self.atoms.holder {
                     self.read_lease()?;
@@ -1636,6 +1829,49 @@ impl Desktop {
                 } else {
                     Ok(())
                 }
+            }
+            Event::MotionNotify(event) if event.event == self.bar => {
+                let hovered = self
+                    .layout
+                    .apps
+                    .iter()
+                    .find(|(r, _)| r.contains(i32::from(event.event_x), i32::from(event.event_y)))
+                    .map(|(_, w)| *w);
+                if hovered != self.hovered_app {
+                    self.hovered_app = hovered;
+                    self.draw_bar()?;
+                }
+                Ok(())
+            }
+            Event::MotionNotify(event)
+                if self.popup.as_ref().is_some_and(|p| p.window == event.event) =>
+            {
+                let y = i32::from(event.event_y);
+                let open = self.popup.as_ref().unwrap();
+                let hovered = match &open.kind {
+                    Popup::Menu => {
+                        (0..4).find(|i| (menu_row_y(*i)..menu_row_y(*i) + ROW).contains(&y))
+                    }
+                    Popup::Jobs { visible, .. } => (PAD..PAD + (*visible as i32 + 1) * ROW)
+                        .contains(&y)
+                        .then(|| ((y - PAD) / ROW) as usize),
+                    Popup::About => None,
+                };
+                if hovered != self.hovered_row {
+                    self.hovered_row = hovered;
+                    self.draw_popup()?;
+                }
+                Ok(())
+            }
+            Event::LeaveNotify(event) if event.event == self.bar => {
+                self.hovered_app = None;
+                self.draw_bar()
+            }
+            Event::LeaveNotify(event)
+                if self.popup.as_ref().is_some_and(|p| p.window == event.event) =>
+            {
+                self.hovered_row = None;
+                self.draw_popup()
             }
             Event::ButtonPress(event) => self.button_press(event),
             Event::KeyPress(event) => self.key_press(event),
@@ -2210,9 +2446,9 @@ fn chip(
 ) -> Rect {
     let rect = Rect {
         x: right - (9 + 6 + 6 + face.width(text) + 9),
-        y: 6,
+        y: 7,
         w: 9 + 6 + 6 + face.width(text) + 9,
-        h: 24,
+        h: 26,
     };
     if let Some(fill) = fill {
         canvas.round_rect(rect.x, rect.y, rect.w, rect.h, 8.0, fill);
@@ -2220,7 +2456,7 @@ fn chip(
         canvas.round_rect(rect.x, rect.y, rect.w, rect.h, 8.0, CHIP_EDGE);
         canvas.round_rect(rect.x + 1, rect.y + 1, rect.w - 2, rect.h - 2, 7.0, CHIP);
     }
-    canvas.dot((rect.x + 12) as f32, (rect.y + 12) as f32, 3.0, dot);
+    canvas.dot((rect.x + 12) as f32, (rect.y + 13) as f32, 3.0, dot);
     canvas.text(
         face,
         rect.x + 21,
@@ -2229,6 +2465,63 @@ fn chip(
         color,
     );
     rect
+}
+
+fn jobs_chip(canvas: &mut Canvas, face: &Face, right: i32, counts: (u32, u32, u32)) -> Rect {
+    let (running, completed, failed) = counts;
+    let (label, suffix, color, dot) = if failed > 0 {
+        (
+            format!("{failed} failed"),
+            format!(" · {running} running"),
+            FAIL,
+            FAIL,
+        )
+    } else if running > 0 {
+        (
+            format!("{running} running"),
+            format!(" · {completed} done"),
+            INK,
+            AGENT,
+        )
+    } else {
+        (
+            "no jobs".into(),
+            format!(" · {completed} done"),
+            MUTED,
+            MUTED,
+        )
+    };
+    let w = 30 + face.width(&label) + face.width(&suffix);
+    let rect = Rect {
+        x: right - w,
+        y: 7,
+        w,
+        h: 26,
+    };
+    canvas.round_rect(rect.x, rect.y, w, 26, 8.0, CHIP_EDGE);
+    canvas.round_rect(rect.x + 1, rect.y + 1, w - 2, 24, 7.0, CHIP);
+    if running > 0 && failed == 0 {
+        canvas.dot(
+            (rect.x + 12) as f32,
+            20.0,
+            6.0,
+            crate::paint::blend(AGENT, BAR_FILL, 0.16),
+        );
+    }
+    canvas.dot((rect.x + 12) as f32, 20.0, 3.0, dot);
+    let advance = canvas.text(face, rect.x + 21, face.baseline_in(7, 26), &label, color);
+    canvas.text(
+        face,
+        rect.x + 21 + advance,
+        face.baseline_in(7, 26),
+        &suffix,
+        MUTED,
+    );
+    rect
+}
+
+fn recently_active(last_action_ms: u64, now: u64) -> bool {
+    last_action_ms != 0 && now.saturating_sub(last_action_ms) < 10_000
 }
 
 fn now_ms() -> u64 {
@@ -2361,6 +2654,13 @@ fn decode_png(bytes: &[u8]) -> Result<Image, String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_recent_action_expires_after_ten_seconds() {
+        assert!(!recently_active(0, 100));
+        assert!(recently_active(100, 10_099));
+        assert!(!recently_active(100, 10_100));
+    }
 
     #[test]
     fn work_area_and_column_share_gutters_including_the_opt_out() {

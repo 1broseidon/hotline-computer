@@ -199,6 +199,7 @@ impl Job {
 
 #[derive(Clone)]
 pub struct Jobs {
+    pub agent: Arc<crate::agent::Identity>,
     root: PathBuf,
     home: PathBuf,
     display: String,
@@ -232,6 +233,7 @@ pub struct Tail {
 impl Jobs {
     pub fn new(home: &Path, display: &str, secrets: Secrets) -> Self {
         Self {
+            agent: Arc::new(crate::agent::Identity::new(display, secrets.clone())),
             root: home.join(".hotline/jobs"),
             home: home.to_owned(),
             display: display.to_owned(),
@@ -509,6 +511,12 @@ impl Jobs {
                 exit_code: record.exit_code,
             })
             .collect();
+        self.agent.task(
+            records
+                .iter()
+                .find(|r| r.state == "running")
+                .map_or("", |r| r.label.as_str()),
+        );
         let _ = crate::x11::publish_jobs(&self.display, &summaries);
         drop(jobs);
     }

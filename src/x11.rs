@@ -584,6 +584,39 @@ pub fn publish_jobs(display: &str, jobs: &[crate::jobs::Summary]) -> Result<(), 
         .map_err(|e| e.to_string())
 }
 
+/// Identity is public display metadata, independent of the control lease.
+pub fn publish_agent(display: &str, agent: &crate::agent::Agent) -> Result<(), String> {
+    use x11rb::wrapper::ConnectionExt as _;
+    let (connection, root) = connect(display)?;
+    connection
+        .change_property8(
+            x11rb::protocol::xproto::PropMode::REPLACE,
+            root,
+            atom(&connection, b"_HOTLINE_AGENT")?,
+            atom(&connection, b"UTF8_STRING")?,
+            &serde_json::to_vec(agent).map_err(|e| e.to_string())?,
+        )
+        .map_err(|e| e.to_string())?
+        .check()
+        .map_err(|e| e.to_string())
+}
+
+pub fn publish_sealed(display: &str, count: u32) -> Result<(), String> {
+    use x11rb::wrapper::ConnectionExt as _;
+    let (connection, root) = connect(display)?;
+    connection
+        .change_property32(
+            x11rb::protocol::xproto::PropMode::REPLACE,
+            root,
+            atom(&connection, b"_HOTLINE_SEALED")?,
+            AtomEnum::CARDINAL,
+            &[count],
+        )
+        .map_err(|e| e.to_string())?
+        .check()
+        .map_err(|e| e.to_string())
+}
+
 /// The bar shows who holds the machine: `_HOTLINE_HOLDER` carries the holder and
 /// when the lease lapses, or nothing when nobody holds it.
 pub fn publish_holder(display: &str, lease: Option<(&str, u64)>) -> Result<(), String> {

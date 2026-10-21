@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use axum::extract::{Path, Request};
+use axum::extract::{Path, Request, State};
 use axum::http::{StatusCode, header};
 use axum::middleware::Next;
 use axum::response::{IntoResponse, Response};
@@ -145,6 +145,10 @@ pub(crate) fn router(app: App) -> Router {
         // by domain or whole. Bearer-only, like `/secrets`.
         .route("/logins/{name}", delete(logins::forget))
         .nest_service("/mcp", service)
+        .layer(axum::middleware::from_fn_with_state(
+            app.clone(),
+            record_holder,
+        ))
         .layer(axum::middleware::from_fn(
             move |request: Request, next: Next| {
                 let expected_token = expected_token.clone();
@@ -152,6 +156,20 @@ pub(crate) fn router(app: App) -> Router {
             },
         ))
         .with_state(app)
+}
+
+/// This runs after the existing bearer gate. Names describe the agent;
+/// they never select a lease or grant access to a tool.
+async fn record_holder(State(app): State<App>, request: Request, next: Next) -> Response {
+    if (request.uri().path() == "/mcp" || request.uri().path().starts_with("/mcp/"))
+        && let Some(holder) = request
+            .headers()
+            .get("X-Computer-Holder")
+            .and_then(|v| v.to_str().ok())
+    {
+        app.jobs.agent.holder(holder);
+    }
+    next.run(request).await
 }
 
 /// `/health` is open; the viewer page is open and its socket checks the
@@ -343,6 +361,49 @@ mod tests {
                 .status(),
             StatusCode::UNAUTHORIZED
         );
+        server.abort();
+    }
+
+    #[tokio::test]
+    async fn only_an_authenticated_mcp_request_updates_the_displayed_name() {
+        let home = tempfile::tempdir().unwrap();
+        let app = App::new(crate::Config {
+            addr: "127.0.0.1:0".into(),
+            token: Some("test-only".into()),
+            home: home.path().into(),
+            display: String::new(),
+            screen: "1920x1080".into(),
+        });
+        let identity = app.jobs.agent.clone();
+        let before = identity.snapshot().name;
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let origin = format!("http://{}", listener.local_addr().unwrap());
+        let server = tokio::spawn(async move {
+            axum::serve(listener, router(app)).await.unwrap();
+        });
+        let http = reqwest::Client::builder().no_proxy().build().unwrap();
+        let denied = http
+            .post(format!("{origin}/mcp"))
+            .header("X-Computer-Holder", "Untrusted")
+            .send()
+            .await
+            .unwrap();
+        assert_eq!(denied.status(), StatusCode::UNAUTHORIZED);
+        assert_eq!(identity.snapshot().name, before);
+        let _ = http
+            .post(format!("{origin}/mcp"))
+            .bearer_auth("test-only")
+            .header("X-Computer-Holder", "Tad")
+            .send()
+            .await
+            .unwrap();
+        if std::env::var("HOTLINE_COMPUTER_AGENT")
+            .unwrap_or_default()
+            .trim()
+            .is_empty()
+        {
+            assert_eq!(identity.snapshot().name, "Tad");
+        }
         server.abort();
     }
 

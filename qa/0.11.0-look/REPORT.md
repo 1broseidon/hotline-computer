@@ -1,6 +1,6 @@
 # 0.11 look
 
-Phases 1–2 landed on `look/0.11`; no phases reverted. Phases 7–8 will not start: no Docker.
+Phases 1–3 landed on `look/0.11`; no phases reverted. Phases 7–8 will not start: no Docker.
 
 | Phase | Status | Commit | Screenshots | What to inspect |
 | --- | --- | --- | --- | --- |
@@ -10,8 +10,12 @@ Phases 1–2 landed on `look/0.11`; no phases reverted. Phases 7–8 will not st
 
 | 2 Window separation | Passed native gate | `Windows share a guttered work area with painted separation.` | S3: not run: no Docker | Work area `[16,56,1888,1008]`; aligned WM/tool tiling; one-pixel rings and three-pass shadows. |
 
+| 3 Bar metadata and layout | Passed native gate | `The bar names the agent and distinguishes work from person control.` | S3, S4: not run: no Docker | Identity, active pills, sealed count, colored job/lease chips, square hover menus. |
+
 ## Checks
 
+- Phase 3: `make check` passed, 111 library tests; see `phase3-check.log`. Corrected test-module placement after the first clippy run. Tests cover name precedence, authenticated metadata updates, read/action distinction and ten-second expiry.
+- Static QA passed: muted/bar **5.792:1**, muted/surface **5.493:1**, ink-2/chip **8.488:1**. See `static-checks.json`. Recipe syntax checked; live scenes are not run.
 - Phase 2: `make check` passed, 107 library tests; see `phase2-check.log`. Removed one obsolete painter after the first clippy run. Tests cover 16px and zero gutters, small screens, minimum-size rejection, bounded/offset shadow alpha.
 - Phase 1: `make check` passed, 104 library tests; see `phase1-check.log`. The first run found two stale wallpaper color expectations, corrected on the second run. Font traversal and unknown-name tests pass. Fontconfig and computed browser font checks: not run: no Docker.
 - Native preflight: `make check` passed, including 102 library tests. The first sandboxed run could not bind local test sockets; rerunning with local sockets permitted passed. See `preflight-check.log`.
@@ -21,6 +25,7 @@ Phases 1–2 landed on `look/0.11`; no phases reverted. Phases 7–8 will not st
 ## Decisions
 
 - Vendored official Geist v1.8.1 TTF and WOFF2 files, with OFL license. Release archive SHA-256: `70f42c1452fb6df12ea183e20a65999157354f91d11dac18b4c713e383808ec2`. No fallback.
+- Display metadata: holder names are observed after the existing bearer check; the same identity state feeds the bar and viewer. The only `/secrets` addition publishes the stored count after a successful replacement. No values or names go into that count. Existing redaction sanitizes identity/task labels. Successful mutating calls mark recent activity; read-only window lists and browser tab lists do not.
 - Geometry: split the usable width after reserving the inner gap. Default observer is `[1280,56,624,1008]`; shell split is 672px / 16px / 320px. Tiny-screen outer gutters are clamped to leave usable pixels. Existing WM did not implement fullscreen; no new fullscreen behavior was added. Rings are painted after all shadows so adjacent shadows cannot dim them.
 - A small portability prerequisite lets the specified check gate run on this macOS host. Linux capture behavior is unchanged; `openpty` gets the pointer types both Unix platforms accept.
 - Full-resolution scene captures will use `capture mode=png` and fetch the original file. `mode=image` rescales large images; changing that tool contract is out of scope.

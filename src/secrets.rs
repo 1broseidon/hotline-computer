@@ -650,6 +650,8 @@ pub async fn replace(
 ) -> Response {
     match app.secrets.replace(set) {
         Ok(()) => {
+            let _ =
+                crate::x11::publish_sealed(&app.config.display, app.secrets.names().len() as u32);
             if let Err(error) = app.browser.sync_passkeys(false).await {
                 eprintln!("secrets: the browser did not take the passkeys: {error}");
             }
