@@ -1,0 +1,26 @@
+{
+  "label": "job-output",
+  "client": "audit",
+  "tool": "shell",
+  "args": {
+    "command": "python3",
+    "args": [
+      "-c",
+      "print(\"x\" * 20000); print(\"END-OF-OUTPUT\")"
+    ],
+    "max_output": 100,
+    "label": "Check bounded output"
+  },
+  "seconds": 0.006,
+  "jsonrpc": "2.0",
+  "id": 13,
+  "result": {
+    "content": [
+      {
+        "type": "text",
+        "text": "{\"duration_ms\":4,\"error\":null,\"exit_code\":0,\"job_id\":\"000001a15c062a49-1ef757ed\",\"more\":\"Only the end of a long stream is here; all of stdout is in /home/agent/.hotline/jobs/000001a15c062a49-1ef757ed/stdout.log. Search there, or page through the whole output, both streams as they were written, with shell read and this job_id.\",\"observer_error\":null,\"signal\":null,\"state\":\"exited\",\"stderr\":\"\",\"stderr_bytes\":0,\"stdout\":\"xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\\nEND-OF-OUTPUT\\n\",\"stdout_bytes\":20015,\"truncated\":true}"
+      }
+    ],
+    "isError": false
+  }
+}

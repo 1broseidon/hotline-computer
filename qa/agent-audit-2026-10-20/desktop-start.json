@@ -1,0 +1,27 @@
+{
+  "label": "desktop-start",
+  "client": "audit",
+  "tool": "capture",
+  "args": {},
+  "seconds": 0.137,
+  "jsonrpc": "2.0",
+  "id": 3,
+  "result": {
+    "content": [
+      {
+        "type": "image",
+        "mimeType": "image/png",
+        "saved_path": "/Users/george/Projects/personal/hotline-computer/qa/agent-audit-2026-10-20/desktop-start-0.png"
+      },
+      {
+        "type": "text",
+        "text": "screenshot of 0,0 1920x1080 shown at 1568x882: screen point = (0 + image x \u00d7 1.224, 0 + image y \u00d7 1.224)"
+      },
+      {
+        "type": "text",
+        "text": "[desktop no windows]\n"
+      }
+    ],
+    "isError": false
+  }
+}

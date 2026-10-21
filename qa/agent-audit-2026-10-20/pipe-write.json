@@ -1,0 +1,23 @@
+{
+  "label": "pipe-write",
+  "client": "audit",
+  "tool": "shell",
+  "args": {
+    "action": "write",
+    "job_id": "000001a15c062a37-26ee3cb2",
+    "text": "Hello stdin\n",
+    "eof": true
+  },
+  "seconds": 0.001,
+  "jsonrpc": "2.0",
+  "id": 9,
+  "result": {
+    "content": [
+      {
+        "type": "text",
+        "text": "{\"id\":\"000001a15c062a37-26ee3cb2\",\"pid\":629,\"label\":\"Check stdin and EOF\",\"command\":\"python3\",\"args\":[\"-u\",\"-c\",\"import sys; print(sys.stdin.read().upper())\"],\"cwd\":\"/home/agent\",\"holder\":\"audit\",\"state\":\"running\",\"exit_code\":null,\"signal\":null,\"started_at\":1792545270327,\"finished_at\":null,\"error\":null,\"output_bytes\":0,\"truncated\":false,\"pty\":false,\"request_id\":null,\"fingerprint\":\"d2c3011a6348475bd54e89252479ff91e9431315babca9592c181e427a386c97\"}"
+      }
+    ],
+    "isError": false
+  }
+}

@@ -1,0 +1,21 @@
+{
+  "label": "long-page-navigate",
+  "client": "audit",
+  "tool": "browser",
+  "args": {
+    "action": "navigate",
+    "url": "http://localhost:39463/long.html"
+  },
+  "seconds": 0.027,
+  "jsonrpc": "2.0",
+  "id": 4,
+  "result": {
+    "content": [
+      {
+        "type": "text",
+        "text": "navigated to http://localhost:39463/long.html"
+      }
+    ],
+    "isError": false
+  }
+}

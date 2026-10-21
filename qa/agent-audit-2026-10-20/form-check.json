@@ -1,0 +1,21 @@
+{
+  "label": "form-check",
+  "client": "audit",
+  "tool": "browser",
+  "args": {
+    "action": "check",
+    "ref": "e4"
+  },
+  "seconds": 0.06,
+  "jsonrpc": "2.0",
+  "id": 3,
+  "result": {
+    "content": [
+      {
+        "type": "text",
+        "text": "{\"action\":\"check\",\"ok\":true,\"type\":\"checkbox\",\"valid\":true,\"validation_message\":\"\",\"value\":true}"
+      }
+    ],
+    "isError": false
+  }
+}

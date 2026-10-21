@@ -1,0 +1,25 @@
+{
+  "label": "boundary-check",
+  "client": "audit",
+  "tool": "shell",
+  "args": {
+    "command": "python3",
+    "args": [
+      "-c",
+      "import json, urllib.request\nfrom pathlib import Path\nresult={}\ntry: result['pid1_contains_server_token']=any(x.startswith(b'HOTLINE_COMPUTER_TOKEN=') for x in Path('/proc/1/environ').read_bytes().split(b'\\0'))\nexcept Exception as e: result['pid1_error']=str(e)\ntry:\n with urllib.request.urlopen('http://127.0.0.1:9222/json/version',timeout=3) as r:\n  value=json.load(r)\n  result['cdp_status']=r.status\n  result['cdp_websocket_advertised']='webSocketDebuggerUrl' in value\nexcept Exception as e: result['cdp_error']=str(e)\nprint(json.dumps(result))\n"
+    ],
+    "label": "Check isolated server boundaries without printing secrets"
+  },
+  "seconds": 0.048,
+  "jsonrpc": "2.0",
+  "id": 4,
+  "result": {
+    "content": [
+      {
+        "type": "text",
+        "text": "{\"duration_ms\":45,\"error\":null,\"exit_code\":0,\"job_id\":\"000001a15c09ca2d-5ee68056\",\"observer_error\":null,\"signal\":null,\"state\":\"exited\",\"stderr\":\"\",\"stderr_bytes\":0,\"stdout\":\"{\\\"pid1_contains_server_token\\\": true, \\\"cdp_status\\\": 200, \\\"cdp_websocket_advertised\\\": true}\\n\",\"stdout_bytes\":90,\"truncated\":false}"
+      }
+    ],
+    "isError": false
+  }
+}

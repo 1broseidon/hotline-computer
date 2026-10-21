@@ -1,0 +1,21 @@
+{
+  "label": "project-prepare-warm",
+  "client": "audit",
+  "tool": "state",
+  "args": {
+    "action": "prepare",
+    "workspace": "/home/agent/src/audit-project"
+  },
+  "seconds": 0.003,
+  "jsonrpc": "2.0",
+  "id": 3,
+  "result": {
+    "content": [
+      {
+        "type": "text",
+        "text": "{\"cached\":true,\"definition\":{\"base\":\"0.10.0-rc.4\",\"file\":\".hotline/manifest.json\",\"nixpkgs\":\"ef34387ddd751e1ab8857adf4676492d32eb24ec\",\"packages\":[\"python312\"],\"platform\":[],\"source\":\"manifest\"},\"next\":\"shell run NAME in this workspace. state manifest shows hooks and services as they start\",\"ready\":true,\"then\":{\"create_hooks\":[],\"runs\":[\"app\",\"test\"],\"services\":[],\"start_hooks\":[]},\"workspace\":\"/home/agent/src/audit-project\"}"
+      }
+    ],
+    "isError": false
+  }
+}

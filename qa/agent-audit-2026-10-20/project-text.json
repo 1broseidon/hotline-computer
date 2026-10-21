@@ -1,0 +1,20 @@
+{
+  "label": "project-text",
+  "client": "audit",
+  "tool": "browser",
+  "args": {
+    "action": "text"
+  },
+  "seconds": 0.002,
+  "jsonrpc": "2.0",
+  "id": 3,
+  "result": {
+    "content": [
+      {
+        "type": "text",
+        "text": "page: Prepared project\nBuilt on the computer\nTest project\n[e1] [h1] Built on the computer\n[e2] [button] Test project value=\"\""
+      }
+    ],
+    "isError": false
+  }
+}

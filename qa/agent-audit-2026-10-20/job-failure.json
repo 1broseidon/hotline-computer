@@ -1,0 +1,25 @@
+{
+  "label": "job-failure",
+  "client": "audit",
+  "tool": "shell",
+  "args": {
+    "command": "python3",
+    "args": [
+      "-c",
+      "import sys; print(\"failure detail\", file=sys.stderr); sys.exit(17)"
+    ],
+    "label": "Check nonzero exit reporting"
+  },
+  "seconds": 0.006,
+  "jsonrpc": "2.0",
+  "id": 12,
+  "result": {
+    "content": [
+      {
+        "type": "text",
+        "text": "{\"duration_ms\":4,\"error\":null,\"exit_code\":17,\"job_id\":\"000001a15c062a43-258178a0\",\"observer_error\":null,\"signal\":null,\"state\":\"failed\",\"stderr\":\"failure detail\\n\",\"stderr_bytes\":15,\"stdout\":\"\",\"stdout_bytes\":0,\"truncated\":false}"
+      }
+    ],
+    "isError": false
+  }
+}

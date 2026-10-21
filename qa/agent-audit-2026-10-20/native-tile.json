@@ -1,0 +1,22 @@
+{
+  "label": "native-tile",
+  "client": "audit",
+  "tool": "windows",
+  "args": {
+    "action": "tile",
+    "primary_id": "0x02200003",
+    "observer_id": "0x01000003"
+  },
+  "seconds": 0.053,
+  "jsonrpc": "2.0",
+  "id": 3,
+  "result": {
+    "content": [
+      {
+        "type": "text",
+        "text": "{\"ok\":true,\"windows\":[{\"bounds\":[1280,36,640,1044],\"class\":\"HotlineTerminal.HotlineTerminal\",\"focused\":false,\"id\":\"0x01000003\",\"maximized\":false,\"minimum_size\":[1,1],\"pid\":43,\"title\":\"Observer\"},{\"bounds\":[0,36,1920,1044],\"class\":\"chromium (/home/agent/.hotline/browser).Chromium\",\"focused\":false,\"id\":\"0x01a00002\",\"maximized\":true,\"minimum_size\":[500,87],\"pid\":65,\"title\":\"Audit edge cases - Chromium\"},{\"bounds\":[0,36,1280,1044],\"class\":\"python3.Python3\",\"focused\":true,\"id\":\"0x02200003\",\"maximized\":false,\"minimum_size\":[168,184],\"pid\":644,\"title\":\"Native audit app\"}]}"
+      }
+    ],
+    "isError": false
+  }
+}

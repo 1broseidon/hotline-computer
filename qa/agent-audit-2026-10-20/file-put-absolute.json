@@ -1,0 +1,22 @@
+{
+  "label": "file-put-absolute",
+  "client": "audit",
+  "tool": "files",
+  "args": {
+    "action": "put",
+    "path": "/home/agent/audit/hello.txt",
+    "content": "Hello Zo\u00eb \u5ba1\u6838\n"
+  },
+  "seconds": 0.001,
+  "jsonrpc": "2.0",
+  "id": 3,
+  "result": {
+    "content": [
+      {
+        "type": "text",
+        "text": "wrote /home/agent/audit/hello.txt (18 bytes)"
+      }
+    ],
+    "isError": false
+  }
+}

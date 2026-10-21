@@ -1,0 +1,22 @@
+{
+  "label": "native-file",
+  "client": "audit",
+  "tool": "files",
+  "args": {
+    "action": "put",
+    "path": "/home/agent/audit/native.py",
+    "content": "import ctypes as C\ng=C.CDLL('libgtk-3.so.0'); o=C.CDLL('libgobject-2.0.so.0')\ndef bind(name, restype, types):\n f=getattr(g,name); f.restype=restype; f.argtypes=types; return f\nptr=C.c_void_p; integer=C.c_int; string=C.c_char_p\nbind('gtk_init',None,[ptr,ptr])(None,None)\nwin=bind('gtk_window_new',ptr,[integer])(0)\nbind('gtk_window_set_title',None,[ptr,string])(win,b'Native audit app')\nbind('gtk_window_set_default_size',None,[ptr,integer,integer])(win,600,300)\nbox=bind('gtk_box_new',ptr,[integer,integer])(1,12)\nbind('gtk_container_add',None,[ptr,ptr])(win,box)\nentry=bind('gtk_entry_new',ptr,[])()\nbind('gtk_entry_set_placeholder_text',None,[ptr,string])(entry,b'Enter audit text')\nbutton=bind('gtk_button_new_with_label',ptr,[string])(b'Save native text')\nlabel=bind('gtk_label_new',ptr,[string])(b'Waiting for input')\npack=bind('gtk_box_pack_start',None,[ptr,ptr,integer,integer,integer])\nfor child in [entry,button,label]: pack(box,child,0,0,12)\nget=bind('gtk_entry_get_text',string,[ptr]); put=bind('gtk_label_set_text',None,[ptr,string])\n@C.CFUNCTYPE(None,ptr,ptr)\ndef clicked(*args): put(label,b'Saved: '+get(entry))\no.g_signal_connect_data.argtypes=[ptr,string,ptr,ptr,ptr,integer]\no.g_signal_connect_data(button,b'clicked',clicked,None,None,0)\nbind('gtk_widget_show_all',None,[ptr])(win)\ng.gtk_main()\n"
+  },
+  "seconds": 0.002,
+  "jsonrpc": "2.0",
+  "id": 3,
+  "result": {
+    "content": [
+      {
+        "type": "text",
+        "text": "wrote /home/agent/audit/native.py (1312 bytes)"
+      }
+    ],
+    "isError": false
+  }
+}

@@ -1,0 +1,21 @@
+{
+  "label": "components-navigate",
+  "client": "audit",
+  "tool": "browser",
+  "args": {
+    "action": "navigate",
+    "url": "data:text/html,%3Ctitle%3EAudit%20edge%20cases%3C/title%3E%3Ch1%3EComponents%3C/h1%3E%3Cbutton%20id%3Doriginal%20onclick%3D%22document.querySelector%28%27output%27%29.textContent%3D%27ORIGINAL%27%22%3EOriginal%20action%3C/button%3E%3Coutput%3E%3C/output%3E%3Ciframe%20title%3D%22Embedded%20form%22%20srcdoc%3D%22%3Clabel%3EFrame%20name%3Cinput%3E%3C/label%3E%3Cbutton%3EFrame%20save%3C/button%3E%22%3E%3C/iframe%3E%3Cdiv%20id%3Dhost%3E%3C/div%3E%3Cscript%3Edocument.querySelector%28%27%23host%27%29.attachShadow%28%7Bmode%3A%27open%27%7D%29.innerHTML%3D%27%3Clabel%3EShadow%20name%3Cinput%3E%3C/label%3E%3Cbutton%3EShadow%20save%3C/button%3E%27%3C/script%3E"
+  },
+  "seconds": 0.033,
+  "jsonrpc": "2.0",
+  "id": 3,
+  "result": {
+    "content": [
+      {
+        "type": "text",
+        "text": "navigated to data:text/html,%3Ctitle%3EAudit%20edge%20cases%3C/title%3E%3Ch1%3EComponents%3C/h1%3E%3Cbutton%20id%3Doriginal%20onclick%3D%22document.querySelector%28%27output%27%29.textContent%3D%27ORIGINAL%27%22%3EOriginal%20action%3C/button%3E%3Coutput%3E%3C/output%3E%3Ciframe%20title%3D%22Embedded%20form%22%20srcdoc%3D%22%3Clabel%3EFrame%20name%3Cinput%3E%3C/label%3E%3Cbutton%3EFrame%20save%3C/button%3E%22%3E%3C/iframe%3E%3Cdiv%20id%3Dhost%3E%3C/div%3E%3Cscript%3Edocument.querySelector%28%27%23host%27%29.attachShadow%28%7Bmode%3A%27open%27%7D%29.innerHTML%3D%27%3Clabel%3EShadow%20name%3Cinput%3E%3C/label%3E%3Cbutton%3EShadow%20save%3C/button%3E%27%3C/script%3E"
+      }
+    ],
+    "isError": false
+  }
+}

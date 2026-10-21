@@ -1,0 +1,29 @@
+{
+  "label": "native-initial",
+  "client": "audit",
+  "tool": "capture",
+  "args": {
+    "window": "Native audit app"
+  },
+  "seconds": 0.125,
+  "jsonrpc": "2.0",
+  "id": 6,
+  "result": {
+    "content": [
+      {
+        "type": "image",
+        "mimeType": "image/png",
+        "saved_path": "/Users/george/Projects/personal/hotline-computer/qa/agent-audit-2026-10-20/native-initial-0.png"
+      },
+      {
+        "type": "text",
+        "text": "screenshot of 0,36 1920x1044 shown at 1568x852: screen point = (0 + image x \u00d7 1.224, 36 + image y \u00d7 1.224)"
+      },
+      {
+        "type": "text",
+        "text": "[0x02200003 Native audit app 0,36 1920x1044]\n  [text]  0,48 1920x34 states=[editable,enabled,focusable,focused,sensitive,showing,single-line,visible] value=\"\"\n  [button] Save native text 0,118 1920x34 states=[enabled,focusable,sensitive,showing,visible]\n  [label] Waiting for input 0,188 1920x17 states=[enabled,multi-line,sensitive,showing,visible]\n\n"
+      }
+    ],
+    "isError": false
+  }
+}

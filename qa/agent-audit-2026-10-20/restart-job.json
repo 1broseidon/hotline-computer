@@ -1,0 +1,27 @@
+{
+  "label": "restart-job",
+  "client": "audit",
+  "tool": "shell",
+  "args": {
+    "action": "start",
+    "command": "python3",
+    "args": [
+      "-u",
+      "-c",
+      "import time; print(\"RESTART-EVIDENCE\"); time.sleep(600)"
+    ],
+    "label": "Check restart persistence"
+  },
+  "seconds": 0.001,
+  "jsonrpc": "2.0",
+  "id": 7,
+  "result": {
+    "content": [
+      {
+        "type": "text",
+        "text": "{\"args\":[\"-u\",\"-c\",\"import time; print(\\\"RESTART-EVIDENCE\\\"); time.sleep(600)\"],\"command\":\"python3\",\"cwd\":\"/home/agent\",\"error\":null,\"exit_code\":null,\"fingerprint\":\"069d2d2f48dba90f1f5ec3e0bce9b6ac22c23135136b017c18565afe74f4fc05\",\"finished_at\":null,\"holder\":\"audit\",\"id\":\"000001a15c08b2ae-537969a1\",\"label\":\"Check restart persistence\",\"output_bytes\":0,\"pid\":803,\"pty\":false,\"request_id\":null,\"signal\":null,\"started_at\":1792545436334,\"state\":\"running\",\"truncated\":false}"
+      }
+    ],
+    "isError": false
+  }
+}

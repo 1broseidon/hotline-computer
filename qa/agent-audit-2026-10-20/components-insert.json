@@ -1,0 +1,21 @@
+{
+  "label": "components-insert",
+  "client": "audit",
+  "tool": "browser",
+  "args": {
+    "action": "eval",
+    "js": "(()=>{const b=document.createElement('button');b.textContent='Different action';b.onclick=()=>document.querySelector('output').textContent='DIFFERENT';document.querySelector('#original').before(b);return 'inserted';})()"
+  },
+  "seconds": 0.002,
+  "jsonrpc": "2.0",
+  "id": 6,
+  "result": {
+    "content": [
+      {
+        "type": "text",
+        "text": "\"inserted\""
+      }
+    ],
+    "isError": false
+  }
+}

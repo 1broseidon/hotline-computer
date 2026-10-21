@@ -1,0 +1,21 @@
+{
+  "label": "restart-job-retained",
+  "client": "audit",
+  "tool": "shell",
+  "args": {
+    "action": "read",
+    "job_id": "000001a15c08b2ae-537969a1"
+  },
+  "seconds": 0.002,
+  "jsonrpc": "2.0",
+  "id": 3,
+  "result": {
+    "content": [
+      {
+        "type": "text",
+        "text": "{\"job\":{\"id\":\"000001a15c08b2ae-537969a1\",\"pid\":803,\"label\":\"Check restart persistence\",\"command\":\"python3\",\"args\":[\"-u\",\"-c\",\"import time; print(\\\"RESTART-EVIDENCE\\\"); time.sleep(600)\"],\"cwd\":\"/home/agent\",\"holder\":\"audit\",\"state\":\"cancelled\",\"exit_code\":null,\"signal\":9,\"started_at\":1792545436334,\"finished_at\":1792545451065,\"error\":null,\"output_bytes\":17,\"truncated\":false,\"pty\":false,\"request_id\":null,\"fingerprint\":\"069d2d2f48dba90f1f5ec3e0bce9b6ac22c23135136b017c18565afe74f4fc05\"},\"output\":\"RESTART-EVIDENCE\\n\",\"cursor\":0,\"next_cursor\":17,\"eof\":true}"
+      }
+    ],
+    "isError": false
+  }
+}

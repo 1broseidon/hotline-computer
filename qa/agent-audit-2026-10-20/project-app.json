@@ -1,0 +1,22 @@
+{
+  "label": "project-app",
+  "client": "audit",
+  "tool": "shell",
+  "args": {
+    "action": "run",
+    "name": "app",
+    "cwd": "/home/agent/src/audit-project"
+  },
+  "seconds": 0.511,
+  "jsonrpc": "2.0",
+  "id": 3,
+  "result": {
+    "content": [
+      {
+        "type": "text",
+        "text": "{\"args\":[\"app.py\"],\"command\":\"python3\",\"cwd\":\"/home/agent/src/audit-project\",\"error\":null,\"exit_code\":null,\"fingerprint\":\"383432388cd2d6e60bc00b415340f4660cfc5044a136735239cae9a0ce17d80a\",\"finished_at\":null,\"holder\":\"audit\",\"id\":\"000001a15c06aca6-2ac4a5ea\",\"kind\":\"web\",\"label\":\"Run app\",\"output_bytes\":0,\"pid\":651,\"pty\":false,\"ready\":{\"job_id\":\"000001a15c06aca6-2ac4a5ea\",\"next\":\"browser navigate to the url\",\"ready\":true,\"url\":\"http://localhost:39463\"},\"request_id\":null,\"run\":\"app\",\"signal\":null,\"started_at\":1792545303718,\"state\":\"running\",\"truncated\":false,\"url\":\"http://localhost:39463\",\"workspace\":\"/home/agent/src/audit-project\"}"
+      }
+    ],
+    "isError": false
+  }
+}

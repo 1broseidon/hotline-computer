@@ -1,0 +1,22 @@
+{
+  "label": "project-test",
+  "client": "audit",
+  "tool": "shell",
+  "args": {
+    "action": "run",
+    "name": "test",
+    "cwd": "/home/agent/src/audit-project"
+  },
+  "seconds": 0.004,
+  "jsonrpc": "2.0",
+  "id": 3,
+  "result": {
+    "content": [
+      {
+        "type": "text",
+        "text": "{\"args\":[\"-m\",\"py_compile\",\"app.py\"],\"command\":\"python3\",\"cwd\":\"/home/agent/src/audit-project\",\"error\":null,\"exit_code\":null,\"fingerprint\":\"aea33ea3831b801c943f4f3ed8c5d7787d6f002a8c4af5c8e0b21aae60052563\",\"finished_at\":null,\"holder\":\"audit\",\"id\":\"000001a15c06ac7e-c8c18e84\",\"kind\":\"task\",\"label\":\"Run test\",\"output_bytes\":0,\"pid\":650,\"pty\":false,\"request_id\":null,\"run\":\"test\",\"signal\":null,\"started_at\":1792545303678,\"state\":\"running\",\"truncated\":false,\"workspace\":\"/home/agent/src/audit-project\"}"
+      }
+    ],
+    "isError": false
+  }
+}

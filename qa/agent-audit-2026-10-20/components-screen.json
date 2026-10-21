@@ -1,0 +1,29 @@
+{
+  "label": "components-screen",
+  "client": "audit",
+  "tool": "capture",
+  "args": {
+    "window": "Audit edge cases"
+  },
+  "seconds": 0.248,
+  "jsonrpc": "2.0",
+  "id": 5,
+  "result": {
+    "content": [
+      {
+        "type": "image",
+        "mimeType": "image/png",
+        "saved_path": "/Users/george/Projects/personal/hotline-computer/qa/agent-audit-2026-10-20/components-screen-0.png"
+      },
+      {
+        "type": "text",
+        "text": "screenshot of 0,36 1920x1044 shown at 1568x852: screen point = (0 + image x \u00d7 1.224, 36 + image y \u00d7 1.224)"
+      },
+      {
+        "type": "text",
+        "text": "[0x01a00002 Audit edge cases - Chromium 0,36 1920x1044]\n  [tool bar]  0,76 1920x46 states=[enabled,sensitive,showing,visible]\n    [button] Back 0,82 40x34 states=[enabled,focusable,sensitive,showing,visible]\n    [button] Forward 42,82 34x34 states=[showing,visible]\n    [button] Reload 78,82 34x34 states=[enabled,focusable,sensitive,showing,visible]\n    [button] Not secure 126,87 102x24 states=[enabled,focusable,sensitive,showing,visible]\n    [entry] Address and search bar 236,87 1555x24 states=[editable,enabled,focusable,sensitive,showing,single-line,visible,supports-autocompletion,selectable-text] value=\"data:text/html,<title>Audit%20edge%20cases</title><h1>Components</h1><button%20id%3Doriginal%20onclick%3D\\\"document.querySelector%28%27output%27%29.textContent%3D%27ORIGINAL%27\\\">Original%20action</butt\"\n    [button] Bookmark this tab 1799,87 24x24 states=[enabled,focusable,sensitive,showing,visible]\n    [button] You 1844,82 34x34 states=[enabled,focusable,sensitive,showing,visible,has-popup]\n    [button] Chromium 1880,82 40x34 states=[enabled,focusable,sensitive,showing,visible,has-popup]\n  [document web] Audit edge cases 0,123 1920x957 states=[enabled,focusable,focused,sensitive,showing,visible]\n    [heading] Components 8,131 1904x38 states=[enabled,sensitive,showing,visible]\n      [static] Components 8,131 226x38 states=[enabled,sensitive,showing,visible]\n    [button] Original action 8,329 114x22 states=[enabled,focusable,sensitive,showing,visible]\n    [status bar]  121,329 0x20 states=[enabled,sensitive,showing,visible]\n    [internal frame] Embedded form 123,192 301x151 states=[enabled,sensitive,showing,visible]\n      [document web]  123,192 301x151 states=[enabled,focusable,sensitive,showing,visible]\n        [label]  131,200 280x22 states=[enabled,sensitive,showing,visible]\n          [static] Frame name 131,200 101x20 states=[enabled,sensitive,showing,visible]\n          [entry] Frame name 231,200 180x22 states=[editable,enabled,focusable,sensitive,showing,single-line,visible,selectable-text] value=\"\"\n        [button] Frame save 131,221 94x22 states=[enabled,focusable,sensitive,showing,visible]\n    [label]  8,350 293x22 states=[enabled,sensitive,showing,visible]\n      [static] Shadow name 8,350 114x20 states=[enabled,sensitive,showing,visible]\n      [entry] Shadow name 121,350 180x22 states=[editable,enabled,focusable,sensitive,showing,single-line,visible,selectable-text] value=\"\"\n    [button] Shadow save 300,350 105x22 states=[enabled,focusable,sensitive,showing,visible]\n  [button] Tab search 6,42 28x28 states=[enabled,focusable,sensitive,showing,visible,has-popup]\n  [page tab list]  28,36 256x41 states=[enabled,multiselectable,sensitive,showing,visible]\n    [page tab] Audit edge cases 28,36 256x41 states=[enabled,focusable,selectable,selected,sensitive,showing,visible]\n      [button] Mute tab 28,36 0x0 states=[]\n      [button] Close 242,42 28x28 states=[enabled,focusable,sensitive,showing,visible]\n  [button] New Tab 278,36 28x41 states=[enabled,focusable,sensitive,showing,visible]\n  [button] Collapse tabs 12,43 32x32 states=[]\n\n"
+      }
+    ],
+    "isError": false
+  }
+}

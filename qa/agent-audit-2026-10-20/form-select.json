@@ -1,0 +1,22 @@
+{
+  "label": "form-select",
+  "client": "audit",
+  "tool": "browser",
+  "args": {
+    "action": "select",
+    "ref": "e3",
+    "value": "Pro"
+  },
+  "seconds": 0.056,
+  "jsonrpc": "2.0",
+  "id": 3,
+  "result": {
+    "content": [
+      {
+        "type": "text",
+        "text": "{\"action\":\"select\",\"ok\":true,\"type\":\"select-one\",\"valid\":true,\"validation_message\":\"\",\"value\":[\"Pro\"]}"
+      }
+    ],
+    "isError": false
+  }
+}

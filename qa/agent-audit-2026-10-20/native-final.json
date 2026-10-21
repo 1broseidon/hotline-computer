@@ -1,0 +1,29 @@
+{
+  "label": "native-final",
+  "client": "audit",
+  "tool": "capture",
+  "args": {
+    "window": "Native audit app"
+  },
+  "seconds": 0.134,
+  "jsonrpc": "2.0",
+  "id": 3,
+  "result": {
+    "content": [
+      {
+        "type": "image",
+        "mimeType": "image/png",
+        "saved_path": "/Users/george/Projects/personal/hotline-computer/qa/agent-audit-2026-10-20/native-final-0.png"
+      },
+      {
+        "type": "text",
+        "text": "screenshot of 0,36 1280x1044 at full size: screen point = (0 + image x, 36 + image y)"
+      },
+      {
+        "type": "text",
+        "text": "[0x02200003 Native audit app 0,36 1280x1044]\n  [text]  0,48 1280x34 states=[editable,enabled,focusable,sensitive,showing,single-line,visible] value=\"Native Zo\u00eb \u5ba1\u6838\"\n  [button] Save native text 0,118 1280x34 states=[enabled,focusable,focused,sensitive,showing,visible]\n  [label] Saved: Native Zo\u00eb \u5ba1\u6838 0,188 1280x20 states=[enabled,multi-line,sensitive,showing,visible]\n\n"
+      }
+    ],
+    "isError": false
+  }
+}

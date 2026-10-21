@@ -1,0 +1,25 @@
+{
+  "label": "restart-python",
+  "client": "audit",
+  "tool": "shell",
+  "args": {
+    "command": "python3",
+    "args": [
+      "--version"
+    ],
+    "cwd": "/home/agent/src/audit-project",
+    "label": "Check restored Python environment"
+  },
+  "seconds": 0.1,
+  "jsonrpc": "2.0",
+  "id": 3,
+  "result": {
+    "content": [
+      {
+        "type": "text",
+        "text": "{\"duration_ms\":17,\"error\":null,\"exit_code\":0,\"job_id\":\"000001a15c09240e-293f3dd0\",\"observer_error\":null,\"signal\":null,\"state\":\"exited\",\"stderr\":\"\",\"stderr_bytes\":0,\"stdout\":\"Python 3.12.14\\n\",\"stdout_bytes\":15,\"truncated\":false}"
+      }
+    ],
+    "isError": false
+  }
+}

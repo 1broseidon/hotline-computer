@@ -1,0 +1,22 @@
+{
+  "label": "project-prepare-log",
+  "client": "audit",
+  "tool": "shell",
+  "args": {
+    "action": "read",
+    "job_id": "000001a15c05ff5b-57224a36",
+    "max_output": 3000
+  },
+  "seconds": 0.001,
+  "jsonrpc": "2.0",
+  "id": 3,
+  "result": {
+    "content": [
+      {
+        "type": "text",
+        "text": "{\"job\":{\"id\":\"000001a15c05ff5b-57224a36\",\"pid\":393,\"label\":\"Prepare workspace environment\",\"command\":\"/usr/bin/hotline-computer\",\"args\":[\"prepare\",\"@request\",\"/home/agent/src/audit-project\",\"/home/agent\"],\"cwd\":\"/home/agent\",\"holder\":\"audit\",\"state\":\"exited\",\"exit_code\":0,\"signal\":null,\"started_at\":1792545259356,\"finished_at\":1792545268713,\"error\":null,\"output_bytes\":7388,\"truncated\":false,\"pty\":false,\"request_id\":null,\"fingerprint\":\"8a7e72ba35d439433a679b853227096cd762730a6ead623d1032a250b08bc990\"},\"output\":\"Preparing /home/agent/src/audit-project; Nix download and build progress follow.\\ncopying path '/nix/store/hhfnpma32czw4h3bqpag8dciax0bcmar-source' from 'file:///opt/hotline-computer/base-cache'...\\ncopying path '/nix/store/n7aaryickpnkwwmmkg7xgnlihmmsh55w-mailcap-2.1.54' from 'https://cache.nixos.org'...\\ncopying path '/nix/store/i8an849ir6g3f4n2wrsm88s2qgrzjayq-tzdata-2026c' from 'https://cache.nixos.org'...\\ncopying path '/nix/store/ahg79xbgc81hkhj3xl8524i8pjp3sxkx-gcc-15.3.0-libgcc' from 'file:///opt/hotline-computer/base-cache'...\\ncopying path '/nix/store/jmg3sklk0yw7cnbplczk7kidhn14dsia-gnu-config-2024-01-01' from 'file:///opt/hotline-computer/base-cache'...\\ncopying path '/nix/store/waax852balprvsvdziyaf1h7r3ldvakg-xgcc-15.3.0-libgcc' from 'file:///opt/hotline-computer/base-cache'...\\ncopying path '/nix/store/h0hd048jzxs7fx9a6g75jwrrhbg50bp8-libunistring-1.4.2' from 'file:///opt/hotline-computer/base-cache'...\\ncopying path '/nix/store/vazsdlk6qrrnkdhfis861dn4w4j5g5x5-linux-headers-7.2' from 'file:///opt/hotline-computer/base-cache'...\\ncopying path '/nix/store/ka9y2y39cb6kj3sgji4sxr79lj20ydw7-update-autotools-gnu-config-scripts-hook' from 'file:///opt/hotline-computer/base-cache'...\\ncopying path '/nix/store/0s40b0an0cz4vypbji92cb7qbr65icl4-libidn2-2.3.8' from 'file:///opt/hotline-computer/base-cache'...\\ncopying path '/nix/store/m54cs0m994hc3n9lax7sg98sgy729qsa-glibc-2.42-84' from 'file:///opt/hotline-computer/base-cache'...\\ncopying path '/nix/store/mmi5xn7d09niakcwn9ni5389p04rk944-acl-2.4.0' from 'file:///opt/hotline-computer/base-cache'...\\ncopying path '/nix/store/fz3swsp25dqnx89i17b73ipjp668nmlk-attr-2.6.0' from 'file:///opt/hotline-computer/base-cache'...\\ncopying path '/nix/store/idnyqaaix26szkvhs1mjgi7990jajz9a-bash-5.3p15' from 'file:///opt/hotline-computer/base-cache'...\\ncopying path '/nix/store/96dn85brqck88r0wwipymxddsdbdkk3y-ed-1.22.6' from 'file:///opt/hotline-computer/base-cache'...\\ncopying path '/nix/store/n65q2br81z7a9g3hcvskd2pvr8s6a7ms-gcc-15.3.0-lib' from 'file:///opt/hotline-computer/base-cache'...\\ncopying path '/nix/store/dpz6cy60syqw1jnrxzq5cl8zys46bm0q-gdbm-1.26-lib' from 'https://cache.nixos.org'...\\ncopying path '/nix/store/r68vac903zffq3aiihz3hzjqag7dl63f-glibc-2.42-84-bin' from 'file:///opt/hotline-computer/base-cache'...\\ncopying path '/nix/store/36isqyq3hq26n3q37dazzb60g3jqpi07-bzip2-1.0.8' from 'file:///opt/hotline-computer/base-cache'...\\ncopying path '/nix/store/mfbl9c76sq0s6l23pcc9skxzqj24kx8s-expand-response-params' from 'file:///opt/hotline-computer/base-cache'...\\ncopying path '/nix/store/cc9ybj8h0b8aj85j6m8lh4nj24l1w4dq-gawk-5.4.1' from 'file:///opt/hotline-computer/base-cache'...\\ncopying path '/nix/store/gcpbflb4hvi7fxrgcr102pkz4qlifnsl-expat-2.8.4' from 'https://cache.nixos.org'...\\ncopying path '/nix/store/2yc5bc6r8jp84mjcjpzhp5rk65lwabqp-gmp-6.3.0' from 'file:///opt/hotline-computer/base-cache'...\\ncopying path '/nix/store/1nwgsy4c5862g44s9lkf50643p3nbwm5-gnused-4.10' from 'file:///opt/hotline-computer/base-cache'.\",\"cursor\":0,\"next_cursor\":3000,\"eof\":false}"
+      }
+    ],
+    "isError": false
+  }
+}

@@ -1,0 +1,15 @@
+{
+  "jsonrpc": "2.0",
+  "id": 1,
+  "result": {
+    "protocolVersion": "2024-11-05",
+    "capabilities": {
+      "tools": {}
+    },
+    "serverInfo": {
+      "name": "hotline-computer",
+      "version": "0.10.3"
+    },
+    "instructions": "Read state action=info and state action=guide on connection. The running computer supplies its release-matched skill. Inspect repository requirements, then state prepare with packages or a local flake. Use shell managed jobs for commands and builds; browser refs for web forms; capture/input for native apps."
+  }
+}

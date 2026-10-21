@@ -1,0 +1,21 @@
+{
+  "label": "components-stale-click",
+  "client": "audit",
+  "tool": "browser",
+  "args": {
+    "action": "click_ref",
+    "ref": "e2"
+  },
+  "seconds": 0.034,
+  "jsonrpc": "2.0",
+  "id": 8,
+  "result": {
+    "content": [
+      {
+        "type": "text",
+        "text": "clicked e2"
+      }
+    ],
+    "isError": false
+  }
+}

@@ -1,0 +1,27 @@
+{
+  "label": "restart-screen",
+  "client": "audit",
+  "tool": "capture",
+  "args": {},
+  "seconds": 0.145,
+  "jsonrpc": "2.0",
+  "id": 3,
+  "result": {
+    "content": [
+      {
+        "type": "image",
+        "mimeType": "image/png",
+        "saved_path": "/Users/george/Projects/personal/hotline-computer/qa/agent-audit-2026-10-20/restart-screen-0.png"
+      },
+      {
+        "type": "text",
+        "text": "screenshot of 0,0 1920x1080 shown at 1568x882: screen point = (0 + image x \u00d7 1.224, 0 + image y \u00d7 1.224)"
+      },
+      {
+        "type": "text",
+        "text": "[0x01000003 Observer 1280,36 640x1044]\n  [accessibility unavailable: no unambiguous application/window match]\n\n"
+      }
+    ],
+    "isError": false
+  }
+}

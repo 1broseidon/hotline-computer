@@ -1,0 +1,20 @@
+{
+  "label": "form-text",
+  "client": "audit",
+  "tool": "browser",
+  "args": {
+    "action": "text"
+  },
+  "seconds": 0.002,
+  "jsonrpc": "2.0",
+  "id": 3,
+  "result": {
+    "content": [
+      {
+        "type": "text",
+        "text": "page: Agent audit form\nOrder test\nName Plan \nBasic\nPro\nAccept termsSubmit\n[e1] [h1] Order test\n[e2] [text] Name required value=\"\" invalid=\"Please fill out this field.\"\n[e3] [combobox] Plan Basic Pro value=\"Basic\" multiple=false options=[{\"value\":\"Basic\",\"label\":\"Basic\",\"selected\":true,\"disabled\":false},{\"value\":\"Pro\",\"label\":\"Pro\",\"selected\":false,\"disabled\":false}]\n[e4] [checkbox] Accept terms checked=false value=\"on\"\n[e5] [button] Submit value=\"\""
+      }
+    ],
+    "isError": false
+  }
+}

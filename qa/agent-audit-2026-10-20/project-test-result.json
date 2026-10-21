@@ -1,0 +1,21 @@
+{
+  "label": "project-test-result",
+  "client": "audit",
+  "tool": "shell",
+  "args": {
+    "action": "status",
+    "job_id": "000001a15c06ac7e-c8c18e84"
+  },
+  "seconds": 0.002,
+  "jsonrpc": "2.0",
+  "id": 3,
+  "result": {
+    "content": [
+      {
+        "type": "text",
+        "text": "{\"id\":\"000001a15c06ac7e-c8c18e84\",\"pid\":650,\"label\":\"Run test\",\"command\":\"python3\",\"args\":[\"-m\",\"py_compile\",\"app.py\"],\"cwd\":\"/home/agent/src/audit-project\",\"holder\":\"audit\",\"state\":\"exited\",\"exit_code\":0,\"signal\":null,\"started_at\":1792545303678,\"finished_at\":1792545303695,\"error\":null,\"output_bytes\":0,\"truncated\":false,\"pty\":false,\"request_id\":null,\"fingerprint\":\"aea33ea3831b801c943f4f3ed8c5d7787d6f002a8c4af5c8e0b21aae60052563\"}"
+      }
+    ],
+    "isError": false
+  }
+}
