@@ -27,6 +27,7 @@ base64 = "0.22.1"
 x11rb = { version = "=0.14.0", default-features = false, features = ["damage", "shm", "xtest", "shape"] }
 # Odilia's protocol crate is the typed route to the desktop accessibility tree.
 atspi = { version = "=0.30.0", default-features = false, features = ["proxies", "tokio", "zbus"] }
+zbus = { version = "=5.19.0", default-features = false, features = ["tokio"] }
 # Chromium is visible on the desktop while this drives its DevTools protocol.
 chromiumoxide = { version = "=0.9.1", default-features = false }
 # Screenshots leave as PNG and the wallpaper mark and dock icons arrive as PNG.

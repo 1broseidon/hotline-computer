@@ -18,7 +18,7 @@ use rmcp::transport::streamable_http_server::{
 };
 use serde_json::{Value, json};
 
-use crate::{App, logins, passkeys, secrets, tools, viewer};
+use crate::{App, files_ui, logins, passkeys, secrets, tools, viewer};
 
 const MAX_REQUEST_BODY: usize = 50 * 1024 * 1024 * 4 / 3 + 1024 * 1024;
 
@@ -113,6 +113,12 @@ pub async fn run(app: App) -> Result<(), String> {
     app.jobs.initialize().await?;
     // Manifest workspaces get their services and start hooks back.
     tokio::spawn(crate::manifest::resume(app.clone()));
+    // The folder handler and the portal's picker open the computer's own
+    // file windows; a computer without a session bus simply has no portal.
+    if let Err(error) = app.files.publish() {
+        eprintln!("file windows: {error}");
+    }
+    tokio::spawn(crate::portal::serve(app.clone()));
     let jobs = app.jobs.clone();
     let observer = app.observer.clone();
     let address = app.config.addr.clone();
@@ -172,6 +178,17 @@ pub(crate) fn router(app: App) -> Router {
         // The person taking a brought-over login back out of the browser,
         // by domain or whole. Bearer-only, like `/secrets`.
         .route("/logins/{name}", delete(logins::forget))
+        // The file manager and picker. Their page carries a key of its own,
+        // which grants listing and opening files and nothing else.
+        .route("/fm/ui", get(files_ui::page))
+        .route("/fm/list", get(files_ui::list))
+        .route(
+            "/fm/request/{id}",
+            get(files_ui::request).post(files_ui::reply),
+        )
+        .route("/fm/request/{id}/cancel", post(files_ui::cancel))
+        .route("/fm/open", post(files_ui::open))
+        .route("/fm/terminal", post(files_ui::terminal))
         .nest_service("/mcp", service)
         .layer(axum::middleware::from_fn_with_state(
             app.clone(),
@@ -209,6 +226,7 @@ async fn authenticate(request: Request, next: Next, token: Option<&str>) -> Resp
         request.uri().path(),
         "/health" | "/" | "/ws" | "/files" | "/files/download"
     ) || request.uri().path().starts_with("/assets/fonts/")
+        || request.uri().path().starts_with("/fm/")
         || token.is_none()
     {
         return next.run(request).await;

@@ -290,6 +290,16 @@ impl Canvas {
         self.segment((x + 8.5, y + 10.0), (x + 11.5, y + 10.0), 1.3, color);
     }
 
+    /// A 16px folder in outline, like the terminal beside it: a tab raised
+    /// at the top left, the body below, and the flap's edge across it.
+    pub fn folder_icon(&mut self, x: i32, y: i32, color: u32, fill: u32) {
+        self.round_rect(x + 1, y + 2, 7, 5, 1.5, color);
+        self.round_rect(x + 1, y + 4, 14, 10, 2.5, color);
+        self.round_rect(x + 2, y + 5, 12, 8, 1.5, fill);
+        let (x, y) = (x as f32, y as f32);
+        self.segment((x + 2.0, y + 7.0), (x + 14.0, y + 7.0), 1.3, color);
+    }
+
     /// A 16px list: three rows, each led by a dot.
     pub fn list_icon(&mut self, x: i32, y: i32, color: u32) {
         let (x, y) = (x as f32, y as f32);

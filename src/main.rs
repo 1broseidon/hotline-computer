@@ -90,7 +90,11 @@ fn main() {
         let opened = if hotline_computer::links::is_link(target) {
             hotline_computer::links::send(target)
         } else {
-            hotline_computer::observer::open(&Config::from_env().home, std::path::Path::new(target))
+            // A folder opens in the file manager; with no service to answer,
+            // the person's terminal in that folder still does.
+            let target = std::path::Path::new(target);
+            hotline_computer::files_ui::open_folder(target)
+                .or_else(|_| hotline_computer::observer::open(&Config::from_env().home, target))
         };
         if let Err(error) = opened {
             eprintln!("{error}");

@@ -1013,6 +1013,7 @@ dependencies = [
  "tokio-tungstenite 0.28.0",
  "tokio-util",
  "x11rb",
+ "zbus",
 ]
 
 [[package]]

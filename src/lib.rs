@@ -8,6 +8,7 @@ pub mod clipboard;
 pub mod desktop;
 pub mod display;
 pub mod draft;
+pub mod files_ui;
 pub mod guide;
 pub mod jobs;
 pub mod lease;
@@ -18,6 +19,7 @@ pub mod manifest;
 pub mod observer;
 pub mod paint;
 pub mod passkeys;
+pub mod portal;
 pub mod ready;
 pub mod screen;
 pub mod secrets;
@@ -76,6 +78,8 @@ pub struct App {
     pub observer: observer::Observer,
     pub activity: activity::Log,
     pub badges: badge::Badges,
+    /// The file manager and picker windows, and the portal requests they answer.
+    pub files: files_ui::Files,
     pub a11y: Arc<tokio::sync::OnceCell<atspi::zbus::Connection>>,
     /// The screen stream, the hands, and the clipboard; `None` until a display is up.
     pub display: Option<Arc<display::Display>>,
@@ -93,6 +97,7 @@ impl App {
             browser: BrowserManager::new(Arc::clone(&config), secrets.clone(), passkeys.clone()),
             activity: activity::Log::new(&config.home, secrets.clone()),
             badges: badge::Badges::default(),
+            files: files_ui::Files::default(),
             secrets,
             passkeys,
             observer: observer::Observer::new(&config.home, &config.display),

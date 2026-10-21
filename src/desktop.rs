@@ -191,6 +191,12 @@ fn docked(client: &Client) -> bool {
     in_column(&client.class) && !client.maximized
 }
 
+/// The computer's own file manager and picker: Chromium app windows of
+/// classes that do not say "chromium", so they are never the agent's browser.
+fn files_window(class: &str) -> bool {
+    class.contains("hotlinefiles") || class.contains("hotlinepicker")
+}
+
 /// The space left of the column, where the app being watched goes while
 /// the observer, activity or the person's shell is open.
 fn main_rect(area: (i16, i16, u16, u16), gap: u16) -> (i16, i16, u16, u16) {
@@ -1390,6 +1396,8 @@ impl Desktop {
                         canvas.terminal_icon(icon_x, icon_y, ink, ground);
                     } else if class.contains("hotlineactivity") {
                         canvas.list_icon(icon_x, icon_y, ink);
+                    } else if files_window(class) {
+                        canvas.folder_icon(icon_x, icon_y, ink, ground);
                     } else {
                         canvas.round_rect(icon_x, icon_y, 16, 16, 4.0, BAR_HOVER);
                         let glyph = title
@@ -2093,7 +2101,17 @@ impl Desktop {
                 if event.atom == self.atoms.net_wm_name {
                     self.draw_bar()
                 } else if event.atom == self.atoms.net_wm_icon {
-                    let icon = self.icon_of(event.window);
+                    // The computer's own windows keep their drawn glyph: the
+                    // file windows' page sets the Hotline mark as its icon.
+                    let own = self
+                        .clients
+                        .get(&event.window)
+                        .is_some_and(|c| in_column(&c.class) || files_window(&c.class));
+                    let icon = if own {
+                        None
+                    } else {
+                        self.icon_of(event.window)
+                    };
                     if let Some(client) = self.clients.get_mut(&event.window) {
                         client.icon = icon;
                     }
@@ -2212,12 +2230,20 @@ impl Desktop {
         let icon = if class.contains("hotlineterminal")
             || class.contains("hotlineactivity")
             || class.contains("hotlineshell")
+            || files_window(&class)
         {
             None
         } else {
             self.icon_of(window)
         };
-        let client = match self.kind(window)? {
+        // The picker is a dialog over the app that asked for a file, though
+        // Chromium marks its window as a normal one.
+        let kind = if class.contains("hotlinepicker") {
+            Kind::Dialog
+        } else {
+            self.kind(window)?
+        };
+        let client = match kind {
             Kind::Furniture => {
                 self.connection
                     .map_window(window)
@@ -2434,9 +2460,9 @@ impl Desktop {
     /// Chromium draws its own frame and shape, and stops repainting its
     /// toolbar if the window manager keeps replacing that shape.
     fn draws_own_frame(&self, window: Window) -> bool {
-        self.clients
-            .get(&window)
-            .is_some_and(|client| client.class.contains(BROWSER_CLASS))
+        self.clients.get(&window).is_some_and(|client| {
+            client.class.contains(BROWSER_CLASS) || files_window(&client.class)
+        })
     }
 
     /// Re-cuts the corners when a client replaced its bounding shape with
