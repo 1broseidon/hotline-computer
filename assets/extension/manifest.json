@@ -2,12 +2,13 @@
   "manifest_version": 3,
   "name": "Hotline",
   "version": "0.11.0",
-  "description": "Passkeys the teammate is granted, answered by this computer: the keys never enter the browser.",
+  "description": "Logins and passkeys the teammate is granted, from this computer: logins fill on a click, passkeys are answered here, and their keys never enter the browser.",
   "key": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAmLzOsuf5EiD/jdOWNoAmhT+w2XSfYMoE03+llRvO8Lf6vtWT9+T7NIWRXGLJeQX6lzfkmuYGcxR/DMkHfYac4EamIvIvEGHAY1yzkyMY7fWn8MH4Tl2Q5ldfjA/xJJkF2nt/mkfznbR8mlY6Vn3giTa3FompQiAahEZFQjQxmWZioMsYp9RxL20wIxhrsXYEMBhEVyHX39ORDV3fXxW8fBrDqlH/+A/kaWcpaTyDGC2FQ2MHB6C4GCf2Nn1ptrwexYGCjh47ux16G/1+pcQI7i6v1GWyzLZpLzp3BDFgz/+oIbVGC+dBGGDC7qIwOpWZe7+BVZoEY1IfUMP8Uisp6QIDAQAB",
   "minimum_chrome_version": "120",
   "permissions": [
     "webAuthenticationProxy",
-    "nativeMessaging"
+    "nativeMessaging",
+    "tabs"
   ],
   "background": {
     "service_worker": "service-worker.js"
@@ -23,10 +24,22 @@
       "run_at": "document_start",
       "all_frames": true,
       "world": "MAIN"
+    },
+    {
+      "matches": [
+        "<all_urls>"
+      ],
+      "js": [
+        "autofill.js"
+      ],
+      "run_at": "document_idle",
+      "all_frames": true,
+      "world": "ISOLATED"
     }
   ],
   "action": {
     "default_title": "Hotline",
+    "default_popup": "popup.html",
     "default_icon": {
       "16": "icon-16.png",
       "32": "icon-32.png"

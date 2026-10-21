@@ -314,6 +314,30 @@ impl Secrets {
     /// What `browser fill secret:` types: `NAME` for a variable's value;
     /// `NAME.username`, `NAME.password` or `NAME.code` for a login's, the
     /// last being the six TOTP digits of this moment.
+    /// The logins that may be typed on `page`, an origin: what the browser
+    /// extension offers there, by name, with the username and whether a
+    /// code comes with it. Never a password.
+    pub fn logins_for(&self, page: &str) -> Vec<(String, String, bool)> {
+        let Ok(page) = Origin::site(page) else {
+            return Vec::new();
+        };
+        self.read()
+            .iter()
+            .filter_map(|(name, secret)| match secret {
+                Secret::Login(login)
+                    if login
+                        .sites
+                        .iter()
+                        .filter_map(|site| Origin::site(site).ok())
+                        .any(|site| site.allows(&page)) =>
+                {
+                    Some((name.clone(), login.username.clone(), login.totp.is_some()))
+                }
+                _ => None,
+            })
+            .collect()
+    }
+
     pub fn resolve(&self, reference: &str) -> Result<Filled, String> {
         self.resolve_at(reference, unix_now())
     }
@@ -755,6 +779,36 @@ mod tests {
         secrets.replace(BTreeMap::new()).unwrap();
         assert!(secrets.names().is_empty());
         assert!(secrets.environment().is_empty());
+    }
+
+    #[test]
+    fn the_extension_is_offered_a_login_only_where_it_may_be_typed() {
+        let secrets = Secrets::default();
+        secrets
+            .replace(typed(json!({
+                "GITHUB": {"kind": "login", "sites": ["https://github.com"], "username": "george",
+                           "password": "correct horse battery", "totp": "gezdgnbvgy3tqojqgezdgnbvgy3tqojq"},
+                "LOCAL": {"kind": "login", "sites": ["http://localhost:8123"], "username": "teammate", "password": "pw-for-the-test"},
+                "GITHUB_TOKEN": "ghp_notarealtoken0001",
+            })))
+            .unwrap();
+        let named = |page: &str| -> Vec<String> {
+            secrets
+                .logins_for(page)
+                .into_iter()
+                .map(|(name, _, _)| name)
+                .collect()
+        };
+        assert_eq!(
+            secrets.logins_for("https://github.com"),
+            [("GITHUB".to_owned(), "george".to_owned(), true)]
+        );
+        assert_eq!(named("https://gist.github.com"), ["GITHUB"]);
+        assert!(named("https://github.com.evil.test").is_empty());
+        assert!(named("http://github.com").is_empty());
+        assert!(named("https://github.com:8443").is_empty());
+        assert_eq!(named("http://localhost:8123"), ["LOCAL"]);
+        assert!(named("not an origin").is_empty());
     }
 
     #[test]

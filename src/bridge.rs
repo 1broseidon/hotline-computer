@@ -106,10 +106,55 @@ async fn answer(app: &App, message: &Value) -> Value {
             Ok(response) => json!({"response": response}),
             Err(refusal) => refused(refusal),
         },
+        // The person's logins, for the page whose origin Chromium names:
+        // what may be filled there, then, on a click, the values themselves.
+        Some("logins") => {
+            let origin = message["origin"].as_str().unwrap_or_default();
+            let logins: Vec<Value> = app
+                .secrets
+                .logins_for(origin)
+                .into_iter()
+                .map(|(name, username, code)| json!({"name": name, "username": username, "code": code}))
+                .collect();
+            json!({"logins": logins})
+        }
+        Some("fill") => fill(app, message),
         _ => refused(authenticator_refusal(
             "NotSupportedError",
             "this computer does not answer that",
         )),
+    }
+}
+
+/// A login's values, for a page it may be typed on and nowhere else.
+fn fill(app: &App, message: &Value) -> Value {
+    let origin = message["origin"].as_str().unwrap_or_default();
+    let name = message["name"].as_str().unwrap_or_default();
+    let allowed = app
+        .secrets
+        .logins_for(origin)
+        .into_iter()
+        .find(|(n, _, _)| n == name);
+    let Some((_, _, code)) = allowed else {
+        return refused(authenticator_refusal(
+            "NotAllowedError",
+            &format!("{name} is not a login for {origin}"),
+        ));
+    };
+    let value = |field: &str| {
+        app.secrets
+            .resolve(&format!("{name}.{field}"))
+            .map(|f| f.value)
+    };
+    match (value("username"), value("password")) {
+        (Ok(username), Ok(password)) => json!({
+            "username": username,
+            "password": password,
+            "code": if code { value("code").ok() } else { None },
+        }),
+        (Err(error), _) | (_, Err(error)) => {
+            refused(authenticator_refusal("NotAllowedError", &error))
+        }
     }
 }
 
