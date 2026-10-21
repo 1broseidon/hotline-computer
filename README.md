@@ -132,8 +132,12 @@ restart, unfinished jobs become `interrupted`; they are not resumed.
 The viewer's control bar sits at the foot of the page. Watching, it reads the
 machine's state (whose it is, how many jobs, how many failed) beside **Take
 control**; if another person holds the screen the button waits. Driving, it
-shows **Paste** and **Give it back** and fades while the pointer is still, so
-it never sits over the screen being driven. Ctrl+V, Ctrl+C and the rest
+shows amber **You're driving**, **Paste** and **Give it back**. Watching shows
+the agent name, job counts and measured ping latency; ten seconds without a
+pong shows **stalled**. The fitted screen reserves space for the 48px control
+bar. **1:1** shows native pixels; Settings also offers this and Fullscreen.
+On macOS, Settings defaults **Cmd as Ctrl** on. Ctrl+Alt+Shift gives control
+back, and focused driving shows **keys → computer**. Ctrl+V, Ctrl+C and the rest
 reach the machine as keys, so its apps use their own clipboard. Text from
 the viewer's computer comes in on Ctrl+Alt+V (⌥⌘V on a Mac) or the
 **Paste** button, as plain text, only while that viewer owns control. A
@@ -148,9 +152,11 @@ page's browser. Behind it, `GET /files?path=` lists a folder as JSON
 `GET /files/download?path=` streams a file as an attachment; both take the
 token as a query like `/ws`, an empty path means the home, and both stop at
 the home like the `files` tool. A file from the viewer's computer goes the
-other way with the panel's **+** button or a drop onto the panel: it lands
+other way with the panel's **Add files** button or a drop anywhere on the page: it lands
 where the panel is looking, through `POST /files?path=` with the file as
-the body, written whole or not at all, under the home only. Inside the
+the body, written whole or not at all, under the home only. Uploads show
+progress and use `create_only=true`; an existing name is replaced only after
+the person confirms **Replace {name}?**. File rows show modification dates. Inside the
 computer, the managed Chromium lists a folder at `file:///home/agent/`.
 
 Desk clients can request `POST /files?path=...&create_only=true` to publish an

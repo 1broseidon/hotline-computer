@@ -1,0 +1,20 @@
+{
+  "kind": "Local viewer fixtures, not Docker scenes",
+  "checks": {
+    "watching, fonts, fit and failure color": "passed",
+    "intent and two-second fade": "passed",
+    "control, Cmd mapping and emergency give-back": "passed",
+    "native pixel scale": "passed",
+    "touch cancellation releases the button": "passed",
+    "errors expire and clear on input": "passed",
+    "files, safe overwrite, global drop and download": "passed",
+    "file authorization errors are readable": "passed",
+    "ping latency, stalled state and recovery": "passed",
+    "reconnect stays view-only": "passed",
+    "phone watching and driving fit without horizontal overflow": "passed",
+    "missing token stops retrying": "passed",
+    "connected without frames has a placeholder": "passed",
+    "unavailable computer has a clear message": "passed"
+  },
+  "browser_errors": []
+}

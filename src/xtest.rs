@@ -48,6 +48,8 @@ pub struct Hands {
     /// Keys put down one at a time and not yet let go, so that a viewer
     /// which vanishes with a modifier down does not leave it down.
     held: HashSet<Keycode>,
+    buttons: HashSet<u8>,
+    intent: Option<String>,
     /// Every pointer move and button, for viewers that draw the hands.
     gestures: tokio::sync::broadcast::Sender<Gesture>,
 }
@@ -55,7 +57,7 @@ pub struct Hands {
 /// A pointer move (`button` none) or a button going down or up, where the
 /// pointer is. The screen stream never contains a cursor, so this is how a
 /// person watching sees where the hands are.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, serde::Serialize)]
+#[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
 pub struct Gesture {
     pub x: i16,
     pub y: i16,
@@ -63,6 +65,8 @@ pub struct Gesture {
     pub button: Option<u8>,
     #[serde(skip_serializing_if = "std::ops::Not::not")]
     pub down: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub intent: Option<String>,
 }
 
 impl Hands {
@@ -97,6 +101,8 @@ impl Hands {
             unsettled: false,
             at: (0, 0),
             held: HashSet::new(),
+            buttons: HashSet::new(),
+            intent: None,
             gestures: tokio::sync::broadcast::channel(256).0,
         })
     }
@@ -104,6 +110,32 @@ impl Hands {
     /// The moves and buttons as they happen; a slow reader misses some.
     pub fn gestures(&self) -> tokio::sync::broadcast::Sender<Gesture> {
         self.gestures.clone()
+    }
+
+    /// Intent is already redacted by the tool layer. Scope it to one action
+    /// so a later person gesture cannot inherit an agent's label.
+    pub fn with_intent<T>(
+        &mut self,
+        intent: Option<String>,
+        work: impl FnOnce(&mut Self) -> Result<T, String>,
+    ) -> Result<T, String> {
+        let previous = std::mem::replace(&mut self.intent, intent);
+        if self.intent.is_some() {
+            self.announce(self.intent.clone());
+        }
+        let result = work(self);
+        self.intent = previous;
+        result
+    }
+
+    pub fn announce(&self, intent: Option<String>) {
+        let _ = self.gestures.send(Gesture {
+            x: self.at.0,
+            y: self.at.1,
+            button: None,
+            down: false,
+            intent,
+        });
     }
 
     pub fn move_to(&mut self, x: i16, y: i16) -> Result<(), String> {
@@ -114,6 +146,7 @@ impl Hands {
             y,
             button: None,
             down: false,
+            intent: self.intent.clone(),
         });
         Ok(())
     }
@@ -125,11 +158,17 @@ impl Hands {
             BUTTON_RELEASE_EVENT
         };
         self.fake(kind, button, 0, 0)?;
+        if down {
+            self.buttons.insert(button);
+        } else {
+            self.buttons.remove(&button);
+        }
         let _ = self.gestures.send(Gesture {
             x: self.at.0,
             y: self.at.1,
             button: Some(button),
             down,
+            intent: self.intent.clone(),
         });
         Ok(())
     }
@@ -149,10 +188,14 @@ impl Hands {
         self.fake(kind, keycode, 0, 0)
     }
 
-    /// Lets go of every key still down: what a person's hands do when they
+    /// Lets go of every key and pointer button still down: what a person's hands do when they
     /// leave the keyboard, and what a viewer that lost focus or went away
     /// cannot send for itself.
     pub fn release_all(&mut self) -> Result<(), String> {
+        let buttons: Vec<u8> = self.buttons.drain().collect();
+        for button in buttons {
+            self.fake(BUTTON_RELEASE_EVENT, button, 0, 0)?;
+        }
         let held: Vec<Keycode> = self.held.drain().collect();
         for keycode in held {
             self.fake(KEY_RELEASE_EVENT, keycode, 0, 0)?;

@@ -39,6 +39,17 @@ pub async fn call(app: &App, arguments: Value, holder: &str) -> ToolResult {
     } else {
         None
     };
+    let intent = if input.action == "click_ref" && matches!(input.button.as_str(), "dbl" | "double")
+    {
+        Some("double-clicking")
+    } else {
+        super::gesture_intent(&input.action)
+    };
+    if let (Some(intent), Some(display)) = (intent, &app.display)
+        && let Ok(hands) = display.hands.lock()
+    {
+        hands.announce(Some(app.secrets.redact(intent).into_owned()));
+    }
     let result = match input.action.as_str() {
         "navigate" => app.browser.navigate(&input.url).await,
         "text" => app.browser.text().await,

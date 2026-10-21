@@ -180,9 +180,33 @@ pub fn action_error(tool: &str, action: &str, actions: &[&str]) -> String {
     format!("{tool}: unknown action {action:?} (one of: {actions:?})")
 }
 
+/// These words contain no argument values: text, scripts, commands and
+/// secret values must never become cursor labels.
+fn gesture_intent(action: &str) -> Option<&'static str> {
+    match action {
+        "click" | "right_click" | "rclick" | "click_ref" | "check" | "select" => Some("clicking"),
+        "double_click" | "dclick" => Some("double-clicking"),
+        "type" | "paste" | "key" | "fill" => Some("typing"),
+        "scroll" => Some("scrolling"),
+        "drag" => Some("dragging"),
+        _ => None,
+    }
+}
+
 #[cfg(test)]
 mod activity_tests {
     use super::*;
+    #[test]
+    fn cursor_intent_uses_only_static_action_words() {
+        assert_eq!(gesture_intent("fill"), Some("typing"));
+        assert_eq!(gesture_intent("dclick"), Some("double-clicking"));
+        assert_eq!(gesture_intent("scroll"), Some("scrolling"));
+        assert_eq!(gesture_intent("drag"), Some("dragging"));
+        for action in ["eval", "exec", "a secret value", "navigate"] {
+            assert_eq!(gesture_intent(action), None);
+        }
+    }
+
     #[test]
     fn reads_do_not_make_the_agent_look_busy() {
         for (tool, action) in [

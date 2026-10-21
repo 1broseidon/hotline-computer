@@ -1,6 +1,6 @@
 # 0.11 look
 
-Phases 1–4 landed on `look/0.11`; no phases reverted. Phases 7–8 will not start: no Docker.
+Phases 1–5 landed on `look/0.11`; no phases reverted. Phases 7–8 will not start: no Docker.
 
 | Phase | Status | Commit | Screenshots | What to inspect |
 | --- | --- | --- | --- | --- |
@@ -14,8 +14,11 @@ Phases 1–4 landed on `look/0.11`; no phases reverted. Phases 7–8 will not st
 
 | 4 Observer and terminals | Passed native gate | `Terminals use Geist Mono and color each job by its state.` | S3: not run: no Docker | 10.5pt medium/regular faces, more line space, colored markers and periwinkle prompt. |
 
+| 5 Viewer | Passed native and browser gates | `The viewer shows agent intent and handles reconnects and handoffs clearly.` | S4: not run: no Docker; separate `viewer-fixture-*.png` | Watching/driving, bad link and phone layout on a labeled fake frame. |
+
 ## Checks
 
+- Phase 5: `make check` passed, 114 library tests, including ping without lease renewal and intent passthrough. All **14 browser fixture checks** passed on the third pass, with zero browser errors; see `viewer-checks.json` and `viewer-check.log`. Earlier runs caught a hidden touch focus indicator and case-sensitive macOS detection; both were fixed. Fixtures cover files/overwrite/download/drop, touch cancellation, Cmd mapping, emergency give-back, fitting, 1:1, six-second errors, liveness, reconnect, missing key and waiting/offline states. These do **not** verify X11 injection or real-container scenes.
 - Phase 4: `make check` passed, 112 library tests; see `phase4-check.log`. Updated the old prompt-color expectation after the first run. Running-marker assertion and Alacritty TOML parsing passed.
 - Phase 3: `make check` passed, 111 library tests; see `phase3-check.log`. Corrected test-module placement after the first clippy run. Tests cover name precedence, authenticated metadata updates, read/action distinction and ten-second expiry.
 - Static QA passed: muted/bar **5.792:1**, muted/surface **5.493:1**, ink-2/chip **8.488:1**. See `static-checks.json`. Recipe syntax checked; live scenes are not run.
@@ -28,6 +31,8 @@ Phases 1–4 landed on `look/0.11`; no phases reverted. Phases 7–8 will not st
 ## Decisions
 
 - Vendored official Geist v1.8.1 TTF and WOFF2 files, with OFL license. Release archive SHA-256: `70f42c1452fb6df12ea183e20a65999157354f91d11dac18b4c713e383808ec2`. No fallback.
+- Intent labels use only the five static verbs, redacted before broadcast. No accessible target names are included: obtaining and validating them would add reads to the action path. Browser CDP intents use the last XTEST pointer location; CDP actions do not themselves move the X pointer.
+- Narrow/touch layouts put 1:1 and Fullscreen in Settings to keep primary controls visible. Cmd-as-Ctrl defaults on for macOS; no auto-retake on reconnect. Upload replacement requires an explicit confirmation after a create-only collision.
 - Display metadata: holder names are observed after the existing bearer check; the same identity state feeds the bar and viewer. The only `/secrets` addition publishes the stored count after a successful replacement. No values or names go into that count. Existing redaction sanitizes identity/task labels. Successful mutating calls mark recent activity; read-only window lists and browser tab lists do not.
 - Geometry: split the usable width after reserving the inner gap. Default observer is `[1280,56,624,1008]`; shell split is 672px / 16px / 320px. Tiny-screen outer gutters are clamped to leave usable pixels. Existing WM did not implement fullscreen; no new fullscreen behavior was added. Rings are painted after all shadows so adjacent shadows cannot dim them.
 - A small portability prerequisite lets the specified check gate run on this macOS host. Linux capture behavior is unchanged; `openpty` gets the pointer types both Unix platforms accept.
@@ -35,6 +40,7 @@ Phases 1–4 landed on `look/0.11`; no phases reverted. Phases 7–8 will not st
 
 ## Known limits
 
+- Browser-ref cursor position: click a ref after leaving the X pointer elsewhere; its intent label uses that last pointer position. Native `input` gestures carry their actual coordinates.
 - All visual and container checks need to be run with Docker before accepting the look. The report does not claim screenshot parity.
 
 ## Run it

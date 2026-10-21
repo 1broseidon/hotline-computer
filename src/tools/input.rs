@@ -125,23 +125,25 @@ where
         .map_err(|error| format!("input task: {error}"))?
 }
 
-async fn with_hands<T, F>(app: &App, work: F) -> Result<T, String>
+async fn with_hands<T, F>(app: &App, intent: Option<&str>, work: F) -> Result<T, String>
 where
     T: Send + 'static,
     F: FnOnce(&mut Hands) -> Result<T, String> + Send + 'static,
 {
     let display: Arc<Display> = app.display()?;
+    let intent = intent.map(|s| app.secrets.redact(s).into_owned());
     blocking(move || {
         let mut hands = display
             .hands
             .lock()
             .map_err(|_| "the hands are poisoned".to_owned())?;
-        work(&mut hands)
+        hands.with_intent(intent, work)
     })
     .await
 }
 
 async fn one(app: &App, action: &str, step: &Value) -> Result<String, String> {
+    let intent = super::gesture_intent(action);
     let integer = |name: &str| {
         step.get(name)
             .and_then(Value::as_i64)
@@ -157,7 +159,7 @@ async fn one(app: &App, action: &str, step: &Value) -> Result<String, String> {
     let (x, y, x2, y2) = (integer("x"), integer("y"), integer("x2"), integer("y2"));
     match action {
         "click" => {
-            with_hands(app, move |hands| {
+            with_hands(app, intent, move |hands| {
                 hands.move_to(x, y)?;
                 hands.click(1, 1)?;
                 Ok("clicked".into())
@@ -165,7 +167,7 @@ async fn one(app: &App, action: &str, step: &Value) -> Result<String, String> {
             .await
         }
         "double_click" | "dclick" => {
-            with_hands(app, move |hands| {
+            with_hands(app, intent, move |hands| {
                 hands.move_to(x, y)?;
                 hands.click(1, 2)?;
                 Ok("double-clicked".into())
@@ -173,7 +175,7 @@ async fn one(app: &App, action: &str, step: &Value) -> Result<String, String> {
             .await
         }
         "right_click" | "rclick" => {
-            with_hands(app, move |hands| {
+            with_hands(app, intent, move |hands| {
                 hands.move_to(x, y)?;
                 hands.click(3, 1)?;
                 Ok("right-clicked".into())
@@ -181,14 +183,14 @@ async fn one(app: &App, action: &str, step: &Value) -> Result<String, String> {
             .await
         }
         "move" => {
-            with_hands(app, move |hands| {
+            with_hands(app, intent, move |hands| {
                 hands.move_to(x, y)?;
                 Ok("moved".into())
             })
             .await
         }
         "drag" => {
-            with_hands(app, move |hands| {
+            with_hands(app, intent, move |hands| {
                 hands.move_to(x, y)?;
                 hands.button(1, true)?;
                 std::thread::sleep(Duration::from_millis(30));
@@ -203,7 +205,7 @@ async fn one(app: &App, action: &str, step: &Value) -> Result<String, String> {
         }
         "scroll" => {
             let (button, notches) = wheel(&string("direction"), integer("clicks"))?;
-            with_hands(app, move |hands| {
+            with_hands(app, intent, move |hands| {
                 hands.move_to(x, y)?;
                 hands.click(button, notches)?;
                 Ok("scrolled".into())
@@ -212,7 +214,7 @@ async fn one(app: &App, action: &str, step: &Value) -> Result<String, String> {
         }
         "type" => {
             let content = string("text");
-            with_hands(app, move |hands| {
+            with_hands(app, intent, move |hands| {
                 hands.type_text(&content)?;
                 Ok::<_, String>(())
             })
@@ -225,7 +227,7 @@ async fn one(app: &App, action: &str, step: &Value) -> Result<String, String> {
             if combo.is_empty() {
                 return Err("combo is required".into());
             }
-            with_hands(app, move |hands| {
+            with_hands(app, intent, move |hands| {
                 hands.combo(&combo)?;
                 Ok(format!("sent {combo}"))
             })
@@ -234,13 +236,14 @@ async fn one(app: &App, action: &str, step: &Value) -> Result<String, String> {
         "paste" => {
             let content = string("text");
             let display = app.display()?;
+            let intent = intent.map(|s| app.secrets.redact(s).into_owned());
             blocking(move || {
                 display.clipboard.write(&content)?;
                 let mut hands = display
                     .hands
                     .lock()
                     .map_err(|_| "the hands are poisoned".to_owned())?;
-                hands.combo("ctrl+v")?;
+                hands.with_intent(intent, |hands| hands.combo("ctrl+v"))?;
                 Ok::<_, String>(())
             })
             .await?;
