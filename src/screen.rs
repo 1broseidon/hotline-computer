@@ -18,7 +18,9 @@
 //! when the extension is missing. If a connection still fails, the stream is
 //! reopened and viewers see the whole screen again.
 
-use std::os::fd::{AsRawFd, FromRawFd, OwnedFd};
+use std::os::fd::OwnedFd;
+#[cfg(target_os = "linux")]
+use std::os::fd::{AsRawFd, FromRawFd};
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::{Duration, Instant};
@@ -275,6 +277,14 @@ struct Shared {
 }
 
 impl Shared {
+    // Other Unix hosts use the existing GetImage fallback. The fd-backed
+    // shared-memory optimization belongs to the Linux computer image.
+    #[cfg(not(target_os = "linux"))]
+    fn attach(_connection: &RustConnection, _len: usize) -> Result<Self, String> {
+        Err("fd-backed screen sharing requires Linux".into())
+    }
+
+    #[cfg(target_os = "linux")]
     fn attach(connection: &RustConnection, len: usize) -> Result<Self, String> {
         connection
             .shm_query_version()

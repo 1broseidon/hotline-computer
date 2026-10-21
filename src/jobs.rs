@@ -800,7 +800,7 @@ fn spawn(start: &Start, cwd: &Path, display: &str) -> Result<Spawned, String> {
     if start.pty {
         let mut master = -1;
         let mut slave = -1;
-        let size = libc::winsize {
+        let mut size = libc::winsize {
             ws_row: 32,
             ws_col: 120,
             ws_xpixel: 0,
@@ -811,8 +811,8 @@ fn spawn(start: &Start, cwd: &Path, display: &str) -> Result<Spawned, String> {
                 &mut master,
                 &mut slave,
                 std::ptr::null_mut(),
-                std::ptr::null(),
-                &size,
+                std::ptr::null_mut(),
+                &raw mut size,
             )
         } < 0
         {
