@@ -214,8 +214,8 @@ if __name__ == '__main__':
     try:
         static_checks()
         if args.static:
-            RESULTS['S1/S2/S3/S4'] = 'not run: no Docker'
-            RESULTS['fc-match / make contract'] = 'not run: no Docker'
+            RESULTS['S1/S2/S3/S4'] = 'not run: static-only invocation'
+            RESULTS['fc-match / make contract'] = 'not run: static-only invocation'
         else:
             scenes()
     finally:

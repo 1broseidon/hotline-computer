@@ -1,0 +1,12 @@
+uid=1000(agent) gid=1000(agent) groups=1000(agent)
+Uid:	1000	1000	1000	1000
+Gid:	1000	1000	1000	1000
+CapInh:	0000000000000000
+CapPrm:	0000000000000000
+CapEff:	0000000000000000
+CapBnd:	0000000000000000
+CapAmb:	0000000000000000
+NoNewPrivs:	1
+Max processes             1024                 1024                 processes 
+Filesystem      1B-blocks  Used  Available Use% Mounted on
+tmpfs          1073741824     0 1073741824   0% /dev/shm

@@ -1,71 +1,75 @@
 # 0.11 look
 
-Phases **1–8 landed** on `look/0.11`; none reverted. All phases are started and verified. Apple container is used at the operator's request. Nothing pushed, published, tagged or merged; version remains 0.10.3.
+**Phases 1–8 landed and verified; none reverted or left unstarted.** Branch `look/0.11`; version remains 0.10.3. Nothing pushed, published, tagged or merged to main. Apple container 1.5.0 supplied the runtime at George's request.
 
-| Phase | Status / commit | Screenshots | What to inspect |
+| Phase | Passed / commit | Screenshots | What to inspect |
 | --- | --- | --- | --- |
-| Native prerequisite | Passed · `1feacba` | verified with Apple container | macOS check support; Linux capture unchanged |
-| 1 Fonts/palette | Passed · `a563f4d` | S1/S4: verified with Apple container | Geist, 40px bar, glyph edges, embedded font allow-list |
-| 2 Window separation | Passed · `9c31437` | S3: verified with Apple container | 16px gutters, matching tiling, rings, shadows |
-| 3 Bar | Passed · `fc19d14` | S3/S4: verified with Apple container | Agent identity/task, sealed count, jobs, amber person control |
-| 4 Terminals | Passed · `b0177d9` | S3: verified with Apple container | Geist Mono, line spacing, colored job markers |
-| 5 Viewer | Passed · `740b92c` | S4: verified with Apple container | Real viewer screenshots plus browser fixtures |
-| 6 Chromium | Passed · `1ec8bfd` | S2: verified with Apple container | Dark chrome and a normal light page |
-| 7 Activity | Passed · `dd3a60e` | s7-activity.png, s7-with-shell.png | 60/40 observer/activity split, shell below, bounded display log |
-| 8 Badge | Passed · this phase commit | s5-badge.png | Sealed-fill receipt below the password field |
+| 1 Fonts/palette | `a563f4d` | [S1](s1-empty.png), [S4](s4-watching.png) | Geist, 40px bar, dark surfaces |
+| 2 Separation | `9c31437` | [S3](s3-busy.png) | 16px gutters, 1px rings, subtle shadows |
+| 3 Bar | `fc19d14` | [Bar](s3-bar.png), [driving](s4-driving.png) | Identity, jobs, sealed count, amber person control |
+| 4 Terminals | `b0177d9` | [S3](s3-busy.png) | Geist Mono and colored job markers |
+| 5 Viewer | `740b92c` | [watching](s4-watching.png), [driving](s4-driving.png), [bad key](s4-badtoken.png), [phone](s4-phone.png) | Connection states, controls and phone layout |
+| 6 Chromium | `1ec8bfd` | [S2](s2-browser.png) | Dark chrome around a normal light page |
+| 7 Activity | `dd3a60e` | [activity](s7-activity.png), [with shell](s7-with-shell.png) | 60/40 split and editable activity display |
+| 8 Receipt | `889cf3e` | [S5](s5-badge.png) | Sealed-fill badge below the password field |
 
-## Evidence
+Prerequisite `1feacba` permits native checks on macOS while retaining the Linux capture path. `0514422` adds Apple runtime recipes/evidence and updates stale contract geometry assertions. Each phase has its own check log; runtime evidence for phases 1–6 was completed once Apple container became available.
 
-- `make check` passed per phase. Library test counts: preflight **102**, then **104 / 107 / 111 / 112 / 114 / 114**. Logs: `preflight-check.log`, `phase1-check.log` through `phase6-check.log`. Native contract tests without a running server do not verify the container.
-- All **14 browser fixture checks passed**, zero browser errors: `viewer-checks.json`. Covers connection states, no auto-retake, latency/stall recovery, Cmd mapping, emergency give-back, touch cancellation, scaling, errors, uploads with explicit overwrite confirmation, global drop and downloads. Rust tests cover ping without lease renewal and intent passthrough.
-- Contrast passed: muted/bar **5.792:1**, muted/surface **5.493:1**, ink-2/chip **8.488:1**, all above 4.5. See `static-checks.json`.
-- `scope-checks.json`: tool schemas/required args, versions, browser launch, leases, passkeys, logins, stored-secret/redaction code and README security wording preserved. Bearer gate only gains the specified public font prefix; unknown/traversal font names are refused.
-- Apple container 1.5.0 built the image and the Linux checks stage: **114 tests, fmt and clippy passed**. The complete S1–S4 recipe and live `make contract` passed (`scene-checks.json`, `contract.log`). S1 bar/rule pixels were `[17,17,20]` / `[34,34,39]`; S3 gutter/ring were `[10,10,11]` / `[42,42,48]`. `fc-match` returned Geist / Geist Mono.
-- Published 0.10.3 versus this image: compressed arm64 image **746,149,985 → 748,829,279 bytes**; run-to-health **1.603 → 1.563 s** (single warm-cache runs, not a performance conclusion). Empty desktop measured **258.13 MiB** just after boot; baseline **287 MiB** after capture, so memory samples are not directly comparable. See runtime JSON and stats files.
-- Two QA corrections: scope the missing-key locator to the placeholder; update stale contract geometry assertions to `[16,56,1248,1008]` and `[1280,56,624,1008]`. The full recipe then passed. Optional full acceptance remains unrun.
+## Checks
 
-These are **labeled fake-screen browser fixtures, not S4/container evidence**: [watching](viewer-fixture-watching.png), [driving](viewer-fixture-driving.png), [bad key](viewer-fixture-badtoken.png), [phone](viewer-fixture-phone.png). Computed Geist font and fitted viewport were verified in these fixtures.
+- Final **119 Rust tests**, fmt and clippy passed on **macOS and Linux**: `phase8-check.log`, `final-linux-checks.log`.
+- Live **MCP/viewer contract passed** against the final Apple-container image: `contract.log`. All eight tool descriptors and required arguments are unchanged.
+- **S1–S4 passed**, including real viewer screenshots: `scene-checks.json`. Bar `[17,17,20]`; bottom rule `[34,34,39]`; gutter `[10,10,11]`; window ring `[42,42,48]`, all within tolerance. `fc-match` returned **Geist / Geist Mono**; viewer computed Geist.
+- Contrast: muted/bar **5.792:1**, muted/surface **5.493:1**, ink-2/chip **8.488:1**. All exceed 4.5.
+- **14 browser fixture checks passed**, zero browser errors (`viewer-checks.json`): reconnects, latency/stall, key mapping, emergency give-back, touch release, scaling, uploads/overwrite confirmation, drops, downloads and errors. The separately labeled `viewer-fixture-*.png` images use synthetic frames.
+- Activity: **500-entry limit**, payload exclusion, rejected-call retention, 60/40 geometry, shell placement and restoration passed (`phase7-scenes.json`). Unit checks cover redaction before truncation and refusing a log symlink.
+- Receipt: **zero X11 input rectangles**, override-redirect, no focus theft or DOM injection, click-through to Sign in, expiry and rejected-origin behavior passed (`phase8-scenes.json`). Fill **94 ms**; screenshot **1.107 s** after reply; removal **4.062 s** after reply. Activity contained the secret name, not its value.
+- `scope-checks.json` verifies unchanged browser launch/security code, secret storage/redaction, passkeys, logins, leases, README security text and tool schemas. Only the specified public font route, sealed count, display metadata and SHAPE feature were added around those boundaries.
+- Optional full `make acceptance` **not run**: its launcher/recovery harness requires Docker. No claim of full release acceptance or amd64 coverage.
 
-## Decisions for review
+## Measurements
 
-- Official [Geist v1.8.1](https://github.com/vercel/geist-font/releases/tag/v1.8.1) static TTF/WOFF2 files plus OFL; no fallback. Assets occupy 932 KiB on disk. Archive SHA-256: `70f42c1452fb6df12ea183e20a65999157354f91d11dac18b4c713e383808ec2`.
-- Added a small Unix portability prerequisite to run the native gate here. Local socket tests required sandbox escalation; no checks were disabled.
-- Work area is `[16,56,1888,1008]` at 1920×1080. Observer is `[1280,56,624,1008]`; shell split is 672px / 16px / 320px. Zero gutters opt out; oversized outer gutters clamp on small screens. All rings paint after shadows. Existing WM had no fullscreen support to preserve.
-- Identity is display metadata observed after bearer authentication, redacted with the existing redactor. `/secrets` only adds count publication after successful replacement. No authority changes.
-- Cursor intents use only the five static verbs, redacted before broadcast. Optional target names are omitted to avoid extra action-path reads and accidental disclosure. On narrow/touch screens, 1:1 and Fullscreen remain available in Settings.
-- Original scene PNGs use `capture mode=png` plus `files get`: `mode=image` resizes to 1568px. The MCP contract stays unchanged.
-- Early checks exposed stale color assertions and two clippy issues; corrected before phase commits. Browser checks passed on the third pass after fixing a hidden touch focus indicator and case-sensitive `macOS` detection.
+| Metric | Published 0.10.3 | Final look image |
+| --- | ---: | ---: |
+| Compressed arm64 image | 746,149,985 bytes | 748,936,728 bytes |
+| Run to healthy, cached image | 1.603 s | 1.705 s |
+| Empty desktop memory | 287 MiB after capture | 258.15 MiB just after boot |
 
-## Known limits
+Single local runs, not a performance conclusion. Memory samples have different timing; the baseline was published earlier and Debian packages were rebuilt today. Image growth is **2.79 MB**. `baseline-runtime.json`, `apple-runtime.json`, `final-empty-stats.txt` and `final-image.json` retain the measurements. [Before](before-empty.png) / [after](s1-empty.png). Paint performance and cold download time were not benchmarked.
 
-- Browser-ref intent position uses the last XTEST pointer position. Reproduce by leaving that pointer elsewhere, then calling `browser click_ref`; CDP does not move the X pointer. Native `input` gestures use actual coordinates.
-- Container fonts, window placement, X11 input and dark Chromium chrome are verified by the real scenes/contract. Paint performance has not been benchmarked. Fullscreen/keyboard-lock support depends on the host browser and was not exercised by the fixtures.
+## Decisions and limits
 
-## Apple runtime decision
+- Official [Geist v1.8.1](https://github.com/vercel/geist-font/releases/tag/v1.8.1) TTF/WOFF2 assets plus OFL, **no fallback**, 932 KiB on disk. Archive SHA-256 `70f42c1452fb6df12ea183e20a65999157354f91d11dac18b4c713e383808ec2`.
+- Work area `[16,56,1888,1008]`. Observer `[1280,56,624,1008]`; with Activity and shell: observer height 393, activity 263, shell 320, with 16px gaps. Zero gutters opts out. Existing WM had no fullscreen support to preserve.
+- Cursor intent uses static verbs; optional target names are omitted. Browser-ref gestures use the last XTEST pointer position because CDP does not move that pointer. Reproduce by leaving it elsewhere before `browser click_ref`. Native input coordinates are accurate.
+- Activity uses **V**, leaving **A** for About. It records explicit job labels, URL host/path without credentials/query/fragment, window titles, and focused field names when AT-SPI answers within 200 ms. Other actions use generic sentences. Atomic replacement retains 500 records. The agent can edit this file; it is not an audit log.
+- Login receipts say “origin matched” only after the existing origin check succeeds. Unbound variables omit that claim. Missing AT-SPI extents or insufficient space below the field means no badge. The fixture uses `FIELDNOTE`, as the existing API requires uppercase names and returns 204 on delivery.
+- Original scene PNGs use `capture mode=png` plus `files get`; image blocks are capped at 1568px. Fullscreen/keyboard-lock availability depends on the viewer browser and was not exercised by the fixture checks.
+- QA corrections before passing: ambiguous missing-key locator, old edge-to-edge contract assertions, one badge clippy warning, and the fixture's secret-name case/HTTP status. No product authentication behavior changed.
 
-The operator asked to use Apple container. The QA recipe uses a separate uid-1000 instance, drops all capabilities, applies `PR_SET_NO_NEW_PRIVS` before boot, and verifies `NoNewPrivs=1`. Memory is 4 GiB and `/dev/shm` 1 GiB; no host mounts; only 127.0.0.1:18787 published. Apple 1.5 has no cgroup PID-limit flag: `RLIMIT_NPROC=1024` is a per-uid substitute, not equivalent protection. Product Docker launch settings stay unchanged. Existing computers were left alone. [Apple runtime configuration](https://github.com/apple/container/blob/1.5.0/docs/runtime-configuration.md).
+## Apple runtime
 
-## See it
+The dedicated QA instance runs as **uid/gid 1000**, drops all capabilities, and sets `PR_SET_NO_NEW_PRIVS` before boot. `/proc/1/status` verifies **NoNewPrivs=1**. Memory is 4 GiB; `/dev/shm` 1 GiB; no host mounts; only **127.0.0.1:18787** is published. See `apple-isolation.txt`.
+
+Apple 1.5 lacks Docker's cgroup PID-limit flag. `RLIMIT_NPROC=1024` is a per-uid substitute, **not equivalent isolation**. Product Docker launch settings are unchanged. The test used separate containers; existing computers were left alone. [Apple runtime documentation](https://github.com/apple/container/blob/1.5.0/docs/runtime-configuration.md).
+
+## Reproduce
 
 ```sh
 cd ~/Projects/personal/hotline-computer
-git checkout look/0.11 && make image && make run
-make contract
-# In a host Python environment with Pillow and Playwright installed:
-python3 qa/0.11.0-look/recipes/look-qa.py
-printf 'http://127.0.0.1:8787/#%s\n' "$(cat .token)"
+git checkout look/0.11
+container build -c 4 -m 6g -t hotline-computer:look-0.11 .
+# Remove only the dedicated QA instance if it already exists:
+container stop hotline-look-011-qa
+container delete hotline-look-011-qa
+python3 qa/0.11.0-look/recipes/run-apple.py
+# Host Python needs Pillow and Playwright, with its Chromium installed.
+PORT=18787 python3 qa/0.11.0-look/recipes/look-qa.py
+PORT=18787 python3 qa/0.11.0-look/recipes/stretch-qa.py
+PORT=18787 python3 qa/0.11.0-look/recipes/badge-qa.py
+printf 'http://127.0.0.1:18787/#%s\n' "$(cat .token)"
 ```
 
-Open the printed viewer URL. The token stays in `.token`, never this report. Recipes, logs and fixture images are committed alongside it.
+The QA instance `hotline-look-011-qa` is left running for review. The launch recipe refuses to replace an existing name. For a fresh replay, explicitly stop/delete that QA instance first. The token stays in `.token`, never in this report. S1 requires a fresh desktop. The scene recipe runs `make contract` at its end; a separate `PORT=18787 make contract` can also be run after the scenes.
 
-On this Mac, use `container build -c 4 -m 6g -t hotline-computer:look-0.11 .`, then `python3 qa/0.11.0-look/recipes/run-apple.py`. Run `PORT=18787 make contract` and `PORT=18787 python3 qa/0.11.0-look/recipes/look-qa.py`; open `http://127.0.0.1:18787/#<token from .token>`. The recipe refuses to replace an existing QA instance.
-
-## Phase 7
-
-Native checks passed with **118 tests** (`phase7-check.log`); Apple image built, live contract and S1–S4 passed again. `phase7-scenes.json` verifies 500-entry retention, exclusion of file/command/JS/invalid-action payloads, failed-call markers, 60/40 geometry, shell preservation and observer restoration. Unit checks also cover redaction before truncation and refusing to follow a log symlink. Activity uses **V** because **A** remains About. Targets are URL host/path (no credentials, query or fragment), explicit job labels, window titles and focused field names when AT-SPI answers within 200 ms. Other actions keep a generic sentence. Each atomic rewrite retains the newest 500 records; this is an agent-editable display, not an audit log.
-
-## Phase 8
-
-Native and Linux checks passed with **119 tests**. The live contract and S1–S4 passed again. `phase8-scenes.json` verifies the receipt is override-redirect, has **zero input rectangles**, leaves the field focused, passes a click through to Sign in, and adds no page DOM. The successful fill took **94 ms**; S5 was captured **1.107 s** after the reply; the receipt disappeared after **4.062 s**. A rejected origin produced no badge. The activity file contained the secret name but no secret value. The worker and queue are bounded.
-
-Decisions: variables are not origin-bound, so their receipt omits “origin matched”; login receipts show it only after the existing origin check succeeds. Missing AT-SPI extents or insufficient space below the field means no receipt. The fixture uses `FIELDNOTE`, since the existing API requires uppercase secret names, and expects its unchanged 204 delivery response. One clippy correction and one fixture correction preceded the passing gate; auth and secret delivery behavior were preserved.
+With Docker, the original requested path remains `git checkout look/0.11 && make image && make run`, then `python3 qa/0.11.0-look/recipes/look-qa.py` and `http://127.0.0.1:8787/#<token from .token>`.

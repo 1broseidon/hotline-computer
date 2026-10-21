@@ -2,6 +2,6 @@
   "muted/bar": 5.792,
   "muted/surface": 5.493,
   "ink-2/chip": 8.488,
-  "S1/S2/S3/S4": "not run: no Docker",
-  "fc-match / make contract": "not run: no Docker"
+  "S1/S2/S3/S4": "not run: static-only invocation",
+  "fc-match / make contract": "not run: static-only invocation"
 }
