@@ -387,7 +387,11 @@ impl Jobs {
         // job itself may still say otherwise.
         let mut environment = crate::limits::environment();
         if !start.skip_workspace_environment {
-            environment.append(&mut crate::workspace::environment(&self.home, &cwd)?);
+            // `sh -c "cd app && npm test"` runs in app, so app's prepared
+            // tools come with it, not those of the folder it started in.
+            let place = leading_cd(&start.command, &start.args, &cwd, &self.home)
+                .unwrap_or_else(|| cwd.clone());
+            environment.append(&mut crate::workspace::environment(&self.home, &place)?);
         }
         if start.secrets {
             // After the workspace, so the person's stored value beats a
@@ -758,6 +762,57 @@ fn skip_escape(chars: &mut std::iter::Peekable<std::str::Chars<'_>>) {
 
 /// The name a job gets when the teammate gives it none: its command line,
 /// on one line, cut to a width that fits a menu row.
+/// The folder a shell script moves to before anything else: `cd DIR` at
+/// the start of `sh -c`, `bash -lc` and the like, followed by `&&`, `;`,
+/// a newline or nothing. Quotes, `~` and `$HOME` are understood; anything
+/// cleverer is left to the job's own cwd.
+fn leading_cd(command: &str, args: &[String], cwd: &Path, home: &Path) -> Option<PathBuf> {
+    let shell = Path::new(command).file_name()?.to_str()?;
+    if !matches!(shell, "sh" | "bash" | "dash" | "zsh") {
+        return None;
+    }
+    let flag = args
+        .iter()
+        .position(|a| a.starts_with('-') && !a.starts_with("--") && a.contains('c'))?;
+    let script = args.get(flag + 1)?.trim_start();
+    let rest = script.strip_prefix("cd")?;
+    if !rest.starts_with([' ', '\t']) {
+        return None;
+    }
+    let rest = rest.trim_start();
+    let target = match rest.chars().next()? {
+        quote @ ('\'' | '"') => {
+            let inner = &rest[1..];
+            &inner[..inner.find(quote)?]
+        }
+        _ => {
+            let end = rest
+                .find(|c: char| c.is_whitespace() || matches!(c, ';' | '&' | '|'))
+                .unwrap_or(rest.len());
+            let after = rest[end..].trim_start();
+            if !(after.is_empty() || after.starts_with("&&") || after.starts_with(';')) {
+                return None;
+            }
+            &rest[..end]
+        }
+    };
+    let home_text = home.to_str()?;
+    let target = if target == "~" || target.starts_with("~/") {
+        target.replacen('~', home_text, 1)
+    } else if let Some(tail) = target
+        .strip_prefix("$HOME")
+        .or_else(|| target.strip_prefix("${HOME}"))
+    {
+        format!("{home_text}{tail}")
+    } else if target.is_empty() || target.contains(['$', '`', '*', '?']) || target == "-" {
+        return None;
+    } else {
+        target.to_owned()
+    };
+    let place = cwd.join(target).canonicalize().ok()?;
+    place.is_dir().then_some(place)
+}
+
 pub fn describe(command: &str, args: &[String]) -> String {
     const WIDTH: usize = 60;
     let line = std::iter::once(command)
@@ -1021,6 +1076,48 @@ async fn supervise(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_script_that_starts_with_cd_takes_that_folders_environment() {
+        let home = std::env::temp_dir()
+            .join(format!("leading-cd-{}", rand_id().unwrap()))
+            .join("agent");
+        let app = home.join("src/app");
+        std::fs::create_dir_all(app.join("web")).unwrap();
+        let home = home.canonicalize().unwrap();
+        let app = app.canonicalize().unwrap();
+        let sh = |script: &str| vec!["-c".to_owned(), script.to_owned()];
+        let at = |command: &str, args: Vec<String>| leading_cd(command, &args, &home, &home);
+        assert_eq!(at("sh", sh("cd src/app && npm test")), Some(app.clone()));
+        assert_eq!(
+            at(
+                "/bin/bash",
+                vec!["-lc".into(), "cd ~/src/app; node -v".into()]
+            ),
+            Some(app.clone())
+        );
+        assert_eq!(
+            at("bash", sh("  cd \"$HOME/src/app\"\nnpm ci")),
+            Some(app.clone())
+        );
+        assert_eq!(
+            at("zsh", sh("cd 'src/app/web' && ls")),
+            Some(app.join("web"))
+        );
+        assert_eq!(at("sh", sh("cd src/app")), Some(app.clone()));
+        // Anything else is the job's own cwd: not a shell, no leading cd, a
+        // folder that is not there, or a target the shell would compute.
+        assert_eq!(at("node", sh("cd src/app")), None);
+        assert_eq!(at("sh", sh("npm test && cd src/app")), None);
+        assert_eq!(at("sh", sh("cd missing && ls")), None);
+        assert_eq!(
+            at("sh", sh("cd $(git rev-parse --show-toplevel) && ls")),
+            None
+        );
+        assert_eq!(at("sh", sh("cd src/app | cat")), None);
+        assert_eq!(at("sh", sh("cdsrc && ls")), None);
+        std::fs::remove_dir_all(home.parent().unwrap()).unwrap();
+    }
 
     #[test]
     fn only_fresh_failures_nobody_has_retried_need_attention() {
