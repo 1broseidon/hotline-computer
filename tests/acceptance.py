@@ -288,7 +288,7 @@ def desktop_job_menu(c):
     job = c.call('shell',{'action':'start','command':'sh','args':['-c','echo "A failed job stays inspectable"; exit 7'],'label':'Inspect a completed failure'})
     job = c.call('shell',{'action':'wait','job_id':job['id'],'wait_ms':5000})
     assert job['state']=='failed' and job['exit_code']==7,job
-    assert layout['height']==36 and layout['jobs'][2]>0, layout
+    assert layout['height']==40 and layout['jobs'][2]>0, layout
     jobs_x, jobs_y = centre(layout['jobs'])
     popup = layout['popup']
     def row(index):
@@ -325,7 +325,7 @@ def desktop_job_menu(c):
     observer = next((w for w in c.call('windows',{'action':'list'}) if 'hotlineterminal' in w['class'].lower()), None)
     if observer:
         ox, oy, ow, oh = observer['bounds']
-        assert ox == 1280 and oy == 36 and oy + oh + 8 == y, (observer, shell)
+        assert ox == 1280 and oy == 40 and oy + oh + 8 == y, (observer, shell)
     c.screenshot('03h-person-shell.png', settle_ms=500)
     c.call('windows',{'action':'close','window_id':shell['id']})
 

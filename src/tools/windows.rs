@@ -267,13 +267,13 @@ mod tests {
         shell.class = "HotlineShell.HotlineShell".into();
         let result = layout(
             &[window("app", [500, 87]), window("observer", [1, 1]), shell],
-            [0, 36, 1920, 1044],
+            [0, 40, 1920, 1040],
             Some(0),
         )
         .unwrap();
-        assert_eq!(result[0].1, [0, 36, 1280, 1044]);
-        assert_eq!(result[1].1, [1280, 36, 640, 696]);
-        assert_eq!(result[2].1, [1280, 740, 640, 340]);
+        assert_eq!(result[0].1, [0, 40, 1280, 1040]);
+        assert_eq!(result[1].1, [1280, 40, 640, 694]);
+        assert_eq!(result[2].1, [1280, 742, 640, 338]);
     }
     #[test]
     fn impossible_layouts_fail_before_moving_any_windows() {

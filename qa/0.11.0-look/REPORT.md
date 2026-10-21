@@ -1,13 +1,16 @@
 # 0.11 look
 
-In progress on `look/0.11`; no phases reverted. Phases 7–8 will not start: no Docker.
+Phase 1 landed on `look/0.11`; no phases reverted. Phases 7–8 will not start: no Docker.
 
 | Phase | Status | Commit | Screenshots | What to inspect |
 | --- | --- | --- | --- | --- |
 | Native check prerequisite | Passed | `The native checks also build on macOS.` | not run: no Docker | Linux keeps memfd capture; other Unix hosts use the existing GetImage fallback. |
 
+| 1 Fonts and palette | Passed native gate | `The desktop and viewer use Geist and the new palette.` | S1, S4: not run: no Docker | 40px bar, public embedded font allow-list, corrected light glyph coverage. |
+
 ## Checks
 
+- Phase 1: `make check` passed, 104 library tests; see `phase1-check.log`. The first run found two stale wallpaper color expectations, corrected on the second run. Font traversal and unknown-name tests pass. Fontconfig and computed browser font checks: not run: no Docker.
 - Native preflight: `make check` passed, including 102 library tests. The first sandboxed run could not bind local test sockets; rerunning with local sockets permitted passed. See `preflight-check.log`.
 - Image, running-container contract, acceptance, and every screenshot: **not run: no Docker**. Neither Docker nor an attached Hotline computer is available. Native contract tests without a running server do not verify the container.
 - Cold start, image size, runtime memory and live task success: not measured without the container.

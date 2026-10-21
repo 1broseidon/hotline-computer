@@ -61,6 +61,9 @@ COPY assets/chromium-policy.json /etc/chromium/policies/managed/hotline.json
 # Nix's fontconfig reads /etc/fonts/conf.d but not Debian's font directory, so
 # apps from a workspace see the image's fonts only through this.
 COPY assets/fonts-system.conf /etc/fonts/conf.d/05-hotline-system-fonts.conf
+COPY assets/fonts-hotline.conf /etc/fonts/conf.d/10-hotline-defaults.conf
+COPY assets/fonts/*.ttf /usr/share/fonts/truetype/hotline/
+RUN fc-cache -f
 COPY assets/bashrc /etc/bash.bashrc
 # "Show in folder" in the browser, and xdg-open on a folder, open the
 # person's terminal there. xdg-open on a web address opens it as a tab of the

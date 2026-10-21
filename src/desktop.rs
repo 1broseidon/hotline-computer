@@ -51,25 +51,29 @@ pub enum Request {
 
 const MARK: &[u8] = include_bytes!("../assets/wallpaper-mark.png");
 const BROWSER_CLASS: &str = "chromium";
-const BACKGROUND: u32 = 0x000000;
+const BACKGROUND: u32 = 0x0b0b0d;
 /// The bar's height in pixels; the work area starts below it.
-pub const BAR_HEIGHT: u16 = 36;
-const BAR_FILL: u32 = 0x1c1c1f;
-const BAR_RAISED: u32 = 0x28282c;
-const BAR_HOVER: u32 = 0x343439;
-const RULE: u32 = 0x38383d;
-const INK: u32 = 0xe8e8ea;
-const INK_2: u32 = 0xaaaaae;
-const MUTED: u32 = 0x7d7d82;
+pub const BAR_HEIGHT: u16 = 40;
+const BAR_FILL: u32 = 0x111114;
+const BAR_RAISED: u32 = 0x1f1f25;
+const BAR_HOVER: u32 = 0x1f1f25;
+const RULE: u32 = 0x2a2a30;
+const INK: u32 = 0xececef;
+const INK_2: u32 = 0xb4b4ba;
+const MUTED: u32 = 0x8e8e95;
 const OK: u32 = 0x86d69c;
-const WARN: u32 = 0xf0c27a;
-const YOU: u32 = 0x7fc4f0;
-const YOU_FILL: u32 = 0x25292e;
+const FAIL: u32 = 0xff8f80;
+const YOU: u32 = 0xf0c27a;
+const AGENT: u32 = 0x8fb8ff;
+const CHIP: u32 = 0x19191e;
+const CHIP_EDGE: u32 = 0x26262c;
+const SURFACE: u32 = 0x17171b;
+const BAR_RULE: u32 = 0x222227;
 /// PutImage requests stay well under the smallest maximum request length.
 const PUT_IMAGE_CHUNK: usize = 60_000;
-/// The image's DejaVu; the bar has no second choice because it is ours.
-const SANS: &str = "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf";
-const MONO: &str = "/usr/share/fonts/truetype/dejavu/DejaVuSansMono.ttf";
+/// The image vendors these faces, so the bar and the viewer use the same type.
+const SANS: &str = "/usr/share/fonts/truetype/hotline/Geist-Regular.ttf";
+const MONO: &str = "/usr/share/fonts/truetype/hotline/GeistMono-Regular.ttf";
 /// Where menus drop from: under the mark, a hair below the bar.
 const POPUP_X: i16 = 8;
 const POPUP_Y: i16 = 40;
@@ -117,7 +121,10 @@ pub fn run(
     }
 }
 
+const SEMIBOLD: &str = "/usr/share/fonts/truetype/hotline/Geist-SemiBold.ttf";
+
 struct Fonts {
+    semibold: Arc<fontdue::Font>,
     sans: Arc<fontdue::Font>,
     mono: Arc<fontdue::Font>,
 }
@@ -132,6 +139,7 @@ impl Fonts {
         };
         Ok(Self {
             sans: load(SANS)?,
+            semibold: load(SEMIBOLD)?,
             mono: load(MONO)?,
         })
     }
@@ -776,7 +784,7 @@ impl Desktop {
         let small = Face::new(&self.fonts.sans, 12.0);
         let mono = Face::new(&self.fonts.mono, 10.0);
         let mut canvas = Canvas::new(self.width, BAR_HEIGHT, BAR_FILL);
-        canvas.fill_rect(0, height - 1, width, 1, RULE);
+        canvas.fill_rect(0, height - 1, width, 1, BAR_RULE);
         // The mark is the menu.
         let mut layout = Layout {
             mark: Rect {
@@ -840,7 +848,11 @@ impl Desktop {
             right = left - 6;
         }
         let (text, color, fill) = match self.holding() {
-            Holding::Person => ("person in control", YOU, Some(YOU_FILL)),
+            Holding::Person => (
+                "person in control",
+                YOU,
+                Some(crate::paint::blend(YOU, BAR_FILL, 0.16)),
+            ),
             Holding::Agent => ("agent in control", INK_2, None),
             Holding::Nobody => ("agent at work", MUTED, None),
         };
@@ -857,9 +869,9 @@ impl Desktop {
             "no jobs".to_owned()
         };
         let (jobs_color, jobs_dot) = if failed > 0 {
-            (WARN, WARN)
+            (FAIL, FAIL)
         } else if running > 0 {
-            (INK, OK)
+            (INK, AGENT)
         } else {
             (MUTED, MUTED)
         };
@@ -1101,7 +1113,7 @@ impl Desktop {
         let small = Face::new(&self.fonts.sans, 12.0);
         let mono = Face::new(&self.fonts.mono, 11.0);
         let width = i32::from(open.width);
-        let mut canvas = Canvas::new(open.width, open.height, BAR_FILL);
+        let mut canvas = Canvas::new(open.width, open.height, SURFACE);
         match &open.kind {
             Popup::Menu => {
                 let rows: [(&str, &str, &str); 4] = [
@@ -1177,7 +1189,7 @@ impl Desktop {
                         (MUTED, "exit 0".to_owned())
                     } else {
                         (
-                            WARN,
+                            FAIL,
                             job.exit_code
                                 .map_or_else(|| job.state.clone(), |code| format!("exit {code}")),
                         )
@@ -1198,7 +1210,7 @@ impl Desktop {
             Popup::About => {
                 canvas.stamp(PAD + 10, PAD + 8 + 3, &self.mark, INK);
                 canvas.text(
-                    &sans,
+                    &Face::new(&self.fonts.semibold, 13.0),
                     PAD + 10 + 18 + 8,
                     sans.baseline_in(PAD + 8, 22),
                     "About this computer",
@@ -2150,7 +2162,10 @@ fn chip(
         h: 24,
     };
     if let Some(fill) = fill {
-        canvas.round_rect(rect.x, rect.y, rect.w, rect.h, 12.0, fill);
+        canvas.round_rect(rect.x, rect.y, rect.w, rect.h, 8.0, fill);
+    } else {
+        canvas.round_rect(rect.x, rect.y, rect.w, rect.h, 8.0, CHIP_EDGE);
+        canvas.round_rect(rect.x + 1, rect.y + 1, rect.w - 2, rect.h - 2, 7.0, CHIP);
     }
     canvas.dot((rect.x + 12) as f32, (rect.y + 12) as f32, 3.0, dot);
     canvas.text(
@@ -2295,13 +2310,13 @@ mod tests {
     use super::*;
 
     #[test]
-    fn the_mark_decodes_and_blends_onto_black() {
+    fn the_mark_decodes_and_blends_onto_ground() {
         let mark = decode_png(MARK).unwrap();
         assert_eq!((mark.width, mark.height), (480, 480));
         let pixels = composite(&mark, BACKGROUND);
         assert_eq!(pixels.len(), 480 * 480 * 4);
-        // Transparent corners stay black; the body of the mark is grey.
-        assert_eq!(&pixels[..4], &[0, 0, 0, 0]);
+        // Transparent corners stay ground; the body of the mark is grey.
+        assert_eq!(&pixels[..4], &[13, 11, 11, 0]);
         let centre = (240 * 480 + 240) * 4;
         assert!(pixels[centre] > 0x30, "centre pixel is the mark's grey");
         let small = resample(&mark, 18, 18);

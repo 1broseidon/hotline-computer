@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use axum::extract::Request;
+use axum::extract::{Path, Request};
 use axum::http::{StatusCode, header};
 use axum::middleware::Next;
 use axum::response::{IntoResponse, Response};
@@ -122,6 +122,7 @@ pub(crate) fn router(app: App) -> Router {
     Router::new()
         .route("/health", get(|| async { "ok" }))
         .route("/", get(viewer::page))
+        .route("/assets/fonts/{name}", get(font))
         .route("/ws", get(viewer::socket))
         .route("/files", get(viewer::files).post(viewer::upload))
         .route("/files/download", get(viewer::download))
@@ -161,7 +162,8 @@ async fn authenticate(request: Request, next: Next, token: Option<&str>) -> Resp
     if matches!(
         request.uri().path(),
         "/health" | "/" | "/ws" | "/files" | "/files/download"
-    ) || token.is_none()
+    ) || request.uri().path().starts_with("/assets/fonts/")
+        || token.is_none()
     {
         return next.run(request).await;
     }
@@ -180,6 +182,61 @@ async fn authenticate(request: Request, next: Next, token: Option<&str>) -> Resp
         )
             .into_response()
     }
+}
+
+/// The open font route contains embedded public assets, never filesystem paths.
+async fn font(Path(name): Path<String>) -> Response {
+    let (bytes, mime): (&[u8], &str) = match name.as_str() {
+        "Geist-Regular.ttf" => (
+            include_bytes!("../assets/fonts/Geist-Regular.ttf"),
+            "font/ttf",
+        ),
+        "Geist-Medium.ttf" => (
+            include_bytes!("../assets/fonts/Geist-Medium.ttf"),
+            "font/ttf",
+        ),
+        "Geist-SemiBold.ttf" => (
+            include_bytes!("../assets/fonts/Geist-SemiBold.ttf"),
+            "font/ttf",
+        ),
+        "GeistMono-Regular.ttf" => (
+            include_bytes!("../assets/fonts/GeistMono-Regular.ttf"),
+            "font/ttf",
+        ),
+        "GeistMono-Medium.ttf" => (
+            include_bytes!("../assets/fonts/GeistMono-Medium.ttf"),
+            "font/ttf",
+        ),
+        "Geist-Regular.woff2" => (
+            include_bytes!("../assets/fonts/Geist-Regular.woff2"),
+            "font/woff2",
+        ),
+        "Geist-Medium.woff2" => (
+            include_bytes!("../assets/fonts/Geist-Medium.woff2"),
+            "font/woff2",
+        ),
+        "Geist-SemiBold.woff2" => (
+            include_bytes!("../assets/fonts/Geist-SemiBold.woff2"),
+            "font/woff2",
+        ),
+        "GeistMono-Regular.woff2" => (
+            include_bytes!("../assets/fonts/GeistMono-Regular.woff2"),
+            "font/woff2",
+        ),
+        "GeistMono-Medium.woff2" => (
+            include_bytes!("../assets/fonts/GeistMono-Medium.woff2"),
+            "font/woff2",
+        ),
+        _ => return StatusCode::NOT_FOUND.into_response(),
+    };
+    (
+        [
+            (header::CONTENT_TYPE, mime),
+            (header::CACHE_CONTROL, "public, max-age=31536000"),
+        ],
+        bytes,
+    )
+        .into_response()
 }
 
 pub(crate) fn same_secret(left: &[u8], right: &[u8]) -> bool {
@@ -223,6 +280,70 @@ mod tests {
         assert_eq!(wire["ttlMs"], json!(0), "{wire}");
         assert_eq!(wire["cacheScope"], json!("private"), "{wire}");
         assert_eq!(wire["tools"].as_array().unwrap().len(), 8, "{wire}");
+    }
+
+    #[tokio::test]
+    async fn public_fonts_are_allowlisted_and_never_resolve_paths() {
+        for name in [
+            "missing.ttf",
+            "..",
+            "../Geist-Regular.ttf",
+            "%2e%2e",
+            "OFL.txt",
+        ] {
+            assert_eq!(
+                font(Path(name.into())).await.status(),
+                StatusCode::NOT_FOUND
+            );
+        }
+        let router = Router::new()
+            .route("/assets/fonts/{name}", get(font))
+            .route("/private", get(|| async { "private" }))
+            .layer(axum::middleware::from_fn(
+                |request: Request, next: Next| async {
+                    authenticate(request, next, Some("test-only")).await
+                },
+            ));
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let origin = format!("http://{}", listener.local_addr().unwrap());
+        let server = tokio::spawn(async move {
+            axum::serve(listener, router).await.unwrap();
+        });
+        let http = reqwest::Client::builder().no_proxy().build().unwrap();
+        let asset = http
+            .get(format!("{origin}/assets/fonts/Geist-Regular.woff2"))
+            .send()
+            .await
+            .unwrap();
+        assert_eq!(asset.status(), StatusCode::OK);
+        assert_eq!(asset.headers()[header::CONTENT_TYPE], "font/woff2");
+        assert_eq!(
+            asset.headers()[header::CACHE_CONTROL],
+            "public, max-age=31536000"
+        );
+        assert_eq!(
+            asset.bytes().await.unwrap().as_ref(),
+            include_bytes!("../assets/fonts/Geist-Regular.woff2")
+        );
+        for path in ["missing.ttf", "%2e%2e%2fGeist-Regular.ttf"] {
+            assert_eq!(
+                http.get(format!("{origin}/assets/fonts/{path}"))
+                    .send()
+                    .await
+                    .unwrap()
+                    .status(),
+                StatusCode::NOT_FOUND
+            );
+        }
+        assert_eq!(
+            http.get(format!("{origin}/private"))
+                .send()
+                .await
+                .unwrap()
+                .status(),
+            StatusCode::UNAUTHORIZED
+        );
+        server.abort();
     }
 
     #[test]

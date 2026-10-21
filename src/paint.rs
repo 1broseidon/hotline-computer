@@ -76,12 +76,11 @@ impl Face {
     /// Where the baseline sits to centre a line of this face in a box.
     pub fn baseline_in(&self, top: i32, height: i32) -> i32 {
         let metrics = self.font.horizontal_line_metrics(self.px);
-        let (ascent, descent) =
-            metrics.map_or((self.px * 0.93, -self.px * 0.24), |m| (m.ascent, m.descent));
+        let ascent = metrics.map_or(self.px * 0.93, |m| m.ascent);
         // Centre the cap height rather than the full ascent/descent box, which
         // is what the eye reads as centred for short labels.
         let caps = ascent * 0.73;
-        top + ((height as f32 + caps) / 2.0).round() as i32 + (descent * 0.0) as i32
+        top + ((height as f32 + caps) / 2.0).round() as i32
     }
 
     pub fn width(&self, text: &str) -> i32 {
@@ -128,6 +127,17 @@ pub struct Canvas {
 fn channels(color: u32) -> [u8; 3] {
     let [_, r, g, b] = color.to_be_bytes();
     [r, g, b]
+}
+
+/// Mix an accent over a surface, including the bar's 16% status tints.
+pub fn blend(fg: u32, bg: u32, alpha: f32) -> u32 {
+    let alpha = alpha.clamp(0.0, 1.0);
+    let mut result = 0;
+    for (f, b) in channels(fg).into_iter().zip(channels(bg)) {
+        result =
+            (result << 8) | (f32::from(f) * alpha + f32::from(b) * (1.0 - alpha)).round() as u32;
+    }
+    result
 }
 
 impl Canvas {
@@ -250,7 +260,20 @@ impl Canvas {
             for (index, &alpha) in coverage.iter().enumerate() {
                 let px = left + (index % metrics.width.max(1)) as i32;
                 let py = top + (index / metrics.width.max(1)) as i32;
-                self.plot(px, py, color, u32::from(alpha));
+                // Light glyph edges need more coverage on a dark surface. Keep
+                // images and shadows linear, and leave dark text unchanged.
+                let mut coverage = u32::from(alpha);
+                if px >= 0 && py >= 0 && px < self.width() && py < self.height() {
+                    let at = ((py * self.width() + px) * 4) as usize;
+                    let luminance = |p: &[u8]| {
+                        2126 * u32::from(p[0]) + 7152 * u32::from(p[1]) + 722 * u32::from(p[2])
+                    };
+                    if luminance(&color) > luminance(&self.image.rgba[at..at + 3]) {
+                        coverage =
+                            ((f32::from(alpha) / 255.0).powf(1.0 / 1.4) * 255.0).round() as u32;
+                    }
+                }
+                self.plot(px, py, color, coverage);
             }
             pen += metrics.advance_width;
             previous = Some(c);
@@ -283,10 +306,10 @@ pub fn resample(image: &Image, width: u16, height: u16) -> Image {
 mod tests {
     use super::*;
 
-    fn face() -> Option<Face> {
-        let bytes = std::fs::read("/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf").ok()?;
-        let font = fontdue::Font::from_bytes(bytes, fontdue::FontSettings::default()).ok()?;
-        Some(Face::new(&Arc::new(font), 13.0))
+    fn face() -> Face {
+        let bytes = include_bytes!("../assets/fonts/Geist-Regular.ttf").as_slice();
+        let font = fontdue::Font::from_bytes(bytes, fontdue::FontSettings::default()).unwrap();
+        Face::new(&Arc::new(font), 13.0)
     }
 
     #[test]
@@ -300,10 +323,7 @@ mod tests {
 
     #[test]
     fn text_is_antialiased_and_measured() {
-        let Some(face) = face() else {
-            eprintln!("DejaVu Sans is not installed here; skipping");
-            return;
-        };
+        let face = face();
         let mut canvas = Canvas::new(120, 24, 0x000000);
         let advance = canvas.text(&face, 4, 17, "14:32", 0xffffff);
         assert!(advance > 20 && advance < 60, "{advance}");
@@ -313,6 +333,25 @@ mod tests {
         assert!(levels.len() > 2, "antialiased text has grey levels");
         assert!(face.fit("Selenium form — Chromium", 60).ends_with('…'));
         assert_eq!(face.fit("Jobs", 400), "Jobs");
+    }
+
+    #[test]
+    fn a_light_glyph_edge_gets_more_coverage_but_dark_ink_does_not() {
+        let face = face();
+        let (metrics, coverage) = face.font.rasterize('G', face.px);
+        let edge = coverage.iter().position(|&a| a > 20 && a < 200).unwrap();
+        let x = 4 + metrics.xmin + (edge % metrics.width) as i32;
+        let y = 20 - metrics.height as i32 - metrics.ymin + (edge / metrics.width) as i32;
+        let at = ((y * 40 + x) * 4) as usize;
+        let mut light = Canvas::new(40, 30, 0);
+        light.text(&face, 4, 20, "G", 0xffffff);
+        let expected = ((f32::from(coverage[edge]) / 255.0).powf(1.0 / 1.4) * 255.0).round() as u8;
+        assert_eq!(light.image.rgba[at], expected);
+        assert!(expected > coverage[edge]);
+        let mut dark = Canvas::new(40, 30, 0xffffff);
+        dark.text(&face, 4, 20, "G", 0);
+        assert_eq!(dark.image.rgba[at], 255 - coverage[edge]);
+        assert_eq!(blend(0x8fb8ff, 0x111114, 0.16), 0x252c3a);
     }
 
     #[test]
