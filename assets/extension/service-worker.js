@@ -147,3 +147,54 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   work.then(sendResponse, (error) => sendResponse(refusal(error && error.message ? error.message : 'something went wrong')));
   return true;
 });
+
+// ---- the passkey being made -------------------------------------------------
+// A standing line to the service: the arming as the desk sets it. When the
+// desk arms this computer, the popup opens by itself so the person sees it is
+// ready to make the passkey; the badge says where it stands until the passkey
+// is made or the arming ends. The line carries no key, only the state.
+
+let arming = { state: 'idle' };
+const BADGES = {
+  armed: ['KEY', '#8fb8ff'],
+  asked: ['1', '#f0c27a'],
+  approved: ['…', '#8fb8ff'],
+  registered: ['✓', '#86d69c'],
+};
+
+function show(next) {
+  const before = arming.state;
+  arming = next;
+  const [text, color] = BADGES[next.state] || ['', '#8fb8ff'];
+  chrome.action.setBadgeText({ text }).catch(() => {});
+  if (text) chrome.action.setBadgeBackgroundColor({ color }).catch(() => {});
+  chrome.action.setTitle({ title: next.state === 'idle' ? 'Hotline' : `Hotline: a passkey for ${next.rpId}` }).catch(() => {});
+  if (before === 'idle' && next.state === 'armed') chrome.action.openPopup().catch(() => {});
+  // An open popup redraws; with none open there is nobody to tell.
+  chrome.runtime.sendMessage({ type: 'arming-changed', arming: next }).catch(() => {});
+}
+
+function watch() {
+  let port;
+  try {
+    port = chrome.runtime.connectNative(HOST);
+  } catch {
+    setTimeout(watch, 3000);
+    return;
+  }
+  port.onMessage.addListener((message) => {
+    if (message && message.passkeys) show(message.passkeys);
+  });
+  port.onDisconnect.addListener(() => {
+    show({ state: 'idle' });
+    setTimeout(watch, 3000);
+  });
+  port.postMessage({ kind: 'watch' });
+}
+watch();
+
+chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+  if (sender.id !== chrome.runtime.id || !message || message.type !== 'arming') return false;
+  sendResponse(arming);
+  return false;
+});

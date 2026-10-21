@@ -56,7 +56,13 @@ async fn conversation(app: App, stream: tokio::net::UnixStream) {
     let Ok(Some(line)) = lines.next_line().await else {
         return;
     };
-    let reply = match serde_json::from_str::<Value>(&line) {
+    let message = serde_json::from_str::<Value>(&line);
+    if let Ok(message) = &message
+        && message["kind"] == "watch"
+    {
+        return watch(&app, &mut lines, &mut write).await;
+    }
+    let reply = match message {
         Ok(message) => tokio::select! {
             reply = answer(&app, &message) => reply,
             // The page gave up: nothing is left to answer.
@@ -79,6 +85,51 @@ fn authenticator_refusal(name: &'static str, message: &str) -> Refusal {
 
 fn refused(refusal: Refusal) -> Value {
     json!({"error": {"name": refusal.name, "message": refusal.message}})
+}
+
+/// Where the making of a passkey stands, for the extension to show: never a
+/// key, only what the person needs to see.
+fn arming(app: &App) -> Value {
+    let Some((rp_id, expires_at)) = app.passkeys.armed() else {
+        return json!({"state": "idle"});
+    };
+    let state = match (app.passkeys.minted(), app.passkeys.asked()) {
+        (Some(_), _) => "registered",
+        (None, Some((_, Some(true)))) => "approved",
+        (None, Some((_, _))) => "asked",
+        (None, None) => "armed",
+    };
+    let ask = app.passkeys.asked().map(
+        |(ask, _)| json!({"origin": ask.origin, "rpName": ask.rp_name, "userName": ask.user_name}),
+    );
+    json!({"state": state, "rpId": rp_id, "expiresAt": expires_at, "ask": ask})
+}
+
+/// The extension's standing line: the arming as it changes, until the
+/// extension hangs up.
+async fn watch(
+    app: &App,
+    lines: &mut tokio::io::Lines<tokio::io::BufReader<tokio::net::unix::OwnedReadHalf>>,
+    write: &mut tokio::net::unix::OwnedWriteHalf,
+) {
+    let mut shown = Value::Null;
+    loop {
+        let now = json!({"passkeys": arming(app)});
+        if now != shown {
+            if write
+                .write_all(format!("{now}\n").as_bytes())
+                .await
+                .is_err()
+            {
+                return;
+            }
+            shown = now;
+        }
+        tokio::select! {
+            () = tokio::time::sleep(std::time::Duration::from_millis(300)) => {}
+            _ = lines.next_line() => return,
+        }
+    }
 }
 
 /// Every passkey this computer may sign with: the granted set, and one an
@@ -245,8 +296,10 @@ fn request_id() -> String {
 
 /// The native messaging host: Chromium's framing on stdio (a 32-bit
 /// length in native byte order, then JSON). The extension opens a port per
-/// request, so this answers one message; when Chromium closes the port,
-/// stdin ends, the socket closes, and the service stops waiting.
+/// request, so this takes one message and passes back every line the
+/// service answers until it hangs up: one for a request, a stream for the
+/// watch. When Chromium closes the port, stdin ends, the socket closes, and
+/// the service stops.
 pub fn relay() -> Result<(), String> {
     let mut input = std::io::stdin().lock();
     let mut length = [0u8; 4];
@@ -256,23 +309,35 @@ pub fn relay() -> Result<(), String> {
     let mut message = vec![0u8; u32::from_ne_bytes(length) as usize];
     input.read_exact(&mut message).map_err(|e| e.to_string())?;
     drop(input);
-    let reply = converse(&message).unwrap_or_else(|error| {
-        refused(authenticator_refusal(
-            "NotAllowedError",
-            &format!("Hotline: this computer's service did not answer ({error})"),
-        ))
-        .to_string()
-    });
-    let reply = reply.trim_end().as_bytes();
     let mut output = std::io::stdout().lock();
-    output
-        .write_all(&(reply.len() as u32).to_ne_bytes())
-        .and_then(|()| output.write_all(reply))
-        .and_then(|()| output.flush())
-        .map_err(|e| e.to_string())
+    let mut send = |reply: &str| -> Result<(), String> {
+        let reply = reply.trim_end().as_bytes();
+        output
+            .write_all(&(reply.len() as u32).to_ne_bytes())
+            .and_then(|()| output.write_all(reply))
+            .and_then(|()| output.flush())
+            .map_err(|e| e.to_string())
+    };
+    let stream = match open(&message) {
+        Ok(stream) => stream,
+        Err(error) => {
+            return send(
+                &refused(authenticator_refusal(
+                    "NotAllowedError",
+                    &format!("Hotline: this computer's service did not answer ({error})"),
+                ))
+                .to_string(),
+            );
+        }
+    };
+    for line in BufReader::new(stream).lines() {
+        let Ok(line) = line else { break };
+        send(&line)?;
+    }
+    Ok(())
 }
 
-fn converse(message: &[u8]) -> Result<String, String> {
+fn open(message: &[u8]) -> Result<std::os::unix::net::UnixStream, String> {
     let mut stream =
         std::os::unix::net::UnixStream::connect(socket_path()).map_err(|e| e.to_string())?;
     stream.write_all(message).map_err(|e| e.to_string())?;
@@ -283,12 +348,5 @@ fn converse(message: &[u8]) -> Result<String, String> {
         let _ = std::io::copy(&mut std::io::stdin(), &mut std::io::sink());
         let _ = closer.shutdown(std::net::Shutdown::Both);
     });
-    let mut reply = String::new();
-    BufReader::new(stream)
-        .read_line(&mut reply)
-        .map_err(|e| e.to_string())?;
-    if reply.is_empty() {
-        return Err("no reply".into());
-    }
-    Ok(reply)
+    Ok(stream)
 }

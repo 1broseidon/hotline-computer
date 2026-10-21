@@ -19,17 +19,6 @@
         "<all_urls>"
       ],
       "js": [
-        "conditional.js"
-      ],
-      "run_at": "document_start",
-      "all_frames": true,
-      "world": "MAIN"
-    },
-    {
-      "matches": [
-        "<all_urls>"
-      ],
-      "js": [
         "autofill.js"
       ],
       "run_at": "document_idle",

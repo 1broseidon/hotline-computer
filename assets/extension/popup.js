@@ -47,6 +47,41 @@ function row(tabId, login) {
   return li;
 }
 
+// The passkey the desk armed this computer to make, if any, as the worker's
+// standing line to the service tells it.
+const PASSKEY = {
+  armed: ['Ready to make a passkey', 'On the site, choose to add a passkey. Hotline then asks for approval at the desk.'],
+  asked: ['Waiting for approval', null],
+  approved: ['Making the passkey…', 'Approved at the desk.'],
+  registered: ['Passkey made', 'Hotline is storing it for this teammate.'],
+};
+let expiresAt = null;
+
+function showPasskey(arming) {
+  const shown = arming && PASSKEY[arming.state];
+  $('passkey').hidden = !shown;
+  if (!shown) return;
+  const ask = arming.ask || {};
+  $('passkey').className = arming.state;
+  $('passkey-title').textContent = shown[0];
+  $('passkey-rp').textContent = arming.rpId;
+  $('passkey-text').textContent = shown[1] ||
+    `${ask.rpName || arming.rpId} asked for a passkey${ask.userName ? ` for ${ask.userName}` : ''}. Approve it at the desk.`;
+  expiresAt = arming.state === 'registered' ? null : arming.expiresAt;
+  tick();
+}
+
+function tick() {
+  const left = expiresAt ? Math.max(0, Math.round((expiresAt - Date.now()) / 1000)) : null;
+  $('passkey-left').textContent = left === null ? '' : `${Math.floor(left / 60)}:${String(left % 60).padStart(2, '0')} left`;
+}
+setInterval(tick, 1000);
+
+chrome.runtime.onMessage.addListener((message) => {
+  if (message && message.type === 'arming-changed') showPasskey(message.arming);
+});
+ask({ type: 'arming' }).then(showPasskey);
+
 async function main() {
   const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
   let url = null;

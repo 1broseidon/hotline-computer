@@ -934,9 +934,12 @@ async fn image_honors_the_computer_contract() {
         )
         .await,
     );
+    // The virtual authenticator's guard leaves it waiting; with the extension
+    // as WebAuthn proxy, Chromium itself says there is no autofill and
+    // refuses the request. Either way it is never answered.
     assert!(
-        conditional.contains("available false, waiting, then ended AbortError"),
-        "a conditional sign-in waits for a pick that never comes: {conditional}"
+        conditional.starts_with("\"available false, ") && !conditional.contains("answered"),
+        "a conditional sign-in is never answered: {conditional}"
     );
     let info = call(&client, "state", json!({"action":"info"})).await;
     let report: serde_json::Value = serde_json::from_str(&text(&info)).expect("info is JSON");

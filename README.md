@@ -303,7 +303,8 @@ has a kind that says where it goes:
   service signs it; the private key never enters the browser. It signs in
   by itself when a site asks for one, without a prompt; nothing types it
   and no tool answers it. A site's passkey autofill is never answered:
-  nothing here picks from autofill, so it would race the passkey button.
+  with the extension as its WebAuthn proxy, Chromium offers none, so it
+  cannot race the passkey button.
 
 One bad entry refuses the whole set with a 400 that names it, keeping the
 last set. Nothing answers a value: there is no `GET`, `state info` lists

@@ -110,10 +110,33 @@ fn client_data(kind: &str, challenge: &str, origin: &str, cross_origin: bool) ->
     )
 }
 
+/// The signature counter: seconds since the epoch, and always past the last
+/// one this computer gave. A site keeps the highest count it has seen and
+/// refuses one that does not climb, as a cloned key; Chromium's own
+/// authenticator counted from zero again in every new browser, so any count
+/// of a key's own would fall behind what the site already holds.
+pub fn counter() -> u32 {
+    use std::sync::atomic::{AtomicU32, Ordering};
+    static LAST: AtomicU32 = AtomicU32::new(0);
+    let now = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map_or(0, |since| {
+            u32::try_from(since.as_secs()).unwrap_or(u32::MAX)
+        });
+    let mut last = LAST.load(Ordering::Relaxed);
+    loop {
+        let next = now.max(last.saturating_add(1));
+        match LAST.compare_exchange(last, next, Ordering::Relaxed, Ordering::Relaxed) {
+            Ok(_) => return next,
+            Err(seen) => last = seen,
+        }
+    }
+}
+
 fn authenticator_data(rp_id: &str, flags: u8, attested: &[u8]) -> Vec<u8> {
     let mut data = Sha256::digest(rp_id.as_bytes()).to_vec();
     data.push(flags);
-    data.extend_from_slice(&0u32.to_be_bytes());
+    data.extend_from_slice(&counter().to_be_bytes());
     data.extend_from_slice(attested);
     data
 }
@@ -426,6 +449,31 @@ mod tests {
             .verify(&signed, &signature)
             .expect("the site can verify what this computer signed");
         assert_eq!(data[32], FLAGS);
+    }
+
+    #[test]
+    fn every_signature_counts_past_what_a_site_has_seen() {
+        let (key, _) = made("https://example.com", "example.com");
+        let count = |got: &Value| {
+            let data = URL_SAFE_NO_PAD
+                .decode(got["response"]["authenticatorData"].as_str().unwrap())
+                .unwrap();
+            u32::from_be_bytes(data[33..37].try_into().unwrap())
+        };
+        let first = assert(
+            &asked("https://example.com", json!({})),
+            std::slice::from_ref(&key),
+        )
+        .unwrap();
+        let second = assert(
+            &asked("https://example.com", json!({})),
+            std::slice::from_ref(&key),
+        )
+        .unwrap();
+        // Past any count Chromium's authenticator reached, and climbing even
+        // within one second.
+        assert!(count(&first) > 1_700_000_000, "{}", count(&first));
+        assert!(count(&second) > count(&first));
     }
 
     #[test]

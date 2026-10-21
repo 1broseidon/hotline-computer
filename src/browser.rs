@@ -986,15 +986,16 @@ async fn install_guard(
 }
 
 /// A stored passkey as the authenticator takes it: resident, backed up as
-/// far as the site is told, and with a signature counter that stays at
-/// zero, since a counter that goes backwards would lock the account after
-/// the credential is put into a second tab.
+/// far as the site is told, and with a signature counter that starts past
+/// any a site has seen. Chromium counts up from what it is given, so a
+/// counter that started at zero in each new browser fell behind the site's
+/// and read as a cloned key (see `authenticator::counter`).
 fn credential_from(passkey: &Passkey) -> Credential {
     let mut credential = Credential::new(
         Binary::from(passkey.credential_id.clone()),
         true,
         Binary::from(passkey.private_key.clone()),
-        0,
+        i64::from(crate::authenticator::counter()),
     );
     credential.rp_id = Some(passkey.rp_id.clone());
     credential.user_handle = passkey.user_handle.clone().map(Binary::from);
