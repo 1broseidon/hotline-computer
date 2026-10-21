@@ -905,6 +905,20 @@ async fn image_honors_the_computer_contract() {
         signed.contains("signed "),
         "the stored passkey signs in: {signed}"
     );
+    // Nothing picks from autofill, so a conditional request is never answered
+    // behind a site's back: it would race the button the agent then clicks.
+    let conditional = text(
+        &call(
+            &client,
+            "browser",
+            json!({"action":"eval","js":"conditional()"}),
+        )
+        .await,
+    );
+    assert!(
+        conditional.contains("available false, waiting, then ended AbortError"),
+        "a conditional sign-in waits for a pick that never comes: {conditional}"
+    );
     let info = call(&client, "state", json!({"action":"info"})).await;
     let report: serde_json::Value = serde_json::from_str(&text(&info)).expect("info is JSON");
     assert_eq!(

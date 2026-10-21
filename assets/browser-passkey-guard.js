@@ -22,6 +22,42 @@
     return;
   }
   const proto = CredentialsContainer.prototype;
+  // Signing in. A person's browser answers a conditional request (passkeys
+  // offered in a field's autofill) only when the person picks one; the
+  // virtual authenticator would answer it the moment the page loads, and a
+  // site that then sees the person click its passkey button has two sign-ins
+  // in flight and refuses one. Nothing here picks from autofill, so say there
+  // is none, and leave a request made anyway waiting until the site gives up
+  // on it, as a person who never opens the suggestions would.
+  const get = proto.get;
+  Object.defineProperty(proto, 'get', {
+    configurable: false, writable: false, enumerable: true,
+    value: function (options) {
+      if (!options || !options.publicKey || options.mediation !== 'conditional') {
+        return get.apply(this, arguments);
+      }
+      const signal = options.signal;
+      return new Promise((_, reject) => {
+        const abort = () => reject(signal.reason ?? new DOMException('The operation was aborted.', 'AbortError'));
+        if (!signal) return;
+        if (signal.aborted) abort();
+        else signal.addEventListener('abort', abort, { once: true });
+      });
+    },
+  });
+  if (typeof PublicKeyCredential !== 'undefined') {
+    Object.defineProperty(PublicKeyCredential, 'isConditionalMediationAvailable', {
+      configurable: false, writable: false, enumerable: true,
+      value: () => Promise.resolve(false),
+    });
+    const capabilities = PublicKeyCredential.getClientCapabilities;
+    if (typeof capabilities === 'function') {
+      Object.defineProperty(PublicKeyCredential, 'getClientCapabilities', {
+        configurable: false, writable: false, enumerable: true,
+        value: () => capabilities.call(PublicKeyCredential).then((all) => ({ ...all, conditionalGet: false })),
+      });
+    }
+  }
   const create = proto.create;
   Object.defineProperty(proto, 'create', {
     configurable: false, writable: false, enumerable: true,
