@@ -53,6 +53,37 @@ pub enum Request {
 }
 
 const MARK: &[u8] = include_bytes!("../assets/wallpaper-mark.png");
+/// Claude's own orange; the other marks take the bar's ink.
+const CLAUDE: u32 = 0xd97757;
+
+/// Harness marks as 14px masks, keyed as `agent::harness` names them.
+const MARKS: [(&str, &[u8]); 9] = [
+    ("claude", include_bytes!("../assets/harness/claude.png")),
+    ("codex", include_bytes!("../assets/harness/codex.png")),
+    ("cursor", include_bytes!("../assets/harness/cursor.png")),
+    ("opencode", include_bytes!("../assets/harness/opencode.png")),
+    ("copilot", include_bytes!("../assets/harness/copilot.png")),
+    ("windsurf", include_bytes!("../assets/harness/windsurf.png")),
+    ("cline", include_bytes!("../assets/harness/cline.png")),
+    ("roocode", include_bytes!("../assets/harness/roocode.png")),
+    ("zed", include_bytes!("../assets/harness/zed.png")),
+];
+
+/// The connected harness's mark, when it has one.
+fn harness_mark(harness: &str) -> Option<&'static Image> {
+    static DECODED: std::sync::OnceLock<Vec<(&str, Image)>> = std::sync::OnceLock::new();
+    DECODED
+        .get_or_init(|| {
+            MARKS
+                .iter()
+                .filter_map(|(key, bytes)| decode_png(bytes).ok().map(|image| (*key, image)))
+                .collect()
+        })
+        .iter()
+        .find(|(key, _)| *key == harness)
+        .map(|(_, image)| image)
+}
+
 /// Room on the shell's bar pill for its place toggle.
 const PLACE_WIDTH: i32 = 26;
 const BROWSER_CLASS: &str = "chromium";
@@ -1257,27 +1288,39 @@ impl Desktop {
                 w: 30 + name_width + task_width,
                 h: 28,
             };
+            // The harness's mark when it has one; otherwise the initial.
+            let mark = harness_mark(&self.agent.harness);
+            let tint = match (&mark, self.agent.harness.as_str()) {
+                (Some(_), "claude") => CLAUDE,
+                (Some(_), _) => INK,
+                (None, _) => AGENT,
+            };
             canvas.dot(
                 (x + 11) as f32,
                 20.0,
                 11.0,
-                crate::paint::blend(AGENT, BAR_FILL, 0.16),
+                crate::paint::blend(tint, BAR_FILL, 0.16),
             );
-            let initial = self
-                .agent
-                .name
-                .chars()
-                .next()
-                .unwrap_or('A')
-                .to_uppercase()
-                .to_string();
-            canvas.text(
-                &initial_face,
-                x + (22 - initial_face.width(&initial)) / 2,
-                initial_face.baseline_in(9, 22),
-                &initial,
-                AGENT,
-            );
+            match mark {
+                Some(mark) => canvas.stamp(x + 4, 13, mark, tint),
+                None => {
+                    let initial = self
+                        .agent
+                        .name
+                        .chars()
+                        .next()
+                        .unwrap_or('A')
+                        .to_uppercase()
+                        .to_string();
+                    canvas.text(
+                        &initial_face,
+                        x + (22 - initial_face.width(&initial)) / 2,
+                        initial_face.baseline_in(9, 22),
+                        &initial,
+                        AGENT,
+                    );
+                }
+            }
             canvas.text(
                 &name_face,
                 x + 30,
@@ -3162,6 +3205,16 @@ mod tests {
         assert!(!in_column(
             "chromium (/home/agent/.hotline/browser).chromium"
         ));
+    }
+
+    #[test]
+    fn every_harness_mark_decodes_as_a_fourteen_pixel_mask() {
+        for (key, _) in MARKS {
+            let mark = harness_mark(key).unwrap_or_else(|| panic!("{key} has no mark"));
+            assert_eq!((mark.width, mark.height), (14, 14), "{key}");
+            assert!(mark.rgba.chunks(4).any(|p| p[3] == 255), "{key} is blank");
+        }
+        assert!(harness_mark("").is_none());
     }
 
     #[test]

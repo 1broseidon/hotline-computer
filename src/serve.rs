@@ -10,9 +10,9 @@ use rmcp::ErrorData;
 use rmcp::handler::server::ServerHandler;
 use rmcp::model::{
     CacheScope, CallToolRequestParams, CallToolResponse, CallToolResult, Implementation,
-    ListToolsResult, PaginatedRequestParams, ServerCapabilities, ServerInfo,
+    ListToolsResult, PaginatedRequestParams, RequestMetaObject, ServerCapabilities, ServerInfo,
 };
-use rmcp::service::RequestContext;
+use rmcp::service::{NotificationContext, Peer, RequestContext};
 use rmcp::transport::streamable_http_server::{
     StreamableHttpServerConfig, StreamableHttpService, session::local::LocalSessionManager,
 };
@@ -27,6 +27,26 @@ struct ComputerTools {
     app: App,
 }
 
+impl ComputerTools {
+    /// Names the agent after the harness it connected through. A modern
+    /// (2026-07-28) client says who it is in each request's `_meta`; an
+    /// older one said so once, at its handshake. On the stateless path
+    /// rmcp fills the handshake with its own name, which names no one.
+    fn note_client(&self, meta: Option<&RequestMetaObject>, peer: &Peer<rmcp::RoleServer>) {
+        let placeholder = Implementation::default();
+        let client = meta
+            .and_then(RequestMetaObject::client_info)
+            .or_else(|| peer.peer_info().map(|info| info.client_info.clone()))
+            .filter(|client| client.name != placeholder.name || client.title.is_some());
+        if let Some(client) = client {
+            self.app
+                .jobs
+                .agent
+                .client(&client.name, client.title.as_deref());
+        }
+    }
+}
+
 impl ServerHandler for ComputerTools {
     fn get_info(&self) -> ServerInfo {
         ServerInfo::new(ServerCapabilities::builder().enable_tools().build()).with_server_info(
@@ -34,11 +54,18 @@ impl ServerHandler for ComputerTools {
         ).with_instructions("Read state action=info and state action=guide on connection. The running computer supplies its release-matched skill. Inspect repository requirements, then state prepare with packages or a local flake. Use shell managed jobs for commands and builds; browser refs for web forms; capture/input for native apps.")
     }
 
+    /// The harness shows on the desktop once it connects, before it acts.
+    async fn on_initialized(&self, context: NotificationContext<rmcp::RoleServer>) {
+        self.note_client(None, &context.peer);
+    }
+
     async fn list_tools(
         &self,
         _request: Option<PaginatedRequestParams>,
-        _context: RequestContext<rmcp::RoleServer>,
+        context: RequestContext<rmcp::RoleServer>,
     ) -> Result<ListToolsResult, ErrorData> {
+        // A modern client lists tools as it connects; name it then.
+        self.note_client(Some(&context.meta), &context.peer);
         Ok(listing(&self.app.config.home.to_string_lossy()))
     }
 
@@ -55,6 +82,7 @@ impl ServerHandler for ComputerTools {
             .filter(|value| !value.is_empty())
             .unwrap_or("anonymous")
             .to_owned();
+        self.note_client(Some(&context.meta), &context.peer);
         let arguments = request.arguments.map_or(Value::Null, Value::Object);
         let result = match tools::call(&self.app, &request.name, arguments, &holder).await {
             Ok(content) => CallToolResult::success(content),
