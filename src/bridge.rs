@@ -161,7 +161,7 @@ async fn answer(app: &App, message: &Value) -> Value {
                     // A page that only offers passkeys in its sign-in field asks
                     // quietly on load; that is not a refusal worth a note.
                     if details["mediation"].as_str() != Some("conditional") {
-                        record(app, &site, "refused a passkey", false).await;
+                        record(app, &site, "was refused a passkey", false).await;
                     }
                     refused(refusal)
                 }
@@ -190,15 +190,20 @@ async fn answer(app: &App, message: &Value) -> Value {
         }
         // The person at the wheel hands the computer back to the agent. Only
         // a person's hold is released: an agent's is never touched from here.
-        Some("hand_back") => match app.access.holder().await {
-            Some((holder, _)) if holder.starts_with(crate::viewer::PERSON) => {
-                match app.access.release(&holder).await {
-                    Ok(_) => json!({"handedBack": true}),
-                    Err(error) => refused(authenticator_refusal("NotAllowedError", &error)),
+        // The person says they are done: their hold ends, and the popup
+        // stops saying it is their turn.
+        Some("hand_back") => {
+            let handed = PERSON_SINCE.lock().unwrap().take().is_some();
+            match app.access.holder().await {
+                Some((holder, _)) if holder.starts_with(crate::viewer::PERSON) => {
+                    match app.access.release(&holder).await {
+                        Ok(_) => json!({"handedBack": true}),
+                        Err(error) => refused(authenticator_refusal("NotAllowedError", &error)),
+                    }
                 }
+                _ => json!({"handedBack": handed}),
             }
-            _ => json!({"handedBack": false}),
-        },
+        }
         // The person's logins, for the page whose origin Chromium names:
         // what may be filled there, then, on a click, the values themselves.
         Some("logins") => {
@@ -215,7 +220,7 @@ async fn answer(app: &App, message: &Value) -> Value {
             let reply = fill(app, message);
             let site = host_of(message["origin"].as_str().unwrap_or_default());
             if reply.get("error").is_some() {
-                record(app, &site, "refused a login fill", false).await;
+                record(app, &site, "was refused a login", false).await;
             } else {
                 record(app, &site, "filled a login", true).await;
             }
@@ -351,14 +356,47 @@ fn request_id() -> String {
 
 /// Who holds the computer now: the person (through the viewer), the agent,
 /// or nobody; and the agent's name and task as the desktop bar shows them.
+/// When the person last took the computer, while it is still theirs. The
+/// viewer's hold lapses ten seconds after their last input, but the turn is
+/// theirs until they hand it back or the agent acts again.
+static PERSON_SINCE: std::sync::Mutex<Option<u64>> = std::sync::Mutex::new(None);
+
 async fn wheel(app: &App) -> Value {
-    let driving = match app.access.holder().await {
-        Some((holder, _)) if holder.starts_with(crate::viewer::PERSON) => "person",
-        Some(_) => "agent",
-        None => "none",
-    };
     let agent = app.jobs.agent.snapshot();
+    let holder = app.access.holder().await;
+    let driving = turn(
+        &PERSON_SINCE,
+        holder.as_ref().map(|(h, _)| h.as_str()),
+        agent.last_action_ms,
+        crate::jobs::now(),
+    );
     json!({"driving": driving, "agent": agent.name, "task": agent.task})
+}
+
+/// Who has the computer: a person holding it now, or one who took it and
+/// has not handed it back while the agent stayed still; else whoever holds.
+fn turn(
+    since: &std::sync::Mutex<Option<u64>>,
+    holder: Option<&str>,
+    agent_acted_ms: u64,
+    now: u64,
+) -> &'static str {
+    let mut since = since.lock().unwrap();
+    match holder {
+        Some(holder) if holder.starts_with(crate::viewer::PERSON) => {
+            since.get_or_insert(now);
+            "person"
+        }
+        Some(_) => {
+            *since = None;
+            "agent"
+        }
+        None if since.is_some_and(|at| agent_acted_ms <= at) => "person",
+        None => {
+            *since = None;
+            "none"
+        }
+    }
 }
 
 #[derive(Clone, serde::Serialize)]
@@ -499,6 +537,24 @@ fn open(message: &[u8]) -> Result<std::os::unix::net::UnixStream, String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn the_turn_stays_with_the_person_until_handed_back_or_the_agent_acts() {
+        let since = std::sync::Mutex::new(None);
+        assert_eq!(turn(&since, None, 0, 1_000), "none");
+        assert_eq!(turn(&since, Some("person-1"), 500, 2_000), "person");
+        // The viewer's hold lapsed; the agent has not moved since.
+        assert_eq!(turn(&since, None, 500, 20_000), "person");
+        // Renewing does not move when the turn began.
+        assert_eq!(turn(&since, Some("person-1"), 500, 21_000), "person");
+        assert_eq!(turn(&since, None, 1_500, 30_000), "person");
+        // The agent acting after the person took it ends the turn.
+        assert_eq!(turn(&since, None, 2_500, 31_000), "none");
+        assert_eq!(turn(&since, None, 2_500, 32_000), "none");
+        assert_eq!(turn(&since, Some("person-2"), 2_500, 40_000), "person");
+        assert_eq!(turn(&since, Some("agent"), 2_500, 41_000), "agent");
+        assert_eq!(turn(&since, None, 2_500, 42_000), "none");
+    }
 
     #[test]
     fn host_of_reads_web_origins_only() {

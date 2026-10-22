@@ -68,11 +68,10 @@ function showTurn() {
   const yours = wheel.driving === 'person';
   $('turn').hidden = !yours;
   if (!yours) return;
-  $('turn-title').textContent = `You have the computer. ${wheel.agent} is waiting.`;
+  $('turn-title').textContent = 'You have the computer.';
   $('turn-task').hidden = !wheel.task;
   $('turn-task').textContent = wheel.task ? `${wheel.agent} was: ${wheel.task}` : '';
   $('hand-back').textContent = `Hand back to ${wheel.agent}`;
-  $('foot').textContent = `${wheel.agent} is waiting. Nothing you type here reaches it.`;
 }
 
 $('hand-back').addEventListener('click', async () => {
@@ -133,7 +132,7 @@ function showRecord() {
     line.append(
       el('span', 'at', `${String(at.getHours()).padStart(2, '0')}:${String(at.getMinutes()).padStart(2, '0')}`),
       el('span', `dot ${u.ok ? 'ok' : 'fail'}`),
-      el('span', '', `${u.who === 'you' ? 'You' : u.who} ${u.what}`),
+      el('span', '', u.who === 'you' ? `You ${u.what.replace(/^was /, 'were ')}` : `${u.who} ${u.what}`),
     );
     return line;
   }));

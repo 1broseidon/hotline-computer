@@ -214,8 +214,8 @@ const NOTE = {
   'signed in with the passkey': (u) => [`${u.who} signed in to ${u.site}`, 'with the passkey on this computer'],
   'made a passkey': (u) => [`${u.who} made a passkey for ${u.site}`, 'kept on this computer'],
   'filled a login': (u) => [`${u.who} filled a login on ${u.site}`, 'from this computer'],
-  'refused a passkey': (u) => [`Refused a passkey on ${u.site}`, `no key here is for this site; ${u.who} was stopped`],
-  'refused a login fill': (u) => [`Refused a login on ${u.site}`, `not a site the login is for; ${u.who} was stopped`],
+  'was refused a passkey': (u) => [`Refused a passkey on ${u.site}`, `no key here is for this site; ${u.who} was stopped`],
+  'was refused a login': (u) => [`Refused a login on ${u.site}`, `not a site the login is for; ${u.who} was stopped`],
 };
 
 async function note(use) {
