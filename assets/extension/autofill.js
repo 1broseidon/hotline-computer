@@ -605,7 +605,7 @@
         if (!card) return;
         if (reply && reply.error) return fail(reply.error.message);
         const rows = [
-          ...(reply.passkeys || []).map((p) => row('key', p.userName || p.rpId, 'passkey · on this computer', el('span', 'when', 'when the page asks'))),
+          ...(reply.passkeys || []).map((p) => row('key', p.userName || p.rpId, 'passkey · used when the page asks', el('span'))),
           ...(reply.logins || []).map((login) => {
             const fill = el('button', 'b', 'Fill'); fill.type = 'button';
             fill.setAttribute('aria-label', `Fill ${login.name}${login.username ? ` (${login.username})` : ''}`);
