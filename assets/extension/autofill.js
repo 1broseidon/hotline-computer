@@ -688,7 +688,11 @@
       }
 
       function hide(byPerson) {
-        if (byPerson) dismissed = reason();
+        if (byPerson) {
+          dismissed = reason();
+          ask({ type: 'card-dismiss' });
+        }
+        openedAt = 0;
         clearInterval(ticking);
         if (!card) return;
         const gone = card;
@@ -704,9 +708,44 @@
         return '';
       }
 
+      // ---- Offered on a sign-in page ---------------------------------------
+      // When this computer holds a key for the site and the page looks like a
+      // sign-in page (a login field shows, or the page asks quietly for a
+      // passkey on load), the card offers it, once a page. Signed in, neither
+      // sign is there, so it stays away; closed, it is not offered on that
+      // site again.
+      let offered = false;
+      let openedAt = 0; // when an offered card opened, so a sign-in after it closes it
+      const loginShows = () => [...document.querySelectorAll('input')].some((input) =>
+        input.type !== 'hidden' && input.getClientRects().length > 0 &&
+        (input.type === 'password' || tokens(input).includes('username') || tokens(input).includes('webauthn')));
+
+      async function offer() {
+        if (offered || card) return;
+        offered = true;
+        looking.disconnect();
+        const reply = await ask({ type: 'card-offer' });
+        if (reply && reply.offer && !card) {
+          await show();
+          openedAt = Date.now();
+        }
+      }
+
+      let lookTimer = 0;
+      const looking = new MutationObserver(() => {
+        lookTimer ||= setTimeout(() => { lookTimer = 0; if (loginShows()) offer(); }, 500);
+      });
+      if (loginShows()) offer();
+      else {
+        looking.observe(document.documentElement, { childList: true, subtree: true });
+        // A page that has not shown a login by now is not a sign-in page.
+        setTimeout(() => looking.disconnect(), 60_000);
+      }
+
       chrome.runtime.onMessage.addListener((message, sender) => {
         if (sender.id !== chrome.runtime.id || !message) return false;
-        if (message.type === 'hotline-card') {
+        if (message.type === 'hotline-sign-in-page') offer();
+        else if (message.type === 'hotline-card') {
           if (card) hide(true); else { dismissed = ''; show(); }
         } else if (message.type === 'hotline-state' && message.state) {
           state = message.state;
@@ -714,6 +753,11 @@
           if (!why) dismissed = '';
           if (card) {
             draw();
+            // Offered for a sign-in, and a key of this site just signed in: done.
+            if (openedAt && state.uses.some((u) => u.ok && u.ts >= openedAt && within(u.site))) {
+              openedAt = 0;
+              setTimeout(() => hide(false), 1500);
+            }
             // The turn handed back or the passkey stored: nothing left to ask of the person.
             if (!why && message.settled) setTimeout(() => hide(false), message.settled);
           } else if (why && why !== dismissed && document.visibilityState === 'visible') {

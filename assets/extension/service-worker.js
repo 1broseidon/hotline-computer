@@ -56,7 +56,11 @@ proxy.onIsUvpaaRequest.addListener(({ requestId }) => {
 
 function answer(complete, kind) {
   return async ({ requestId, requestDetailsJson }) => {
-    const reply = await ask(requestId, { kind, details: JSON.parse(requestDetailsJson) });
+    const details = JSON.parse(requestDetailsJson);
+    // A page asking quietly on load is a sign-in page that takes passkeys:
+    // its card may offer the keys this computer has for it.
+    if (kind === 'get' && details.mediation === 'conditional') signInPage(details);
+    const reply = await ask(requestId, { kind, details });
     const done = reply.error
       ? { requestId, error: reply.error }
       : { requestId, responseJson: JSON.stringify(reply.response) };
@@ -150,10 +154,36 @@ async function passkeysFor(tabId) {
   return reply.error ? { error: reply.error } : { passkeys: reply.passkeys || [] };
 }
 
+// The sites whose offered card the person closed: not offered again until
+// the worker restarts.
+const passedOver = new Set();
+
+async function signInPage(details) {
+  const origin = webOrigin(details.extensions?.remoteDesktopClientOverride?.origin, null);
+  if (!origin) return;
+  for (const tab of await chrome.tabs.query({})) {
+    if (Number.isInteger(tab.id) && webOrigin(null, tab.url) === origin) {
+      chrome.tabs.sendMessage(tab.id, { type: 'hotline-sign-in-page' }, { frameId: 0 }).catch(() => {});
+    }
+  }
+}
+
 // The card in a tab's top frame asks for that tab only: Chromium names the
 // tab, never the page.
 async function fromCard(message, tabId) {
   if (message.type === 'card-state') return { arming, wheel, uses };
+  if (message.type === 'card-dismiss' || message.type === 'card-offer') {
+    const origin = await tabOrigin(tabId);
+    if (!origin) return { offer: false };
+    const host = new URL(origin).hostname;
+    if (message.type === 'card-dismiss') {
+      passedOver.add(host);
+      return {};
+    }
+    if (passedOver.has(host)) return { offer: false };
+    const [passkeys, logins] = await Promise.all([passkeysFor(tabId), loginsFor(origin)]);
+    return { offer: (passkeys.passkeys || []).length + (logins.logins || []).length > 0 };
+  }
   if (message.type === 'card-hand-back') return ask(crypto.randomUUID(), { kind: 'hand_back' });
   if (message.type === 'card-fill') return fromPopup({ type: 'fill', tabId, name: message.name });
   const origin = await tabOrigin(tabId);
