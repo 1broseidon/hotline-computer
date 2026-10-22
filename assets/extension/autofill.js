@@ -462,263 +462,266 @@
       return false;
     });
 
-    // ---- The card -----------------------------------------------------------
-    // Hotline's one surface in the browser: a card at the top right of the
-    // page, not a toolbar popup. It opens when the person is needed (the
-    // computer handed to them, a passkey being made) or when they click the
-    // Hotline mark, and closes on Not now, Escape or the cross. Its root is
-    // closed and its buttons take only real clicks, so the page can neither
-    // read it nor press it.
-    const MARK = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAACAAAAAgCAYAAABzenr0AAABHElEQVR4nOyUSwrCMBCGZ9rqRkGRUryFXsDjKKI7D+JOETxOca+3kCKioBsfHTtUMX2orY/ERX4oDTM/mS9MMgYolgGKpQE0gAZQDmC9MiyXVEJcN3hNVFvU67j/ph8fJTzPKyMWh4jQFuNEMCU6DBzH2X3ifwoQblZwEbGZlieiOdGxdds0r19U6h0IT5K+WZjHJnve9Udy8QD30LK2O8ig06lS5n8ef/xOGEna8AKxgv51bLuK4scx0ZvXH68XAVittiPTNF3IqMA74y+H3+UaYgzF4sEZeiBFOLbtSj8GsDmDvMHkB+0xeSEOIplT0UgsVOmvAHyQJz8FACcgTfdakUl4fYpd+F1rfC5+e4IJABXSr0ADaADlABcAAAD//+Q0FKEAAAAGSURBVAMAf0t8WB/LVrkAAAAASUVORK5CYII=';
-    const ask = (message) => chrome.runtime.sendMessage(message).catch((error) => ({ error: { message: `Hotline: ${error.message}` } }));
-    const el = (tag, className, text) => {
-      const node = document.createElement(tag);
-      if (className) node.className = className;
-      if (text !== undefined) node.textContent = text;
-      return node;
-    };
-    const press = (button, run) => button.addEventListener('click', (event) => { if (event.isTrusted) run(); });
-    const ICONS = {
-      key: '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="6" cy="6" r="3"/><path d="M8.2 8.2 14 14M11.5 11.5l1.8-1.8"/></svg>',
-      lock: '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="3" y="7" width="10" height="7" rx="1.5"/><path d="M5.5 7V5a2.5 2.5 0 0 1 5 0v2"/></svg>',
-      close: '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M4 4l8 8M12 4l-8 8"/></svg>',
-    };
-    const PASSKEY = {
-      armed: ['Ready to make a passkey', 'On the site, choose to add a passkey. Hotline then asks for approval at the desk.'],
-      asked: ['Waiting for approval', null],
-      approved: ['Making the passkey…', 'Approved at the desk.'],
-      registered: ['Passkey made', 'Hotline is storing it for this teammate.'],
-    };
+    // Its own scope: the filler above has a hide() and show() of its own.
+    (() => {
+      // ---- The card -----------------------------------------------------------
+      // Hotline's one surface in the browser: a card at the top right of the
+      // page, not a toolbar popup. It opens when the person is needed (the
+      // computer handed to them, a passkey being made) or when they click the
+      // Hotline mark, and closes on Not now, Escape or the cross. Its root is
+      // closed and its buttons take only real clicks, so the page can neither
+      // read it nor press it.
+      const MARK = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAACAAAAAgCAYAAABzenr0AAABHElEQVR4nOyUSwrCMBCGZ9rqRkGRUryFXsDjKKI7D+JOETxOca+3kCKioBsfHTtUMX2orY/ERX4oDTM/mS9MMgYolgGKpQE0gAZQDmC9MiyXVEJcN3hNVFvU67j/ph8fJTzPKyMWh4jQFuNEMCU6DBzH2X3ifwoQblZwEbGZlieiOdGxdds0r19U6h0IT5K+WZjHJnve9Udy8QD30LK2O8ig06lS5n8ef/xOGEna8AKxgv51bLuK4scx0ZvXH68XAVittiPTNF3IqMA74y+H3+UaYgzF4sEZeiBFOLbtSj8GsDmDvMHkB+0xeSEOIplT0UgsVOmvAHyQJz8FACcgTfdakUl4fYpd+F1rfC5+e4IJABXSr0ADaADlABcAAAD//+Q0FKEAAAAGSURBVAMAf0t8WB/LVrkAAAAASUVORK5CYII=';
+      const ask = (message) => chrome.runtime.sendMessage(message).catch((error) => ({ error: { message: `Hotline: ${error.message}` } }));
+      const el = (tag, className, text) => {
+        const node = document.createElement(tag);
+        if (className) node.className = className;
+        if (text !== undefined) node.textContent = text;
+        return node;
+      };
+      const press = (button, run) => button.addEventListener('click', (event) => { if (event.isTrusted) run(); });
+      const ICONS = {
+        key: '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="6" cy="6" r="3"/><path d="M8.2 8.2 14 14M11.5 11.5l1.8-1.8"/></svg>',
+        lock: '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="3" y="7" width="10" height="7" rx="1.5"/><path d="M5.5 7V5a2.5 2.5 0 0 1 5 0v2"/></svg>',
+        close: '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M4 4l8 8M12 4l-8 8"/></svg>',
+      };
+      const PASSKEY = {
+        armed: ['Ready to make a passkey', 'On the site, choose to add a passkey. Hotline then asks for approval at the desk.'],
+        asked: ['Waiting for approval', null],
+        approved: ['Making the passkey…', 'Approved at the desk.'],
+        registered: ['Passkey made', 'Hotline is storing it for this teammate.'],
+      };
 
-    let card = null; // the host element, while the card is shown
-    let parts = null;
-    let state = { arming: { state: 'idle' }, wheel: { driving: 'none', agent: 'Agent', task: '' }, uses: [] };
-    let dismissed = ''; // the reason the person closed it for, so it does not reopen for the same one
-    let ticking = null;
+      let card = null; // the host element, while the card is shown
+      let parts = null;
+      let state = { arming: { state: 'idle' }, wheel: { driving: 'none', agent: 'Agent', task: '' }, uses: [] };
+      let dismissed = ''; // the reason the person closed it for, so it does not reopen for the same one
+      let ticking = null;
 
-    function build() {
-      card = document.createElement('hotline-card');
-      const style = { all: 'initial', position: 'fixed', right: '12px', top: '12px', 'z-index': '2147483647' };
-      for (const [k, v] of Object.entries(style)) card.style.setProperty(k, v, 'important');
-      const root = card.attachShadow({ mode: 'closed' });
-      const sheet = new CSSStyleSheet();
-      sheet.replaceSync(`
-        * { box-sizing: border-box; }
-        [hidden] { display: none !important; }
-        .card { width: 316px; max-height: calc(100vh - 24px); overflow: auto; background: #17171b; color: #ececef;
-          border: 1px solid #2a2a30; border-radius: 14px; box-shadow: 0 18px 48px rgba(0,0,0,.45);
-          font: 13px/1.45 Geist, system-ui, sans-serif; opacity: 0; transform: translateY(-6px); transition: opacity .18s, transform .18s; }
-        .card.in { opacity: 1; transform: none; }
-        header { display: flex; align-items: center; gap: 8px; height: 42px; padding: 0 8px 0 14px; }
-        header img { width: 16px; height: 16px; }
-        .name { font-weight: 600; }
-        .site { margin-left: auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: #8e8e95; font: 12px 'Geist Mono', ui-monospace, monospace; }
-        .x { width: 26px; height: 26px; padding: 0; display: grid; place-items: center; border: 0; background: none; color: #8e8e95; border-radius: 7px; }
-        .x:hover { background: #1f1f25; color: #ececef; } .x svg { width: 12px; height: 12px; }
-        section { padding: 4px 6px; border-top: 1px solid #2a2a30; }
-        .pad { padding: 8px; }
-        .chip { display: inline-flex; align-items: center; gap: 6px; height: 22px; padding: 0 8px; border-radius: 6px; font-size: 12px; background: #352d24; color: #f0c27a; }
-        .chip i { width: 6px; height: 6px; border-radius: 50%; background: #f0c27a; }
-        .t { font-weight: 500; } .s { color: #8e8e95; font-size: 12px; }
-        .quote { margin: 0 8px 10px; padding: 6px 10px; border-left: 2px solid #2a2a30; color: #b4b4ba; font-size: 12.5px; }
-        .acts { display: flex; gap: 6px; padding: 0 8px 8px; }
-        button { font: inherit; cursor: pointer; }
-        .b { height: 28px; padding: 0 12px; border: 1px solid #2e2e35; border-radius: 8px; background: #1f1f25; color: #ececef; font-weight: 500; flex: none; }
-        .b:hover:not(:disabled) { background: #2e2e35; } .b:disabled { opacity: .45; cursor: default; }
-        .b.you { background: #352d24; border-color: transparent; color: #f0c27a; }
-        .b.ghost { background: none; border-color: #2a2a30; color: #b4b4ba; }
-        button:focus-visible { outline: 2px solid #8fb8ff; outline-offset: 2px; }
-        .row { display: flex; align-items: center; gap: 10px; padding: 8px; border-radius: 9px; }
-        .row:hover { background: #1f1f25; }
-        .ico { width: 28px; height: 28px; border-radius: 8px; background: #1f1f25; border: 1px solid #2e2e35; display: grid; place-items: center; color: #b4b4ba; flex: none; }
-        .ico svg { width: 14px; height: 14px; }
-        .who { flex: 1; min-width: 0; } .who div { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-        .when { color: #8e8e95; font-size: 12px; flex: none; }
-        .sec { padding: 8px 8px 2px; color: #8e8e95; font: 11px 'Geist Mono', ui-monospace, monospace; letter-spacing: .04em; }
-        .log { display: flex; gap: 10px; padding: 5px 8px; font-size: 12.5px; color: #b4b4ba; }
-        .at { width: 40px; flex: none; color: #8e8e95; font: 12px 'Geist Mono', ui-monospace, monospace; }
-        .dot { width: 6px; height: 6px; border-radius: 50%; flex: none; margin-top: 7px; } .ok { background: #86d69c; } .fail { background: #ff8f80; }
-        .rp { margin-top: 2px; font: 12px 'Geist Mono', ui-monospace, monospace; }
-        .left { margin-top: 6px; color: #8e8e95; font: 11.5px 'Geist Mono', ui-monospace, monospace; }
-        .note { margin: 0; padding: 10px 8px; color: #b4b4ba; }
-        .err { color: #ff8f80; }`);
-      root.adoptedStyleSheets = [sheet];
-      const box = el('div', 'card');
-      box.setAttribute('role', 'dialog');
-      box.setAttribute('aria-label', 'Hotline');
-      const head = el('header');
-      const mark = el('img'); mark.src = MARK; mark.alt = '';
-      const close = el('button', 'x'); close.type = 'button'; close.innerHTML = ICONS.close; close.setAttribute('aria-label', 'Close');
-      press(close, () => hide(true));
-      head.append(mark, el('span', 'name', 'Hotline'), el('span', 'site', location.host), close);
+      function build() {
+        card = document.createElement('hotline-card');
+        const style = { all: 'initial', position: 'fixed', right: '12px', top: '12px', 'z-index': '2147483647' };
+        for (const [k, v] of Object.entries(style)) card.style.setProperty(k, v, 'important');
+        const root = card.attachShadow({ mode: 'closed' });
+        const sheet = new CSSStyleSheet();
+        sheet.replaceSync(`
+          * { box-sizing: border-box; }
+          [hidden] { display: none !important; }
+          .card { width: 316px; max-height: calc(100vh - 24px); overflow: auto; background: #17171b; color: #ececef;
+            border: 1px solid #2a2a30; border-radius: 14px; box-shadow: 0 18px 48px rgba(0,0,0,.45);
+            font: 13px/1.45 Geist, system-ui, sans-serif; opacity: 0; transform: translateY(-6px); transition: opacity .18s, transform .18s; }
+          .card.in { opacity: 1; transform: none; }
+          header { display: flex; align-items: center; gap: 8px; height: 42px; padding: 0 8px 0 14px; }
+          header img { width: 16px; height: 16px; }
+          .name { font-weight: 600; }
+          .site { margin-left: auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: #8e8e95; font: 12px 'Geist Mono', ui-monospace, monospace; }
+          .x { width: 26px; height: 26px; padding: 0; display: grid; place-items: center; border: 0; background: none; color: #8e8e95; border-radius: 7px; }
+          .x:hover { background: #1f1f25; color: #ececef; } .x svg { width: 12px; height: 12px; }
+          section { padding: 4px 6px; border-top: 1px solid #2a2a30; }
+          .pad { padding: 8px; }
+          .chip { display: inline-flex; align-items: center; gap: 6px; height: 22px; padding: 0 8px; border-radius: 6px; font-size: 12px; background: #352d24; color: #f0c27a; }
+          .chip i { width: 6px; height: 6px; border-radius: 50%; background: #f0c27a; }
+          .t { font-weight: 500; } .s { color: #8e8e95; font-size: 12px; }
+          .quote { margin: 0 8px 10px; padding: 6px 10px; border-left: 2px solid #2a2a30; color: #b4b4ba; font-size: 12.5px; }
+          .acts { display: flex; gap: 6px; padding: 0 8px 8px; }
+          button { font: inherit; cursor: pointer; }
+          .b { height: 28px; padding: 0 12px; border: 1px solid #2e2e35; border-radius: 8px; background: #1f1f25; color: #ececef; font-weight: 500; flex: none; }
+          .b:hover:not(:disabled) { background: #2e2e35; } .b:disabled { opacity: .45; cursor: default; }
+          .b.you { background: #352d24; border-color: transparent; color: #f0c27a; }
+          .b.ghost { background: none; border-color: #2a2a30; color: #b4b4ba; }
+          button:focus-visible { outline: 2px solid #8fb8ff; outline-offset: 2px; }
+          .row { display: flex; align-items: center; gap: 10px; padding: 8px; border-radius: 9px; }
+          .row:hover { background: #1f1f25; }
+          .ico { width: 28px; height: 28px; border-radius: 8px; background: #1f1f25; border: 1px solid #2e2e35; display: grid; place-items: center; color: #b4b4ba; flex: none; }
+          .ico svg { width: 14px; height: 14px; }
+          .who { flex: 1; min-width: 0; } .who div { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+          .when { color: #8e8e95; font-size: 12px; flex: none; }
+          .sec { padding: 8px 8px 2px; color: #8e8e95; font: 11px 'Geist Mono', ui-monospace, monospace; letter-spacing: .04em; }
+          .log { display: flex; gap: 10px; padding: 5px 8px; font-size: 12.5px; color: #b4b4ba; }
+          .at { width: 40px; flex: none; color: #8e8e95; font: 12px 'Geist Mono', ui-monospace, monospace; }
+          .dot { width: 6px; height: 6px; border-radius: 50%; flex: none; margin-top: 7px; } .ok { background: #86d69c; } .fail { background: #ff8f80; }
+          .rp { margin-top: 2px; font: 12px 'Geist Mono', ui-monospace, monospace; }
+          .left { margin-top: 6px; color: #8e8e95; font: 11.5px 'Geist Mono', ui-monospace, monospace; }
+          .note { margin: 0; padding: 10px 8px; color: #b4b4ba; }
+          .err { color: #ff8f80; }`);
+        root.adoptedStyleSheets = [sheet];
+        const box = el('div', 'card');
+        box.setAttribute('role', 'dialog');
+        box.setAttribute('aria-label', 'Hotline');
+        const head = el('header');
+        const mark = el('img'); mark.src = MARK; mark.alt = '';
+        const close = el('button', 'x'); close.type = 'button'; close.innerHTML = ICONS.close; close.setAttribute('aria-label', 'Close');
+        press(close, () => hide(true));
+        head.append(mark, el('span', 'name', 'Hotline'), el('span', 'site', location.host), close);
 
-      const turn = el('section'); turn.hidden = true;
-      const turnTask = el('div', 'quote');
-      const handBack = el('button', 'b you'); handBack.type = 'button';
-      const notNow = el('button', 'b ghost', 'Not now'); notNow.type = 'button';
-      const chipRow = el('div', 'pad'); const chip = el('span', 'chip'); chip.append(el('i'), 'Your turn'); chipRow.append(chip);
-      const turnTitle = el('div', 'pad'); turnTitle.style.paddingTop = '0'; turnTitle.append(el('div', 't', 'You have the computer.'));
-      const acts = el('div', 'acts'); acts.append(handBack, notNow);
-      turn.append(chipRow, turnTitle, turnTask, acts);
-      press(handBack, async () => {
-        handBack.disabled = true;
-        const reply = await ask({ type: 'card-hand-back' });
-        handBack.disabled = false;
+        const turn = el('section'); turn.hidden = true;
+        const turnTask = el('div', 'quote');
+        const handBack = el('button', 'b you'); handBack.type = 'button';
+        const notNow = el('button', 'b ghost', 'Not now'); notNow.type = 'button';
+        const chipRow = el('div', 'pad'); const chip = el('span', 'chip'); chip.append(el('i'), 'Your turn'); chipRow.append(chip);
+        const turnTitle = el('div', 'pad'); turnTitle.style.paddingTop = '0'; turnTitle.append(el('div', 't', 'You have the computer.'));
+        const acts = el('div', 'acts'); acts.append(handBack, notNow);
+        turn.append(chipRow, turnTitle, turnTask, acts);
+        press(handBack, async () => {
+          handBack.disabled = true;
+          const reply = await ask({ type: 'card-hand-back' });
+          handBack.disabled = false;
+          if (reply && reply.error) return fail(reply.error.message);
+          hide(false);
+        });
+        press(notNow, () => hide(true));
+
+        const passkey = el('section', ''); passkey.hidden = true;
+        const pk = el('div', 'pad'); const pkTitle = el('div', 't'); const pkRp = el('div', 'rp'); const pkText = el('div', 's'); pkText.style.marginTop = '6px'; const pkLeft = el('div', 'left');
+        pk.append(pkTitle, pkRp, pkText, pkLeft); passkey.append(pk);
+
+        const keys = el('section'); keys.hidden = true;
+        const record = el('section'); record.hidden = true;
+        const status = el('p', 'note'); status.hidden = true;
+        box.append(head, turn, passkey, keys, record, status);
+        root.append(box);
+        root.addEventListener('keydown', (event) => { if (event.key === 'Escape') hide(true); });
+        parts = { box, turn, turnTask, handBack, passkey, pkTitle, pkRp, pkText, pkLeft, keys, record, status };
+        document.documentElement.append(card);
+        requestAnimationFrame(() => box.classList.add('in'));
+      }
+
+      function fail(message) {
+        parts.status.hidden = false;
+        parts.status.className = 'note err';
+        parts.status.textContent = message || 'Hotline: something went wrong';
+      }
+
+      function row(icon, title, sub, trailing) {
+        const r = el('div', 'row');
+        const ico = el('div', 'ico'); ico.innerHTML = ICONS[icon];
+        const who = el('div', 'who'); who.append(el('div', 't', title), el('div', 's', sub));
+        r.append(ico, who, trailing);
+        return r;
+      }
+
+      async function loadKeys() {
+        const reply = await ask({ type: 'card-keys' });
+        if (!card) return;
         if (reply && reply.error) return fail(reply.error.message);
-        hide(false);
-      });
-      press(notNow, () => hide(true));
-
-      const passkey = el('section', ''); passkey.hidden = true;
-      const pk = el('div', 'pad'); const pkTitle = el('div', 't'); const pkRp = el('div', 'rp'); const pkText = el('div', 's'); pkText.style.marginTop = '6px'; const pkLeft = el('div', 'left');
-      pk.append(pkTitle, pkRp, pkText, pkLeft); passkey.append(pk);
-
-      const keys = el('section'); keys.hidden = true;
-      const record = el('section'); record.hidden = true;
-      const status = el('p', 'note'); status.hidden = true;
-      box.append(head, turn, passkey, keys, record, status);
-      root.append(box);
-      root.addEventListener('keydown', (event) => { if (event.key === 'Escape') hide(true); });
-      parts = { box, turn, turnTask, handBack, passkey, pkTitle, pkRp, pkText, pkLeft, keys, record, status };
-      document.documentElement.append(card);
-      requestAnimationFrame(() => box.classList.add('in'));
-    }
-
-    function fail(message) {
-      parts.status.hidden = false;
-      parts.status.className = 'note err';
-      parts.status.textContent = message || 'Hotline: something went wrong';
-    }
-
-    function row(icon, title, sub, trailing) {
-      const r = el('div', 'row');
-      const ico = el('div', 'ico'); ico.innerHTML = ICONS[icon];
-      const who = el('div', 'who'); who.append(el('div', 't', title), el('div', 's', sub));
-      r.append(ico, who, trailing);
-      return r;
-    }
-
-    async function loadKeys() {
-      const reply = await ask({ type: 'card-keys' });
-      if (!card) return;
-      if (reply && reply.error) return fail(reply.error.message);
-      const rows = [
-        ...(reply.passkeys || []).map((p) => row('key', p.userName || p.rpId, 'passkey · on this computer', el('span', 'when', 'when the page asks'))),
-        ...(reply.logins || []).map((login) => {
-          const fill = el('button', 'b', 'Fill'); fill.type = 'button';
-          fill.setAttribute('aria-label', `Fill ${login.name}${login.username ? ` (${login.username})` : ''}`);
-          press(fill, async () => {
-            fill.disabled = true;
-            const done = await ask({ type: 'card-fill', name: login.name });
-            if (done && done.error) { fill.disabled = false; return fail(done.error.message); }
-            fill.textContent = 'Filled';
-            setTimeout(() => hide(false), 600);
-          });
-          return row('lock', login.username || login.name, `${login.name} · from this computer`, fill);
-        }),
-      ];
-      parts.keys.replaceChildren(...rows);
-      parts.keys.hidden = !rows.length;
-      quiet();
-    }
-
-    // Nothing to show at all: say so in one line rather than an empty card.
-    function quiet() {
-      const empty = parts.turn.hidden && parts.passkey.hidden && parts.keys.hidden && parts.record.hidden;
-      if (parts.status.classList.contains('err')) return;
-      parts.status.hidden = !empty;
-      parts.status.textContent = 'Nothing for this site. Grant a login or passkey from the desk.';
-    }
-
-    function within(site) {
-      const host = location.hostname;
-      return host === site || host.endsWith(`.${site}`) || site.endsWith(`.${host}`);
-    }
-
-    function draw() {
-      if (!card) return;
-      const { wheel, arming, uses } = state;
-      const yours = wheel.driving === 'person';
-      parts.turn.hidden = !yours;
-      parts.turnTask.hidden = !wheel.task;
-      parts.turnTask.textContent = wheel.task ? `${wheel.agent} was: ${wheel.task}` : '';
-      parts.handBack.textContent = `Hand back to ${wheel.agent}`;
-
-      const shown = arming && PASSKEY[arming.state];
-      parts.passkey.hidden = !shown;
-      if (shown) {
-        const asked = arming.ask || {};
-        parts.pkTitle.textContent = shown[0];
-        parts.pkRp.textContent = arming.rpId;
-        parts.pkText.textContent = shown[1] || `${asked.rpName || arming.rpId} asked for a passkey${asked.userName ? ` for ${asked.userName}` : ''}. Approve it at the desk.`;
-        clearInterval(ticking);
-        const tick = () => {
-          const left = arming.state === 'registered' || !arming.expiresAt ? null : Math.max(0, Math.round((arming.expiresAt - Date.now()) / 1000));
-          parts.pkLeft.textContent = left === null ? '' : `${Math.floor(left / 60)}:${String(left % 60).padStart(2, '0')} left`;
-        };
-        tick();
-        ticking = setInterval(tick, 1000);
+        const rows = [
+          ...(reply.passkeys || []).map((p) => row('key', p.userName || p.rpId, 'passkey · on this computer', el('span', 'when', 'when the page asks'))),
+          ...(reply.logins || []).map((login) => {
+            const fill = el('button', 'b', 'Fill'); fill.type = 'button';
+            fill.setAttribute('aria-label', `Fill ${login.name}${login.username ? ` (${login.username})` : ''}`);
+            press(fill, async () => {
+              fill.disabled = true;
+              const done = await ask({ type: 'card-fill', name: login.name });
+              if (done && done.error) { fill.disabled = false; return fail(done.error.message); }
+              fill.textContent = 'Filled';
+              setTimeout(() => hide(false), 600);
+            });
+            return row('lock', login.username || login.name, `${login.name} · from this computer`, fill);
+          }),
+        ];
+        parts.keys.replaceChildren(...rows);
+        parts.keys.hidden = !rows.length;
+        quiet();
       }
 
-      const midnight = new Date(); midnight.setHours(0, 0, 0, 0);
-      const here = (uses || []).filter((u) => within(u.site) && u.ts >= midnight.getTime()).slice(-4).reverse();
-      parts.record.hidden = !here.length;
-      parts.record.replaceChildren(el('div', 'sec', 'today here'), ...here.map((u) => {
-        const line = el('div', 'log');
-        const at = new Date(u.ts);
-        line.append(
-          el('span', 'at', `${String(at.getHours()).padStart(2, '0')}:${String(at.getMinutes()).padStart(2, '0')}`),
-          el('span', `dot ${u.ok ? 'ok' : 'fail'}`),
-          el('span', '', u.who === 'you' ? `You ${u.what.replace(/^was /, 'were ')}` : `${u.who} ${u.what}`),
-        );
-        return line;
-      }));
-      quiet();
-    }
+      // Nothing to show at all: say so in one line rather than an empty card.
+      function quiet() {
+        const empty = parts.turn.hidden && parts.passkey.hidden && parts.keys.hidden && parts.record.hidden;
+        if (parts.status.classList.contains('err')) return;
+        parts.status.hidden = !empty;
+        parts.status.textContent = 'Nothing for this site. Grant a login or passkey from the desk.';
+      }
 
-    async function show() {
-      if (card && card.isConnected) return;
-      build();
-      const now = await ask({ type: 'card-state' });
-      if (now && !now.error) state = now;
-      draw();
-      loadKeys();
-    }
+      function within(site) {
+        const host = location.hostname;
+        return host === site || host.endsWith(`.${site}`) || site.endsWith(`.${host}`);
+      }
 
-    function hide(byPerson) {
-      if (byPerson) dismissed = reason();
-      clearInterval(ticking);
-      if (!card) return;
-      const gone = card;
-      card = null;
-      parts.box.classList.remove('in');
-      setTimeout(() => gone.remove(), 200);
-    }
+      function draw() {
+        if (!card) return;
+        const { wheel, arming, uses } = state;
+        const yours = wheel.driving === 'person';
+        parts.turn.hidden = !yours;
+        parts.turnTask.hidden = !wheel.task;
+        parts.turnTask.textContent = wheel.task ? `${wheel.agent} was: ${wheel.task}` : '';
+        parts.handBack.textContent = `Hand back to ${wheel.agent}`;
 
-    // Why the card would open by itself now, if at all.
-    function reason() {
-      if (state.wheel.driving === 'person') return 'turn';
-      if (['armed', 'asked'].includes(state.arming.state)) return `passkey-${state.arming.rpId}`;
-      return '';
-    }
-
-    chrome.runtime.onMessage.addListener((message, sender) => {
-      if (sender.id !== chrome.runtime.id || !message) return false;
-      if (message.type === 'hotline-card') {
-        if (card) hide(true); else { dismissed = ''; show(); }
-      } else if (message.type === 'hotline-state' && message.state) {
-        state = message.state;
-        const why = reason();
-        if (!why) dismissed = '';
-        if (card) {
-          draw();
-          // The turn handed back or the passkey stored: nothing left to ask of the person.
-          if (!why && message.settled) setTimeout(() => hide(false), message.settled);
-        } else if (why && why !== dismissed && document.visibilityState === 'visible') {
-          show();
+        const shown = arming && PASSKEY[arming.state];
+        parts.passkey.hidden = !shown;
+        if (shown) {
+          const asked = arming.ask || {};
+          parts.pkTitle.textContent = shown[0];
+          parts.pkRp.textContent = arming.rpId;
+          parts.pkText.textContent = shown[1] || `${asked.rpName || arming.rpId} asked for a passkey${asked.userName ? ` for ${asked.userName}` : ''}. Approve it at the desk.`;
+          clearInterval(ticking);
+          const tick = () => {
+            const left = arming.state === 'registered' || !arming.expiresAt ? null : Math.max(0, Math.round((arming.expiresAt - Date.now()) / 1000));
+            parts.pkLeft.textContent = left === null ? '' : `${Math.floor(left / 60)}:${String(left % 60).padStart(2, '0')} left`;
+          };
+          tick();
+          ticking = setInterval(tick, 1000);
         }
+
+        const midnight = new Date(); midnight.setHours(0, 0, 0, 0);
+        const here = (uses || []).filter((u) => within(u.site) && u.ts >= midnight.getTime()).slice(-4).reverse();
+        parts.record.hidden = !here.length;
+        parts.record.replaceChildren(el('div', 'sec', 'today here'), ...here.map((u) => {
+          const line = el('div', 'log');
+          const at = new Date(u.ts);
+          line.append(
+            el('span', 'at', `${String(at.getHours()).padStart(2, '0')}:${String(at.getMinutes()).padStart(2, '0')}`),
+            el('span', `dot ${u.ok ? 'ok' : 'fail'}`),
+            el('span', '', u.who === 'you' ? `You ${u.what.replace(/^was /, 'were ')}` : `${u.who} ${u.what}`),
+          );
+          return line;
+        }));
+        quiet();
       }
-      return false;
-    });
+
+      async function show() {
+        if (card && card.isConnected) return;
+        build();
+        const now = await ask({ type: 'card-state' });
+        if (now && !now.error) state = now;
+        draw();
+        loadKeys();
+      }
+
+      function hide(byPerson) {
+        if (byPerson) dismissed = reason();
+        clearInterval(ticking);
+        if (!card) return;
+        const gone = card;
+        card = null;
+        parts.box.classList.remove('in');
+        setTimeout(() => gone.remove(), 200);
+      }
+
+      // Why the card would open by itself now, if at all.
+      function reason() {
+        if (state.wheel.driving === 'person') return 'turn';
+        if (['armed', 'asked'].includes(state.arming.state)) return `passkey-${state.arming.rpId}`;
+        return '';
+      }
+
+      chrome.runtime.onMessage.addListener((message, sender) => {
+        if (sender.id !== chrome.runtime.id || !message) return false;
+        if (message.type === 'hotline-card') {
+          if (card) hide(true); else { dismissed = ''; show(); }
+        } else if (message.type === 'hotline-state' && message.state) {
+          state = message.state;
+          const why = reason();
+          if (!why) dismissed = '';
+          if (card) {
+            draw();
+            // The turn handed back or the passkey stored: nothing left to ask of the person.
+            if (!why && message.settled) setTimeout(() => hide(false), message.settled);
+          } else if (why && why !== dismissed && document.visibilityState === 'visible') {
+            show();
+          }
+        }
+        return false;
+      });
+    })();
   }
 })();
