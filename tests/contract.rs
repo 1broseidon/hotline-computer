@@ -645,6 +645,137 @@ async fn image_honors_the_computer_contract() {
         opened.contains("Passkey proof"),
         "the proof page is served: {opened}"
     );
+    // The desk asks which sites the browser has open, to offer the person
+    // cookies for them: the top-level web pages, newest first, and nothing
+    // of Chromium's own or the extension's.
+    let pages_door = format!("{base}/pages");
+    if !token.is_empty() {
+        let naked = http.get(&pages_door).send().await.expect("pages, naked");
+        assert_eq!(naked.status(), 401, "the pages door wants the bearer");
+    }
+    let open_pages = || async {
+        let answer = http
+            .get(&pages_door)
+            .bearer_auth(&token)
+            .send()
+            .await
+            .expect("open pages");
+        assert_eq!(answer.status(), 200, "the pages door answers");
+        let answer = answer
+            .json::<serde_json::Value>()
+            .await
+            .expect("open pages JSON");
+        answer["pages"]
+            .as_array()
+            .unwrap_or_else(|| panic!("pages is a list: {answer}"))
+            .clone()
+    };
+    let proof_url = "http://localhost:8123/passkey.html";
+    let second_url = "http://localhost:8123/passkey.html?second-tab";
+    let pages = open_pages().await;
+    for page in &pages {
+        let url = page["url"].as_str().unwrap_or_default();
+        assert!(
+            url.starts_with("http://") || url.starts_with("https://"),
+            "only web pages are listed: {page}"
+        );
+    }
+    let proof = pages
+        .iter()
+        .find(|page| page["url"] == proof_url)
+        .unwrap_or_else(|| panic!("the proof page is listed: {pages:?}"));
+    assert_eq!(proof["origin"], "http://localhost:8123", "{proof}");
+    assert_eq!(proof["title"], "Passkey proof", "{proof}");
+    assert!(
+        proof["openedAt"].as_u64().unwrap_or_default() > 0,
+        "{proof}"
+    );
+    let opened_tab = call(
+        &client,
+        "browser",
+        json!({"action":"tab_new","url":second_url}),
+    )
+    .await;
+    assert!(
+        !opened_tab.is_error.unwrap_or(false),
+        "{}",
+        text(&opened_tab)
+    );
+    let pages = open_pages().await;
+    assert_eq!(
+        pages.first().map(|page| page["url"].clone()),
+        Some(json!(second_url)),
+        "the newest tab comes first: {pages:?}"
+    );
+    assert!(
+        pages.iter().any(|page| page["url"] == proof_url),
+        "the first tab is still listed: {pages:?}"
+    );
+    let tabs: Vec<serde_json::Value> = serde_json::from_str(&text(
+        &call(&client, "browser", json!({"action":"tabs"})).await,
+    ))
+    .expect("tabs JSON");
+    let second = tabs
+        .iter()
+        .find(|tab| tab["url"] == second_url)
+        .and_then(|tab| tab["index"].as_u64())
+        .unwrap_or_else(|| panic!("the second tab is among the tabs: {tabs:?}"));
+    let closed_tab = call(
+        &client,
+        "browser",
+        json!({"action":"tab_close","index":second}),
+    )
+    .await;
+    assert!(
+        !closed_tab.is_error.unwrap_or(false),
+        "{}",
+        text(&closed_tab)
+    );
+    // DevTools can list a closed tab for a moment.
+    let mut pages = open_pages().await;
+    for _ in 0..40 {
+        if !pages.iter().any(|page| page["url"] == second_url) {
+            break;
+        }
+        tokio::time::sleep(std::time::Duration::from_millis(250)).await;
+        pages = open_pages().await;
+    }
+    assert!(
+        !pages.iter().any(|page| page["url"] == second_url),
+        "a closed tab is no longer listed: {pages:?}"
+    );
+    assert!(
+        pages.iter().any(|page| page["url"] == proof_url),
+        "the proof page stays listed: {pages:?}"
+    );
+    let tabs: Vec<serde_json::Value> = serde_json::from_str(&text(
+        &call(&client, "browser", json!({"action":"tabs"})).await,
+    ))
+    .expect("tabs JSON");
+    let first = tabs
+        .iter()
+        .find(|tab| tab["url"] == proof_url)
+        .and_then(|tab| tab["index"].as_u64())
+        .unwrap_or_else(|| panic!("the proof tab is among the tabs: {tabs:?}"));
+    let selected = call(
+        &client,
+        "browser",
+        json!({"action":"tab_select","index":first}),
+    )
+    .await;
+    assert!(!selected.is_error.unwrap_or(false), "{}", text(&selected));
+    let back = text(
+        &call(
+            &client,
+            "browser",
+            json!({"action":"eval","js":"document.title"}),
+        )
+        .await,
+    );
+    assert!(
+        back.contains("Passkey proof"),
+        "the agent drives the proof page again: {back}"
+    );
     let registration = format!("{base}/passkeys/registration");
     if !token.is_empty() {
         let naked = http

@@ -170,6 +170,9 @@ pub(crate) fn router(app: App) -> Router {
         // the desk carrying their answer back. Bearer-only, like `/secrets`.
         .route("/secrets/uses", get(holds::list))
         .route("/secrets/uses/answer", post(holds::answer))
+        // The web pages the browser has open, newest first, for the desk to
+        // offer the person cookies on. Bearer-only, like `/secrets`.
+        .route("/pages", get(pages))
         // The one moment a passkey is made: the desk arms it, polls for
         // the request the site makes and then for what was minted, carries
         // the person's answer back, and ends it. Bearer-only, like
@@ -207,6 +210,16 @@ pub(crate) fn router(app: App) -> Router {
             },
         ))
         .with_state(app)
+}
+
+/// `GET /pages`: `{"pages": [{"origin", "url", "title", "openedAt"}]}`,
+/// each top-level tab of the browser on an http or https page, newest
+/// first. No browser running is no page open.
+async fn pages(State(app): State<App>) -> Response {
+    match app.browser.open_pages().await {
+        Ok(pages) => Json(json!({ "pages": pages })).into_response(),
+        Err(error) => (StatusCode::BAD_GATEWAY, Json(json!({ "error": error }))).into_response(),
+    }
 }
 
 /// This runs after the existing bearer gate. Names describe the agent;

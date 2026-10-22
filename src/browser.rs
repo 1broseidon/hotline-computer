@@ -18,6 +18,7 @@ use chromiumoxide::cdp::browser_protocol::web_authn::{
 use chromiumoxide::cdp::js_protocol::runtime::{RemoteObjectSubtype, RemoteObjectType};
 use chromiumoxide::{Binary, Browser, BrowserConfig, Page};
 use futures_util::StreamExt;
+use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 use tokio::sync::Mutex;
 
@@ -37,6 +38,8 @@ const INITIAL_TAB: Duration = Duration::from_secs(2);
 /// How long a passkey delivery waits for a browser action in flight before
 /// leaving the tabs to the next action's own look.
 const SYNC_PATIENCE: Duration = Duration::from_secs(5);
+/// The port Chromium answers DevTools on, inside the computer alone.
+const DEVTOOLS_PORT: u16 = 9222;
 
 #[derive(Clone)]
 pub struct BrowserManager {
@@ -44,6 +47,32 @@ pub struct BrowserManager {
     secrets: Secrets,
     passkeys: Passkeys,
     session: Arc<Mutex<Option<BrowserSession>>>,
+    /// When each page target was first seen, by target id: the `openedAt`
+    /// that `GET /pages` names.
+    first_seen: Arc<std::sync::Mutex<HashMap<String, u64>>>,
+}
+
+/// A top-level page the browser has open on a web site, as `GET /pages`
+/// lists it.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct OpenPage {
+    pub origin: String,
+    pub url: String,
+    pub title: String,
+    pub opened_at: u64,
+}
+
+/// One target as DevTools lists it.
+#[derive(Clone, Debug, Deserialize)]
+struct TargetInfo {
+    id: String,
+    #[serde(rename = "type")]
+    kind: String,
+    #[serde(default)]
+    url: String,
+    #[serde(default)]
+    title: String,
 }
 
 struct BrowserSession {
@@ -74,7 +103,34 @@ impl BrowserManager {
             secrets,
             passkeys,
             session: Arc::new(Mutex::new(None)),
+            first_seen: Arc::new(std::sync::Mutex::new(HashMap::new())),
         }
+    }
+
+    /// The web pages the browser has open, newest first: what the desk
+    /// offers the person cookies for. Read from DevTools' own target list,
+    /// so it never waits on a browser action in flight and never launches a
+    /// browser; with none running, no page is open.
+    pub async fn open_pages(&self) -> Result<Vec<OpenPage>, String> {
+        let http = reqwest::Client::builder()
+            .no_proxy()
+            .timeout(LIVENESS)
+            .build()
+            .map_err(browser_error)?;
+        let targets: Vec<TargetInfo> = match http
+            .get(format!("http://127.0.0.1:{DEVTOOLS_PORT}/json/list"))
+            .send()
+            .await
+        {
+            Ok(response) => response.json().await.map_err(browser_error)?,
+            Err(error) if error.is_connect() => Vec::new(),
+            Err(error) => return Err(browser_error(error)),
+        };
+        let mut first_seen = self
+            .first_seen
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        Ok(web_pages(targets, &mut first_seen, crate::jobs::now()))
     }
 
     /// Every browser action runs against a browser that just answered, and
@@ -154,7 +210,7 @@ impl BrowserManager {
             .chrome_executable(executable)
             .with_head()
             .no_sandbox()
-            .port(9222)
+            .port(DEVTOOLS_PORT)
             .viewport(None)
             .user_data_dir(profile)
             .env("DISPLAY", self.config.display.clone())
@@ -807,6 +863,41 @@ async fn tabs(browser: &Browser) -> Result<Vec<Page>, String> {
     Ok(visible)
 }
 
+/// The top-level pages among `targets` that are on a web site, newest
+/// first. Each page target is stamped the first time it is seen, whatever
+/// it shows then, so a tab keeps its time as it moves between sites; a
+/// target gone from the list is forgotten. Chromium's own pages, the
+/// extension's, DevTools and a blank tab have no site and are never listed,
+/// nor are frames, workers and the extension's background.
+fn web_pages(
+    targets: Vec<TargetInfo>,
+    first_seen: &mut HashMap<String, u64>,
+    now: u64,
+) -> Vec<OpenPage> {
+    let pages: Vec<TargetInfo> = targets
+        .into_iter()
+        .filter(|target| target.kind == "page")
+        .collect();
+    first_seen.retain(|id, _| pages.iter().any(|page| &page.id == id));
+    let mut open: Vec<OpenPage> = pages
+        .into_iter()
+        .filter_map(|page| {
+            let opened_at = *first_seen.entry(page.id).or_insert(now);
+            let origin = Origin::of_page(&page.url).ok()?;
+            Some(OpenPage {
+                origin: origin.to_string(),
+                url: page.url,
+                title: page.title,
+                opened_at,
+            })
+        })
+        .collect();
+    // DevTools lists the most recently used first; a stable sort keeps that
+    // order among pages first seen together.
+    open.sort_by_key(|page| std::cmp::Reverse(page.opened_at));
+    open
+}
+
 /// The tab the agent drives, carrying the teammate's passkeys and their
 /// guard before anything is done on it.
 async fn current_page(session: &mut BrowserSession) -> Result<Page, String> {
@@ -1147,6 +1238,86 @@ fn find_on_path(name: &str) -> Option<PathBuf> {
 
 #[cfg(test)]
 mod tests {
+    use std::collections::HashMap;
+
+    use super::{OpenPage, TargetInfo, web_pages};
+
+    fn target(id: &str, kind: &str, url: &str) -> TargetInfo {
+        TargetInfo {
+            id: id.into(),
+            kind: kind.into(),
+            url: url.into(),
+            title: format!("title of {id}"),
+        }
+    }
+
+    #[test]
+    fn only_top_level_web_pages_are_listed_newest_first() {
+        let mut first_seen = HashMap::new();
+        let open = vec![
+            target("old", "page", "https://porkbun.com/account"),
+            target("newtab", "page", "chrome://newtab/"),
+            target("footer", "page", "chrome://newtab-footer/"),
+            target(
+                "untrusted",
+                "page",
+                "chrome-untrusted://new-tab-page/one-google-bar",
+            ),
+            target(
+                "card",
+                "page",
+                "chrome-extension://abcdefghijklmnop/card.html",
+            ),
+            target(
+                "worker",
+                "service_worker",
+                "chrome-extension://abcdefghijklmnop/background.js",
+            ),
+            target(
+                "tools",
+                "page",
+                "devtools://devtools/bundled/inspector.html",
+            ),
+            target("blank", "page", "about:blank"),
+            target("data", "page", "data:text/html,<title>x</title>"),
+            target("frame", "iframe", "https://ads.example/frame"),
+            target("site-worker", "service_worker", "https://porkbun.com/sw.js"),
+        ];
+        let listed = web_pages(open.clone(), &mut first_seen, 1_000);
+        assert_eq!(
+            listed,
+            vec![OpenPage {
+                origin: "https://porkbun.com".into(),
+                url: "https://porkbun.com/account".into(),
+                title: "title of old".into(),
+                opened_at: 1_000,
+            }]
+        );
+        // A blank tab that goes to a site is listed from when it opened; a
+        // tab first seen later comes first.
+        let mut later = open.clone();
+        later[7] = target("blank", "page", "http://localhost:8123/passkey.html");
+        later.insert(0, target("new", "page", "https://example.com:8443/a?b#c"));
+        let listed = web_pages(later, &mut first_seen, 2_000);
+        let summary: Vec<(&str, u64)> = listed
+            .iter()
+            .map(|page| (page.origin.as_str(), page.opened_at))
+            .collect();
+        assert_eq!(
+            summary,
+            vec![
+                ("https://example.com:8443", 2_000),
+                ("https://porkbun.com", 1_000),
+                ("http://localhost:8123", 1_000),
+            ]
+        );
+        // A closed tab leaves the list and its stamp goes with it.
+        let closed: Vec<TargetInfo> = open.into_iter().filter(|t| t.id != "old").collect();
+        assert!(web_pages(closed, &mut first_seen, 3_000).is_empty());
+        assert!(!first_seen.contains_key("old"));
+        assert!(!first_seen.contains_key("worker"), "only pages are stamped");
+    }
+
     #[test]
     fn stale_profile_locks_are_cleared_before_launch() {
         let profile = std::env::temp_dir().join(format!("hotline-profile-{}", std::process::id()));

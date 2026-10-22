@@ -76,7 +76,7 @@ stop — at once when they give it back or close the page.
 
 `/health` and the viewer page never require authentication. When
 `HOTLINE_COMPUTER_TOKEN` is set, every method on `/mcp` and the desk's
-`/secrets`, `/passkeys/registration` (with its `/answer`) and `/logins/{name}` doors require `Authorization: Bearer <token>`, the viewer's socket
+`/secrets`, `/passkeys/registration` (with its `/answer`), `/logins/{name}` and `/pages` doors require `Authorization: Bearer <token>`, the viewer's socket
 and its `/files` routes
 require the same token as their `token` query, and otherwise all return a JSON 401. `X-Computer-Holder` names the teammate using a lease or
 run slot; an absent header means `anonymous`.
@@ -350,13 +350,25 @@ separate identities, that line is a convenience, not a wall.
 `HOTLINE_COMPUTER_PASSKEYS=virtual` keeps the older arrangement: Chromium's
 virtual authenticator, filled over DevTools on port 9222.
 
+`GET /pages`, with the bearer, names the sites the browser has open, so the
+desk can offer the person cookies for them: `{"pages":[{"origin":
+"https://porkbun.com","url":"https://porkbun.com/account","title":…,
+"openedAt":…}]}`, one entry per top-level tab on an `http://` or `https://`
+page, newest first. `openedAt` is the milliseconds since the epoch at which
+the computer first saw the tab, which keeps its time as it moves between
+sites. Chromium's own pages, the extension's, DevTools, a blank tab, frames
+and workers are never listed. The list comes from DevTools' own target list,
+so it never waits on a browser action and never starts a browser: with none
+running it is empty. A computer older than 0.11.0-rc.8 answers 404, which
+tells the desk there is no offer.
+
 `hotline-computer serve` serves on a display that already exists, for running
 the agent outside the container.
 
 | variable | default | |
 | --- | --- | --- |
 | `HOTLINE_COMPUTER_ADDR` | `0.0.0.0:8787` | where `/mcp`, `/health`, and the viewer listen |
-| `HOTLINE_COMPUTER_TOKEN` | unset | bearer for `/mcp`, `/secrets`, `/passkeys/registration` (with its `/answer`) and `/logins/{name}`; unset means open |
+| `HOTLINE_COMPUTER_TOKEN` | unset | bearer for `/mcp`, `/secrets`, `/passkeys/registration` (with its `/answer`), `/logins/{name}` and `/pages`; unset means open |
 | `HOTLINE_COMPUTER_HOME` | `/home/agent` | the directory `files` is confined to |
 | `HOTLINE_COMPUTER_SCREEN` | `1920x1080` | the Xvfb screen `boot` creates |
 | `DISPLAY` | `:0` | the display `boot` creates and `serve` uses |
