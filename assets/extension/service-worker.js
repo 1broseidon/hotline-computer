@@ -150,6 +150,39 @@ async function passkeysFor(tabId) {
   return reply.error ? { error: reply.error } : { passkeys: reply.passkeys || [] };
 }
 
+// The card in a tab's top frame asks for that tab only: Chromium names the
+// tab, never the page.
+async function fromCard(message, tabId) {
+  if (message.type === 'card-state') return { arming, wheel, uses };
+  if (message.type === 'card-hand-back') return ask(crypto.randomUUID(), { kind: 'hand_back' });
+  if (message.type === 'card-fill') return fromPopup({ type: 'fill', tabId, name: message.name });
+  const origin = await tabOrigin(tabId);
+  if (!origin) return { passkeys: [], logins: [] };
+  const [passkeys, logins] = await Promise.all([passkeysFor(tabId), loginsFor(origin)]);
+  if (logins.error) return logins;
+  return { passkeys: passkeys.passkeys || [], logins: logins.logins || [] };
+}
+
+chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+  if (sender.id !== chrome.runtime.id || !message || !String(message.type).startsWith('card-')) return false;
+  if (!sender.tab || sender.frameId !== 0 || !Number.isInteger(sender.tab.id)) return false;
+  fromCard(message, sender.tab.id).then(sendResponse, (error) => sendResponse(refusal(error && error.message ? error.message : 'something went wrong')));
+  return true;
+});
+
+// The mark in the toolbar opens and closes the card on the page. Where
+// Chromium keeps scripts out (its own pages, the Web Store), the old popup
+// stands in.
+chrome.action.onClicked.addListener(async (tab) => {
+  try {
+    await chrome.tabs.sendMessage(tab.id, { type: 'hotline-card' }, { frameId: 0 });
+  } catch {
+    await chrome.action.setPopup({ popup: 'popup.html' });
+    await chrome.action.openPopup().catch(() => {});
+    await chrome.action.setPopup({ popup: '' });
+  }
+});
+
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   if (sender.id !== chrome.runtime.id || !message) return false;
   const popup = !sender.tab && typeof sender.url === 'string' && sender.url.startsWith(chrome.runtime.getURL('popup.html'));
@@ -171,7 +204,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 
 // ---- the passkey being made -------------------------------------------------
 // A standing line to the service: the arming as the desk sets it. When the
-// desk arms this computer, the popup opens by itself so the person sees it is
+// desk arms this computer, the card opens on the page so the person sees it is
 // ready to make the passkey; the badge says where it stands until the passkey
 // is made or the arming ends. The line carries no key, only the state.
 
@@ -188,10 +221,8 @@ const BADGES = {
 };
 
 function show(next) {
-  const before = arming.state;
   arming = next;
   badge();
-  if (before === 'idle' && next.state === 'armed') chrome.action.openPopup().catch(() => {});
   // An open popup redraws; with none open there is nobody to tell.
   chrome.runtime.sendMessage({ type: 'arming-changed', arming: next }).catch(() => {});
 }
@@ -229,6 +260,7 @@ async function note(use) {
 }
 
 function heard(message) {
+  const before = { driving: wheel.driving, arming: arming.state };
   if (message.passkeys) show(message.passkeys);
   if (message.wheel) {
     const changed = message.wheel.driving !== wheel.driving;
@@ -242,7 +274,18 @@ function heard(message) {
     lastUse = uses.length ? uses[uses.length - 1].id : (lastUse ?? 0);
     fresh.forEach(note);
   }
-  chrome.runtime.sendMessage({ type: 'state-changed', state: { arming, wheel, uses } }).catch(() => {});
+  const state = { arming, wheel, uses };
+  chrome.runtime.sendMessage({ type: 'state-changed', state }).catch(() => {});
+  // The card on the active page: it opens itself when the person is needed,
+  // and steps away a beat after the turn is handed back or the passkey kept.
+  const settled = (before.driving === 'person' && wheel.driving !== 'person') ? 400
+    : (before.arming !== 'registered' && arming.state === 'registered') ? 2500 : 0;
+  tellActiveTab({ type: 'hotline-state', state, settled });
+}
+
+async function tellActiveTab(message) {
+  const [tab] = await chrome.tabs.query({ active: true, lastFocusedWindow: true });
+  if (tab && Number.isInteger(tab.id)) chrome.tabs.sendMessage(tab.id, message, { frameId: 0 }).catch(() => {});
 }
 
 
