@@ -140,6 +140,27 @@ async function fromPopup(message) {
   }
 }
 
+// The passkeys this computer may sign with on the active tab's site: which
+// account each is for, never a key. The origin comes from Chromium.
+async function passkeysFor(tabId) {
+  if (!Number.isInteger(tabId)) return refusal('no tab');
+  const origin = await tabOrigin(tabId);
+  if (!origin) return { passkeys: [] };
+  const reply = await ask(crypto.randomUUID(), { kind: 'passkeys', origin });
+  return reply.error ? { error: reply.error } : { passkeys: reply.passkeys || [] };
+}
+
+chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+  if (sender.id !== chrome.runtime.id || !message) return false;
+  const popup = !sender.tab && typeof sender.url === 'string' && sender.url.startsWith(chrome.runtime.getURL('popup.html'));
+  if (!popup || !['passkeys', 'hand-back'].includes(message.type)) return false;
+  const work = message.type === 'passkeys'
+    ? passkeysFor(message.tabId)
+    : ask(crypto.randomUUID(), { kind: 'hand_back' });
+  work.then(sendResponse, (error) => sendResponse(refusal(error && error.message ? error.message : 'something went wrong')));
+  return true;
+});
+
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   if (sender.id !== chrome.runtime.id || !message || !['logins', 'fill'].includes(message.type)) return false;
   const popup = !sender.tab && typeof sender.url === 'string' && sender.url.startsWith(chrome.runtime.getURL('popup.html'));
@@ -155,6 +176,10 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 // is made or the arming ends. The line carries no key, only the state.
 
 let arming = { state: 'idle' };
+// Who has the computer, and what its keys did lately: the same standing line.
+let wheel = { driving: 'none', agent: 'Agent', task: '' };
+let uses = [];
+let lastUse = null;
 const BADGES = {
   armed: ['KEY', '#8fb8ff'],
   asked: ['1', '#f0c27a'],
@@ -165,14 +190,61 @@ const BADGES = {
 function show(next) {
   const before = arming.state;
   arming = next;
-  const [text, color] = BADGES[next.state] || ['', '#8fb8ff'];
-  chrome.action.setBadgeText({ text }).catch(() => {});
-  if (text) chrome.action.setBadgeBackgroundColor({ color }).catch(() => {});
-  chrome.action.setTitle({ title: next.state === 'idle' ? 'Hotline' : `Hotline: a passkey for ${next.rpId}` }).catch(() => {});
+  badge();
   if (before === 'idle' && next.state === 'armed') chrome.action.openPopup().catch(() => {});
   // An open popup redraws; with none open there is nobody to tell.
   chrome.runtime.sendMessage({ type: 'arming-changed', arming: next }).catch(() => {});
 }
+
+// The icon lights only when the person is needed: a passkey being made, or
+// the computer handed to them. Otherwise it stays plain.
+function badge() {
+  let [text, color] = BADGES[arming.state] || ['', '#8fb8ff'];
+  if (!text && wheel.driving === 'person') [text, color] = ['1', '#f0c27a'];
+  chrome.action.setBadgeText({ text }).catch(() => {});
+  if (text) chrome.action.setBadgeBackgroundColor({ color }).catch(() => {});
+  const title = arming.state !== 'idle' ? `Hotline: a passkey for ${arming.rpId}`
+    : wheel.driving === 'person' ? `Hotline: your turn on the computer` : 'Hotline';
+  chrome.action.setTitle({ title }).catch(() => {});
+}
+
+// A note on the page for a key used or refused for the agent. The person's
+// own uses need no note: they were there.
+const NOTE = {
+  'signed in with the passkey': (u) => [`${u.who} signed in to ${u.site}`, 'with the passkey on this computer'],
+  'made a passkey': (u) => [`${u.who} made a passkey for ${u.site}`, 'kept on this computer'],
+  'filled a login': (u) => [`${u.who} filled a login on ${u.site}`, 'from this computer'],
+  'refused a passkey': (u) => [`Refused a passkey on ${u.site}`, `no key here is for this site; ${u.who} was stopped`],
+  'refused a login fill': (u) => [`Refused a login on ${u.site}`, `not a site the login is for; ${u.who} was stopped`],
+};
+
+async function note(use) {
+  const words = NOTE[use.what];
+  if (!words || use.who === 'you') return;
+  const [title, sub] = words(use);
+  const [tab] = await chrome.tabs.query({ active: true, lastFocusedWindow: true });
+  if (tab && Number.isInteger(tab.id)) {
+    chrome.tabs.sendMessage(tab.id, { type: 'hotline-note', ok: use.ok, title, sub }, { frameId: 0 }).catch(() => {});
+  }
+}
+
+function heard(message) {
+  if (message.passkeys) show(message.passkeys);
+  if (message.wheel) {
+    const changed = message.wheel.driving !== wheel.driving;
+    wheel = message.wheel;
+    if (changed) badge();
+  }
+  if (Array.isArray(message.uses)) {
+    // The first line after connecting is history: no notes for it.
+    const fresh = lastUse === null ? [] : message.uses.filter((u) => u.id > lastUse);
+    uses = message.uses;
+    lastUse = uses.length ? uses[uses.length - 1].id : (lastUse ?? 0);
+    fresh.forEach(note);
+  }
+  chrome.runtime.sendMessage({ type: 'state-changed', state: { arming, wheel, uses } }).catch(() => {});
+}
+
 
 function watch() {
   let port;
@@ -183,9 +255,10 @@ function watch() {
     return;
   }
   port.onMessage.addListener((message) => {
-    if (message && message.passkeys) show(message.passkeys);
+    if (message) heard(message);
   });
   port.onDisconnect.addListener(() => {
+    wheel = { driving: 'none', agent: wheel.agent, task: '' };
     show({ state: 'idle' });
     setTimeout(watch, 3000);
   });
@@ -194,7 +267,9 @@ function watch() {
 watch();
 
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
-  if (sender.id !== chrome.runtime.id || !message || message.type !== 'arming') return false;
-  sendResponse(arming);
+  if (sender.id !== chrome.runtime.id || !message) return false;
+  if (message.type === 'arming') sendResponse(arming);
+  else if (message.type === 'state') sendResponse({ arming, wheel, uses });
+  else return false;
   return false;
 });

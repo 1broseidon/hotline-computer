@@ -114,7 +114,8 @@ async fn watch(
 ) {
     let mut shown = Value::Null;
     loop {
-        let now = json!({"passkeys": arming(app)});
+        let now =
+            json!({"passkeys": arming(app), "wheel": wheel(app).await, "uses": recent_uses()});
         if now != shown {
             if write
                 .write_all(format!("{now}\n").as_bytes())
@@ -149,13 +150,54 @@ async fn answer(app: &App, message: &Value) -> Value {
     let details = &message["details"];
     match message["kind"].as_str() {
         Some("uvpaa") => json!({"isUvpaa": true}),
-        Some("get") => match authenticator::assert(details, &keys(app)) {
-            Ok(response) => json!({"response": response}),
-            Err(refusal) => refused(refusal),
-        },
-        Some("create") => match create(app, details).await {
-            Ok(response) => json!({"response": response}),
-            Err(refusal) => refused(refusal),
+        Some("get") => {
+            let site = site_of_request(details);
+            match authenticator::assert(details, &keys(app)) {
+                Ok(response) => {
+                    record(app, &site, "signed in with the passkey", true).await;
+                    json!({"response": response})
+                }
+                Err(refusal) => {
+                    // A page that only offers passkeys in its sign-in field asks
+                    // quietly on load; that is not a refusal worth a note.
+                    if details["mediation"].as_str() != Some("conditional") {
+                        record(app, &site, "refused a passkey", false).await;
+                    }
+                    refused(refusal)
+                }
+            }
+        }
+        Some("create") => {
+            let site = site_of_request(details);
+            match create(app, details).await {
+                Ok(response) => {
+                    record(app, &site, "made a passkey", true).await;
+                    json!({"response": response})
+                }
+                Err(refusal) => refused(refusal),
+            }
+        }
+        // The passkeys this computer may sign with on a page's site: the
+        // account each is for, never a key.
+        Some("passkeys") => {
+            let host = host_of(message["origin"].as_str().unwrap_or_default());
+            let passkeys: Vec<Value> = keys(app)
+                .into_iter()
+                .filter(|key| !host.is_empty() && serves(&host, &key.rp_id))
+                .map(|key| json!({"rpId": key.rp_id, "userName": key.user_name}))
+                .collect();
+            json!({"passkeys": passkeys})
+        }
+        // The person at the wheel hands the computer back to the agent. Only
+        // a person's hold is released: an agent's is never touched from here.
+        Some("hand_back") => match app.access.holder().await {
+            Some((holder, _)) if holder.starts_with(crate::viewer::PERSON) => {
+                match app.access.release(&holder).await {
+                    Ok(_) => json!({"handedBack": true}),
+                    Err(error) => refused(authenticator_refusal("NotAllowedError", &error)),
+                }
+            }
+            _ => json!({"handedBack": false}),
         },
         // The person's logins, for the page whose origin Chromium names:
         // what may be filled there, then, on a click, the values themselves.
@@ -169,7 +211,16 @@ async fn answer(app: &App, message: &Value) -> Value {
                 .collect();
             json!({"logins": logins})
         }
-        Some("fill") => fill(app, message),
+        Some("fill") => {
+            let reply = fill(app, message);
+            let site = host_of(message["origin"].as_str().unwrap_or_default());
+            if reply.get("error").is_some() {
+                record(app, &site, "refused a login fill", false).await;
+            } else {
+                record(app, &site, "filled a login", true).await;
+            }
+            reply
+        }
         _ => refused(authenticator_refusal(
             "NotSupportedError",
             "this computer does not answer that",
@@ -294,6 +345,100 @@ fn request_id() -> String {
     bytes.iter().map(|b| format!("{b:02x}")).collect()
 }
 
+// ---- the wheel and the record --------------------------------------------
+// What the extension shows besides a request: who has the computer, and a
+// short record of what its keys did. Neither carries a key or a value.
+
+/// Who holds the computer now: the person (through the viewer), the agent,
+/// or nobody; and the agent's name and task as the desktop bar shows them.
+async fn wheel(app: &App) -> Value {
+    let driving = match app.access.holder().await {
+        Some((holder, _)) if holder.starts_with(crate::viewer::PERSON) => "person",
+        Some(_) => "agent",
+        None => "none",
+    };
+    let agent = app.jobs.agent.snapshot();
+    json!({"driving": driving, "agent": agent.name, "task": agent.task})
+}
+
+#[derive(Clone, serde::Serialize)]
+struct Use {
+    id: u64,
+    ts: u64,
+    site: String,
+    what: &'static str,
+    ok: bool,
+    /// The agent's name when it held the computer, else "you".
+    who: String,
+}
+
+/// The last uses, newest last: enough for a site's record in the popup and
+/// for a note when one happens. Kept in memory; a restart starts it empty.
+static USES: std::sync::Mutex<std::collections::VecDeque<Use>> =
+    std::sync::Mutex::new(std::collections::VecDeque::new());
+static NEXT_USE: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(1);
+const USES_KEPT: usize = 40;
+
+async fn record(app: &App, site: &str, what: &'static str, ok: bool) {
+    if site.is_empty() {
+        return;
+    }
+    let who = match app.access.holder().await {
+        Some((holder, _)) if holder.starts_with(crate::viewer::PERSON) => "you".to_owned(),
+        _ => app.jobs.agent.snapshot().name,
+    };
+    let entry = Use {
+        id: NEXT_USE.fetch_add(1, std::sync::atomic::Ordering::Relaxed),
+        ts: crate::jobs::now(),
+        site: site.to_owned(),
+        what,
+        ok,
+        who,
+    };
+    let mut uses = USES.lock().unwrap();
+    uses.push_back(entry);
+    while uses.len() > USES_KEPT {
+        uses.pop_front();
+    }
+}
+
+fn recent_uses() -> Value {
+    json!(USES.lock().unwrap().iter().cloned().collect::<Vec<_>>())
+}
+
+/// The host of a web origin, or empty for anything that is not one.
+fn host_of(origin: &str) -> String {
+    let rest = origin
+        .strip_prefix("https://")
+        .or_else(|| origin.strip_prefix("http://"))
+        .unwrap_or_default();
+    let host = rest.split(['/', '?', '#']).next().unwrap_or_default();
+    host.rsplit_once(':')
+        .filter(|(_, port)| port.chars().all(|c| c.is_ascii_digit()))
+        .map_or(host, |(name, _)| name)
+        .to_ascii_lowercase()
+}
+
+/// The site a WebAuthn request is for: its relying party, else its page.
+fn site_of_request(details: &Value) -> String {
+    details["rpId"]
+        .as_str()
+        .map(str::to_owned)
+        .or_else(|| details["rp"]["id"].as_str().map(str::to_owned))
+        .unwrap_or_else(|| {
+            host_of(
+                details["extensions"]["remoteDesktopClientOverride"]["origin"]
+                    .as_str()
+                    .unwrap_or_default(),
+            )
+        })
+}
+
+/// Whether a page on `host` may use a passkey made for `rp_id`.
+fn serves(host: &str, rp_id: &str) -> bool {
+    host == rp_id || host.ends_with(&format!(".{rp_id}"))
+}
+
 /// The native messaging host: Chromium's framing on stdio (a 32-bit
 /// length in native byte order, then JSON). The extension opens a port per
 /// request, so this takes one message and passes back every line the
@@ -349,4 +494,41 @@ fn open(message: &[u8]) -> Result<std::os::unix::net::UnixStream, String> {
         let _ = closer.shutdown(std::net::Shutdown::Both);
     });
     Ok(stream)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn host_of_reads_web_origins_only() {
+        assert_eq!(host_of("https://GitHub.com"), "github.com");
+        assert_eq!(
+            host_of("https://login.example.com:8443/path?q"),
+            "login.example.com"
+        );
+        assert_eq!(host_of("http://localhost:3000"), "localhost");
+        assert_eq!(host_of("chrome-extension://abc"), "");
+        assert_eq!(host_of(""), "");
+    }
+
+    #[test]
+    fn a_request_names_its_relying_party_before_its_page() {
+        let get = json!({"rpId": "github.com", "extensions": {"remoteDesktopClientOverride": {"origin": "https://evil.example"}}});
+        assert_eq!(site_of_request(&get), "github.com");
+        let create = json!({"rp": {"id": "example.com"}});
+        assert_eq!(site_of_request(&create), "example.com");
+        let bare =
+            json!({"extensions": {"remoteDesktopClientOverride": {"origin": "https://gitbub.co"}}});
+        assert_eq!(site_of_request(&bare), "gitbub.co");
+    }
+
+    #[test]
+    fn a_passkey_serves_its_site_and_subdomains_only() {
+        assert!(serves("github.com", "github.com"));
+        assert!(serves("auth.github.com", "github.com"));
+        assert!(!serves("notgithub.com", "github.com"));
+        assert!(!serves("github.com.evil.example", "github.com"));
+        assert!(!serves("github.com", "auth.github.com"));
+    }
 }

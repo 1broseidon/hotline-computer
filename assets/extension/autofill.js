@@ -411,4 +411,55 @@
     sendResponse(last ? { filled: true } : { error: { name: 'NotFoundError', message: 'Hotline: no login form on this page' } });
     return false;
   });
+
+  // ---- A note while the agent works ----------------------------------------
+  // The worker sends one when a key of this computer was used or refused for
+  // the agent. Only the top frame shows it, bottom right, and it goes by
+  // itself; nothing on the page moves.
+  if (window.top === window) {
+    let notes = null;
+    const notesRoot = () => {
+      if (notes && notes.isConnected) return notes.shadowRoot.querySelector('.stack');
+      notes = document.createElement('hotline-notes');
+      const style = { all: 'initial', position: 'fixed', right: '12px', bottom: '12px', 'z-index': '2147483647', 'pointer-events': 'none' };
+      for (const [k, v] of Object.entries(style)) notes.style.setProperty(k, v, 'important');
+      const root = notes.attachShadow({ mode: 'open' });
+      const sheet = new CSSStyleSheet();
+      sheet.replaceSync(`
+        .stack { display: flex; flex-direction: column; gap: 8px; align-items: flex-end; }
+        .note { display: flex; gap: 10px; width: 280px; padding: 10px 12px; border: 1px solid #2a2a30; border-radius: 10px;
+          background: #17171b; color: #ececef; box-shadow: 0 10px 28px rgba(0,0,0,.35);
+          font: 13px/1.45 Geist, system-ui, sans-serif; opacity: 0; transform: translateY(6px); transition: opacity .2s, transform .2s; }
+        .note.in { opacity: 1; transform: none; }
+        .dot { width: 6px; height: 6px; border-radius: 50%; flex: none; margin-top: 7px; }
+        .ok { background: #86d69c; } .fail { background: #ff8f80; }
+        .t { font-weight: 500; } .s { color: #8e8e95; font-size: 12px; margin-top: 1px; }`);
+      root.adoptedStyleSheets = [sheet];
+      const stack = document.createElement('div');
+      stack.className = 'stack';
+      root.append(stack);
+      document.documentElement.append(notes);
+      return stack;
+    };
+    chrome.runtime.onMessage.addListener((message, sender) => {
+      if (sender.id !== chrome.runtime.id || !message || message.type !== 'hotline-note') return false;
+      const note = document.createElement('div');
+      note.className = 'note';
+      const dot = document.createElement('span');
+      dot.className = `dot ${message.ok ? 'ok' : 'fail'}`;
+      const text = document.createElement('div');
+      const title = document.createElement('div');
+      title.className = 't';
+      title.textContent = String(message.title || '');
+      const sub = document.createElement('div');
+      sub.className = 's';
+      sub.textContent = String(message.sub || '');
+      text.append(title, sub);
+      note.append(dot, text);
+      notesRoot().append(note);
+      requestAnimationFrame(() => note.classList.add('in'));
+      setTimeout(() => { note.classList.remove('in'); setTimeout(() => note.remove(), 250); }, 6000);
+      return false;
+    });
+  }
 })();
