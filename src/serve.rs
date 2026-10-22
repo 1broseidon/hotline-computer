@@ -18,7 +18,7 @@ use rmcp::transport::streamable_http_server::{
 };
 use serde_json::{Value, json};
 
-use crate::{App, files_ui, logins, passkeys, secrets, tools, viewer};
+use crate::{App, files_ui, holds, logins, passkeys, secrets, tools, viewer};
 
 const MAX_REQUEST_BODY: usize = 50 * 1024 * 1024 * 4 / 3 + 1024 * 1024;
 
@@ -166,6 +166,10 @@ pub(crate) fn router(app: App) -> Router {
         // goes in, and no method answers one. It is not among the open
         // routes below, so the bearer rides in the header as on `/mcp`.
         .route("/secrets", put(secrets::replace))
+        // Uses of an ask-me key the computer is holding for the person, and
+        // the desk carrying their answer back. Bearer-only, like `/secrets`.
+        .route("/secrets/uses", get(holds::list))
+        .route("/secrets/uses/answer", post(holds::answer))
         // The one moment a passkey is made: the desk arms it, polls for
         // the request the site makes and then for what was minted, carries
         // the person's answer back, and ends it. Bearer-only, like

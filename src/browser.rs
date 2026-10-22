@@ -646,6 +646,28 @@ impl BrowserManager {
         .await
     }
 
+    /// The address of the page the agent drives, when the browser runs and
+    /// is not busy: what a held use names as its page. Never waits on a tool
+    /// call that holds the browser.
+    pub async fn current_url_if_idle(&self) -> Option<String> {
+        let mut session = self.session.try_lock().ok()?;
+        let session = session.as_mut()?;
+        let pages = tabs(&session.browser).await.ok()?;
+        let page = pages.get(session.current.min(pages.len().checked_sub(1)?))?;
+        page.url().await.ok().flatten()
+    }
+
+    /// The address of the page the agent drives, for a fill about to type.
+    pub async fn current_url(&self) -> Result<String, String> {
+        self.with_session(|session| {
+            Box::pin(async move {
+                let page = current_page(session).await?;
+                Ok(page.url().await.map_err(browser_error)?.unwrap_or_default())
+            })
+        })
+        .await
+    }
+
     pub async fn page_text_if_running(&self) -> Option<String> {
         let mut session = self.session.lock().await;
         let session = session.as_mut()?;
@@ -821,7 +843,14 @@ async fn passkey_sync(session: &mut BrowserSession, page: &Page) -> Result<Optio
     if crate::bridge::extension_answers() {
         return Ok(None);
     }
-    let granted = session.secrets.passkeys();
+    // Chromium's own authenticator signs without asking anyone, so a passkey
+    // whose every use waits for the person is not given to it at all.
+    let granted: Vec<(String, Passkey)> = session
+        .secrets
+        .passkeys()
+        .into_iter()
+        .filter(|(_, passkey)| passkey.use_.is_auto())
+        .collect();
     let armed = session.passkeys.armed().map(|(rp_id, _)| rp_id);
     let target = page.target_id().inner().clone();
     if granted.is_empty() && armed.is_none() && !session.authenticators.contains_key(&target) {
@@ -1018,6 +1047,7 @@ fn passkey_from(credential: Credential, armed: Option<&str>) -> Passkey {
         user_handle: credential.user_handle.map(String::from),
         user_name: credential.user_name,
         user_display_name: credential.user_display_name,
+        use_: crate::secrets::Use::Auto,
     }
 }
 

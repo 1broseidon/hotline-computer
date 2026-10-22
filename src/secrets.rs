@@ -33,9 +33,9 @@
 //! redacted.
 
 use std::borrow::Cow;
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, VecDeque};
 use std::fmt;
-use std::sync::{Arc, RwLock, RwLockReadGuard};
+use std::sync::{Arc, Mutex, RwLock, RwLockReadGuard};
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use axum::Json;
@@ -107,6 +107,26 @@ pub struct Login {
     /// A base32 TOTP seed; `NAME.code` is the six digits it gives right now.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub totp: Option<String>,
+    /// Whether each use waits for the person; absent is automatic.
+    #[serde(default, rename = "use", skip_serializing_if = "Use::is_auto")]
+    pub use_: Use,
+}
+
+/// How a login or a passkey may be used: by itself, or only once the person
+/// approves each use at the desk (see `crate::holds`). A variable has no
+/// use: it is in every job's environment from the start.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Deserialize, Serialize)]
+#[serde(rename_all = "lowercase")]
+pub enum Use {
+    #[default]
+    Auto,
+    Ask,
+}
+
+impl Use {
+    pub fn is_auto(&self) -> bool {
+        *self == Use::Auto
+    }
 }
 
 /// A WebAuthn credential as Chromium's virtual authenticator reports one,
@@ -124,6 +144,9 @@ pub struct Passkey {
     pub user_name: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub user_display_name: Option<String>,
+    /// Whether each sign-in waits for the person; absent is automatic.
+    #[serde(default, rename = "use", skip_serializing_if = "Use::is_auto")]
+    pub use_: Use,
 }
 
 /// One entry of a delivery. A bare string is a variable, which is all a
@@ -202,6 +225,7 @@ impl Secret {
                     username,
                     password: login.password,
                     totp,
+                    use_: login.use_,
                 }))
             }
             Secret::Passkey(passkey) => {
@@ -229,17 +253,67 @@ impl Secret {
     fn describe(&self, name: &str) -> Value {
         match self {
             Secret::Variable(_) => json!({"name": name, "kind": "variable"}),
-            Secret::Login(login) => json!({
-                "name": name, "kind": "login", "sites": login.sites,
-                "username": login.username, "totp": login.totp.is_some(),
-            }),
-            Secret::Passkey(passkey) => json!({
-                "name": name, "kind": "passkey", "rpId": passkey.rp_id,
-                "userName": passkey.user_name,
-            }),
+            Secret::Login(login) => {
+                let mut described = json!({
+                    "name": name, "kind": "login", "sites": login.sites,
+                    "username": login.username, "totp": login.totp.is_some(),
+                });
+                if login.use_ == Use::Ask {
+                    described["use"] = json!("ask");
+                }
+                described
+            }
+            Secret::Passkey(passkey) => {
+                let mut described = json!({
+                    "name": name, "kind": "passkey", "rpId": passkey.rp_id,
+                    "userName": passkey.user_name,
+                });
+                if passkey.use_ == Use::Ask {
+                    described["use"] = json!("ask");
+                }
+                described
+            }
+        }
+    }
+
+    /// The use a login or a passkey asks for; a variable has none.
+    pub fn use_(&self) -> Option<Use> {
+        match self {
+            Secret::Variable(_) => None,
+            Secret::Login(login) => Some(login.use_),
+            Secret::Passkey(passkey) => Some(passkey.use_),
+        }
+    }
+
+    /// The hosts a login or a passkey is for, as a page's card matches them.
+    fn hosts(&self) -> Vec<String> {
+        match self {
+            Secret::Variable(_) => Vec::new(),
+            Secret::Login(login) => login
+                .sites
+                .iter()
+                .filter_map(|site| Origin::site(site).ok())
+                .map(|origin| origin.host)
+                .collect(),
+            Secret::Passkey(passkey) => vec![passkey.rp_id.clone()],
         }
     }
 }
+
+/// A login or a passkey that came with a delivery and was not in the one
+/// before: what the card on a page of its site says arrived. Names and
+/// hosts, never a value.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize)]
+pub struct Arrival {
+    pub id: u64,
+    pub name: String,
+    pub kind: &'static str,
+    pub sites: Vec<String>,
+    /// Unix milliseconds.
+    pub at: u64,
+}
+
+const ARRIVALS_KEPT: usize = 20;
 
 /// A value the browser is about to type, with the sites it may be typed on
 /// when it is a login's, and the name it is answered by.
@@ -256,7 +330,10 @@ pub struct Filled {
 /// the jobs that start with it, the browser that types and signs with it,
 /// and the answers it is taken out of.
 #[derive(Clone, Default)]
-pub struct Secrets(Arc<RwLock<BTreeMap<String, Secret>>>);
+pub struct Secrets {
+    set: Arc<RwLock<BTreeMap<String, Secret>>>,
+    arrivals: Arc<Mutex<(u64, VecDeque<Arrival>)>>,
+}
 
 impl Secrets {
     /// Takes the whole set, or none of it: one entry the computer would not
@@ -268,11 +345,64 @@ impl Secrets {
             let secret = Secret::from(delivered).checked(&name)?;
             checked.insert(name, secret);
         }
-        *self
-            .0
+        let mut set = self
+            .set
             .write()
-            .unwrap_or_else(|poisoned| poisoned.into_inner()) = checked;
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
+        let new: Vec<(String, &'static str, Vec<String>)> = checked
+            .iter()
+            .filter(|(name, _)| !set.contains_key(*name))
+            .filter_map(|(name, secret)| {
+                let kind = match secret {
+                    Secret::Variable(_) => return None,
+                    Secret::Login(_) => "login",
+                    Secret::Passkey(_) => "passkey",
+                };
+                Some((name.clone(), kind, secret.hosts()))
+            })
+            .collect();
+        *set = checked;
+        drop(set);
+        if !new.is_empty() {
+            let at = crate::jobs::now();
+            let mut arrivals = self
+                .arrivals
+                .lock()
+                .unwrap_or_else(|poisoned| poisoned.into_inner());
+            for (name, kind, sites) in new {
+                arrivals.0 += 1;
+                let id = arrivals.0;
+                arrivals.1.push_back(Arrival {
+                    id,
+                    name,
+                    kind,
+                    sites,
+                    at,
+                });
+                while arrivals.1.len() > ARRIVALS_KEPT {
+                    arrivals.1.pop_front();
+                }
+            }
+        }
         Ok(())
+    }
+
+    /// The logins and passkeys that arrived lately, oldest first.
+    pub fn arrivals(&self) -> Vec<Arrival> {
+        self.arrivals
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
+            .1
+            .iter()
+            .cloned()
+            .collect()
+    }
+
+    /// How a login or passkey named `name` may be used, read from the set as
+    /// it stands now, so a delivery that changes it applies from the next
+    /// use. `None` when there is no such login or passkey.
+    pub fn use_of(&self, name: &str) -> Option<Use> {
+        self.read().get(name).and_then(Secret::use_)
     }
 
     /// The names alone.
@@ -404,7 +534,7 @@ impl Secrets {
     }
 
     fn read(&self) -> RwLockReadGuard<'_, BTreeMap<String, Secret>> {
-        self.0
+        self.set
             .read()
             .unwrap_or_else(|poisoned| poisoned.into_inner())
     }
@@ -779,6 +909,95 @@ mod tests {
         secrets.replace(BTreeMap::new()).unwrap();
         assert!(secrets.names().is_empty());
         assert!(secrets.environment().is_empty());
+    }
+
+    #[test]
+    fn the_use_rides_with_the_set_and_a_change_applies_from_the_next_use() {
+        let secrets = Secrets::default();
+        let delivered = |use_: Option<&str>| {
+            let mut login = json!({"kind": "login", "sites": ["https://github.com"],
+                                   "username": "george", "password": "correct horse battery"});
+            let mut passkey = json!({"kind": "passkey", "rpId": "github.com", "credentialId": "AQID",
+                                     "privateKey": KEY_BASE64, "userName": "george"});
+            if let Some(use_) = use_ {
+                login["use"] = json!(use_);
+                passkey["use"] = json!(use_);
+            }
+            typed(
+                json!({"GH_LOGIN": login, "GH_PASSKEY": passkey, "NPM_TOKEN": "npm_notarealtoken0002"}),
+            )
+        };
+        secrets.replace(delivered(None)).unwrap();
+        assert_eq!(
+            secrets.use_of("GH_LOGIN"),
+            Some(Use::Auto),
+            "absent is auto"
+        );
+        assert_eq!(secrets.use_of("GH_PASSKEY"), Some(Use::Auto));
+        assert_eq!(secrets.use_of("NPM_TOKEN"), None, "a variable has no use");
+        assert!(
+            !serde_json::to_string(&secrets.catalog())
+                .unwrap()
+                .contains("\"use\""),
+            "an automatic key says nothing of it"
+        );
+        secrets.replace(delivered(Some("ask"))).unwrap();
+        assert_eq!(secrets.use_of("GH_LOGIN"), Some(Use::Ask));
+        assert_eq!(secrets.use_of("GH_PASSKEY"), Some(Use::Ask));
+        assert_eq!(secrets.passkeys()[0].1.use_, Use::Ask);
+        let catalog = secrets.catalog();
+        assert_eq!(catalog[0]["use"], "ask", "{catalog:?}");
+        assert_eq!(catalog[1]["use"], "ask", "{catalog:?}");
+        secrets.replace(delivered(Some("auto"))).unwrap();
+        assert_eq!(secrets.use_of("GH_LOGIN"), Some(Use::Auto));
+        assert_eq!(secrets.use_of("GH_PASSKEY"), Some(Use::Auto));
+        let refused = serde_json::from_value::<BTreeMap<String, Delivered>>(json!({
+            "GH_LOGIN": {"kind": "login", "sites": ["https://github.com"], "username": "george",
+                         "password": "correct horse battery", "use": "sometimes"}
+        }));
+        assert!(refused.is_err(), "a use is auto or ask");
+    }
+
+    #[test]
+    fn a_login_or_passkey_new_to_the_set_is_an_arrival_and_a_variable_never() {
+        let secrets = Secrets::default();
+        secrets
+            .replace(typed(json!({"NPM_TOKEN": "npm_notarealtoken0002"})))
+            .unwrap();
+        assert!(secrets.arrivals().is_empty());
+        let set = json!({
+            "NPM_TOKEN": "npm_notarealtoken0002",
+            "GITHUB_LOGIN": {"kind": "login", "sites": ["https://github.com", "http://localhost:8123"],
+                             "username": "george", "password": "correct horse battery"},
+        });
+        secrets.replace(typed(set.clone())).unwrap();
+        let arrived = secrets.arrivals();
+        assert_eq!(arrived.len(), 1);
+        assert_eq!(arrived[0].name, "GITHUB_LOGIN");
+        assert_eq!(arrived[0].kind, "login");
+        assert_eq!(arrived[0].sites, ["github.com", "localhost"]);
+        secrets.replace(typed(set)).unwrap();
+        assert_eq!(
+            secrets.arrivals().len(),
+            1,
+            "delivered again, it is not new"
+        );
+        secrets
+            .replace(typed(json!({
+                "GH_PASSKEY": {"kind": "passkey", "rpId": "github.com", "credentialId": "AQID",
+                               "privateKey": KEY_BASE64},
+            })))
+            .unwrap();
+        let arrived = secrets.arrivals();
+        assert_eq!(arrived.len(), 2);
+        assert_eq!(arrived[1].name, "GH_PASSKEY");
+        assert_eq!(arrived[1].sites, ["github.com"]);
+        assert!(arrived[1].id > arrived[0].id);
+        let wire = serde_json::to_string(&arrived).unwrap();
+        assert!(
+            !wire.contains("battery") && !wire.contains(KEY_BASE64),
+            "{wire}"
+        );
     }
 
     #[test]

@@ -494,9 +494,13 @@
 
       let card = null; // the host element, while the card is shown
       let parts = null;
-      let state = { arming: { state: 'idle' }, wheel: { driving: 'none', agent: 'Agent', task: '' }, uses: [] };
+      let state = { arming: { state: 'idle' }, wheel: { driving: 'none', agent: 'Agent', task: '' }, uses: [], held: [], banners: [] };
       let dismissed = ''; // the reason the person closed it for, so it does not reopen for the same one
       let ticking = null;
+      let banTicking = null;
+      let autoOpened = false; // opened by itself for a held use or a banner, so it closes by itself after
+      let lastWhy = '';
+      const seenArrivals = new Set();
 
       function build() {
         card = document.createElement('hotline-card');
@@ -543,7 +547,17 @@
           .rp { margin-top: 2px; font: 12px 'Geist Mono', ui-monospace, monospace; }
           .left { margin-top: 6px; color: #8e8e95; font: 11.5px 'Geist Mono', ui-monospace, monospace; }
           .note { margin: 0; padding: 10px 8px; color: #b4b4ba; }
-          .err { color: #ff8f80; }`);
+          .err { color: #ff8f80; }
+          .ban { margin: 2px 0; padding: 9px 10px; border-radius: 9px; background: #1f1f25; border: 1px solid #2e2e35; }
+          .ban .bt { font-weight: 600; display: flex; align-items: center; gap: 7px; }
+          .ban .bt i { width: 7px; height: 7px; border-radius: 50%; flex: none; background: #f0c27a; }
+          .ban.ok .bt i { background: #86d69c; } .ban.fail .bt i { background: #ff8f80; } .ban.agent .bt i { background: #8fb8ff; }
+          .ban.wait .bt i { animation: breathe 1.6s ease-in-out infinite; }
+          @keyframes breathe { 50% { opacity: .35; } }
+          .ban .bs { color: #b4b4ba; font-size: 12px; margin-top: 2px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+          .ban .bl { color: #8e8e95; font: 11.5px 'Geist Mono', ui-monospace, monospace; margin-top: 4px; }
+          .k { font: 11.5px 'Geist Mono', ui-monospace, monospace; color: #ececef; }
+          .row.new { background: #252c3a; }`);
         root.adoptedStyleSheets = [sheet];
         const box = el('div', 'card');
         box.setAttribute('role', 'dialog');
@@ -575,13 +589,18 @@
         const pk = el('div', 'pad'); const pkTitle = el('div', 't'); const pkRp = el('div', 'rp'); const pkText = el('div', 's'); pkText.style.marginTop = '6px'; const pkLeft = el('div', 'left');
         pk.append(pkTitle, pkRp, pkText, pkLeft); passkey.append(pk);
 
+        // What waits for the person's answer at the desk, the answer, or a key
+        // that just arrived for this site.
+        const banner = el('section'); banner.hidden = true;
+        const ban = el('div', 'ban'); const banTitle = el('div', 'bt'); const banText = el('div', 'bs'); const banLeft = el('div', 'bl');
+        ban.append(banTitle, banText, banLeft); banner.append(ban);
         const keys = el('section'); keys.hidden = true;
         const record = el('section'); record.hidden = true;
         const status = el('p', 'note'); status.hidden = true;
-        box.append(head, turn, passkey, keys, record, status);
+        box.append(head, banner, turn, passkey, keys, record, status);
         root.append(box);
         root.addEventListener('keydown', (event) => { if (event.key === 'Escape') hide(true); });
-        parts = { box, turn, turnTask, handBack, passkey, pkTitle, pkRp, pkText, pkLeft, keys, record, status };
+        parts = { box, banner, ban, banTitle, banText, banLeft, turn, turnTask, handBack, passkey, pkTitle, pkRp, pkText, pkLeft, keys, record, status };
         document.documentElement.append(card);
         requestAnimationFrame(() => box.classList.add('in'));
       }
@@ -604,6 +623,7 @@
         const reply = await ask({ type: 'card-keys' });
         if (!card) return;
         if (reply && reply.error) return fail(reply.error.message);
+        const arrived = new Set(fresh().filter((b) => b.key.startsWith('arrival-')).map((b) => b.secret));
         const rows = [
           ...(reply.passkeys || []).map((p) => row('key', p.userName || p.rpId, 'passkey · used when the page asks', el('span'))),
           ...(reply.logins || []).map((login) => {
@@ -616,7 +636,9 @@
               fill.textContent = 'Filled';
               setTimeout(() => hide(false), 600);
             });
-            return row('lock', login.username || login.name, `${login.name} · from this computer`, fill);
+            const r = row('lock', login.username || login.name, `${login.name} · from this computer`, fill);
+            if (arrived.has(login.name)) r.classList.add('new');
+            return r;
           }),
         ];
         parts.keys.replaceChildren(...rows);
@@ -626,7 +648,7 @@
 
       // Nothing to show at all: say so in one line rather than an empty card.
       function quiet() {
-        const empty = parts.turn.hidden && parts.passkey.hidden && parts.keys.hidden && parts.record.hidden;
+        const empty = parts.banner.hidden && parts.turn.hidden && parts.passkey.hidden && parts.keys.hidden && parts.record.hidden;
         if (parts.status.classList.contains('err')) return;
         parts.status.hidden = !empty;
         parts.status.textContent = 'Nothing for this site. Grant a login or passkey from the desk.';
@@ -637,9 +659,37 @@
         return host === site || host.endsWith(`.${site}`) || site.endsWith(`.${host}`);
       }
 
+      // The held uses of this site's keys, and the banners for this site still showing.
+      const waiting = () => (state.held || []).filter((h) => within(h.site));
+      const fresh = () => (state.banners || []).filter((b) => b.at + b.ttl > Date.now() && (b.sites || []).some(within));
+
+      function drawBanner() {
+        clearInterval(banTicking);
+        const held = waiting()[0];
+        const shown = fresh().pop();
+        parts.banner.hidden = !held && !shown;
+        parts.banLeft.hidden = !held;
+        if (held) {
+          parts.ban.className = 'ban wait';
+          parts.banTitle.replaceChildren(el('i'), 'Waiting for approval at the desk');
+          parts.banText.replaceChildren(el('span', 'k', held.secret), ` · ${held.site} · for ${state.wheel.agent}`);
+          const tick = () => {
+            const left = Math.max(0, Math.round((held.expiresAt - Date.now()) / 1000));
+            parts.banLeft.textContent = `${Math.floor(left / 60)}:${String(left % 60).padStart(2, '0')} left`;
+          };
+          tick();
+          banTicking = setInterval(tick, 1000);
+        } else if (shown) {
+          parts.ban.className = `ban ${shown.tone}`;
+          parts.banTitle.replaceChildren(el('i'), shown.t);
+          parts.banText.replaceChildren(shown.s);
+        }
+      }
+
       function draw() {
         if (!card) return;
         const { wheel, arming, uses } = state;
+        drawBanner();
         const yours = wheel.driving === 'person';
         parts.turn.hidden = !yours;
         parts.turnTask.hidden = !wheel.task;
@@ -671,7 +721,7 @@
           line.append(
             el('span', 'at', `${String(at.getHours()).padStart(2, '0')}:${String(at.getMinutes()).padStart(2, '0')}`),
             el('span', `dot ${u.ok ? 'ok' : 'fail'}`),
-            el('span', '', u.who === 'you' ? `You ${u.what.replace(/^was /, 'were ')}` : `${u.who} ${u.what}`),
+            el('span', '', (u.who === 'you' ? `You ${u.what.replace(/^was /, 'were ')}` : `${u.who} ${u.what}`) + (u.how ? ` · ${u.how}` : '')),
           );
           return line;
         }));
@@ -693,7 +743,9 @@
           ask({ type: 'card-dismiss' });
         }
         openedAt = 0;
+        autoOpened = false;
         clearInterval(ticking);
+        clearInterval(banTicking);
         if (!card) return;
         const gone = card;
         card = null;
@@ -705,6 +757,10 @@
       function reason() {
         if (state.wheel.driving === 'person') return 'turn';
         if (['armed', 'asked'].includes(state.arming.state)) return `passkey-${state.arming.rpId}`;
+        const held = waiting()[0];
+        if (held) return `held-${held.id}`;
+        const shown = fresh().pop();
+        if (shown) return `banner-${shown.key}`;
         return '';
       }
 
@@ -752,18 +808,28 @@
         } else if (message.type === 'hotline-state' && message.state) {
           state = message.state;
           const why = reason();
+          const was = lastWhy;
+          lastWhy = why;
           if (!why) dismissed = '';
+          // A key for this site arrived: the rows show it, marked new.
+          const arrivals = fresh().filter((b) => b.key.startsWith('arrival-') && !seenArrivals.has(b.key));
+          arrivals.forEach((b) => seenArrivals.add(b.key));
           if (card) {
             draw();
-            // Offered for a sign-in, and a key of this site just signed in: done.
-            if (openedAt && state.uses.some((u) => u.ok && u.ts >= openedAt && within(u.site))) {
+            // ...and once its banner has gone by, the mark goes too.
+            if (arrivals.length || (parts.keys.querySelector('.row.new') && !fresh().some((b) => b.key.startsWith('arrival-')))) loadKeys();
+            // Offered for a sign-in, and a key of this site just signed in: done,
+            // once what the card says about it has been read.
+            if (openedAt && !why && state.uses.some((u) => u.ok && u.ts >= openedAt && within(u.site))) {
               openedAt = 0;
               setTimeout(() => hide(false), 1500);
             }
             // The turn handed back or the passkey stored: nothing left to ask of the person.
             if (!why && message.settled) setTimeout(() => hide(false), message.settled);
+            // Opened for a held use or a banner, and it has gone by: so does the card.
+            if (!why && autoOpened && /^(held|banner)-/.test(was)) setTimeout(() => { if (!reason()) hide(false); }, 400);
           } else if (why && why !== dismissed && document.visibilityState === 'visible') {
-            show();
+            show().then(() => { autoOpened = /^(held|banner)-/.test(why); });
           }
         }
         return false;

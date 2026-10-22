@@ -157,7 +157,7 @@ const passedOver = new Set();
 // The card in a tab's top frame asks for that tab only: Chromium names the
 // tab, never the page.
 async function fromCard(message, tabId) {
-  if (message.type === 'card-state') return { arming, wheel, uses };
+  if (message.type === 'card-state') return cardState();
   if (message.type === 'card-dismiss' || message.type === 'card-offer') {
     const origin = await tabOrigin(tabId);
     if (!origin) return { offer: false };
@@ -229,6 +229,15 @@ let arming = { state: 'idle' };
 let wheel = { driving: 'none', agent: 'Agent', task: '' };
 let uses = [];
 let lastUse = null;
+// Uses of an ask-me key the computer holds for the person now, and what the
+// card on a page says for a few seconds: an answer, or a key that arrived.
+// The first line after connecting is history, as with uses: no banners for it.
+let held = [];
+let banners = [];
+let lastSettled = null;
+let lastArrival = null;
+const BANNER_MS = 6000;
+const ARRIVAL_MS = 9000;
 const BADGES = {
   armed: ['KEY', '#8fb8ff'],
   asked: ['1', '#f0c27a'],
@@ -248,22 +257,46 @@ function show(next) {
 function badge() {
   let [text, color] = BADGES[arming.state] || ['', '#8fb8ff'];
   if (!text && wheel.driving === 'person') [text, color] = ['1', '#f0c27a'];
+  if (!text && held.length) [text, color] = [String(held.length), '#f0c27a'];
   chrome.action.setBadgeText({ text }).catch(() => {});
   if (text) chrome.action.setBadgeBackgroundColor({ color }).catch(() => {});
   const title = arming.state !== 'idle' ? `Hotline: a passkey for ${arming.rpId}`
-    : wheel.driving === 'person' ? `Hotline: your turn on the computer` : 'Hotline';
+    : wheel.driving === 'person' ? `Hotline: your turn on the computer`
+    : held.length ? 'Hotline: waiting for approval at the desk' : 'Hotline';
   chrome.action.setTitle({ title }).catch(() => {});
 }
 
 // A note on the page for a key used or refused for the agent. The person's
 // own uses need no note: they were there.
 const NOTE = {
-  'signed in with the passkey': (u) => [`${u.who} signed in to ${u.site}`, 'with the passkey on this computer'],
+  'signed in with the passkey': (u) => [`${u.who} signed in to ${u.site}`, u.how ? `with the passkey on this computer · ${u.how}` : 'with the passkey on this computer'],
   'made a passkey': (u) => [`${u.who} made a passkey for ${u.site}`, 'kept on this computer'],
-  'filled a login': (u) => [`${u.who} filled a login on ${u.site}`, 'from this computer'],
-  'was refused a passkey': (u) => [`Refused a passkey on ${u.site}`, `no key here is for this site; ${u.who} was stopped`],
-  'was refused a login': (u) => [`Refused a login on ${u.site}`, `not a site the login is for; ${u.who} was stopped`],
+  'filled a login': (u) => [`${u.who} filled a login on ${u.site}`, u.how ? `from this computer · ${u.how}` : 'from this computer'],
+  'was refused a passkey': (u) => [`Refused a passkey on ${u.site}`, `${u.how || 'no key here is for this site'}; ${u.who} was stopped`],
+  'was refused a login': (u) => [`Refused a login on ${u.site}`, `${u.how || 'not a site the login is for'}; ${u.who} was stopped`],
 };
+
+const clock = (ms) => {
+  const at = new Date(ms);
+  return `${String(at.getHours()).padStart(2, '0')}:${String(at.getMinutes()).padStart(2, '0')}`;
+};
+
+// What the card on a page of the use's site says once the person answered.
+function answered(s) {
+  const base = { key: `settled-${s.seq}`, sites: [s.site], secret: s.secret, at: Date.now(), ttl: BANNER_MS };
+  if (s.outcome === 'approved') return { ...base, tone: 'ok', t: 'Approved', s: `at the desk · ${clock(s.at)}` };
+  if (s.outcome === 'allowed') return { ...base, tone: 'ok', t: 'Approved', s: `allowed 10 min · until ${clock(s.until || s.at)}` };
+  if (s.outcome === 'denied') {
+    return { ...base, tone: 'fail', t: 'Declined at the desk', s: s.kind === 'passkey' ? 'The site was told no.' : `${wheel.agent} was told no.` };
+  }
+  return { ...base, tone: 'fail', t: 'Not answered in time', s: `${s.secret} was not used.` };
+}
+
+function cardState() {
+  const now = Date.now();
+  banners = banners.filter((b) => b.at + b.ttl > now);
+  return { arming, wheel, uses, held, banners };
+}
 
 async function note(use) {
   const words = NOTE[use.what];
@@ -290,7 +323,30 @@ function heard(message) {
     lastUse = uses.length ? uses[uses.length - 1].id : (lastUse ?? 0);
     fresh.forEach(note);
   }
-  const state = { arming, wheel, uses };
+  if (Array.isArray(message.held)) {
+    const before = held.length;
+    held = message.held;
+    if (before !== held.length) badge();
+  }
+  if (Array.isArray(message.settled)) {
+    const fresh = lastSettled === null ? [] : message.settled.filter((s) => s.seq > lastSettled);
+    lastSettled = message.settled.length ? message.settled[message.settled.length - 1].seq : (lastSettled ?? 0);
+    fresh.forEach((s) => banners.push(answered(s)));
+  }
+  if (Array.isArray(message.arrivals)) {
+    const fresh = lastArrival === null ? [] : message.arrivals.filter((a) => a.id > lastArrival);
+    lastArrival = message.arrivals.length ? message.arrivals[message.arrivals.length - 1].id : (lastArrival ?? 0);
+    fresh.forEach((a) => banners.push({
+      key: `arrival-${a.id}`, sites: a.sites, secret: a.name, at: Date.now(), ttl: ARRIVAL_MS, tone: 'agent',
+      t: `New ${a.kind} for this site: ${a.name}`, s: `Granted to ${wheel.agent} at the desk`,
+    }));
+    // A banner goes by itself: tell the page again once it has.
+    if (fresh.length) setTimeout(() => tellActiveTab({ type: 'hotline-state', state: cardState(), settled: 0 }), ARRIVAL_MS + 50);
+  }
+  if (Array.isArray(message.settled) && banners.some((b) => b.key.startsWith('settled-') && b.at > Date.now() - 1000)) {
+    setTimeout(() => tellActiveTab({ type: 'hotline-state', state: cardState(), settled: 0 }), BANNER_MS + 50);
+  }
+  const state = cardState();
   chrome.runtime.sendMessage({ type: 'state-changed', state }).catch(() => {});
   // The card on the active page: it opens itself when the person is needed,
   // and steps away a beat after the turn is handed back or the passkey kept.
@@ -318,6 +374,10 @@ function watch() {
   });
   port.onDisconnect.addListener(() => {
     wheel = { driving: 'none', agent: wheel.agent, task: '' };
+    // A restarted service counts its answers and arrivals from one again.
+    held = [];
+    lastSettled = null;
+    lastArrival = null;
     show({ state: 'idle' });
     setTimeout(watch, 3000);
   });
@@ -328,7 +388,7 @@ watch();
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   if (sender.id !== chrome.runtime.id || !message) return false;
   if (message.type === 'arming') sendResponse(arming);
-  else if (message.type === 'state') sendResponse({ arming, wheel, uses });
+  else if (message.type === 'state') sendResponse(cardState());
   else return false;
   return false;
 });

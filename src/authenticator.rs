@@ -156,12 +156,11 @@ fn from_std(text: &str) -> Option<Vec<u8>> {
 }
 
 /// Signs a `navigator.credentials.get()` with a granted passkey for the site.
-pub fn assert(details: &Value, keys: &[Passkey]) -> Result<Value, Refusal> {
-    let (origin, cross_origin) = caller(details)?;
+/// The passkey a sign-in request would be answered with, if any: the first
+/// for the request's relying party that the site allows.
+pub fn chosen<'a>(details: &Value, keys: &'a [Passkey]) -> Result<&'a Passkey, Refusal> {
+    let (origin, _) = caller(details)?;
     let rp_id = relying_party(&origin, details["rpId"].as_str())?;
-    let challenge = details["challenge"]
-        .as_str()
-        .ok_or_else(|| refuse("DataError", "the request has no challenge"))?;
     let allowed: Vec<Vec<u8>> = details["allowCredentials"]
         .as_array()
         .map(|list| {
@@ -171,8 +170,7 @@ pub fn assert(details: &Value, keys: &[Passkey]) -> Result<Value, Refusal> {
                 .collect()
         })
         .unwrap_or_default();
-    let key = keys
-        .iter()
+    keys.iter()
         .filter(|key| key.rp_id == rp_id)
         .find(|key| {
             allowed.is_empty()
@@ -183,7 +181,16 @@ pub fn assert(details: &Value, keys: &[Passkey]) -> Result<Value, Refusal> {
                 "NotAllowedError",
                 format!("no passkey for {rp_id} is granted to this computer"),
             )
-        })?;
+        })
+}
+
+pub fn assert(details: &Value, keys: &[Passkey]) -> Result<Value, Refusal> {
+    let (origin, cross_origin) = caller(details)?;
+    let rp_id = relying_party(&origin, details["rpId"].as_str())?;
+    let challenge = details["challenge"]
+        .as_str()
+        .ok_or_else(|| refuse("DataError", "the request has no challenge"))?;
+    let key = chosen(details, keys)?;
     let credential = from_std(&key.credential_id)
         .ok_or_else(|| refuse("UnknownError", "a granted passkey's id is not base64"))?;
     let pkcs8 = from_std(&key.private_key)
@@ -313,6 +320,7 @@ pub fn mint(creation: &Creation) -> Result<(Passkey, Value), Refusal> {
         user_handle: Some(STANDARD.encode(&creation.user_id)),
         user_name: creation.user_name.clone(),
         user_display_name: creation.user_display_name.clone(),
+        use_: crate::secrets::Use::Auto,
     };
     let response = json!({
         "id": b64url(&credential),

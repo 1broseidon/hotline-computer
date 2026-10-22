@@ -905,7 +905,7 @@ async fn image_honors_the_computer_contract() {
         .put(&door)
         .bearer_auth(&token)
         .json(&json!({
-            "PROOF_PASSKEY": credential,
+            "PROOF_PASSKEY": credential.clone(),
             "PROOF": {"kind": "login", "sites": ["http://localhost:8123"], "username": "teammate",
                       "password": "correct horse battery staple", "totp": "GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQ"},
             "PROOF_TOKEN": "contract-token-value-0002",
@@ -1075,6 +1075,294 @@ async fn image_honors_the_computer_contract() {
         .await,
     );
     assert_eq!(nothing_leaked, "\"[redacted PROOF_TOKEN]\"");
+    // An ask-me key is used only once the person approves that use. The
+    // setting rides with the set, and a change applies from the next use.
+    let mut asking = credential.clone();
+    asking["use"] = json!("ask");
+    let proof_login = |use_: &str| {
+        json!({"kind": "login", "sites": ["http://localhost:8123"], "username": "teammate",
+               "password": "correct horse battery staple", "use": use_})
+    };
+    let stored = http
+        .put(&door)
+        .bearer_auth(&token)
+        .json(&json!({"PROOF_PASSKEY": asking, "PROOF": proof_login("ask")}))
+        .send()
+        .await
+        .expect("store ask-me keys");
+    assert_eq!(stored.status(), 204);
+    let navigated = call(
+        &client,
+        "browser",
+        json!({"action":"navigate","url":"http://localhost:8123/passkey.html"}),
+    )
+    .await;
+    assert!(!navigated.is_error.unwrap_or(false), "{}", text(&navigated));
+    let uses_door = format!("{base}/secrets/uses");
+    let answer_door = format!("{base}/secrets/uses/answer");
+    if !token.is_empty() {
+        let naked = http.get(&uses_door).send().await.expect("uses, naked");
+        assert_eq!(naked.status(), 401, "the uses door wants the bearer");
+    }
+    let held_now = || async {
+        http.get(&uses_door)
+            .bearer_auth(&token)
+            .send()
+            .await
+            .expect("held uses")
+            .json::<serde_json::Value>()
+            .await
+            .expect("held uses JSON")
+    };
+    assert_eq!(held_now().await, json!({"uses": []}));
+    let held_one = || async {
+        for _ in 0..50 {
+            let held = held_now().await;
+            if held["uses"].as_array().is_some_and(|uses| !uses.is_empty()) {
+                return held["uses"][0].clone();
+            }
+            tokio::time::sleep(Duration::from_millis(100)).await;
+        }
+        panic!("no use was held");
+    };
+    let answer = |id: String, answer: &'static str| {
+        let http = http.clone();
+        let answer_door = answer_door.clone();
+        let token = token.clone();
+        async move {
+            http.post(&answer_door)
+                .bearer_auth(&token)
+                .json(&json!({"id": id, "answer": answer}))
+                .send()
+                .await
+                .expect("answer a held use")
+        }
+    };
+    // A held passkey sign-in completes after approval...
+    let parked = text(
+        &call(
+            &client,
+            "browser",
+            json!({"action":"eval","js":"window.signing = sign(); 'parked'"}),
+        )
+        .await,
+    );
+    assert!(parked.contains("parked"), "{parked}");
+    let held = held_one().await;
+    assert_eq!(held["secret"], "PROOF_PASSKEY", "{held}");
+    assert_eq!(held["kind"], "passkey", "{held}");
+    assert_eq!(held["site"], "localhost", "{held}");
+    assert!(
+        held["path"] == "/passkey.html" || held["path"] == "/",
+        "{held}"
+    );
+    let asked_at = held["askedAt"].as_u64().expect("askedAt");
+    let expires_at = held["expiresAt"].as_u64().expect("expiresAt");
+    // Chromium hands the extension the request's time limit as it adjusted
+    // it (it raises a short one); the hold keeps to that, at most 5 minutes.
+    assert!(
+        expires_at > asked_at && expires_at - asked_at <= 300_000,
+        "held within the page's own time, capped: {held}"
+    );
+    let id = held["id"].as_str().expect("use id").to_owned();
+    let approved = answer(id.clone(), "approve").await;
+    assert_eq!(approved.status(), 200);
+    assert_eq!(
+        approved.json::<serde_json::Value>().await.unwrap(),
+        json!({"state": "approved"})
+    );
+    let signed = text(
+        &call(
+            &client,
+            "browser",
+            json!({"action":"eval","js":"window.signing"}),
+        )
+        .await,
+    );
+    assert!(
+        signed.contains("signed "),
+        "the approved use signs in: {signed}"
+    );
+    let stale = answer(id, "approve").await;
+    assert_eq!(stale.status(), 409, "an answered use is not held");
+    let stale = answer("not-a-use".to_owned(), "deny").await;
+    assert_eq!(stale.status(), 409, "an unknown use is not held");
+    let bad = http
+        .post(&answer_door)
+        .bearer_auth(&token)
+        .json(&json!({"id": "x", "answer": "perhaps"}))
+        .send()
+        .await
+        .expect("a bad answer");
+    assert_eq!(bad.status(), 400);
+    // ...and is refused after a denial.
+    text(
+        &call(
+            &client,
+            "browser",
+            json!({"action":"eval","js":"window.signing = sign(); 'parked'"}),
+        )
+        .await,
+    );
+    let held = held_one().await;
+    let denied = answer(held["id"].as_str().unwrap().to_owned(), "deny").await;
+    assert_eq!(
+        denied.json::<serde_json::Value>().await.unwrap(),
+        json!({"state": "denied"})
+    );
+    let refused = text(
+        &call(
+            &client,
+            "browser",
+            json!({"action":"eval","js":"window.signing"}),
+        )
+        .await,
+    );
+    assert!(
+        refused.contains("refused NotAllowedError") && refused.contains("denied"),
+        "a denied use is refused at the page: {refused}"
+    );
+    // A page that stops waiting ends the use: it is no longer held, and an
+    // answer to it is refused.
+    text(
+        &call(
+            &client,
+            "browser",
+            json!({"action":"eval","js":"window.stop = new AbortController(); window.signing = navigator.credentials.get({signal: stop.signal, publicKey: {challenge: crypto.getRandomValues(new Uint8Array(32)), rpId: 'localhost'}}).then(() => 'answered', (error) => 'ended ' + error.name); 'parked'"}),
+        )
+        .await,
+    );
+    let held = held_one().await;
+    let gave_up = text(
+        &call(
+            &client,
+            "browser",
+            json!({"action":"eval","js":"stop.abort(); window.signing"}),
+        )
+        .await,
+    );
+    assert!(gave_up.contains("ended AbortError"), "{gave_up}");
+    let mut gone = json!(null);
+    for _ in 0..30 {
+        gone = held_now().await;
+        if gone == json!({"uses": []}) {
+            break;
+        }
+        tokio::time::sleep(Duration::from_millis(100)).await;
+    }
+    assert_eq!(gone, json!({"uses": []}), "a use the page gave up is gone");
+    let late = answer(held["id"].as_str().unwrap().to_owned(), "approve").await;
+    assert_eq!(late.status(), 409, "and cannot be answered");
+    // A fill of an ask-me login answers at once that it waits, with an id.
+    let snapshot = text(&call(&client, "browser", json!({"action":"text"})).await);
+    let pass = snapshot
+        .lines()
+        .find(|line| line.starts_with("[e") && line.contains("Password"))
+        .and_then(|line| line.split(']').next())
+        .map(|reference| reference.trim_start_matches('[').to_owned())
+        .expect("password field");
+    let started = std::time::Instant::now();
+    let waiting = call(
+        &client,
+        "browser",
+        json!({"action":"fill","ref":pass,"secret":"PROOF.password"}),
+    )
+    .await;
+    assert!(
+        started.elapsed() < Duration::from_secs(10),
+        "a fill never waits for the person"
+    );
+    assert!(waiting.is_error.unwrap_or(false), "{}", text(&waiting));
+    assert!(
+        text(&waiting).contains("Waiting for the person to approve PROOF on localhost (use "),
+        "{}",
+        text(&waiting)
+    );
+    let held = held_one().await;
+    assert_eq!(held["kind"], "login", "{held}");
+    assert_eq!(held["secret"], "PROOF", "{held}");
+    let id = held["id"].as_str().unwrap().to_owned();
+    assert!(text(&waiting).contains(&id), "{}", text(&waiting));
+    let empty = text(
+        &call(
+            &client,
+            "browser",
+            json!({"action":"eval","js":"pass.value"}),
+        )
+        .await,
+    );
+    assert_eq!(empty, "\"\"", "nothing was typed while it waits");
+    let again = call(
+        &client,
+        "browser",
+        json!({"action":"fill","ref":pass,"secret":"PROOF.password"}),
+    )
+    .await;
+    assert!(
+        text(&again).contains(&id),
+        "a retry before the answer is the same ask: {}",
+        text(&again)
+    );
+    assert_eq!(answer(id, "approve").await.status(), 200);
+    let filled = call(
+        &client,
+        "browser",
+        json!({"action":"fill","ref":pass,"secret":"PROOF.password"}),
+    )
+    .await;
+    assert_eq!(
+        text(&filled),
+        format!("filled {pass} with PROOF.password"),
+        "the retry after approval fills"
+    );
+    // Allow lets a later use of the same key on the same site through.
+    text(
+        &call(
+            &client,
+            "browser",
+            json!({"action":"eval","js":"window.signing = sign(); 'parked'"}),
+        )
+        .await,
+    );
+    let held = held_one().await;
+    let allowed = answer(held["id"].as_str().unwrap().to_owned(), "allow").await;
+    assert_eq!(
+        allowed.json::<serde_json::Value>().await.unwrap(),
+        json!({"state": "approved"})
+    );
+    let signed = text(
+        &call(
+            &client,
+            "browser",
+            json!({"action":"eval","js":"window.signing"}),
+        )
+        .await,
+    );
+    assert!(signed.contains("signed "), "{signed}");
+    let signed = text(&call(&client, "browser", json!({"action":"eval","js":"sign()"})).await);
+    assert!(
+        signed.contains("signed "),
+        "a second use within the allowance goes through: {signed}"
+    );
+    assert_eq!(held_now().await, json!({"uses": []}), "and is not held");
+    // Back to automatic, the next use is not held.
+    let stored = http
+        .put(&door)
+        .bearer_auth(&token)
+        .json(&json!({"PROOF_PASSKEY": credential.clone(), "PROOF": proof_login("auto")}))
+        .send()
+        .await
+        .expect("store the keys as automatic");
+    assert_eq!(stored.status(), 204);
+    let filled = call(
+        &client,
+        "browser",
+        json!({"action":"fill","ref":pass,"secret":"PROOF.password"}),
+    )
+    .await;
+    assert_eq!(text(&filled), format!("filled {pass} with PROOF.password"));
+    assert_eq!(held_now().await, json!({"uses": []}));
+
     // Revoked, the passkey is gone from the browser at once.
     let revoked = http
         .put(&door)

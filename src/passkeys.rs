@@ -480,6 +480,7 @@ mod tests {
             user_handle: None,
             user_name: Some("george".to_owned()),
             user_display_name: None,
+            use_: crate::secrets::Use::Auto,
         }
     }
 

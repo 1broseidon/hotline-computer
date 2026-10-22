@@ -12,6 +12,7 @@ pub mod display;
 pub mod draft;
 pub mod files_ui;
 pub mod guide;
+pub mod holds;
 pub mod jobs;
 pub mod lease;
 pub mod limits;
@@ -77,6 +78,8 @@ pub struct App {
     pub secrets: secrets::Secrets,
     /// The arming under which the browser may mint a passkey.
     pub passkeys: passkeys::Passkeys,
+    /// Uses of ask-me keys waiting for the person, and their allowances.
+    pub holds: holds::Holds,
     pub observer: observer::Observer,
     pub activity: activity::Log,
     pub badges: badge::Badges,
@@ -102,6 +105,7 @@ impl App {
             files: files_ui::Files::default(),
             secrets,
             passkeys,
+            holds: holds::Holds::default(),
             observer: observer::Observer::new(&config.home, &config.display),
             config,
             display: None,

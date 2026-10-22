@@ -2,6 +2,8 @@ use serde::Deserialize;
 use serde_json::Value;
 
 use crate::App;
+use crate::holds::Pass;
+use crate::secrets::{Origin, Use};
 
 use super::{ToolResult, action_error, text};
 
@@ -97,7 +99,52 @@ pub async fn call(app: &App, arguments: Value, holder: &str) -> ToolResult {
                 let filled = app.secrets.resolve(reference)?;
                 let origin_matched = filled.sites.is_some();
                 let label = app.secrets.redact(&filled.label).into_owned();
+                let (name, field) = reference.split_once('.').unwrap_or((reference, ""));
+                let login = filled.sites.clone();
+                let mut site = String::new();
+                let mut how = None;
+                if let Some(sites) = &login {
+                    let url = app.browser.current_url().await.unwrap_or_default();
+                    site = crate::bridge::host_of(&url);
+                    let on_site = Origin::of_page(&url)
+                        .is_ok_and(|page| sites.iter().any(|site| site.allows(&page)));
+                    // A username is who, not a secret: only what signs in waits.
+                    if on_site
+                        && field != "username"
+                        && app.secrets.use_of(name) == Some(Use::Ask)
+                        && !crate::bridge::person_has_it(app).await
+                    {
+                        let who = crate::bridge::who(app).await;
+                        let path = crate::bridge::path_on(&url, &site);
+                        match app.holds.fill(name, &site, &path, &who, crate::jobs::now()) {
+                            Pass::Within => how = Some("within the 10 min"),
+                            Pass::Answered(outcome) => how = Some(outcome.how()),
+                            Pass::Held { id, lapsed } => {
+                                return Err(waiting(name, &site, &id, lapsed));
+                            }
+                            Pass::Denied => {
+                                return Err(format!(
+                                    "The person denied this use of {name} on {site}. Nothing was typed; do not try another way, and ask them in the chat if it is still needed."
+                                ));
+                            }
+                        }
+                    }
+                }
                 let result = app.browser.fill_secret(&input.r#ref, filled).await;
+                // Each use leaves a line in the card's record and a note on
+                // the page, as the extension's own fills do.
+                if login.is_some() {
+                    match &result {
+                        Ok(_) if field != "username" => {
+                            crate::bridge::record(app, &site, "filled a login", true, how).await;
+                        }
+                        Err(error) if error.contains(" is typed only on ") => {
+                            crate::bridge::record(app, &site, "was refused a login", false, None)
+                                .await;
+                        }
+                        _ => {}
+                    }
+                }
                 if result.is_ok()
                     && let Ok(Some((_, bounds))) = tokio::time::timeout(
                         std::time::Duration::from_millis(200),
@@ -183,6 +230,19 @@ pub async fn call(app: &App, arguments: Value, holder: &str) -> ToolResult {
         )),
     }?;
     Ok(text(result))
+}
+
+/// What a fill of an ask-me login answers while the person is asked: at
+/// once, so no tool call waits on them.
+fn waiting(name: &str, site: &str, id: &str, lapsed: bool) -> String {
+    format!(
+        "{}Waiting for the person to approve {name} on {site} (use {id}). Nothing was typed. Try this fill again after they answer at the desk.",
+        if lapsed {
+            "The earlier ask went unanswered and lapsed. "
+        } else {
+            ""
+        }
+    )
 }
 
 /// What `fill` should do once a supplied-but-empty `secret` has been told
