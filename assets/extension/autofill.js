@@ -710,15 +710,18 @@
 
       // ---- Offered on a sign-in page ---------------------------------------
       // When this computer holds a key for the site and the page looks like a
-      // sign-in page (a login field shows, or the page asks quietly for a
-      // passkey on load), the card offers it, once a page. Signed in, neither
-      // sign is there, so it stays away; closed, it is not offered on that
-      // site again.
+      // sign-in page (a login field shows, or a button offers a passkey), the
+      // card offers it, once a page. Signed in, neither sign is there, so it
+      // stays away; closed, it is not offered on that site again. (A page's
+      // quiet passkey request on load would be a better sign, but with an
+      // extension answering WebAuthn, Chromium refuses those itself.)
       let offered = false;
       let openedAt = 0; // when an offered card opened, so a sign-in after it closes it
       const loginShows = () => [...document.querySelectorAll('input')].some((input) =>
         input.type !== 'hidden' && input.getClientRects().length > 0 &&
-        (input.type === 'password' || tokens(input).includes('username') || tokens(input).includes('webauthn')));
+        (input.type === 'password' || tokens(input).includes('username') || tokens(input).includes('webauthn'))) ||
+        [...document.querySelectorAll('button, a, [role="button"]')].some((button) =>
+          button.getClientRects().length > 0 && button.textContent.length < 80 && /passkey/i.test(button.textContent));
 
       async function offer() {
         if (offered || card) return;
@@ -744,8 +747,7 @@
 
       chrome.runtime.onMessage.addListener((message, sender) => {
         if (sender.id !== chrome.runtime.id || !message) return false;
-        if (message.type === 'hotline-sign-in-page') offer();
-        else if (message.type === 'hotline-card') {
+        if (message.type === 'hotline-card') {
           if (card) hide(true); else { dismissed = ''; show(); }
         } else if (message.type === 'hotline-state' && message.state) {
           state = message.state;
