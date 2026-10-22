@@ -1,0 +1,51 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>Sign in · Proof</title>
+<style>
+  body { font: 15px/1.5 system-ui, sans-serif; background: #f6f8fa; color: #1f2328; margin: 0; }
+  main { width: 340px; margin: 96px auto; }
+  h1 { font-weight: 400; font-size: 24px; text-align: center; }
+  form, .alt { background: #fff; border: 1px solid #d0d7de; border-radius: 6px; padding: 16px; }
+  label { display: block; font-weight: 600; margin: 8px 0 4px; }
+  input { width: 100%; box-sizing: border-box; padding: 6px 10px; border: 1px solid #d0d7de; border-radius: 6px; font: inherit; }
+  button { width: 100%; margin-top: 16px; padding: 6px; font: inherit; font-weight: 600; border-radius: 6px; border: 1px solid #1f883d; background: #1f883d; color: #fff; }
+  .alt { margin-top: 16px; text-align: center; }
+  .alt button { background: #f6f8fa; color: #1f2328; border-color: #d0d7de; margin-top: 0; }
+  #out { margin-top: 12px; text-align: center; font-size: 14px; color: #59636e; min-height: 1.5em; }
+</style>
+<main>
+  <h1>Sign in to Proof</h1>
+  <form onsubmit="event.preventDefault(); out.textContent = 'Signed in as ' + user.value">
+    <label for="user">Username</label><input id="user" name="username" autocomplete="username">
+    <label for="pass">Password</label><input id="pass" name="password" type="password" autocomplete="current-password">
+    <button type="submit">Sign in</button>
+  </form>
+  <div class="alt"><button type="button" id="pk" onclick="passkey()">Sign in with a passkey</button></div>
+  <div id="out"></div>
+</main>
+<script>
+  const challenge = () => crypto.getRandomValues(new Uint8Array(32));
+  window.make = async () => {
+    try {
+      const credential = await navigator.credentials.create({publicKey: {
+        challenge: challenge(), rp: {id: 'localhost', name: 'Proof'},
+        user: {id: new TextEncoder().encode('rex-1'), name: 'rex@hotline.dev', displayName: 'Rex'},
+        pubKeyCredParams: [{type: 'public-key', alg: -7}],
+        authenticatorSelection: {residentKey: 'required', userVerification: 'required'}, timeout: 30000,
+      }});
+      return 'made ' + credential.id;
+    } catch (error) { return 'refused ' + error.name + ': ' + error.message; }
+  };
+  window.sign = async (timeout = 120000) => {
+    try {
+      const assertion = await navigator.credentials.get({publicKey: {challenge: challenge(), rpId: 'localhost', userVerification: 'required', timeout}});
+      return 'signed ' + assertion.id;
+    } catch (error) { return 'refused ' + error.name + ': ' + error.message; }
+  };
+  window.passkey = async (timeout) => {
+    out.textContent = 'Asking for a passkey…';
+    const r = await sign(timeout);
+    out.textContent = r.startsWith('signed') ? 'Signed in with a passkey.' : 'Passkey sign-in refused: ' + r.replace(/^refused /, '');
+    return r;
+  };
+</script>
