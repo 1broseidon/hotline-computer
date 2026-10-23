@@ -4,419 +4,538 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Hotline Computer</title>
+<link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A//www.w3.org/2000/svg%22%20viewBox%3D%220%200%2064%2064%22%20class%3D%22mark%22%20aria-hidden%3D%22true%22%3E%0A%09%0A%09%3Cmask%20id%3D%22hotline-pupils%22%20maskUnits%3D%22userSpaceOnUse%22%20x%3D%220%22%20y%3D%220%22%20width%3D%2264%22%20height%3D%2264%22%3E%0A%09%09%3Crect%20width%3D%2264%22%20height%3D%2264%22%20fill%3D%22%23fff%22%20/%3E%0A%09%09%3Crect%20x%3D%2214.5%22%20y%3D%2228%22%20width%3D%2211%22%20height%3D%224%22%20rx%3D%222%22%20fill%3D%22%23000%22%20/%3E%0A%09%09%3Crect%20x%3D%2238.5%22%20y%3D%2228%22%20width%3D%2211%22%20height%3D%224%22%20rx%3D%222%22%20fill%3D%22%23000%22%20/%3E%0A%09%3C/mask%3E%0A%09%3Cg%20mask%3D%22url%28%23hotline-pupils%29%22%20fill%3D%22%23ececef%22%3E%0A%09%09%3Crect%20x%3D%224%22%20y%3D%2230%22%20width%3D%2256%22%20height%3D%2218%22%20rx%3D%226%22%20/%3E%0A%09%09%3Ccircle%20cx%3D%2220%22%20cy%3D%2230%22%20r%3D%2210.5%22%20/%3E%0A%09%09%3Ccircle%20cx%3D%2244%22%20cy%3D%2230%22%20r%3D%2210.5%22%20/%3E%0A%09%3C/g%3E%0A%3C/svg%3E%0A">
 <style>
-  :root {
-    --fill: rgba(28, 28, 31, .92); --raised: #343439; --rule: #38383d;
-    --ink: #e8e8ea; --ink-2: #aaaaae; --muted: #7d7d82;
-    --you: #7fc4f0; --warn: #f0c27a; --shadow: 0 8px 24px rgba(0, 0, 0, .55);
-  }
-  html, body { margin: 0; height: 100%; background: #000; overflow: hidden; }
-  body { display: flex; align-items: center; justify-content: center; font: 13px system-ui, -apple-system, "Segoe UI", sans-serif; color: var(--ink-2); }
-  canvas { display: block; outline: none; cursor: default; image-rendering: auto; }
-  /* One bar says whose screen this is and offers only what that allows. */
-  #bar { position: fixed; left: 50%; bottom: 18px; transform: translateX(-50%); display: inline-flex; align-items: center; gap: 4px; height: 40px; padding: 4px 6px 4px 12px; border-radius: 999px; background: var(--fill); border: 1px solid var(--rule); box-shadow: var(--shadow); white-space: nowrap; backdrop-filter: blur(8px); transition: opacity .3s; }
-  #bar .status { display: inline-flex; align-items: center; gap: 8px; padding-right: 10px; margin-right: 4px; border-right: 1px solid var(--rule); color: var(--ink-2); }
-  #bar .status .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--muted); }
-  #bar .sub { color: var(--muted); }
-  #bar.driving .status { color: var(--you); }
-  #bar.driving .status .dot { background: var(--you); box-shadow: 0 0 0 3px rgba(127, 196, 240, .2); }
-  #bar.held .status .dot { background: var(--warn); }
-  #bar.lost .status .dot { background: transparent; border: 1.5px solid var(--muted); }
-  #bar button { border: 0; font: inherit; height: 30px; padding: 0 12px; border-radius: 999px; background: transparent; color: var(--ink); cursor: pointer; }
-  #bar button.primary { background: var(--ink); color: #0d0d0f; font-weight: 600; }
-  #bar button.quiet { color: var(--ink-2); }
-  #bar button.quiet:hover, #bar button.quiet:focus-visible { background: var(--raised); color: var(--ink); }
-  #bar button[disabled] { opacity: .4; cursor: default; }
-  #bar .hint { font: 11px ui-monospace, Menlo, monospace; color: var(--muted); padding: 0 8px 0 4px; }
-  /* While the screen is the person's, the bar sits over a desktop they are
-     using, so it steps back to the edge of sight until they go for it. */
-  #bar.driving.idle { opacity: .4; }
-  #bar.driving.idle:hover { opacity: 1; }
-  /* The hands, drawn where the machine says they are. The screen stream
-     carries no cursor, so this arrow is how a person watching sees the
-     agent reach for things; it slides rather than jumps, and a press rings. */
-  #pointer { position: fixed; left: 0; top: 0; width: 22px; height: 30px; pointer-events: none; opacity: 0; transition: transform .14s cubic-bezier(.2, .7, .2, 1), opacity .4s; will-change: transform; filter: drop-shadow(0 1px 2px rgba(0, 0, 0, .6)); z-index: 5; }
-  #pointer.shown { opacity: 1; }
-  .ring { position: fixed; left: 0; top: 0; width: 28px; height: 28px; margin: -14px 0 0 -14px; border-radius: 50%; border: 2px solid var(--you); pointer-events: none; z-index: 4; animation: ring .45s ease-out forwards; }
-  .ring.right { border-color: var(--warn); }
-  @keyframes ring { from { transform: scale(.3); opacity: .9; } to { transform: scale(1.4); opacity: 0; } }
-  /* The Files panel: the home and what is under it, as the machine lists
-     it. A folder opens; a file is saved on this computer. */
-  #files { position: fixed; right: 18px; bottom: 70px; width: min(420px, calc(100vw - 36px)); max-height: min(60vh, 520px); display: flex; flex-direction: column; border-radius: 14px; background: var(--fill); border: 1px solid var(--rule); box-shadow: var(--shadow); backdrop-filter: blur(8px); overflow: hidden; z-index: 6; }
-  #files[hidden] { display: none; }
-  #files header { display: flex; align-items: center; gap: 4px; padding: 8px 8px 8px 14px; border-bottom: 1px solid var(--rule); }
-  #files header .path { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font: 12px ui-monospace, Menlo, monospace; color: var(--ink); }
-  #files header button { border: 0; font: inherit; width: 28px; height: 28px; border-radius: 999px; background: transparent; color: var(--ink-2); cursor: pointer; }
-  #files header button:hover:not([disabled]) { background: var(--raised); color: var(--ink); }
-  #files header button[disabled] { opacity: .3; cursor: default; }
-  #files.arriving { outline: 2px dashed var(--you); outline-offset: -2px; }
-  #files ul { list-style: none; margin: 0; padding: 6px 0; overflow-y: auto; }
-  #files li { display: flex; align-items: center; gap: 10px; padding: 6px 14px; cursor: pointer; color: var(--ink); }
-  #files li:hover { background: var(--raised); }
-  #files li .name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  #files li.dir .name::after { content: "/"; color: var(--muted); }
-  #files li .size { font: 11px ui-monospace, Menlo, monospace; color: var(--muted); }
-  #files li.empty { color: var(--muted); cursor: default; }
-  #files li.empty:hover { background: transparent; }
-  #toast { position: fixed; left: 50%; bottom: 70px; transform: translateX(-50%); padding: 5px 12px; border-radius: 999px; background: var(--fill); border: 1px solid var(--rule); color: var(--ink-2); font-size: 12px; pointer-events: none; transition: opacity .3s; }
-  #toast.quiet { opacity: 0; }
+@font-face { font-family: Geist; src: url('/assets/fonts/Geist-Regular.woff2') format('woff2'); font-weight: 400; font-display: swap; }
+@font-face { font-family: Geist; src: url('/assets/fonts/Geist-Medium.woff2') format('woff2'); font-weight: 500; font-display: swap; }
+@font-face { font-family: Geist; src: url('/assets/fonts/Geist-SemiBold.woff2') format('woff2'); font-weight: 600; font-display: swap; }
+@font-face { font-family: 'Geist Mono'; src: url('/assets/fonts/GeistMono-Regular.woff2') format('woff2'); font-weight: 400; font-display: swap; }
+:root {
+  --ground:#0b0b0d; --bar:#111114; --bar-rule:#222227; --surface:#17171b;
+  --raised:#1f1f25; --raised-edge:#2e2e35; --chip:#19191e; --chip-edge:#26262c; --rule:#2a2a30;
+  --ink:#ececef; --ink-2:#b4b4ba; --pill-ink:#a2a2a9; --muted:#8e8e95;
+  --agent:#8fb8ff; --you:#f0c27a; --ok:#86d69c; --fail:#ff8f80;
+  --fill:rgba(23,23,27,.92); --shadow:0 18px 40px rgba(0,0,0,.5);
+}
+* { box-sizing:border-box; }
+[hidden] { display:none !important; }
+html { min-height:100%; background:var(--ground); }
+body { margin:0; min-height:100vh; color:var(--ink); font:13px Geist,sans-serif; }
+#stage { min-height:calc(100vh - 72px); display:flex; align-items:center; justify-content:center; }
+body.native #stage { width:max-content; min-width:100%; padding-bottom:16px; }
+canvas { display:block; touch-action:none; cursor:default; flex:none; }
+button { border:0; font:inherit; font-weight:400; cursor:pointer; background:transparent; color:var(--ink); }
+button:disabled { opacity:.45; cursor:default; }
+button:focus-visible, canvas:focus-visible, #toast:focus-visible { outline:2px solid var(--agent); outline-offset:2px; }
+button svg { width:16px; height:16px; flex:none; fill:none; stroke:currentColor; stroke-width:1.5; stroke-linecap:round; stroke-linejoin:round; }
+.mark { display:block; width:16px; height:16px; flex:none; color:var(--ink); }
+#placeholder { position:fixed; inset:0 0 72px; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:16px; padding:24px; text-align:center; color:var(--muted); }
+#placeholder .mark { width:64px; height:64px; }
+#placeholder p { max-width:380px; margin:0; line-height:1.6; }
+#bar { position:fixed; z-index:10; left:50%; bottom:12px; transform:translateX(-50%); display:flex; align-items:center; gap:4px; height:48px; max-width:calc(100vw - 24px); padding:0 6px 0 12px; border-radius:14px; background:var(--fill); border:1px solid var(--raised-edge); box-shadow:var(--shadow); backdrop-filter:blur(8px); white-space:nowrap; }
+#bar.driving { border-color:color-mix(in srgb,var(--you) 45%,transparent); }
+#bar .status { display:flex; align-items:center; gap:8px; min-width:0; padding-right:10px; margin-right:2px; }
+#bar .status.divided { border-right:1px solid var(--rule); }
+#status { overflow:hidden; text-overflow:ellipsis; max-width:220px; }
+.dot { width:7px; height:7px; border-radius:50%; background:var(--ok); flex:none; }
+#bar.lost .dot { background:var(--muted); }
+#bar.stalled .dot, #bar.held .dot, #bar.driving .dot { background:var(--you); }
+#bar.driving #status { color:var(--you); }
+.sub { color:var(--muted); }
+#job-count.failed { color:var(--fail); }
+#bar button { height:32px; padding:0 10px; border-radius:8px; flex:none; }
+#bar button:hover:not(:disabled), #settings button:hover { background:var(--raised); }
+#bar .icon { width:32px; padding:8px; }
+#bar .primary, #bar .primary:hover:not(:disabled) { background:var(--you); color:var(--ground); font-weight:500; }
+#bar #back { background:var(--chip-edge); }
+#bar .quiet { color:var(--ink-2); }
+#bar [aria-pressed=true] { background:var(--raised); color:var(--agent); }
+#keys { position:fixed; bottom:66px; left:50%; transform:translateX(-50%); color:var(--muted); font-size:11px; pointer-events:none; z-index:10; }
+#pointer { position:fixed; left:0; top:0; width:22px; height:30px; pointer-events:none; opacity:0; transition:transform .14s ease-out,opacity .25s; z-index:5; }
+#pointer.shown, #intent.shown { opacity:1; }
+#intent { position:fixed; display:flex; align-items:center; gap:6px; height:28px; max-width:calc(100vw - 16px); padding:0 10px 0 4px; border-radius:14px; background:var(--agent); color:var(--ground); font-size:12.5px; font-weight:500; pointer-events:none; opacity:0; transition:opacity .25s; z-index:5; }
+#intent-initial { display:grid; place-items:center; width:20px; height:20px; border-radius:50%; background:rgba(11,11,13,.12); flex:none; }
+#intent-label { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.ring { position:fixed; width:28px; height:28px; margin:-14px 0 0 -14px; border:2px solid var(--agent); border-radius:50%; pointer-events:none; z-index:4; animation:ring .45s ease-out forwards; }
+.ring.right { border-color:var(--you); }
+@keyframes ring { from { transform:scale(.3); opacity:.9; } to { transform:scale(1.4); opacity:0; } }
+.sheet { position:fixed; right:12px; bottom:72px; border-radius:14px; background:var(--fill); border:1px solid var(--raised-edge); box-shadow:var(--shadow); backdrop-filter:blur(8px); z-index:20; }
+#settings { padding:6px; width:220px; }
+#settings button { display:flex; width:100%; align-items:center; justify-content:space-between; text-align:left; min-height:32px; padding:6px 10px; border-radius:8px; }
+#settings [aria-pressed=true] .check { color:var(--agent); }
+#settings [aria-pressed=false] .check { visibility:hidden; }
+#files { width:min(440px,calc(100vw - 24px)); max-height:min(65vh,540px); display:flex; flex-direction:column; }
+#files header { display:flex; align-items:center; gap:4px; padding:8px 8px 8px 14px; border-bottom:1px solid var(--rule); }
+#files-path { flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font:12px 'Geist Mono',monospace; }
+#files header button { width:28px; height:28px; border-radius:8px; display:grid; place-items:center; }
+#files header button:hover { background:var(--raised); }
+#files.arriving { outline:2px dashed var(--agent); outline-offset:-2px; }
+#files-list { list-style:none; margin:0; padding:6px; overflow-y:auto; }
+#files-list li { position:relative; }
+.file-row { display:flex; width:100%; gap:10px; align-items:center; text-align:left; padding:9px 8px; border-radius:8px; }
+.file-row:hover { background:var(--raised); }
+.file-row .name, .upload .name { flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.file-row.dir .name::after { content:'/'; color:var(--muted); }
+.file-row .details { color:var(--muted); text-align:right; font-size:11px; line-height:1.5; flex:none; }
+.file-row .download { opacity:0; }
+.file-row:hover .download, .file-row:focus-visible .download { opacity:1; }
+.empty, .upload { color:var(--muted); padding:10px 8px; }
+.upload { display:flex; gap:8px; position:relative; }
+.progress { position:absolute; left:8px; right:8px; bottom:3px; height:2px; background:var(--chip-edge); }
+.progress span { display:block; width:0; height:100%; background:var(--agent); }
+#toast { position:fixed; z-index:40; left:50%; bottom:82px; transform:translateX(-50%); max-width:calc(100vw - 24px); padding:10px 14px; border-radius:8px; background:var(--surface); border:1px solid var(--raised-edge); box-shadow:var(--shadow); color:var(--ink-2); line-height:1.4; cursor:pointer; transition:opacity .2s; }
+#toast.error { color:var(--fail); }
+#toast.quiet { opacity:0; pointer-events:none; }
+@media(max-width:600px), (hover:none) {
+  #sub, .hint, #bar .secondary { display:none; }
+  #bar { gap:2px; padding-left:8px; }
+  #bar button { padding:0 8px; }
+  #bar .status { gap:6px; padding-right:6px; margin-right:0; }
+  #status { max-width:120px; }
+  #bar .icon { padding:8px; }
+  .file-row .download { opacity:1; }
+}
+@media(prefers-reduced-motion:reduce) { #pointer, #intent, #toast { transition:none; } .ring { animation:none; } }
 </style>
 </head>
 <body>
-<canvas id="screen" tabindex="0" width="1" height="1"></canvas>
-<svg id="pointer" viewBox="0 0 22 30" aria-hidden="true"><path d="M2.5 1.5 L2.5 23 L8.6 17.6 L19 15.4 Z" fill="#f4f4f6" stroke="#141416" stroke-width="1.6" stroke-linejoin="round"/></svg>
-<div id="toast" class="quiet"></div>
-<div id="files" hidden>
-  <header><span class="path" id="files-path"></span><button id="files-add" type="button" title="Add a file from your computer">+</button><button id="files-up" type="button" title="Up a folder">↑</button><button id="files-close" type="button" title="Close">×</button></header>
-  <input id="files-pick" type="file" multiple hidden>
-  <ul id="files-list"></ul>
-</div>
+<div id="stage"><canvas id="screen" tabindex="0" width="1" height="1" role="img" aria-label="Agent's desktop" hidden></canvas></div>
+<div id="placeholder"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" class="mark" aria-hidden="true">
+
+	<mask id="placeholder-pupils" maskUnits="userSpaceOnUse" x="0" y="0" width="64" height="64">
+		<rect width="64" height="64" fill="#fff" />
+		<rect x="14.5" y="28" width="11" height="4" rx="2" fill="#000" />
+		<rect x="38.5" y="28" width="11" height="4" rx="2" fill="#000" />
+	</mask>
+	<g mask="url(#placeholder-pupils)" fill="currentColor">
+		<rect x="4" y="30" width="56" height="18" rx="6" />
+		<circle cx="20" cy="30" r="10.5" />
+		<circle cx="44" cy="30" r="10.5" />
+	</g>
+</svg>
+<p id="placeholder-text">Connecting…</p></div>
+<svg id="pointer" viewBox="0 0 22 30" aria-hidden="true"><path d="M2.5 1.5 L2.5 23 L8.6 17.6 L19 15.4 Z" fill="#8fb8ff" stroke="#0b0b0d" stroke-width="1.6" stroke-linejoin="round"/></svg>
+<div id="intent" aria-hidden="true"><span id="intent-initial"></span><span id="intent-label"></span></div>
+<div id="toast" class="quiet" role="alert" tabindex="0"></div>
+<section id="files" class="sheet" aria-label="Files" hidden>
+  <header><span id="files-path">Files</span>
+    <button id="files-add" aria-label="Add files" title="Add files from your computer"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M8 3v10M3 8h10"/></svg></button>
+    <button id="files-up" aria-label="Up a folder" title="Up a folder"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M8 13V3M3 8l5-5 5 5"/></svg></button>
+    <button id="files-close" aria-label="Close Files" title="Close Files"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="m4 4 8 8M12 4l-8 8"/></svg></button>
+  </header>
+  <input id="files-pick" type="file" multiple hidden><ul id="files-list"></ul>
+</section>
+<section id="settings" class="sheet" aria-label="Viewer settings" hidden>
+  <button id="cmd-control" aria-pressed="true">Cmd as Ctrl <span class="check" aria-hidden="true">✓</span></button>
+  <button id="settings-scale" aria-pressed="false">1:1 pixels <span class="check" aria-hidden="true">✓</span></button>
+  <button id="settings-fullscreen">Fullscreen</button>
+</section>
+<div id="keys" hidden>keys → computer</div>
 <div id="bar" class="lost">
-  <span class="status"><span class="dot"></span><span id="status">Connecting…</span><span class="sub" id="sub"></span></span>
-  <button id="control" type="button" class="primary" hidden>Take control</button>
-  <button id="paste" type="button" class="quiet" hidden>Paste</button>
-  <button id="browse" type="button" class="quiet" hidden>Files</button>
-  <button id="back" type="button" class="quiet" hidden>Give it back</button>
-  <span class="hint" id="hint" hidden></span>
+  <span class="status" aria-live="polite"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" class="mark" aria-hidden="true">
+
+	<mask id="status-pupils" maskUnits="userSpaceOnUse" x="0" y="0" width="64" height="64">
+		<rect width="64" height="64" fill="#fff" />
+		<rect x="14.5" y="28" width="11" height="4" rx="2" fill="#000" />
+		<rect x="38.5" y="28" width="11" height="4" rx="2" fill="#000" />
+	</mask>
+	<g mask="url(#status-pupils)" fill="currentColor">
+		<rect x="4" y="30" width="56" height="18" rx="6" />
+		<circle cx="20" cy="30" r="10.5" />
+		<circle cx="44" cy="30" r="10.5" />
+	</g>
+</svg>
+<span class="dot" aria-hidden="true"></span><span id="status">Connecting…</span><span id="sub" class="sub"><span id="job-count"></span><span id="latency"></span></span></span>
+  <button id="browse" class="quiet" aria-expanded="false" aria-controls="files" hidden>Files</button>
+  <button id="paste" class="quiet" title="Ctrl+Alt+V pastes from your computer" hidden>Paste</button>
+  <button id="control" class="primary" hidden>Take control</button>
+  <button id="back" title="Give it back (Ctrl+Alt+Shift)" hidden>Give it back</button>
+  <button id="scale" class="quiet secondary" aria-pressed="false" title="Show one screen pixel per device pixel">1:1</button>
+  <button id="fullscreen" class="quiet icon secondary" aria-label="Fullscreen" title="Fullscreen"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M6 2H2v4m8-4h4v4M2 10v4h4m8-4v4h-4"/></svg></button>
+  <button id="settings-toggle" class="quiet icon" aria-label="Settings" aria-expanded="false" aria-controls="settings" title="Settings"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M2 4h12M2 12h12M5 2v4m6 4v4"/></svg></button>
 </div>
 <script>
 (() => {
-  const canvas = document.getElementById("screen");
-  const context = canvas.getContext("2d");
-  const bar = document.getElementById("bar");
-  const status = document.getElementById("status");
-  const sub = document.getElementById("sub");
-  const control = document.getElementById("control");
-  const paste = document.getElementById("paste");
-  const back = document.getElementById("back");
-  const browse = document.getElementById("browse");
-  const hint = document.getElementById("hint");
-  const toast = document.getElementById("toast");
-  const token = decodeURIComponent(location.hash.slice(1));
-  const mac = /Mac|iPhone|iPad/.test(navigator.platform);
-  let socket = null;
-  let drawing = Promise.resolve();
-  let quiet = null;
-  let connected = false;
-  // The page opens watching. Nothing it does reaches the desktop until the
-  // person takes the screen, so opening it never takes it from the agent.
-  let driving = false;
-  // What the machine last said about itself: who holds it and its jobs.
-  let machine = { holder: "none", running: 0, completed: 0, failed: 0 };
-  let sticky = false;
-  // The hands' last known point in screen pixels, and when to stop showing them.
-  const pointer = document.getElementById("pointer");
-  let hands = null;
-  let handsIdle = null;
+  'use strict';
+  const $ = id => document.getElementById(id);
+  const canvas = $('screen'), context = canvas.getContext('2d'), bar = $('bar');
+  const status = $('status'), sub = $('sub'), control = $('control'), paste = $('paste'), back = $('back'), browse = $('browse');
+  const pointer = $('pointer'), intent = $('intent'), toast = $('toast'), placeholder = $('placeholder');
+  const mac = /Mac|iPhone|iPad/i.test(navigator.userAgentData?.platform || navigator.platform);
+  let token; try { token = decodeURIComponent(location.hash.slice(1)); } catch { token = location.hash.slice(1); }
+  let socket, connected = false, hasOpened = false, driving = false, frameReady = false, stopped = false;
+  let machine = { holder:'none', running:0, completed:0, failed:0, agent:{name:'Agent'} };
+  let connectionText = 'Connecting…', reconnectAttempt = 0, nativeSize = false, cmdAsCtrl = true;
+  let drawing = Promise.resolve(), hands, handsIdle, toastTimer, hinted = false;
+  let pingID = 0, lastPong = 0, latency = null;
+  const pings = new Map(), held = new Map(), pointers = new Map();
 
-  function placePointer() {
-    if (!hands) return;
-    const rect = canvas.getBoundingClientRect();
-    const px = rect.left + hands.x * rect.width / canvas.width;
-    const py = rect.top + hands.y * rect.height / canvas.height;
-    pointer.style.transform = `translate(${px.toFixed(1)}px, ${py.toFixed(1)}px)`;
-    return [px, py];
+  function dismissToast() { clearTimeout(toastTimer); toast.classList.add('quiet'); toast.tabIndex = -1; }
+  function say(text, error = false) {
+    toast.textContent = text; toast.classList.toggle('error', error); toast.classList.remove('quiet'); toast.tabIndex = 0;
+    clearTimeout(toastTimer); toastTimer = setTimeout(dismissToast, 6000);
   }
-
-  function showHands(message) {
-    hands = { x: message.x, y: message.y };
-    const at = placePointer();
-    // A person driving has their own pointer over the screen already.
-    pointer.classList.toggle("shown", !driving);
-    if (message.button && message.down && !driving && at) {
-      const ring = document.createElement("div");
-      ring.className = "ring" + (message.button === 3 ? " right" : "");
-      ring.style.left = at[0] + "px"; ring.style.top = at[1] + "px";
-      document.body.appendChild(ring);
-      ring.addEventListener("animationend", () => ring.remove());
-    }
-    clearTimeout(handsIdle);
-    handsIdle = setTimeout(() => pointer.classList.remove("shown"), 4000);
+  toast.addEventListener('click', dismissToast);
+  toast.addEventListener('keydown', event => { if (event.key === 'Enter' || event.key === 'Escape' || event.key === ' ') dismissToast(); });
+  function send(message) {
+    if (socket?.readyState !== WebSocket.OPEN) return;
+    if (['move','button','key','wheel','paste'].includes(message.t)) dismissToast();
+    socket.send(JSON.stringify(message));
   }
-
-  function say(text, fade = true) {
-    toast.textContent = text;
-    toast.classList.remove("quiet");
-    clearTimeout(quiet);
-    sticky = !fade;
-    if (fade) quiet = setTimeout(() => toast.classList.add("quiet"), 1200);
-  }
-
+  function agentName() { return machine.agent?.name || 'Agent'; }
+  // The harness marks from assets/harness, drawn in the pill's ink.
+  // Constants only: the agent supplies a key, never markup.
+  const MARKS = {"claude": "<svg viewBox=\"0 0 24 24\" xmlns=\"http://www.w3.org/2000/svg\" fill=\"currentColor\"><path d=\"m4.7144 15.9555 4.7174-2.6471.079-.2307-.079-.1275h-.2307l-.7893-.0486-2.6956-.0729-2.3375-.0971-2.2646-.1214-.5707-.1215-.5343-.7042.0546-.3522.4797-.3218.686.0608 1.5179.1032 2.2767.1578 1.6514.0972 2.4468.255h.3886l.0546-.1579-.1336-.0971-.1032-.0972L6.973 9.8356l-2.55-1.6879-1.3356-.9714-.7225-.4918-.3643-.4614-.1578-1.0078.6557-.7225.8803.0607.2246.0607.8925.686 1.9064 1.4754 2.4893 1.8336.3643.3035.1457-.1032.0182-.0728-.164-.2733-1.3539-2.4467-1.445-2.4893-.6435-1.032-.17-.6194c-.0607-.255-.1032-.4674-.1032-.7285L6.287.1335 6.6997 0l.9957.1336.419.3642.6192 1.4147 1.0018 2.2282 1.5543 3.0296.4553.8985.2429.8318.091.255h.1579v-.1457l.1275-1.706.2368-2.0947.2307-2.6957.0789-.7589.3764-.9107.7468-.4918.5828.2793.4797.686-.0668.4433-.2853 1.8517-.5586 2.9021-.3643 1.9429h.2125l.2429-.2429.9835-1.3053 1.6514-2.0643.7286-.8196.85-.9046.5464-.4311h1.0321l.759 1.1293-.34 1.1657-1.0625 1.3478-.8804 1.1414-1.2628 1.7-.7893 1.36.0729.1093.1882-.0183 2.8535-.607 1.5421-.2794 1.8396-.3157.8318.3886.091.3946-.3278.8075-1.967.4857-2.3072.4614-3.4364.8136-.0425.0304.0486.0607 1.5482.1457.6618.0364h1.621l3.0175.2247.7892.522.4736.6376-.079.4857-1.2142.6193-1.6393-.3886-3.825-.9107-1.3113-.3279h-.1822v.1093l1.0929 1.0686 2.0035 1.8092 2.5075 2.3314.1275.5768-.3218.4554-.34-.0486-2.2039-1.6575-.85-.7468-1.9246-1.621h-.1275v.17l.4432.6496 2.3436 3.5214.1214 1.0807-.17.3521-.6071.2125-.6679-.1214-1.3721-1.9246L14.38 17.959l-1.1414-1.9428-.1397.079-.674 7.2552-.3156.3703-.7286.2793-.6071-.4614-.3218-.7468.3218-1.4753.3886-1.9246.3157-1.53.2853-1.9004.17-.6314-.0121-.0425-.1397.0182-1.4328 1.9672-2.1796 2.9446-1.7243 1.8456-.4128.164-.7164-.3704.0667-.6618.4008-.5889 2.386-3.0357 1.4389-1.882.929-1.0868-.0062-.1579h-.0546l-6.3385 4.1164-1.1293.1457-.4857-.4554.0608-.7467.2307-.2429 1.9064-1.3114Z\"/></svg>", "codex": "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 24 24\" fill-rule=\"evenodd\" fill=\"currentColor\"><path clip-rule=\"evenodd\" d=\"M8.086.457a6.105 6.105 0 013.046-.415c1.333.153 2.521.72 3.564 1.7a.117.117 0 00.107.029c1.408-.346 2.762-.224 4.061.366l.063.03.154.076c1.357.703 2.33 1.77 2.918 3.198.278.679.418 1.388.421 2.126a5.655 5.655 0 01-.18 1.631.167.167 0 00.04.155 5.982 5.982 0 011.578 2.891c.385 1.901-.01 3.615-1.183 5.14l-.182.22a6.063 6.063 0 01-2.934 1.851.162.162 0 00-.108.102c-.255.736-.511 1.364-.987 1.992-1.199 1.582-2.962 2.462-4.948 2.451-1.583-.008-2.986-.587-4.21-1.736a.145.145 0 00-.14-.032c-.518.167-1.04.191-1.604.185a5.924 5.924 0 01-2.595-.622 6.058 6.058 0 01-2.146-1.781c-.203-.269-.404-.522-.551-.821a7.74 7.74 0 01-.495-1.283 6.11 6.11 0 01-.017-3.064.166.166 0 00.008-.074.115.115 0 00-.037-.064 5.958 5.958 0 01-1.38-2.202 5.196 5.196 0 01-.333-1.589 6.915 6.915 0 01.188-2.132c.45-1.484 1.309-2.648 2.577-3.493.282-.188.55-.334.802-.438.286-.12.573-.22.861-.304a.129.129 0 00.087-.087A6.016 6.016 0 015.635 2.31C6.315 1.464 7.132.846 8.086.457zm-.804 7.85a.848.848 0 00-1.473.842l1.694 2.965-1.688 2.848a.849.849 0 001.46.864l1.94-3.272a.849.849 0 00.007-.854l-1.94-3.393zm5.446 6.24a.849.849 0 000 1.695h4.848a.849.849 0 000-1.696h-4.848z\" /></svg>", "cursor": "<svg viewBox=\"0 0 24 24\" xmlns=\"http://www.w3.org/2000/svg\" fill=\"currentColor\"><path d=\"M11.503.131 1.891 5.678a.84.84 0 0 0-.42.726v11.188c0 .3.162.575.42.724l9.609 5.55a1 1 0 0 0 .998 0l9.61-5.55a.84.84 0 0 0 .42-.724V6.404a.84.84 0 0 0-.42-.726L12.497.131a1.01 1.01 0 0 0-.996 0M2.657 6.338h18.55c.263 0 .43.287.297.515L12.23 22.918c-.062.107-.229.064-.229-.06V12.335a.59.59 0 0 0-.295-.51l-9.11-5.257c-.109-.063-.064-.23.061-.23\"/></svg>", "opencode": "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 24 24\" fill-rule=\"evenodd\" fill=\"currentColor\"><path d=\"M16 6H8v12h8V6zm4 16H4V2h16v20z\" /></svg>", "copilot": "<svg viewBox=\"0 0 24 24\" xmlns=\"http://www.w3.org/2000/svg\" fill=\"currentColor\"><path d=\"M23.922 16.997C23.061 18.492 18.063 22.02 12 22.02 5.937 22.02.939 18.492.078 16.997A.641.641 0 0 1 0 16.741v-2.869a.883.883 0 0 1 .053-.22c.372-.935 1.347-2.292 2.605-2.656.167-.429.414-1.055.644-1.517a10.098 10.098 0 0 1-.052-1.086c0-1.331.282-2.499 1.132-3.368.397-.406.89-.717 1.474-.952C7.255 2.937 9.248 1.98 11.978 1.98c2.731 0 4.767.957 6.166 2.093.584.235 1.077.546 1.474.952.85.869 1.132 2.037 1.132 3.368 0 .368-.014.733-.052 1.086.23.462.477 1.088.644 1.517 1.258.364 2.233 1.721 2.605 2.656a.841.841 0 0 1 .053.22v2.869a.641.641 0 0 1-.078.256Zm-11.75-5.992h-.344a4.359 4.359 0 0 1-.355.508c-.77.947-1.918 1.492-3.508 1.492-1.725 0-2.989-.359-3.782-1.259a2.137 2.137 0 0 1-.085-.104L4 11.746v6.585c1.435.779 4.514 2.179 8 2.179 3.486 0 6.565-1.4 8-2.179v-6.585l-.098-.104s-.033.045-.085.104c-.793.9-2.057 1.259-3.782 1.259-1.59 0-2.738-.545-3.508-1.492a4.359 4.359 0 0 1-.355-.508Zm2.328 3.25c.549 0 1 .451 1 1v2c0 .549-.451 1-1 1-.549 0-1-.451-1-1v-2c0-.549.451-1 1-1Zm-5 0c.549 0 1 .451 1 1v2c0 .549-.451 1-1 1-.549 0-1-.451-1-1v-2c0-.549.451-1 1-1Zm3.313-6.185c.136 1.057.403 1.913.878 2.497.442.544 1.134.938 2.344.938 1.573 0 2.292-.337 2.657-.751.384-.435.558-1.15.558-2.361 0-1.14-.243-1.847-.705-2.319-.477-.488-1.319-.862-2.824-1.025-1.487-.161-2.192.138-2.533.529-.269.307-.437.808-.438 1.578v.021c0 .265.021.562.063.893Zm-1.626 0c.042-.331.063-.628.063-.894v-.02c-.001-.77-.169-1.271-.438-1.578-.341-.391-1.046-.69-2.533-.529-1.505.163-2.347.537-2.824 1.025-.462.472-.705 1.179-.705 2.319 0 1.211.175 1.926.558 2.361.365.414 1.084.751 2.657.751 1.21 0 1.902-.394 2.344-.938.475-.584.742-1.44.878-2.497Z\"/></svg>", "windsurf": "<svg viewBox=\"0 0 24 24\" xmlns=\"http://www.w3.org/2000/svg\" fill=\"currentColor\"><path d=\"M23.55 5.067c-1.2038-.002-2.1806.973-2.1806 2.1765v4.8676c0 .972-.8035 1.7594-1.7597 1.7594-.568 0-1.1352-.286-1.4718-.7659l-4.9713-7.1003c-.4125-.5896-1.0837-.941-1.8103-.941-1.1334 0-2.1533.9635-2.1533 2.153v4.8957c0 .972-.7969 1.7594-1.7596 1.7594-.57 0-1.1363-.286-1.4728-.7658L.4076 5.1598C.2822 4.9798 0 5.0688 0 5.2882v4.2452c0 .2147.0656.4228.1884.599l5.4748 7.8183c.3234.462.8006.8052 1.3509.9298 1.3771.313 2.6446-.747 2.6446-2.0977v-4.893c0-.972.7875-1.7593 1.7596-1.7593h.003a1.798 1.798 0 0 1 1.4718.7658l4.9723 7.0994c.4135.5905 1.05.941 1.8093.941 1.1587 0 2.1515-.9645 2.1515-2.153v-4.8948c0-.972.7875-1.7594 1.7596-1.7594h.194a.22.22 0 0 0 .2204-.2202v-4.622a.22.22 0 0 0-.2203-.2203Z\"/></svg>", "cline": "<svg viewBox=\"0 0 24 24\" xmlns=\"http://www.w3.org/2000/svg\" fill=\"currentColor\"><path d=\"m23.365 13.556-1.442-2.895V8.994c0-2.764-2.218-5.002-4.954-5.002h-2.464c.178-.367.276-.779.276-1.213A2.77 2.77 0 0 0 12.018 0a2.77 2.77 0 0 0-2.763 2.779c0 .434.098.846.276 1.213H7.067c-2.736 0-4.954 2.238-4.954 5.002v1.667L.64 13.549c-.149.29-.149.636 0 .927l1.472 2.855v1.667C2.113 21.762 4.33 24 7.067 24h9.902c2.736 0 4.954-2.238 4.954-5.002V17.33l1.44-2.865c.143-.286.143-.622.002-.91m-12.854 2.36a2.27 2.27 0 0 1-2.261 2.273 2.27 2.27 0 0 1-2.261-2.273v-4.042A2.27 2.27 0 0 1 8.249 9.6a2.267 2.267 0 0 1 2.262 2.274zm7.285 0a2.27 2.27 0 0 1-2.26 2.273 2.27 2.27 0 0 1-2.262-2.273v-4.042A2.267 2.267 0 0 1 15.535 9.6a2.267 2.267 0 0 1 2.261 2.274z\"/></svg>", "roocode": "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 24 24\" fill-rule=\"evenodd\" fill=\"currentColor\"><path d=\"M20.113 5.5l-.442 1.557a.157.157 0 01-.196.106l-7.414-2.157a.16.16 0 00-.143.028l-7.342 5.74a.159.159 0 01-.074.032l-4.37.656a.154.154 0 00-.132.162l.02.245c.005.078.071.14.152.141l5.074.128.058.002 3.75-1.953a.16.16 0 01.164.01l2.657 1.847a.152.152 0 01.066.125l-.023 2.45c0 .032.01.063.028.089l3.737 5.227c.03.04.077.065.129.065h1.182a.153.153 0 00.14-.224l-2.664-4.919a.15.15 0 01.005-.152l1.389-2.169a.156.156 0 01.062-.055l4.965-2.456a.16.16 0 01.158.01l1.418.921a.16.16 0 00.087.026h1.289c.125 0 .2-.136.13-.237l-3.578-5.29c-.074-.109-.246-.082-.282.044z\" /></svg>", "zed": "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 96 96\" fill=\"currentColor\"><g clip-path=\"url(#a)\"><path fill=\"currentColor\" fill-rule=\"evenodd\" d=\"M9 6a3 3 0 0 0-3 3v66H0V9a9 9 0 0 1 9-9h80.379c4.009 0 6.016 4.847 3.182 7.682L43.055 57.187H57V51h6v7.688a4.5 4.5 0 0 1-4.5 4.5H37.055L26.743 73.5H73.5V36h6v37.5a6 6 0 0 1-6 6H20.743L10.243 90H87a3 3 0 0 0 3-3V21h6v66a9 9 0 0 1-9 9H6.621c-4.009 0-6.016-4.847-3.182-7.682L52.757 39H39v6h-6v-7.5a4.5 4.5 0 0 1 4.5-4.5h21.257l10.5-10.5H22.5V60h-6V22.5a6 6 0 0 1 6-6h52.757L85.757 6H9Z\" clip-rule=\"evenodd\"/></g><defs><clipPath id=\"a\"><path fill=\"currentColor\" d=\"M0 0h96v96H0z\"/></clipPath></defs></svg>"};
   function render() {
-    const held = machine.holder === "person" && !driving;
-    if (driving) pointer.classList.remove("shown");
-    bar.className = !connected ? "lost" : driving ? "driving" : held ? "held" : "";
-    control.hidden = !connected || driving;
-    control.disabled = held;
-    paste.hidden = back.hidden = hint.hidden = !(connected && driving);
-    browse.hidden = !connected;
-    if (!connected) { status.textContent = "Reconnecting…"; sub.textContent = ""; return; }
-    if (driving) { status.textContent = "You’re in control"; sub.textContent = ""; hint.textContent = (mac ? "⌥⌘V" : "Ctrl+Alt+V") + " pastes from your computer"; return; }
-    if (held) { status.textContent = "Someone else has the screen"; sub.textContent = ""; return; }
-    status.textContent = "Watching";
-    // The same words as the desktop's bar.
-    const { running, completed, failed } = machine;
-    const jobs = failed ? `${failed} failed · ${running} running`
-      : running ? `${running} running · ${completed} done`
-      : completed ? `${completed} done` : "no jobs";
-    const doing = machine.holder === "agent" ? "agent in control" : "agent at work";
-    sub.textContent = `· ${doing} · ${jobs}`;
+    const other = machine.holder === 'person' && !driving;
+    const stalled = connected && performance.now() - lastPong >= 10000;
+    bar.classList.toggle('lost', !connected); bar.classList.toggle('driving', driving);
+    bar.classList.toggle('held', other); bar.classList.toggle('stalled', stalled);
+    control.hidden = !connected || driving; control.disabled = other;
+    paste.hidden = back.hidden = !(connected && driving); browse.hidden = !connected;
+    $('keys').hidden = !(connected && driving && document.activeElement === canvas);
+    $('job-count').classList.toggle('failed', !driving && machine.failed > 0);
+    if (!connected) {
+      status.textContent = connectionText; $('job-count').textContent = ''; $('latency').textContent = '';
+    } else if (driving) {
+      status.textContent = "You're driving"; $('job-count').textContent = '· agent paused'; $('latency').textContent = stalled ? ' · stalled' : '';
+    } else {
+      status.textContent = other ? 'Someone else is driving' : `Watching ${agentName()}`;
+      $('job-count').textContent = machine.failed ? `· ${machine.failed} failed · ${machine.running} running` : `· ${machine.running} jobs`;
+      $('latency').textContent = stalled ? ' · stalled' : latency === null ? ' · live' : ` · live ${latency} ms`;
+    }
+    sub.hidden = !$('job-count').textContent && !$('latency').textContent;
+    const visibleButtons = [...bar.querySelectorAll('button')].some(button => !button.hidden && getComputedStyle(button).display !== 'none');
+    bar.querySelector('.status').classList.toggle('divided', visibleButtons);
+    placeholder.hidden = frameReady;
+    canvas.hidden = !frameReady;
+    $('placeholder-text').textContent = connected ? 'Waiting for the screen…' : connectionText;
+    if (driving || !connected) { pointer.classList.remove('shown'); intent.classList.remove('shown'); }
   }
-
   function fit() {
-    const scale = Math.min(innerWidth / canvas.width, innerHeight / canvas.height);
-    canvas.style.width = Math.floor(canvas.width * scale) + "px";
-    canvas.style.height = Math.floor(canvas.height * scale) + "px";
+    const scale = nativeSize ? 1 / (devicePixelRatio || 1) : Math.min(innerWidth / canvas.width, Math.max(1, innerHeight - 72) / canvas.height);
+    canvas.style.width = Math.floor(canvas.width * scale) + 'px';
+    canvas.style.height = Math.floor(canvas.height * scale) + 'px';
+    document.body.classList.toggle('native', nativeSize);
+    placePointer();
   }
-  addEventListener("resize", () => { fit(); placePointer(); });
-
+  function toggleScale() {
+    nativeSize = !nativeSize;
+    for (const id of ['scale','settings-scale']) $(id).setAttribute('aria-pressed', String(nativeSize));
+    fit();
+  }
+  $('scale').addEventListener('click', toggleScale); $('settings-scale').addEventListener('click', toggleScale);
+  addEventListener('resize', () => { fit(); render(); }); addEventListener('scroll', placePointer);
+  function placePointer() {
+    if (!hands || !frameReady) return;
+    const rect = canvas.getBoundingClientRect();
+    const x = rect.left + hands.x * rect.width / canvas.width, y = rect.top + hands.y * rect.height / canvas.height;
+    pointer.style.transform = `translate(${x}px,${y}px)`;
+    intent.style.left = Math.max(8, Math.min(x + 14, innerWidth - intent.offsetWidth - 8)) + 'px';
+    intent.style.top = Math.max(8, Math.min(y + 30, innerHeight - 36)) + 'px';
+    return [x,y];
+  }
+  function showHands(message) {
+    hands = message;
+    const mark = Object.hasOwn(MARKS, machine.agent?.harness) ? MARKS[machine.agent.harness] : null;
+    if (mark) $('intent-initial').innerHTML = mark.replace('<svg', '<svg width="12" height="12" aria-hidden="true"');
+    else $('intent-initial').textContent = [...agentName()][0]?.toUpperCase() || 'A';
+    $('intent-label').textContent = message.intent ? `${agentName()} · ${message.intent}` : '';
+    const at = placePointer();
+    pointer.classList.toggle('shown', !driving && frameReady);
+    intent.classList.toggle('shown', !driving && frameReady && !!message.intent);
+    if (message.button && message.down && !driving && at) {
+      const ring = document.createElement('div'); ring.className = 'ring' + (message.button === 3 ? ' right' : '');
+      ring.style.left = at[0] + 'px'; ring.style.top = at[1] + 'px'; document.body.append(ring);
+      setTimeout(() => ring.remove(), 500);
+    }
+    clearTimeout(handsIdle); handsIdle = setTimeout(() => { pointer.classList.remove('shown'); intent.classList.remove('shown'); }, 2000);
+  }
+  function ping() {
+    if (!connected) return;
+    const id = ++pingID, now = performance.now(); pings.set(id, now);
+    for (const [old, sent] of pings) if (now - sent > 30000) pings.delete(old);
+    send({t:'ping',id});
+  }
+  setInterval(ping, 5000); setInterval(render, 1000);
+  async function diagnose() {
+    try {
+      const response = await fetch(fileUrl('/files',''), {signal:AbortSignal.timeout(3000)});
+      if (response.status === 401) {
+        stopped = true; connectionText = 'This link is missing its key. Open it from Hotline, or add #<token> to the address.';
+        return;
+      }
+    } catch { /* Health distinguishes an unavailable computer from a refused socket. */ }
+    try {
+      const response = await fetch('/health', {signal:AbortSignal.timeout(3000)});
+      if (!response.ok) throw new Error();
+    } catch { connectionText = "The computer isn't running."; }
+  }
   function connect() {
-    const scheme = location.protocol === "https:" ? "wss" : "ws";
-    socket = new WebSocket(`${scheme}://${location.host}/ws?token=${encodeURIComponent(token)}`);
-    socket.binaryType = "arraybuffer";
-    // A fresh socket is a machine that has not been told who is driving, so
-    // a person who still holds the screen says so again.
-    socket.onopen = () => { connected = true; render(); if (driving) send({ t: "control", take: true }); };
-    socket.onclose = () => { connected = false; driving = false; render(); setTimeout(connect, 1000); };
-    socket.onmessage = (event) => {
+    if (stopped) return;
+    const ws = new WebSocket(`${location.protocol === 'https:' ? 'wss' : 'ws'}://${location.host}/ws?token=${encodeURIComponent(token)}`);
+    socket = ws; ws.binaryType = 'arraybuffer';
+    ws.onopen = () => {
+      if (ws !== socket) return;
+      connected = hasOpened = true; reconnectAttempt = 0; driving = false; frameReady = false;
+      lastPong = performance.now(); latency = null; pings.clear(); render(); ping();
+    };
+    ws.onclose = async () => {
+      if (ws !== socket) return;
+      connected = driving = frameReady = false; held.clear(); releasePointers(false); pings.clear();
+      connectionText = hasOpened ? 'Reconnecting…' : 'Connecting…'; render();
+      if (!hasOpened) await diagnose();
+      render();
+      if (!stopped) setTimeout(connect, [1000,2000,4000,8000,15000][Math.min(reconnectAttempt++,4)]);
+    };
+    ws.onmessage = event => {
+      if (ws !== socket) return;
       if (typeof event.data === 'string') {
-        const message = JSON.parse(event.data);
-        if (message.t === 'state') { machine = message; render(); }
+        let message; try { message = JSON.parse(event.data); } catch { return; }
+        if (message.t === 'state') { machine = message; driving = !!message.driving; render(); }
         if (message.t === 'pointer') showHands(message);
-        if (message.t === 'paste') say('Pasted');
-        if (message.t === 'error') {
-          say(message.error, false);
-          if (!message.driving) { driving = false; render(); }
+        if (message.t === 'pong' && pings.has(message.id)) {
+          lastPong = performance.now(); latency = Math.round(lastPong - pings.get(message.id)); pings.delete(message.id); render();
         }
+        if (message.t === 'paste') say('Pasted');
+        if (message.t === 'error') { if (!message.driving) { driving = false; letGo(); } render(); say(message.error, true); }
         return;
       }
       const data = event.data;
-      const view = new DataView(data);
-      const [x, y, w, h, sw, sh] = [0, 2, 4, 6, 8, 10].map((offset) => view.getUint16(offset, true));
-      if (canvas.width !== sw || canvas.height !== sh) { canvas.width = sw; canvas.height = sh; fit(); }
-      const blob = new Blob([data.slice(12)], { type: "image/png" });
-      drawing = drawing
-        .then(() => createImageBitmap(blob))
-        .then((bitmap) => { context.drawImage(bitmap, x, y); bitmap.close(); })
-        .catch(() => {});
+      if (data.byteLength < 12) return;
+      const view = new DataView(data), [x,y,w,h,sw,sh] = [0,2,4,6,8,10].map(offset => view.getUint16(offset,true));
+      if (!w || !h || !sw || !sh || x + w > sw || y + h > sh) return;
+      drawing = drawing.then(async () => {
+        const bitmap = await createImageBitmap(new Blob([data.slice(12)],{type:'image/png'}));
+        try {
+          if (ws !== socket || !connected) return;
+          if (canvas.width !== sw || canvas.height !== sh) { canvas.width = sw; canvas.height = sh; fit(); }
+          context.drawImage(bitmap,x,y); frameReady = true; render();
+        } finally { bitmap.close(); }
+      }).catch(() => {});
     };
   }
+  addEventListener('hashchange', () => location.reload());
 
-  function send(message) {
-    if (socket && socket.readyState === WebSocket.OPEN) socket.send(JSON.stringify(message));
+  function releasePointers(sendUps = true) {
+    for (const [id, button] of pointers) {
+      if (sendUps) send({t:'button',b:button,down:false});
+      pointers.delete(id);
+      if (canvas.hasPointerCapture(id)) canvas.releasePointerCapture(id);
+    }
   }
-
-  // Keys this page has sent down and not yet up. A host shortcut can take
-  // focus between the two, and a modifier left down turns every later key
-  // into a chord, so losing focus lets go of all of them.
-  const held = new Set();
   function letGo() {
-    for (const key of held) send({ t: "key", key, down: false });
-    held.clear();
+    for (const key of new Set(held.values())) send({t:'key',key,down:false});
+    held.clear(); releasePointers();
   }
-  addEventListener("blur", letGo);
-  document.addEventListener("visibilitychange", () => { if (document.hidden) letGo(); });
-
+  addEventListener('blur', letGo);
+  document.addEventListener('visibilitychange', () => { if (document.hidden) letGo(); });
   function drive(taking) {
-    if (!taking) letGo();
-    driving = taking;
-    send({ t: "control", take: taking });
-    render();
-    if (taking) canvas.focus(); else canvas.blur();
-    say(taking ? "The screen is yours" : "The screen is the agent’s");
-    wake();
+    if (!connected) return;
+    if (!taking) { letGo(); navigator.keyboard?.unlock?.(); }
+    driving = taking; send({t:'control',take:taking}); render();
+    if (taking) {
+      canvas.focus();
+      if (!hinted) { say('Ctrl+Alt+V pastes from your computer. Ctrl+Alt+Shift gives control back.'); hinted = true; }
+    } else { canvas.blur(); say('The screen is the agent’s'); }
   }
-  control.addEventListener("click", () => { if (!control.disabled) drive(true); });
-  back.addEventListener("click", () => drive(false));
-
-  // Driving and idle for two seconds, the bar steps back until the pointer moves.
-  let idle = null;
-  function wake() {
-    bar.classList.remove("idle");
-    clearTimeout(idle);
-    if (driving) idle = setTimeout(() => bar.classList.add("idle"), 2000);
-  }
-  addEventListener("pointermove", wake);
-
+  control.addEventListener('click', () => { if (!control.disabled) drive(true); });
+  back.addEventListener('click', () => drive(false));
   function pasteText(text) {
-    if (!driving || !socket || socket.readyState !== WebSocket.OPEN) return;
-    if (new TextEncoder().encode(text).length > 1048576) { say('Paste exceeds 1 MiB', false); return; }
-    send({t:'paste',text});
-    canvas.focus();
+    if (!driving) return;
+    if (new TextEncoder().encode(text).length > 1048576) { say('Paste exceeds 1 MiB',true); return; }
+    send({t:'paste',text}); canvas.focus();
   }
-  paste.addEventListener('click', async () => {
+  async function pasteFromHost() {
     if (!driving) return;
     try { pasteText(await navigator.clipboard.readText()); }
-    catch { say('Your browser did not share the clipboard.', false); canvas.focus(); }
-  });
-  // The machine has its own clipboard: Ctrl+V, Ctrl+C and Ctrl+Shift+V reach
-  // it like any other key. Text from this computer comes in on Ctrl+Alt+V
-  // (⌥⌘V on a Mac), or the Paste button.
-  function hostPaste(event) {
-    return (event.ctrlKey || event.metaKey) && event.altKey && event.code === 'KeyV';
+    catch { say('Your browser did not share the clipboard.',true); canvas.focus(); }
   }
-  canvas.addEventListener('paste', event => {
-    if (!driving) return;
-    event.preventDefault();
-    pasteText(event.clipboardData.getData('text/plain'));
-  });
+  paste.addEventListener('click',pasteFromHost);
+  canvas.addEventListener('paste', event => { if (driving) { event.preventDefault(); pasteText(event.clipboardData.getData('text/plain')); } });
+  const settings = $('settings'), settingsToggle = $('settings-toggle');
+  function closeSettings() { settings.hidden = true; settingsToggle.setAttribute('aria-expanded','false'); }
+  settingsToggle.addEventListener('click', () => { settings.hidden = !settings.hidden; settingsToggle.setAttribute('aria-expanded',String(!settings.hidden)); });
+  $('cmd-control').hidden = !mac;
+  $('cmd-control').addEventListener('click', () => { letGo(); cmdAsCtrl = !cmdAsCtrl; $('cmd-control').setAttribute('aria-pressed',String(cmdAsCtrl)); });
+  async function fullscreen() {
+    try {
+      if (document.fullscreenElement) { await document.exitFullscreen(); return; }
+      await document.documentElement.requestFullscreen();
+      if (navigator.keyboard?.lock) { try { await navigator.keyboard.lock(); } catch { /* Some browsers reserve their own shortcuts. */ } }
+      if (driving) canvas.focus();
+    } catch { say('Your browser could not enter fullscreen.',true); }
+    closeSettings();
+  }
+  $('fullscreen').addEventListener('click',fullscreen); $('settings-fullscreen').addEventListener('click',fullscreen);
+  document.addEventListener('fullscreenchange', () => { if (!document.fullscreenElement) navigator.keyboard?.unlock?.(); fit(); });
 
-  // The Files panel: the home and what is under it, as the machine lists
-  // it. A folder opens, the arrow goes up as far as the home, and a file is
-  // saved on this computer by the page's own browser. Reading takes nothing
-  // from the agent, so watching is enough to look.
-  const files = document.getElementById("files");
-  const filesPath = document.getElementById("files-path");
-  const filesUp = document.getElementById("files-up");
-  const filesList = document.getElementById("files-list");
-  let folder = "";
-  let home = "";
-  function fileUrl(route, path) {
-    return `${route}?token=${encodeURIComponent(token)}&path=${encodeURIComponent(path)}`;
+  const files = $('files'), filesList = $('files-list'), filesUp = $('files-up');
+  let folder = '', home = '', loadingFolder = null, listingSequence = 0, uploadQueue = Promise.resolve();
+  function fileUrl(route,path) { return `${route}?token=${encodeURIComponent(token)}&path=${encodeURIComponent(path)}`; }
+  function fileError(status) {
+    if (status === 401) return 'This link cannot access files. Open it again from Hotline.';
+    if (status === 403) return 'That file is outside the shared home.';
+    if (status === 404) return 'That file or folder is no longer here.';
+    if (status === 413) return 'That file is too large. The limit is 50 MiB.';
+    if (status === 409) return 'A file with that name already exists.';
+    return 'The computer could not finish the file request. Try again.';
   }
+  function openFiles() { files.hidden = false; browse.setAttribute('aria-expanded','true'); closeSettings(); }
+  function closeFiles() { files.hidden = true; browse.setAttribute('aria-expanded','false'); if (driving) canvas.focus(); else browse.focus(); }
   function sizeText(bytes) {
-    if (bytes < 1024) return bytes + " B";
-    const units = ["KiB", "MiB", "GiB"];
-    let value = bytes / 1024, unit = 0;
-    while (value >= 1024 && unit < units.length - 1) { value /= 1024; unit += 1; }
-    return (value < 10 ? value.toFixed(1) : Math.round(value)) + " " + units[unit];
+    if (bytes < 1024) return bytes + ' B';
+    const units = ['KiB','MiB','GiB']; let value = bytes / 1024, unit = 0;
+    while (value >= 1024 && unit < 2) { value /= 1024; unit++; }
+    return (value < 10 ? value.toFixed(1) : Math.round(value)) + ' ' + units[unit];
+  }
+  function downloadIcon() {
+    const wrapper = document.createElement('span'); wrapper.className = 'download'; wrapper.setAttribute('aria-hidden','true');
+    wrapper.innerHTML = '<svg viewBox="0 0 16 16"><path d="M8 2v8m-3-3 3 3 3-3M3 11v3h10v-3"/></svg>';
+    return wrapper;
   }
   async function showFolder(path) {
-    let listing;
+    openFiles();
+    const sequence = ++listingSequence;
     try {
-      const response = await fetch(fileUrl("/files", path));
-      listing = await response.json();
-      if (!response.ok) throw new Error(listing.error || response.statusText);
-    } catch (error) { say(error.message || String(error), false); return; }
-    folder = listing.path; home = listing.home;
-    filesPath.textContent = folder === home ? "~" : "~" + folder.slice(home.length);
-    filesPath.title = folder;
-    filesUp.disabled = folder === home;
-    filesList.replaceChildren();
-    if (!listing.entries.length) {
-      const empty = document.createElement("li");
-      empty.className = "empty"; empty.textContent = "Nothing here";
-      filesList.appendChild(empty);
-    }
-    for (const entry of listing.entries) {
-      const item = document.createElement("li");
-      item.className = entry.is_dir ? "dir" : "file";
-      const name = document.createElement("span");
-      name.className = "name"; name.textContent = entry.name;
-      item.appendChild(name);
-      if (!entry.is_dir) {
-        const size = document.createElement("span");
-        size.className = "size"; size.textContent = sizeText(entry.size);
-        item.appendChild(size);
+      const response = await fetch(fileUrl('/files',path));
+      if (!response.ok) throw new Error(fileError(response.status));
+      const listing = await response.json();
+      if (sequence !== listingSequence) return false;
+      folder = listing.path; home = listing.home;
+      $('files-path').textContent = folder === home ? '~' : '~' + folder.slice(home.length); $('files-path').title = folder;
+      filesUp.disabled = folder === home; filesList.replaceChildren();
+      if (!listing.entries.length) { const empty = document.createElement('li'); empty.className = 'empty'; empty.textContent = 'Nothing here'; filesList.append(empty); }
+      for (const entry of listing.entries) {
+        const li = document.createElement('li'), button = document.createElement('button'), name = document.createElement('span'), details = document.createElement('span');
+        button.className = 'file-row ' + (entry.is_dir ? 'dir' : 'file');
+        button.setAttribute('aria-label',(entry.is_dir ? 'Open ' : 'Download ') + entry.name);
+        name.className = 'name'; name.textContent = entry.name; details.className = 'details';
+        const date = entry.modified ? new Date(entry.modified * 1000).toLocaleDateString() : '';
+        details.textContent = (entry.is_dir ? '' : sizeText(entry.size) + ' · ') + date;
+        button.append(name,details); if (!entry.is_dir) button.append(downloadIcon());
+        const target = folder.replace(/\/$/,'') + '/' + entry.name;
+        button.addEventListener('click', () => entry.is_dir ? showFolder(target) : saveFile(target,entry.name));
+        li.append(button); filesList.append(li);
       }
-      item.addEventListener("click", () => {
-        const path = folder.replace(/\/$/, "") + "/" + entry.name;
-        if (entry.is_dir) showFolder(path); else saveFile(path, entry.name);
-      });
-      filesList.appendChild(item);
-    }
-    files.hidden = false;
+      return true;
+    } catch (error) { say(error instanceof TypeError ? 'Files are unavailable while the computer is disconnected.' : error.message,true); return false; }
   }
-  function saveFile(path, name) {
-    const link = document.createElement("a");
-    link.href = fileUrl("/files/download", path); link.download = name;
-    document.body.appendChild(link); link.click(); link.remove();
-    say("Saving " + name);
+  async function ensureFolder() {
+    openFiles();
+    if (folder) return true;
+    if (!loadingFolder) loadingFolder = showFolder('').finally(() => { loadingFolder = null; });
+    return loadingFolder;
   }
-  // A file from this computer goes where the panel is looking: picked with
-  // the + button, or dropped onto the panel.
-  const filesAdd = document.getElementById("files-add");
-  const filesPick = document.getElementById("files-pick");
+  async function saveFile(path,name) {
+    try {
+      const response = await fetch(fileUrl('/files/download',path));
+      if (!response.ok) throw new Error(fileError(response.status));
+      const url = URL.createObjectURL(await response.blob()), link = document.createElement('a');
+      link.href = url; link.download = name; document.body.append(link); link.click(); link.remove(); setTimeout(() => URL.revokeObjectURL(url),1000);
+      say('Saving ' + name);
+    } catch (error) { say(error instanceof TypeError ? 'The download was interrupted. Try again.' : error.message,true); }
+  }
+  function upload(file,path,createOnly,progress) {
+    return new Promise((resolve,reject) => {
+      const request = new XMLHttpRequest(); request.open('POST',fileUrl('/files',path) + (createOnly ? '&create_only=true' : ''));
+      request.upload.onprogress = event => { if (event.lengthComputable) progress(Math.round(event.loaded / event.total * 100)); };
+      request.onload = () => resolve(request.status);
+      request.onerror = request.onabort = () => reject(new Error('The upload was interrupted. Try again.'));
+      request.send(file);
+    });
+  }
   async function sendFiles(list) {
+    if (!list.length || !await ensureFolder()) return;
+    const destination = folder;
+    filesList.querySelector('.empty')?.remove();
     for (const file of list) {
-      say("Sending " + file.name + "…", false);
+      const row = document.createElement('li'), name = document.createElement('span'), percentage = document.createElement('span'), progress = document.createElement('div'), fill = document.createElement('span');
+      row.className = 'upload'; name.className = 'name'; name.textContent = file.name; percentage.textContent = '0%';
+      progress.className = 'progress'; progress.setAttribute('role','progressbar'); progress.setAttribute('aria-label','Uploading ' + file.name); progress.setAttribute('aria-valuemin','0'); progress.setAttribute('aria-valuemax','100');
+      progress.append(fill); row.append(name,percentage,progress); filesList.append(row);
+      const update = value => { percentage.textContent = value + '%'; fill.style.width = value + '%'; progress.setAttribute('aria-valuenow',String(value)); };
       try {
-        const response = await fetch(fileUrl("/files", folder.replace(/\/$/, "") + "/" + file.name), { method: "POST", body: file });
-        const reply = await response.json();
-        if (!response.ok) throw new Error(reply.error || response.statusText);
-        say("Sent " + file.name);
-      } catch (error) { say(error.message || String(error), false); }
+        const path = destination.replace(/\/$/,'') + '/' + file.name;
+        let code = await upload(file,path,true,update);
+        if (code === 409) {
+          if (!confirm(`Replace ${file.name}?`)) { percentage.textContent = 'Kept existing'; continue; }
+          update(0); code = await upload(file,path,false,update);
+        }
+        if (code < 200 || code >= 300) throw new Error(fileError(code));
+        update(100); say('Sent ' + file.name);
+      } catch (error) { percentage.textContent = 'Failed'; say(error.message,true); }
     }
-    showFolder(folder);
+    if (!files.hidden) await showFolder(folder);
   }
-  filesAdd.addEventListener("click", () => filesPick.click());
-  filesPick.addEventListener("change", () => { sendFiles([...filesPick.files]); filesPick.value = ""; });
-  files.addEventListener("dragover", (event) => { event.preventDefault(); files.classList.add("arriving"); });
-  files.addEventListener("dragleave", () => files.classList.remove("arriving"));
-  files.addEventListener("drop", (event) => {
-    event.preventDefault(); files.classList.remove("arriving");
-    sendFiles([...event.dataTransfer.files]);
+  function queueFiles(list) { uploadQueue = uploadQueue.then(() => sendFiles(list)).catch(() => say('The upload could not finish. Try again.',true)); }
+  browse.addEventListener('click', () => files.hidden ? showFolder(folder) : closeFiles());
+  $('files-close').addEventListener('click',closeFiles); $('files-add').addEventListener('click', () => $('files-pick').click());
+  $('files-pick').addEventListener('change', () => { queueFiles([...$('files-pick').files]); $('files-pick').value = ''; });
+  filesUp.addEventListener('click', () => { if (folder !== home) showFolder(folder.replace(/\/[^/]*$/,'') || '/'); });
+  addEventListener('dragover', event => {
+    event.preventDefault();
+    if ([...(event.dataTransfer?.types || [])].includes('Files')) { ensureFolder(); files.classList.add('arriving'); }
   });
-  function closeFiles() { files.hidden = true; if (driving) canvas.focus(); }
-  browse.addEventListener("click", () => { if (files.hidden) showFolder(folder); else closeFiles(); });
-  document.getElementById("files-close").addEventListener("click", closeFiles);
-  filesUp.addEventListener("click", () => { if (folder !== home) showFolder(folder.replace(/\/[^/]*$/, "") || "/"); });
-  addEventListener("keydown", (event) => {
-    if (event.key === "Escape" && !files.hidden && document.activeElement !== canvas) closeFiles();
-  });
+  addEventListener('dragleave', event => { if (!event.relatedTarget) files.classList.remove('arriving'); });
+  addEventListener('drop', event => { event.preventDefault(); files.classList.remove('arriving'); queueFiles([...event.dataTransfer.files]); });
 
   function at(event) {
     const rect = canvas.getBoundingClientRect();
-    return {
-      x: Math.max(0, Math.min(canvas.width - 1, Math.round((event.clientX - rect.left) * canvas.width / rect.width))),
-      y: Math.max(0, Math.min(canvas.height - 1, Math.round((event.clientY - rect.top) * canvas.height / rect.height))),
-    };
+    return { x:Math.max(0,Math.min(canvas.width-1,Math.round((event.clientX-rect.left)*canvas.width/rect.width))), y:Math.max(0,Math.min(canvas.height-1,Math.round((event.clientY-rect.top)*canvas.height/rect.height))) };
   }
-
-  // One pointer position per animation frame is plenty for a human hand.
-  let pending = null;
-  canvas.addEventListener("pointermove", (event) => {
+  let pending = null, pointerFrame = null;
+  canvas.addEventListener('pointermove', event => {
     if (!driving) return;
     pending = at(event);
-    requestAnimationFrame(() => { if (pending) { send({ t: "move", ...pending }); pending = null; } });
+    if (!pointerFrame) pointerFrame = requestAnimationFrame(() => { pointerFrame = null; if (pending && driving) send({t:'move',...pending}); pending = null; });
   });
-  const buttons = { 0: 1, 1: 2, 2: 3 };
-  canvas.addEventListener("pointerdown", (event) => {
-    if (!driving) return;
-    canvas.focus();
-    send({ t: "move", ...at(event) });
-    if (event.button in buttons) send({ t: "button", b: buttons[event.button], down: true });
+  const buttons = {0:1,1:2,2:3};
+  canvas.addEventListener('pointerdown', event => {
+    if (!driving || pointers.size || !(event.button in buttons)) return;
+    event.preventDefault(); canvas.focus(); pending = null;
+    canvas.setPointerCapture(event.pointerId); pointers.set(event.pointerId,buttons[event.button]);
+    send({t:'move',...at(event)}); send({t:'button',b:buttons[event.button],down:true});
   });
-  canvas.addEventListener("pointerup", (event) => {
-    if (!driving) return;
-    if (event.button in buttons) send({ t: "button", b: buttons[event.button], down: false });
-  });
-  canvas.addEventListener("contextmenu", (event) => event.preventDefault());
-
-  // Wheel deltas arrive in pixels from a trackpad and in lines from a mouse;
-  // either way one notch is sent per fifty pixels' worth.
+  function releasePointer(event) {
+    if (!pointers.has(event.pointerId)) return;
+    const button = pointers.get(event.pointerId); pointers.delete(event.pointerId);
+    if (driving) send({t:'button',b:button,down:false});
+    if (canvas.hasPointerCapture(event.pointerId)) canvas.releasePointerCapture(event.pointerId);
+  }
+  for (const kind of ['pointerup','pointercancel','lostpointercapture']) canvas.addEventListener(kind,releasePointer);
+  canvas.addEventListener('contextmenu', event => event.preventDefault());
   let wheelX = 0, wheelY = 0;
-  canvas.addEventListener("wheel", (event) => {
+  canvas.addEventListener('wheel', event => {
     if (!driving) return;
-    event.preventDefault();
-    const unit = event.deltaMode === 1 ? 50 : 1;
+    event.preventDefault(); const unit = event.deltaMode === 1 ? 50 : event.deltaMode === 2 ? canvas.height : 1;
     wheelX += event.deltaX * unit; wheelY += event.deltaY * unit;
-    while (Math.abs(wheelY) >= 50) { send({ t: "wheel", dy: Math.sign(wheelY) }); wheelY -= Math.sign(wheelY) * 50; }
-    while (Math.abs(wheelX) >= 50) { send({ t: "wheel", dx: Math.sign(wheelX) }); wheelX -= Math.sign(wheelX) * 50; }
-  }, { passive: false });
-
-  // The X server repeats a held key itself, so browser repeats are dropped.
-  canvas.addEventListener("keydown", (event) => {
+    while (Math.abs(wheelY) >= 50) { send({t:'wheel',dy:Math.sign(wheelY)}); wheelY -= Math.sign(wheelY)*50; }
+    while (Math.abs(wheelX) >= 50) { send({t:'wheel',dx:Math.sign(wheelX)}); wheelX -= Math.sign(wheelX)*50; }
+  },{passive:false});
+  addEventListener('keydown', event => {
+    if (driving && event.ctrlKey && event.altKey && event.shiftKey) { event.preventDefault(); event.stopImmediatePropagation(); drive(false); }
+    if (event.key === 'Escape' && document.activeElement !== canvas) { if (!files.hidden) closeFiles(); closeSettings(); }
+  },true);
+  function hostPaste(event) { return (event.ctrlKey || event.metaKey) && event.altKey && event.code === 'KeyV'; }
+  canvas.addEventListener('keydown', event => {
     if (!driving) return;
     event.preventDefault();
-    if (hostPaste(event)) {
-      if (event.repeat) return;
-      navigator.clipboard.readText().then(pasteText).catch(() => say('Your browser did not share the clipboard.', false));
-      return;
+    if (hostPaste(event)) { if (!event.repeat) pasteFromHost(); return; }
+    if (!event.repeat) {
+      const key = mac && cmdAsCtrl && event.key === 'Meta' ? 'Control' : event.key;
+      const code = event.code || event.key;
+      const already = [...held.values()].includes(key); held.set(code,key);
+      if (!already) send({t:'key',key,down:true});
     }
-    if (!event.repeat) { held.add(event.key); send({ t: "key", key: event.key, down: true }); }
   });
-  canvas.addEventListener("keyup", (event) => {
+  canvas.addEventListener('keyup', event => {
     if (!driving) return;
-    event.preventDefault();
-    if (hostPaste(event)) return;
-    held.delete(event.key);
-    send({ t: "key", key: event.key, down: false });
+    event.preventDefault(); const code = event.code || event.key, key = held.get(code); held.delete(code);
+    if (key && ![...held.values()].includes(key)) send({t:'key',key,down:false});
   });
-  canvas.addEventListener("blur", () => { letGo(); if (driving) say("Click the screen to type"); });
-
-  render();
-  connect();
+  canvas.addEventListener('focus',render); canvas.addEventListener('blur', () => { letGo(); render(); });
+  render(); connect();
 })();
 </script>
 </body>

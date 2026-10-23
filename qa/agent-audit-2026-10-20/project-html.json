@@ -1,0 +1,22 @@
+{
+  "label": "project-html",
+  "client": "audit",
+  "tool": "files",
+  "args": {
+    "action": "put",
+    "path": "src/audit-project/index.html",
+    "content": "<title>Prepared project</title><h1>Built on the computer</h1><button onclick=\"this.textContent='It works'\">Test project</button>"
+  },
+  "seconds": 0.001,
+  "jsonrpc": "2.0",
+  "id": 4,
+  "result": {
+    "content": [
+      {
+        "type": "text",
+        "text": "wrote /home/agent/src/audit-project/index.html (128 bytes)"
+      }
+    ],
+    "isError": false
+  }
+}

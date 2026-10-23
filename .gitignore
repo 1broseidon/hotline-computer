@@ -17,3 +17,6 @@ __pycache__/
 /qa/*/upstream*.txt
 /qa/*/app-sources.txt
 /qa/linux-amd64/
+
+# Screenshots from driving a local QA instance by hand.
+qa/0.11.0-look/polish/local/

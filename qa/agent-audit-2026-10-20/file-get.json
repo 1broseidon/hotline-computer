@@ -1,0 +1,21 @@
+{
+  "label": "file-get",
+  "client": "audit",
+  "tool": "files",
+  "args": {
+    "action": "get",
+    "path": "audit/hello.txt"
+  },
+  "seconds": 0.001,
+  "jsonrpc": "2.0",
+  "id": 15,
+  "result": {
+    "content": [
+      {
+        "type": "text",
+        "text": "path must be under /home/agent/"
+      }
+    ],
+    "isError": true
+  }
+}

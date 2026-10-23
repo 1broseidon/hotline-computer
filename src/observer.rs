@@ -140,6 +140,29 @@ impl Observer {
         crate::x11::activate(&self.display, &window)
     }
 
+    pub async fn open_activity(&self) -> Result<(), String> {
+        let mut active = self.child.lock().await;
+        let socket = self.daemon(&mut active).await?;
+        if let Some(window) = window_of_class(&self.display, "HotlineActivity")? {
+            return crate::x11::activate(&self.display, &window);
+        }
+        let executable = std::env::current_exe().map_err(|e| e.to_string())?;
+        self.create_window(
+            &socket,
+            "Activity",
+            "HotlineActivity",
+            &[],
+            &[
+                executable.as_os_str(),
+                "activity".as_ref(),
+                self.home.as_os_str(),
+            ],
+        )
+        .await?;
+        let window = self.wait_for_window(&active, "HotlineActivity").await?;
+        crate::x11::activate(&self.display, &window)
+    }
+
     /// The Alacritty daemon every terminal window comes from, started if it
     /// is not running; returns its socket once it answers.
     async fn daemon(&self, active: &mut Option<TerminalProcess>) -> Result<PathBuf, String> {
@@ -530,11 +553,12 @@ pub fn run(home: &Path) -> Result<(), String> {
     }
 }
 const RESET: &str = "\x1b[0m";
-const INK: &str = "\x1b[1;38;2;232;232;234m";
-const INK_2: &str = "\x1b[38;2;170;170;174m";
-const MUTED: &str = "\x1b[38;2;125;125;130m";
-const OK: &str = "\x1b[38;2;134;214;156m";
-const WARN: &str = "\x1b[38;2;240;194;122m";
+const INK: &str = "\x1b[97m";
+const INK_2: &str = "\x1b[38;2;180;180;186m";
+const MUTED: &str = "\x1b[90m";
+const OK: &str = "\x1b[32m";
+const AGENT: &str = "\x1b[34m";
+const FAIL: &str = "\x1b[31m";
 
 /// The top of the window: its name, and a note only when it is narrowed
 /// to one job, since then the rest are missing on purpose.
@@ -548,18 +572,52 @@ fn banner(selection: Option<&str>) -> String {
 
 /// A job's opening: its name, then the facts the tools need, then the command.
 fn header(record: &Record) -> String {
-    let command = std::iter::once(quoted(&record.command))
-        .chain(record.args.iter().map(|s| quoted(s)))
-        .collect::<Vec<_>>()
-        .join(" ");
+    let (color, marker) = if record.state == "running" {
+        (AGENT, "●")
+    } else if record.state == "exited" && record.exit_code == Some(0) {
+        (OK, "✓")
+    } else {
+        (FAIL, "✗")
+    };
+    let command = one_line(
+        &std::iter::once(quoted(&record.command))
+            .chain(record.args.iter().map(|s| quoted(s)))
+            .collect::<Vec<_>>()
+            .join(" "),
+    );
     format!(
-        "\r\n{INK}▎ {}{RESET}\r\n{MUTED}  job {} · started {} · {}{RESET}\r\n{INK_2}  $ {}{RESET}\r\n",
+        "\r\n{color}{marker}{RESET} {INK}{}{RESET}\r\n{MUTED}  job {} · started {} · {}{RESET}\r\n{INK_2}  $ {}{RESET}\r\n",
         record.label,
         record.id,
         clock(record.started_at),
-        record.cwd,
+        home_relative(&record.cwd),
         command
     )
+}
+
+/// `~/src/app` reads at a glance and keeps the line from wrapping.
+fn home_relative(path: &str) -> String {
+    let home = std::env::var("HOTLINE_COMPUTER_HOME").unwrap_or_else(|_| "/home/agent".into());
+    match path.strip_prefix(&home) {
+        Some("") => "~".into(),
+        Some(rest) if rest.starts_with('/') => format!("~{rest}"),
+        _ => path.to_owned(),
+    }
+}
+
+/// A command as one readable line. A script passed inline (`python3 -c
+/// '...'`) would otherwise wrap across the whole panel; the label already
+/// says what it is for, and the job log keeps the full command.
+fn one_line(command: &str) -> String {
+    const LIMIT: usize = 72;
+    let mut lines = command.lines();
+    let first = lines.next().unwrap_or("").trim_end();
+    let more = lines.next().is_some();
+    let mut shown: String = first.chars().take(LIMIT).collect();
+    if more || first.chars().count() > LIMIT {
+        shown.push('…');
+    }
+    shown
 }
 
 /// A job's close: how it ended, named again so a long output still reads.
@@ -570,7 +628,7 @@ fn footer(record: &Record) -> String {
         .unwrap_or_else(crate::jobs::now)
         .saturating_sub(record.started_at) as f64
         / 1000.0;
-    let mut facts = vec![record.label.clone()];
+    let mut facts = Vec::new();
     if !ok || record.state != "exited" {
         facts.push(record.state.replace('_', " "));
     }
@@ -585,9 +643,10 @@ fn footer(record: &Record) -> String {
         facts.push("output capped".to_owned());
     }
     format!(
-        "\r\n{}{} {}{RESET}\r\n",
-        if ok { OK } else { WARN },
+        "\r\n{}{}{RESET} {INK}{}{RESET}{MUTED} · {}{RESET}\r\n",
+        if ok { OK } else { FAIL },
         if ok { "✓" } else { "✗" },
+        record.label,
         facts.join(" · ")
     )
 }
@@ -619,7 +678,7 @@ mod tests {
     #[test]
     fn the_rc_file_sets_the_prompt_and_leaves_room_for_the_operators_own() {
         let rc = super::BASHRC;
-        assert!(rc.contains("PS1='\\[\\e[38;2;127;196;240m\\]\\w\\[\\e[0m\\] $ '"));
+        assert!(rc.contains("PS1='\\[\\e[38;2;143;184;255m\\]\\w\\[\\e[0m\\] $ '"));
         assert!(
             !rc.contains("export PS1"),
             "an exported prompt reaches sh as text"
@@ -671,31 +730,52 @@ mod tests {
     }
 
     #[test]
+    fn an_inline_script_shows_as_one_line() {
+        assert_eq!(one_line("sh -c 'echo hi'"), "sh -c 'echo hi'");
+        assert_eq!(
+            one_line("python3 -c 'import time\nfor _ in range(9): pass'"),
+            "python3 -c 'import time…"
+        );
+        assert_eq!(one_line(&"x".repeat(100)).chars().count(), 73);
+    }
+
+    #[test]
     fn a_job_is_named_first_and_identified_underneath() {
-        let text = header(&record("Run the unit tests", "running", None));
+        let text = crate::jobs::plain(&header(&record("Run the unit tests", "running", None)));
         let lines: Vec<&str> = text.lines().filter(|l| !l.is_empty()).collect();
-        assert!(lines[0].contains("▎ Run the unit tests"), "{text}");
+        assert!(lines[0].contains("● Run the unit tests"), "{text}");
         assert!(
             lines[1].contains("job 0800001a0a5ee4cb4-f789fa4d · started "),
             "{text}"
         );
-        assert!(lines[1].contains("· /home/agent/src/app"), "{text}");
+        assert!(lines[1].contains("· ~/src/app"), "{text}");
         assert!(lines[2].contains("$ bash -c 'cargo test'"), "{text}");
+    }
+
+    #[test]
+    fn running_headers_use_the_agent_marker_and_a_white_label() {
+        let header = header(&record("pnpm dev", "running", None));
+        assert!(header.starts_with(&format!("\r\n{AGENT}●{RESET} {INK}pnpm dev")));
+        assert!(header.contains(&format!("{MUTED}  job ")));
     }
 
     #[test]
     fn the_ending_names_the_job_again_and_says_how_it_went() {
         let ok = footer(&record("Run the unit tests", "exited", Some(0)));
-        assert!(ok.contains("✓ Run the unit tests · exit 0 · 2.5 s"), "{ok}");
+        assert!(
+            crate::jobs::plain(&ok).contains("✓ Run the unit tests · exit 0 · 2.5 s"),
+            "{ok}"
+        );
         assert!(ok.starts_with(&format!("\r\n{OK}")), "{ok}");
         let failed = footer(&record("Run the unit tests", "failed", Some(101)));
         assert!(
-            failed.contains("✗ Run the unit tests · failed · exit 101 · 2.5 s"),
+            crate::jobs::plain(&failed)
+                .contains("✗ Run the unit tests · failed · exit 101 · 2.5 s"),
             "{failed}"
         );
         let cancelled = footer(&record("Serve the app", "cancelled", None));
         assert!(
-            cancelled.contains("✗ Serve the app · cancelled · 2.5 s"),
+            crate::jobs::plain(&cancelled).contains("✗ Serve the app · cancelled · 2.5 s"),
             "{cancelled}"
         );
     }

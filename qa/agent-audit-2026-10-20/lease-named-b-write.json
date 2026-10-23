@@ -1,0 +1,22 @@
+{
+  "label": "lease-named-b-write",
+  "client": "named-b",
+  "tool": "files",
+  "args": {
+    "action": "put",
+    "path": "/home/agent/audit/named-b.txt",
+    "content": "should be refused"
+  },
+  "seconds": 0.001,
+  "jsonrpc": "2.0",
+  "id": 3,
+  "result": {
+    "content": [
+      {
+        "type": "text",
+        "text": "machine under named-a's control \u2014 lease expires in 0m 29s"
+      }
+    ],
+    "isError": true
+  }
+}

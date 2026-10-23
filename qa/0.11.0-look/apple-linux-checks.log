@@ -1,0 +1,661 @@
+#1 [resolver] fetching image...docker.io/library/rust:1-trixie
+#1 DONE 0.0s
+
+#2 [resolver] fetching image...docker.io/library/debian:trixie-slim@sha256:d7e12182ce18b85b93007c1dedf31f2d29e01ccf3182cc4017c709b6259bc132
+#2 DONE 0.0s
+
+#3 [internal] load build definition from Dockerfile
+#3 transferring dockerfile:
+#3 transferring dockerfile: 7.20kB 3.4s done
+#3 DONE 3.4s
+
+#4 [internal] load .dockerignore
+#4 transferring context:
+#4 transferring context: 138B 2.5s done
+#4 DONE 2.5s
+
+#5 oci-layout://docker.io/library/rust:1-trixie@sha256:7e9eb23ac694dda816c76933ab63b2703e6becbf3b10da90970124656788d47b
+#5 resolve docker.io/library/rust:1-trixie@sha256:7e9eb23ac694dda816c76933ab63b2703e6becbf3b10da90970124656788d47b done
+#5 DONE 0.0s
+
+#6 [internal] load build context
+#6 transferring context: 1.96MB 2.4s done
+#6 DONE 2.4s
+
+#7 [linux/arm64 build 2/8] WORKDIR /src
+#7 CACHED
+
+#8 [linux/arm64 build 4/8] COPY src ./src
+#8 CACHED
+
+#9 [linux/arm64 build 6/8] COPY skills ./skills
+#9 CACHED
+
+#10 [linux/arm64 build 1/8] RUN apt-get update && apt-get install -y --no-install-recommends cmake perl pkg-config && rm -rf /var/lib/apt/lists/*
+#10 CACHED
+
+#11 [linux/arm64 build 3/8] COPY Cargo.toml Cargo.lock ./
+#11 CACHED
+
+#12 [linux/arm64 build 5/8] COPY assets ./assets
+#12 CACHED
+
+#13 [linux/arm64 build 7/8] RUN --mount=type=cache,target=/usr/local/cargo/registry --mount=type=cache,target=/src/target cargo build --release --locked && cp target/release/hotline-computer /usr/local/bin/hotline-computer
+#13 CACHED
+
+#14 [linux/arm64 checks 1/3] RUN rustup component add rustfmt clippy
+#14 0.084 info: downloading 2 components
+#14 DONE 0.8s
+
+#15 [linux/arm64 checks 2/3] COPY tests ./tests
+#15 DONE 0.0s
+
+#16 [linux/arm64 checks 3/3] RUN --mount=type=cache,target=/usr/local/cargo/registry --mount=type=cache,target=/src/target rm -f target/debug/deps/contract-* && cargo fmt --check && CARGO_PROFILE_TEST_DEBUG=0 CARGO_INCREMENTAL=0 cargo test --locked && CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 cargo clippy --all-targets --locked -- -D warnings     && mkdir -p /acceptance     && for binary in target/debug/deps/contract-*; do if [ -f "$binary" ] && [ -x "$binary" ]; then cp "$binary" /acceptance/contract; fi; done     && test -x /acceptance/contract
+#16 0.239  Downloading crates ...
+#16 0.291   Downloaded tokio-tungstenite v0.28.0
+#16 0.321    Compiling proc-macro2 v1.0.107
+#16 0.321    Compiling quote v1.0.47
+#16 0.321    Compiling unicode-ident v1.0.24
+#16 0.322    Compiling libc v0.2.189
+#16 0.322    Compiling pin-project-lite v0.2.17
+#16 0.345    Compiling futures-core v0.3.34
+#16 0.353    Compiling cfg-if v1.0.4
+#16 0.369    Compiling serde_core v1.0.229
+#16 0.378    Compiling bytes v1.12.1
+#16 0.411    Compiling itoa v1.0.18
+#16 0.450    Compiling futures-io v0.3.34
+#16 0.555    Compiling memchr v2.8.3
+#16 0.653    Compiling syn v3.0.4
+#16 0.659    Compiling syn v2.0.119
+#16 0.688    Compiling serde v1.0.229
+#16 0.701    Compiling errno v0.3.14
+#16 0.732    Compiling slab v0.4.12
+#16 0.771    Compiling signal-hook-registry v1.4.8
+#16 0.846    Compiling equivalent v1.0.2
+#16 0.863    Compiling mio v1.2.2
+#16 1.028    Compiling socket2 v0.6.5
+#16 1.093    Compiling hashbrown v0.17.1
+#16 1.172    Compiling winnow v1.0.4
+#16 1.430    Compiling once_cell v1.21.4
+#16 1.437    Compiling futures-sink v0.3.34
+#16 1.462    Compiling indexmap v2.14.1
+#16 1.484    Compiling http v1.5.0
+#16 1.577    Compiling toml_parser v1.1.3+spec-1.1.0
+#16 1.678    Compiling stable_deref_trait v1.2.1
+#16 1.699    Compiling bitflags v2.13.1
+#16 1.770    Compiling subtle v2.6.1
+#16 1.802    Compiling toml_datetime v1.1.1+spec-1.1.0
+#16 1.804    Compiling futures-channel v0.3.34
+#16 1.829    Compiling jobserver v0.1.35
+#16 1.861    Compiling synstructure v0.13.2
+#16 1.864    Compiling toml_edit v0.25.13+spec-1.1.0
+#16 1.926    Compiling shlex v2.0.1
+#16 1.959    Compiling find-msvc-tools v0.1.11
+#16 2.035    Compiling version_check v0.9.5
+#16 2.044    Compiling cc v1.4.4
+#16 2.122    Compiling generic-array v0.14.7
+#16 2.191    Compiling proc-macro-crate v3.5.0
+#16 2.194    Compiling parking v2.2.1
+#16 2.233    Compiling futures-task v0.3.34
+#16 2.269    Compiling autocfg v1.5.1
+#16 2.332    Compiling serde_derive v1.0.229
+#16 2.351    Compiling tokio-macros v2.7.2
+#16 2.363    Compiling zerofrom-derive v0.1.7
+#16 2.378    Compiling yoke-derive v0.8.2
+#16 2.560    Compiling enumflags2_derive v0.7.12
+#16 2.608    Compiling tokio v1.53.1
+#16 2.791    Compiling zerovec-derive v0.11.6
+#16 2.796    Compiling futures-macro v0.3.34
+#16 2.839    Compiling zerofrom v0.1.8
+#16 2.868    Compiling yoke v0.8.3
+#16 2.929    Compiling displaydoc v0.2.7
+#16 3.112    Compiling futures-util v0.3.34
+#16 3.243    Compiling cmake v0.1.58
+#16 3.246    Compiling zerovec v0.11.8
+#16 3.370    Compiling typenum v1.20.1
+#16 3.422    Compiling endi v1.1.1
+#16 3.452    Compiling dunce v1.0.5
+#16 3.471    Compiling fs_extra v1.3.0
+#16 3.594    Compiling pkg-config v0.3.34
+#16 3.674    Compiling atomic-waker v1.1.2
+#16 3.699    Compiling zvariant_utils v4.2.0
+#16 3.729    Compiling httparse v1.10.1
+#16 3.766    Compiling aws-lc-sys v0.45.0
+#16 4.009    Compiling zmij v1.0.23
+#16 4.043    Compiling rustix v1.1.4
+#16 4.058    Compiling zvariant_derive v5.15.0
+#16 4.082    Compiling crossbeam-utils v0.8.22
+#16 4.182    Compiling zerocopy v0.8.56
+#16 4.259    Compiling getrandom v0.3.4
+#16 4.279    Compiling linux-raw-sys v0.12.1
+#16 4.298    Compiling smallvec v1.16.0
+#16 4.337    Compiling fastrand v2.5.0
+#16 4.452    Compiling block-buffer v0.10.4
+#16 4.475    Compiling crypto-common v0.1.7
+#16 4.489    Compiling tinystr v0.8.4
+#16 4.495    Compiling tracing-attributes v0.1.31
+#16 4.533    Compiling http-body v1.1.0
+#16 4.562    Compiling tracing-core v0.1.36
+#16 4.582    Compiling writeable v0.6.4
+#16 4.652    Compiling aws-lc-rs v1.18.1
+#16 4.709    Compiling litemap v0.8.3
+#16 4.722    Compiling zeroize v1.9.0
+#16 4.756    Compiling icu_locale_core v2.3.0
+#16 4.756    Compiling digest v0.10.7
+#16 4.810    Compiling concurrent-queue v2.5.0
+#16 4.916    Compiling tracing v0.1.44
+#16 5.007    Compiling zcheapstr v1.1.0
+#16 5.037    Compiling enumflags2 v0.7.12
+#16 5.044    Compiling potential_utf v0.1.6
+#16 5.075    Compiling zerotrie v0.2.5
+#16 5.079    Compiling event-listener v5.4.2
+#16 5.129    Compiling thiserror v2.0.20
+#16 5.145    Compiling getrandom v0.4.3
+#16 5.197    Compiling icu_properties_data v2.3.0
+#16 5.210    Compiling log v0.4.34
+#16 5.242    Compiling rand_core v0.10.1
+#16 5.248    Compiling serde_json v1.0.151
+#16 5.272    Compiling percent-encoding v2.3.2
+#16 5.290    Compiling icu_normalizer_data v2.3.0
+#16 5.305    Compiling utf8_iter v1.0.4
+#16 5.331    Compiling icu_collections v2.3.0
+#16 5.355    Compiling icu_provider v2.3.1
+#16 5.426    Compiling event-listener-strategy v0.5.4
+#16 5.447    Compiling zvariant v5.15.0
+#16 5.456    Compiling rand_core v0.9.5
+#16 5.503    Compiling rustls-pki-types v1.15.1
+#16 5.610    Compiling futures-lite v2.6.1
+#16 5.740    Compiling thiserror-impl v2.0.20
+#16 5.806    Compiling ppv-lite86 v0.2.21
+#16 5.815    Compiling cpufeatures v0.2.17
+#16 5.858    Compiling tower-service v0.3.3
+#16 5.880    Compiling rand_chacha v0.9.0
+#16 6.055    Compiling zbus_names v4.3.4
+#16 6.230    Compiling async-io v2.6.0
+#16 6.261    Compiling try-lock v0.2.5
+#16 6.280    Compiling rustls v0.23.43
+#16 6.289    Compiling untrusted v0.9.0
+#16 6.324    Compiling want v0.3.1
+#16 6.327    Compiling icu_normalizer v2.3.0
+#16 6.351    Compiling icu_properties v2.3.0
+#16 6.467    Compiling rand v0.9.5
+#16 6.503    Compiling sha1 v0.10.7
+#16 6.532    Compiling polling v3.11.0
+#16 6.584    Compiling form_urlencoded v1.2.2
+#16 6.620    Compiling sync_wrapper v1.0.2
+#16 6.624    Compiling data-encoding v2.11.1
+#16 6.635    Compiling async-task v4.7.1
+#16 6.683    Compiling tower-layer v0.3.3
+#16 6.719    Compiling httpdate v1.0.3
+#16 6.765    Compiling hyper v1.11.1
+#16 6.802    Compiling idna_adapter v1.2.2
+#16 7.015    Compiling async-channel v2.5.0
+#16 7.067    Compiling http-body-util v0.1.5
+#16 7.068    Compiling ipnet v2.12.1
+#16 7.128    Compiling base64 v0.22.1
+#16 7.137    Compiling async-signal v0.2.14
+#16 7.169    Compiling idna v1.1.0
+#16 7.174    Compiling tower v0.5.3
+#16 7.204    Compiling hyper-util v0.1.20
+#16 7.305    Compiling zbus_xml v5.2.1
+#16 7.332    Compiling uuid v1.26.0
+#16 7.433    Compiling async-lock v3.4.2
+#16 7.579    Compiling piper v0.2.5
+#16 7.621    Compiling num-traits v0.2.19
+#16 7.622    Compiling async-trait v0.1.92
+#16 7.634    Compiling aho-corasick v1.1.5
+#16 7.674    Compiling regex-syntax v0.8.11
+#16 7.725    Compiling libm v0.2.16
+#16 7.799    Compiling strsim v0.11.1
+#16 7.878    Compiling openssl-probe v0.2.1
+#16 7.908    Compiling ident_case v1.0.1
+#16 7.927    Compiling simd-adler32 v0.3.10
+#16 7.958    Compiling darling_core v0.24.1
+#16 7.962    Compiling rustls-native-certs v0.8.4
+#16 8.093    Compiling blocking v1.7.0
+#16 8.152    Compiling async-process v2.5.0
+#16 8.293    Compiling regex-automata v0.4.18
+#16 8.300    Compiling zbus-lockstep v0.5.2
+#16 8.341    Compiling url v2.5.8
+#16 8.366    Compiling async-executor v1.14.0
+#16 8.445    Compiling zbus_macros v5.19.0
+#16 8.554    Compiling async-broadcast v0.7.2
+#16 8.602    Compiling async-recursion v1.1.1
+#16 8.765    Compiling serde_repr v0.1.21
+#16 8.806    Compiling ordered-stream v0.2.0
+#16 8.882    Compiling hex v0.4.3
+#16 8.928    Compiling crc32fast v1.5.1
+#16 8.934    Compiling utf-8 v0.7.6
+#16 8.961    Compiling ref-cast v1.0.27
+#16 9.030    Compiling adler2 v2.0.1
+#16 9.047    Compiling tungstenite v0.28.0
+#16 9.051    Compiling regex v1.13.1
+#16 9.165    Compiling darling_macro v0.24.1
+#16 9.267    Compiling tower-http v0.6.11
+#16 9.313    Compiling zbus v5.19.0
+#16 9.334    Compiling zbus-lockstep-macros v0.5.2
+#16 9.533    Compiling chromiumoxide_types v0.9.1
+#16 9.585    Compiling tokio-util v0.7.19
+#16 9.595    Compiling futures-executor v0.3.34
+#16 9.641    Compiling ref-cast-impl v1.0.27
+#16 9.758    Compiling serde_derive_internals v0.30.0
+#16 9.790    Compiling either v1.18.0
+#16 9.814    Compiling static_assertions v1.1.0
+#16 9.838    Compiling iana-time-zone v0.1.65
+#16 9.884    Compiling heck v0.5.0
+#16 9.951    Compiling chromiumoxide_pdl v0.9.1
+#16 9.989    Compiling schemars_derive v1.2.2
+#16 10.21    Compiling chrono v0.4.45
+#16 10.32    Compiling core_maths v0.1.1
+#16 10.34    Compiling futures v0.3.34
+#16 10.35    Compiling darling v0.24.1
+#16 10.40    Compiling miniz_oxide v0.9.1
+#16 10.48    Compiling tungstenite v0.29.0
+#16 10.58    Compiling chacha20 v0.10.2
+#16 10.63    Compiling foldhash v0.1.5
+#16 10.64    Compiling allocator-api2 v0.2.21
+#16 10.67    Compiling dyn-clone v1.0.20
+#16 10.70    Compiling ryu v1.0.23
+#16 10.74    Compiling rmcp v3.2.0
+#16 10.74    Compiling mime v0.3.17
+#16 10.77    Compiling hashbrown v0.15.5
+#16 10.80    Compiling axum-core v0.5.6
+#16 10.80    Compiling serde_urlencoded v0.7.1
+#16 10.86    Compiling schemars v1.2.2
+#16 10.93    Compiling tokio-tungstenite v0.29.0
+#16 11.00    Compiling rand v0.10.2
+#16 11.17    Compiling flate2 v1.1.10
+#16 11.21    Compiling atspi-common v0.14.0
+#16 11.22    Compiling rmcp-macros v3.2.0
+#16 11.28    Compiling ttf-parser v0.25.1
+#16 11.55    Compiling chromiumoxide_cdp v0.9.1
+#16 11.77    Compiling async-tungstenite v0.32.1
+#16 11.86    Compiling miniz_oxide v0.8.9
+#16 12.03    Compiling fdeflate v0.3.7
+#16 12.07    Compiling sse-stream v0.2.5
+#16 12.13    Compiling gethostname v1.1.0
+#16 12.14    Compiling tokio-stream v0.1.19
+#16 12.27    Compiling atspi-proxies v0.14.0
+#16 12.33    Compiling serde_path_to_error v0.1.20
+#16 12.42    Compiling which v8.0.6
+#16 12.49    Compiling base64 v0.23.1
+#16 12.51    Compiling pastey v0.2.3
+#16 12.60    Compiling futures-timer v3.0.4
+#16 12.65    Compiling x11rb-protocol v0.14.0
+#16 12.67    Compiling fnv v1.0.7
+#16 12.70    Compiling matchit v0.8.4
+#16 12.72    Compiling atspi v0.30.0
+#16 12.73    Compiling png v0.18.1
+#16 12.78    Compiling axum v0.8.9
+#16 13.09    Compiling fontdue v0.9.4
+#16 13.23    Compiling tempfile v3.27.0
+#16 13.33    Compiling sha2 v0.10.9
+#16 13.38    Compiling hmac v0.12.1
+#16 13.40    Compiling tokio-tungstenite v0.28.0
+#16 13.89    Compiling x11rb v0.14.0
+#16 22.24    Compiling rustls-webpki v0.103.15
+#16 23.35    Compiling tokio-rustls v0.26.4
+#16 23.35    Compiling rustls-platform-verifier v0.7.0
+#16 23.41    Compiling hyper-rustls v0.27.9
+#16 23.46    Compiling reqwest v0.13.4
+#16 25.37    Compiling chromiumoxide v0.9.1
+#16 27.44    Compiling hotline-computer v0.10.3 (/src)
+#16 35.29     Finished `test` profile [unoptimized] target(s) in 35.12s
+#16 35.30      Running unittests src/lib.rs (target/debug/deps/hotline_computer-018fc2a730f067ca)
+#16 35.30 
+#16 35.30 running 114 tests
+#16 35.31 test boot::tests::a_screen_is_width_by_height ... ok
+#16 35.31 test boot::tests::the_display_socket_is_named_by_its_number ... ok
+#16 35.31 test a11y::tests::similar_titles_never_cross_application_boundaries ... ok
+#16 35.31 test boot::tests::only_dead_endpoints_are_removed ... ok
+#16 35.31 test desktop::tests::a_recent_action_expires_after_ten_seconds ... ok
+#16 35.31 test desktop::tests::compositing_is_a_straight_alpha_blend ... ok
+#16 35.31 test desktop::tests::menu_rows_leave_room_for_the_separator ... ok
+#16 35.31 test browser::tests::stale_profile_locks_are_cleared_before_launch ... ok
+#16 35.31 test agent::tests::identity_tracks_the_last_named_holder_but_honors_an_override ... ok
+#16 35.31 test desktop::tests::the_bar_takes_the_smallest_icon_that_is_still_big_enough ... ok
+#16 35.31 test desktop::tests::work_area_and_column_share_gutters_including_the_opt_out ... ok
+#16 35.31 test draft::tests::a_vite_app_gets_a_web_run_on_the_given_port ... ok
+#16 35.31 test draft::tests::a_tauri_workspace_gets_webkit_its_ui_install_and_an_app_run ... ok
+#16 35.31 test draft::tests::native_toolkits_choose_their_platform ... ok
+#16 35.31 test draft::tests::python_gets_a_virtualenv_and_every_decision_is_explained ... ok
+#16 35.31 test jobs::tests::an_unlabelled_job_is_named_by_its_command_line_cut_to_a_row ... ok
+#16 35.31 test jobs::tests::only_fresh_failures_nobody_has_retried_need_attention ... ok
+#16 35.31 test jobs::tests::a_long_stream_answers_with_its_end_from_a_whole_character ... ok
+#16 35.31 test jobs::tests::output_reads_as_plain_text ... ok
+#16 35.31 test jobs::tests::a_job_offered_the_persons_secrets_finds_them_by_name_and_never_the_bearer ... ok
+#16 35.31 test jobs::tests::output_storage_failure_stops_and_reaps_the_job ... ok
+#16 35.32 test jobs::tests::retry_ids_are_scoped_and_spawn_failures_are_queryable ... ok
+#16 35.32 test jobs::tests::stdin_works_without_a_visible_terminal_for_pipes_and_ptys ... ok
+#16 35.32 test lease::tests::a_hold_that_lapsed_is_taken_off_the_bar_when_it_ends ... ok
+#16 35.32 test desktop::tests::the_mark_decodes_and_blends_onto_ground ... ok
+#16 35.32 test lease::tests::only_another_holder_is_refused ... ok
+#16 35.32 test limits::tests::memory_bounds_jobs_even_when_the_host_reports_many_cpus ... ok
+#16 35.32 test limits::tests::without_a_cgroup_the_available_cpus_decide ... ok
+#16 35.32 test links::tests::only_web_addresses_are_links ... ok
+#16 35.32 test logins::tests::a_cookie_belongs_to_its_site_or_a_host_within_it ... ok
+#16 35.32 test limits::tests::a_cpu_quota_bounds_both_and_unlimited_memory_follows_cpus ... ok
+#16 35.32 test manifest::tests::environment_gains_service_addresses_and_extends_paths ... ok
+#16 35.32 test manifest::tests::a_run_is_a_job_and_an_unknown_one_names_the_alternatives ... ok
+#16 35.32 test manifest::tests::layers_concatenate_lists_merge_maps_and_last_wins_for_scalars ... ok
+#16 35.32 test manifest::tests::errors_say_what_is_valid ... ok
+#16 35.32 test manifest::tests::nix_strings_expand_only_package_references ... ok
+#16 35.32 test manifest::tests::platforms_pull_in_what_they_require_and_render_their_runtime ... ok
+#16 35.32 test observer::tests::running_headers_use_the_agent_marker_and_a_white_label ... ok
+#16 35.32 test observer::tests::the_banner_is_the_name_and_nothing_more_unless_narrowed ... ok
+#16 35.32 test observer::tests::the_ending_names_the_job_again_and_says_how_it_went ... ok
+#16 35.32 test observer::tests::the_persons_bash_is_never_the_store_one ... ok
+#16 35.32 test observer::tests::a_job_is_named_first_and_identified_underneath ... ok
+#16 35.32 test observer::tests::the_rc_file_sets_the_prompt_and_leaves_room_for_the_operators_own ... ok
+#16 35.32 test paint::tests::a_rounded_pill_leaves_its_corners_to_the_background ... ok
+#16 35.32 test paint::tests::icons_downscale_with_their_alpha ... ok
+#16 35.32 test jobs::tests::output_is_bounded_and_history_survives_a_new_service ... ok
+#16 35.32 test paint::tests::shadows_are_soft_offset_and_bounded ... ok
+#16 35.32 test passkeys::tests::a_denial_is_told_to_the_page_and_the_door_ends_the_arming ... ok
+#16 35.32 test passkeys::tests::a_request_that_left_with_its_page_is_forgotten_and_a_told_one_makes_way ... ok
+#16 35.33 test passkeys::tests::a_request_waits_for_the_person_and_an_approval_lets_one_credential_be_kept ... ok
+#16 35.33 test passkeys::tests::a_site_for_a_passkey_is_a_host_name ... ok
+#16 35.33 test passkeys::tests::an_arming_past_its_time_is_gone ... ok
+#16 35.33 test screen::tests::a_frame_leads_with_its_geometry ... ok
+#16 35.33 test screen::tests::a_union_is_the_bounding_box ... ok
+#16 35.33 test secrets::tests::a_fill_resolves_a_field_by_name_and_a_code_from_the_seed ... ok
+#16 35.33 test secrets::tests::a_job_finds_a_secret_by_name_and_the_tools_answer_the_name_alone ... ok
+#16 35.33 test secrets::tests::a_login_and_a_passkey_are_kept_by_kind_and_a_job_never_sees_them ... ok
+#16 35.33 test secrets::tests::a_name_is_an_environment_variable_and_the_computers_own_are_refused ... ok
+#16 35.33 test secrets::tests::a_site_allows_its_own_pages_and_no_other ... ok
+#16 35.33 test secrets::tests::every_value_is_taken_out_of_a_text_whole_and_in_its_json_spelling ... ok
+#16 35.33 test paint::tests::a_light_glyph_edge_gets_more_coverage_but_dark_ink_does_not ... ok
+#16 35.33 test secrets::tests::the_set_is_taken_whole_or_the_last_one_kept ... ok
+#16 35.33 test paint::tests::text_is_antialiased_and_measured ... ok
+#16 35.36 test serve::tests::only_an_authenticated_mcp_request_updates_the_displayed_name ... ok
+#16 35.36 test serve::tests::public_fonts_are_allowlisted_and_never_resolve_paths ... ok
+#16 35.36 test serve::tests::secret_comparison_needs_equal_bytes ... ok
+#16 35.36 test tools::activity_tests::cursor_intent_uses_only_static_action_words ... ok
+#16 35.36 test serve::tests::the_listing_carries_the_cache_hints_a_modern_client_requires ... ok
+#16 35.36 test tools::browser::tests::a_real_text_and_a_real_secret_together_is_an_error ... ok
+#16 35.36 test tools::browser::tests::an_empty_text_alone_clears_the_field ... ok
+#16 35.36 test tools::activity_tests::reads_do_not_make_the_agent_look_busy ... ok
+#16 35.36 test tools::browser::tests::an_unused_empty_secret_alongside_text_still_fills_with_text ... ok
+#16 35.36 test tools::browser::tests::an_unused_empty_text_alongside_a_secret_still_fills_with_the_secret ... ok
+#16 35.36 test tools::browser::tests::neither_argument_is_an_error ... ok
+#16 35.36 test tools::browser::tests::secret_only_fills_with_secret ... ok
+#16 35.36 test tools::browser::tests::text_only_fills_with_text ... ok
+#16 35.36 test secrets::tests::the_door_takes_the_set_from_the_bearer_alone_and_answers_no_value ... ok
+#16 35.36 test tools::files::tests::refuses_an_existing_file_symlink_that_leaves_home ... ok
+#16 35.36 test tools::input::tests::the_wheel_scrolls_the_way_it_is_told ... ok
+#16 35.36 test tools::shell::tests::a_line_goes_to_the_shell_and_a_name_does_not ... ok
+#16 35.36 test tools::files::tests::refuses_before_creating_a_parent_outside_home ... ok
+#16 35.36 test tools::files::tests::refuses_a_symlink_that_leaves_home ... ok
+#16 35.36 test tools::state::tests::names_cannot_escape_the_state_directories ... ok
+#16 35.36 test tools::windows::tests::a_large_application_gets_its_minimum_width_above_the_bar ... ok
+#16 35.36 test tools::windows::tests::impossible_layouts_fail_before_moving_any_windows ... ok
+#16 35.36 test tools::windows::tests::opting_out_removes_both_outer_and_inner_gaps ... ok
+#16 35.36 test tools::windows::tests::the_persons_shell_takes_the_bottom_third_of_the_column_under_a_line ... ok
+#16 35.36 test viewer::tests::a_caller_that_can_set_headers_may_present_the_bearer_there_instead ... ok
+#16 35.37 test viewer::tests::a_file_from_the_persons_computer_lands_whole_under_the_home ... ok
+#16 35.37 test lease::tests::a_call_stuck_behind_another_reports_the_wait ... ok
+#16 35.37 test viewer::tests::cancelling_or_failing_an_upload_removes_its_private_spool ... ok
+#16 35.37 test viewer::tests::create_only_uploads_publish_once_and_keep_the_competing_file ... ok
+#16 35.38 test viewer::tests::ping_answers_without_taking_or_renewing_the_lease ... ok
+#16 35.38 test viewer::tests::the_control_bar_is_told_whose_screen_it_is ... ok
+#16 35.39 test viewer::tests::the_files_panel_sees_the_home_and_nothing_above_it ... ok
+#16 35.39 test viewer::tests::the_files_panel_wants_the_token ... ok
+#16 35.39 test viewer::tests::the_page_is_told_where_the_hands_are ... ok
+#16 35.39 test viewer::tests::the_screen_is_the_teammate_s_until_a_person_takes_it ... ok
+#16 35.39 test workspace::tests::a_cached_definition_attaches_and_shell_jobs_inherit_it ... ok
+#16 35.39 test tools::shell::tests::exec_answers_with_the_end_of_a_long_log_and_where_the_rest_is ... ok
+#16 35.39 test workspace::tests::a_manifest_workspace_keeps_its_base_until_it_asks_for_the_new_one ... ok
+#16 35.39 test viewer::tests::http_files_advertises_and_enforces_create_only_with_header_auth ... ok
+#16 35.39 test workspace::tests::flakes_use_the_requested_local_shell_and_cannot_escape_home ... ok
+#16 35.39 test workspace::tests::the_catalog_names_are_attribute_paths_and_read_well ... ok
+#16 35.39 test workspace::tests::image_versions_do_not_invalidate_existing_environment_but_missing_store_paths_do ... ok
+#16 35.39 test workspace::tests::preparation_obeys_the_lease_and_home_boundary_through_the_state_tool ... ok
+#16 35.39 test workspace::tests::the_operator_spelling_takes_names_flags_and_a_workspace ... ok
+#16 35.39 test x11::tests::a_region_is_clipped_to_the_screen ... ok
+#16 35.39 test xtest::tests::named_keys_are_looked_up ... ok
+#16 35.39 test xtest::tests::x_names_and_browser_names_both_resolve ... ok
+#16 35.39 test xtest::tests::characters_are_their_own_keysyms ... ok
+#16 35.39 test workspace::tests::workspace_pins_survive_dependency_changes_and_unsafe_attributes_are_rejected ... ok
+#16 36.32 test jobs::tests::deadlines_retain_partial_output_and_cancellation_reaps_the_child ... ok
+#16 36.37 test tools::shell::tests::a_waiting_command_does_not_lock_out_desktop_takeover ... ok
+#16 36.37 
+#16 36.37 test result: ok. 114 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.06s
+#16 36.37 
+#16 36.37      Running unittests src/main.rs (target/debug/deps/hotline_computer-3c27e1a435d14df0)
+#16 36.37 
+#16 36.37 running 0 tests
+#16 36.37 
+#16 36.37 test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+#16 36.37 
+#16 36.37      Running tests/contract.rs (target/debug/deps/contract-c7e7ebe23d087351)
+#16 36.38 
+#16 36.38 running 1 test
+#16 36.38 test image_honors_the_computer_contract ... ok
+#16 36.38 
+#16 36.38 test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+#16 36.38 
+#16 36.38    Doc-tests hotline_computer
+#16 36.55 
+#16 36.55 running 0 tests
+#16 36.55 
+#16 36.55 test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+#16 36.55 
+#16 36.69     Checking pin-project-lite v0.2.17
+#16 36.69     Checking futures-core v0.3.34
+#16 36.69     Checking libc v0.2.189
+#16 36.69     Checking cfg-if v1.0.4
+#16 36.69     Checking bytes v1.12.1
+#16 36.70     Checking serde_core v1.0.229
+#16 36.70     Checking futures-io v0.3.34
+#16 36.71     Checking itoa v1.0.18
+#16 36.74     Checking slab v0.4.12
+#16 36.74     Checking memchr v2.8.3
+#16 36.77     Checking once_cell v1.21.4
+#16 36.80     Checking futures-sink v0.3.34
+#16 36.83     Checking zerofrom v0.1.8
+#16 36.84     Checking http v1.5.0
+#16 36.84     Checking stable_deref_trait v1.2.1
+#16 36.84     Checking subtle v2.6.1
+#16 36.85     Checking bitflags v2.13.1
+#16 36.87     Checking yoke v0.8.3
+#16 36.89     Checking futures-channel v0.3.34
+#16 36.93     Checking unicode-ident v1.0.24
+#16 36.94     Checking errno v0.3.14
+#16 36.94     Checking mio v1.2.2
+#16 36.95     Checking socket2 v0.6.5
+#16 36.96     Checking signal-hook-registry v1.4.8
+#16 36.98     Checking parking v2.2.1
+#16 37.00     Checking futures-task v0.3.34
+#16 37.03     Checking proc-macro2 v1.0.107
+#16 37.03     Checking tokio v1.53.1
+#16 37.03     Checking zerovec v0.11.8
+#16 37.05     Checking futures-util v0.3.34
+#16 37.10     Checking atomic-waker v1.1.2
+#16 37.14     Checking typenum v1.20.1
+#16 37.17     Checking quote v1.0.47
+#16 37.20     Checking httparse v1.10.1
+#16 37.23     Checking serde v1.0.229
+#16 37.26     Checking fastrand v2.5.0
+#16 37.30     Checking linux-raw-sys v0.12.1
+#16 37.34     Checking generic-array v0.14.7
+#16 37.35     Checking smallvec v1.16.0
+#16 37.38     Checking crossbeam-utils v0.8.22
+#16 37.46     Checking tinystr v0.8.4
+#16 37.49     Checking block-buffer v0.10.4
+#16 37.49     Checking crypto-common v0.1.7
+#16 37.52     Checking http-body v1.1.0
+#16 37.52     Checking tracing-core v0.1.36
+#16 37.54     Checking writeable v0.6.4
+#16 37.58     Checking litemap v0.8.3
+#16 37.59     Checking zeroize v1.9.0
+#16 37.64     Checking icu_locale_core v2.3.0
+#16 37.64     Checking tracing v0.1.44
+#16 37.66     Checking rustix v1.1.4
+#16 37.68     Checking digest v0.10.7
+#16 37.74     Checking concurrent-queue v2.5.0
+#16 37.75     Checking getrandom v0.3.4
+#16 37.77     Checking zerocopy v0.8.56
+#16 37.78     Checking potential_utf v0.1.6
+#16 37.80     Checking zerotrie v0.2.5
+#16 37.84     Checking event-listener v5.4.2
+#16 37.87     Checking log v0.4.34
+#16 37.88     Checking rand_core v0.10.1
+#16 37.93     Checking percent-encoding v2.3.2
+#16 37.94     Checking utf8_iter v1.0.4
+#16 37.95     Checking event-listener-strategy v0.5.4
+#16 37.96     Checking icu_collections v2.3.0
+#16 37.97     Checking icu_provider v2.3.1
+#16 38.05     Checking rand_core v0.9.5
+#16 38.05     Checking rustls-pki-types v1.15.1
+#16 38.08     Checking futures-lite v2.6.1
+#16 38.14     Checking aws-lc-sys v0.45.0
+#16 38.25     Checking syn v3.0.4
+#16 38.30     Checking zmij v1.0.23
+#16 38.30     Checking cpufeatures v0.2.17
+#16 38.33     Checking tower-service v0.3.3
+#16 38.35     Checking winnow v1.0.4
+#16 38.38     Checking serde_json v1.0.151
+#16 38.65     Checking thiserror v2.0.20
+#16 38.66     Checking aws-lc-rs v1.18.1
+#16 38.68     Checking icu_properties_data v2.3.0
+#16 38.74     Checking icu_normalizer_data v2.3.0
+#16 38.75     Checking getrandom v0.4.3
+#16 38.76     Checking enumflags2 v0.7.12
+#16 38.80     Checking zcheapstr v1.1.0
+#16 38.80     Checking endi v1.1.1
+#16 38.83     Checking untrusted v0.9.0
+#16 38.85     Checking try-lock v0.2.5
+#16 38.85     Checking polling v3.11.0
+#16 38.86     Checking want v0.3.1
+#16 38.88     Checking icu_normalizer v2.3.0
+#16 38.88     Checking icu_properties v2.3.0
+#16 38.95     Checking ppv-lite86 v0.2.21
+#16 38.96     Checking rustls-webpki v0.103.15
+#16 38.98     Checking sha1 v0.10.7
+#16 39.00     Checking form_urlencoded v1.2.2
+#16 39.03     Checking sync_wrapper v1.0.2
+#16 39.03     Checking zvariant_utils v4.2.0
+#16 39.03     Checking rand_chacha v0.9.0
+#16 39.04     Checking httpdate v1.0.3
+#16 39.06     Checking rand v0.9.5
+#16 39.07     Checking async-task v4.7.1
+#16 39.10     Checking tower-layer v0.3.3
+#16 39.12     Checking data-encoding v2.11.1
+#16 39.15     Checking rustls v0.23.43
+#16 39.17     Checking idna_adapter v1.2.2
+#16 39.18     Checking zvariant v5.15.0
+#16 39.18     Checking hyper v1.11.1
+#16 39.19     Checking async-io v2.6.0
+#16 39.20     Checking async-channel v2.5.0
+#16 39.25     Checking http-body-util v0.1.5
+#16 39.30     Checking ipnet v2.12.1
+#16 39.32     Checking base64 v0.22.1
+#16 39.35     Checking async-signal v0.2.14
+#16 39.37     Checking idna v1.1.0
+#16 39.38     Checking tower v0.5.3
+#16 39.40     Checking hyper-util v0.1.20
+#16 39.44     Checking uuid v1.26.0
+#16 39.49     Checking async-lock v3.4.2
+#16 39.53     Checking piper v0.2.5
+#16 39.56     Checking aho-corasick v1.1.5
+#16 39.63     Checking openssl-probe v0.2.1
+#16 39.65     Checking simd-adler32 v0.3.10
+#16 39.67     Checking regex-syntax v0.8.11
+#16 39.74     Checking zbus_names v4.3.4
+#16 39.76     Checking rustls-native-certs v0.8.4
+#16 39.78     Checking async-process v2.5.0
+#16 39.80     Checking blocking v1.7.0
+#16 39.86     Checking url v2.5.8
+#16 39.86     Checking async-executor v1.14.0
+#16 39.87     Checking zbus_xml v5.2.1
+#16 39.95     Checking async-broadcast v0.7.2
+#16 39.98     Checking ordered-stream v0.2.0
+#16 39.99     Checking hex v0.4.3
+#16 40.05     Checking utf-8 v0.7.6
+#16 40.05     Checking tokio-rustls v0.26.4
+#16 40.06     Checking equivalent v1.0.2
+#16 40.06     Checking adler2 v2.0.1
+#16 40.07     Checking zbus-lockstep v0.5.2
+#16 40.07     Checking tungstenite v0.28.0
+#16 40.08     Checking zbus v5.19.0
+#16 40.09     Checking rustls-platform-verifier v0.7.0
+#16 40.10     Checking hyper-rustls v0.27.9
+#16 40.14     Checking tower-http v0.6.11
+#16 40.16     Checking num-traits v0.2.19
+#16 40.16     Checking regex-automata v0.4.18
+#16 40.20     Checking libm v0.2.16
+#16 40.22     Checking chromiumoxide_types v0.9.1
+#16 40.27     Checking tokio-util v0.7.19
+#16 40.33     Checking futures-executor v0.3.34
+#16 40.35     Checking either v1.18.0
+#16 40.39     Checking static_assertions v1.1.0
+#16 40.40     Checking heck v0.5.0
+#16 40.43     Checking iana-time-zone v0.1.65
+#16 40.44     Checking reqwest v0.13.4
+#16 40.45     Checking chrono v0.4.45
+#16 40.46     Checking core_maths v0.1.1
+#16 40.48     Checking ref-cast v1.0.27
+#16 40.50     Checking futures v0.3.34
+#16 40.51     Checking crc32fast v1.5.1
+#16 40.54     Checking miniz_oxide v0.9.1
+#16 40.67     Checking tungstenite v0.29.0
+#16 40.68     Checking chacha20 v0.10.2
+#16 40.70     Checking regex v1.13.1
+#16 40.74     Checking mime v0.3.17
+#16 40.77     Checking ryu v1.0.23
+#16 40.78     Checking allocator-api2 v0.2.21
+#16 40.80     Checking dyn-clone v1.0.20
+#16 40.83     Checking chromiumoxide_pdl v0.9.1
+#16 40.83     Checking foldhash v0.1.5
+#16 40.84     Checking hashbrown v0.17.1
+#16 40.85     Checking tokio-tungstenite v0.29.0
+#16 40.86     Checking hashbrown v0.15.5
+#16 40.90     Checking schemars v1.2.2
+#16 40.98     Checking indexmap v2.14.1
+#16 41.03     Checking serde_urlencoded v0.7.1
+#16 41.05     Checking chromiumoxide_cdp v0.9.1
+#16 41.07     Checking axum-core v0.5.6
+#16 41.13     Checking rand v0.10.2
+#16 41.18     Checking flate2 v1.1.10
+#16 41.27     Checking ttf-parser v0.25.1
+#16 41.28     Checking async-tungstenite v0.32.1
+#16 41.37     Checking miniz_oxide v0.8.9
+#16 41.48     Checking fdeflate v0.3.7
+#16 41.48     Checking sse-stream v0.2.5
+#16 41.54     Checking gethostname v1.1.0
+#16 41.55     Checking tokio-stream v0.1.19
+#16 41.56     Checking serde_path_to_error v0.1.20
+#16 41.65     Checking which v8.0.6
+#16 41.66     Checking atspi-common v0.14.0
+#16 41.66     Checking base64 v0.23.1
+#16 41.68     Checking futures-timer v3.0.4
+#16 41.69     Checking dunce v1.0.5
+#16 41.72     Checking x11rb-protocol v0.14.0
+#16 41.74     Checking fnv v1.0.7
+#16 41.75     Checking matchit v0.8.4
+#16 41.75     Checking rmcp v3.2.0
+#16 41.79     Checking axum v0.8.9
+#16 42.67     Checking atspi-proxies v0.14.0
+#16 42.86     Checking fontdue v0.9.4
+#16 42.93     Checking x11rb v0.14.0
+#16 42.96     Checking png v0.18.1
+#16 43.13     Checking atspi v0.30.0
+#16 43.14     Checking tempfile v3.27.0
+#16 43.18     Checking sha2 v0.10.9
+#16 43.18     Checking hmac v0.12.1
+#16 43.22     Checking tokio-tungstenite v0.28.0
+#16 52.07     Checking chromiumoxide v0.9.1
+#16 52.47     Checking hotline-computer v0.10.3 (/src)
+#16 54.93     Finished `dev` profile [unoptimized] target(s) in 18.36s
+#16 DONE 55.0s
+
+#17 exporting to oci image format
+#17 exporting layers
+#17 exporting layers 1.0s done
+#17 exporting manifest sha256:64712f4d425c2b4abede85d29db4ba61c49c99ee3666826b6fc011b9dd841bfa done
+#17 exporting config sha256:dc4f2fa319d871c1c5745cce163eb7e6a3815201f4d3a5138f5063fcd3aeddca done
+#17 exporting manifest list sha256:ffd8dc90d6c7466540357436e5fe6abbb2948cd73c84cc93f1759a2b4391cd4a done
+#17 sending tarball
+#17 sending tarball 1.8s done
+#17 DONE 2.8s
+hotline-computer:look-0.11-checks

@@ -35,4 +35,15 @@
       return 'refused ' + error.name + ': ' + error.message;
     }
   };
+  // What a site with passkey autofill does on load: ask quietly, and give up
+  // when the person signs in another way.
+  window.conditional = async () => {
+    const available = await PublicKeyCredential.isConditionalMediationAvailable();
+    const abort = new AbortController();
+    const asked = navigator.credentials.get({mediation: 'conditional', signal: abort.signal,
+      publicKey: {challenge: challenge(), rpId: 'localhost'}}).then(() => 'answered', (error) => 'ended ' + error.name);
+    const outcome = await Promise.race([asked, new Promise((done) => setTimeout(() => done('waiting'), 1500))]);
+    abort.abort();
+    return `available ${available}, ${outcome}, then ${await asked}`;
+  };
 </script>

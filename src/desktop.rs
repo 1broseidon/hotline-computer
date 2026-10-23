@@ -3,7 +3,8 @@
 //!
 //! Chromium needs no decorations and the agent already speaks EWMH, so the
 //! agent is the window manager. A normal window opens maximized into the
-//! work area below the bar; a dialog opens centered at its own size. Focus
+//! work area below the bar, or into the left two thirds while the right
+//! column is open; a dialog opens centered at its own size. Focus
 //! follows a click, so a person driving the screen reaches the window they
 //! see. `_NET_CLIENT_LIST`, `_NET_ACTIVE_WINDOW` and `_NET_WM_STATE` are kept
 //! current because the `windows` tool reads them.
@@ -22,12 +23,13 @@ use serde_json::json;
 use tokio::sync::mpsc::UnboundedSender;
 use x11rb::connection::Connection;
 use x11rb::protocol::Event;
+use x11rb::protocol::shape::{ConnectionExt as _, SK, SO};
 use x11rb::protocol::xproto::{
-    Allow, Atom, AtomEnum, ButtonIndex, ButtonPressEvent, CONFIGURE_NOTIFY_EVENT,
+    Allow, Atom, AtomEnum, BackPixmap, ButtonIndex, ButtonPressEvent, CONFIGURE_NOTIFY_EVENT,
     ChangeWindowAttributesAux, ClientMessageData, ClientMessageEvent, ConfigWindow,
     ConfigureNotifyEvent, ConfigureRequestEvent, ConfigureWindowAux, ConnectionExt, CreateGCAux,
     CreateWindowAux, EventMask, Gcontext, GrabMode, ImageFormat, InputFocus, KeyPressEvent,
-    MapState, ModMask, Pixmap, PropMode, Rectangle, StackMode, Window, WindowClass,
+    MapState, ModMask, Pixmap, PropMode, StackMode, Window, WindowClass,
 };
 use x11rb::rust_connection::RustConnection;
 use x11rb::wrapper::ConnectionExt as _;
@@ -44,39 +46,84 @@ pub enum Request {
     /// pages outlive a destroyed window, so the agent has to be told.
     BrowserClosed,
     OpenTerminal,
+    OpenActivity,
     /// The person asked for a shell of their own.
     OpenShell,
     OpenJob(String),
 }
 
 const MARK: &[u8] = include_bytes!("../assets/wallpaper-mark.png");
+/// Claude's own orange; the other marks take the bar's ink.
+const CLAUDE: u32 = 0xd97757;
+
+/// Harness marks as 14px masks, keyed as `agent::harness` names them.
+const MARKS: [(&str, &[u8]); 9] = [
+    ("claude", include_bytes!("../assets/harness/claude.png")),
+    ("codex", include_bytes!("../assets/harness/codex.png")),
+    ("cursor", include_bytes!("../assets/harness/cursor.png")),
+    ("opencode", include_bytes!("../assets/harness/opencode.png")),
+    ("copilot", include_bytes!("../assets/harness/copilot.png")),
+    ("windsurf", include_bytes!("../assets/harness/windsurf.png")),
+    ("cline", include_bytes!("../assets/harness/cline.png")),
+    ("roocode", include_bytes!("../assets/harness/roocode.png")),
+    ("zed", include_bytes!("../assets/harness/zed.png")),
+];
+
+/// The connected harness's mark, when it has one.
+fn harness_mark(harness: &str) -> Option<&'static Image> {
+    static DECODED: std::sync::OnceLock<Vec<(&str, Image)>> = std::sync::OnceLock::new();
+    DECODED
+        .get_or_init(|| {
+            MARKS
+                .iter()
+                .filter_map(|(key, bytes)| decode_png(bytes).ok().map(|image| (*key, image)))
+                .collect()
+        })
+        .iter()
+        .find(|(key, _)| *key == harness)
+        .map(|(_, image)| image)
+}
+
+/// Room on the shell's bar pill for its place toggle.
+const PLACE_WIDTH: i32 = 26;
 const BROWSER_CLASS: &str = "chromium";
-const BACKGROUND: u32 = 0x000000;
+/// Window corners. Cut with SHAPE (one bit), then the wallpaper's antialiased
+/// ring hugs the curve, so the stair-step never meets the ground.
+const CORNER: u16 = 10;
+const BACKGROUND: u32 = 0x0b0b0d;
 /// The bar's height in pixels; the work area starts below it.
-pub const BAR_HEIGHT: u16 = 36;
-const BAR_FILL: u32 = 0x1c1c1f;
-const BAR_RAISED: u32 = 0x28282c;
-const BAR_HOVER: u32 = 0x343439;
-const RULE: u32 = 0x38383d;
-const INK: u32 = 0xe8e8ea;
-const INK_2: u32 = 0xaaaaae;
-const MUTED: u32 = 0x7d7d82;
+pub const BAR_HEIGHT: u16 = 40;
+const BAR_FILL: u32 = 0x111114;
+const BAR_RAISED: u32 = 0x1f1f25;
+const RAISED_EDGE: u32 = 0x2e2e35;
+const PILL_INK: u32 = 0xa2a2a9;
+const BAR_HOVER: u32 = 0x1f1f25;
+/// The wallpaper mark: one step above the ground.
+const WATERMARK: u32 = 0x1a1a1f;
+const RULE: u32 = 0x2a2a30;
+const INK: u32 = 0xececef;
+const INK_2: u32 = 0xb4b4ba;
+const MUTED: u32 = 0x8e8e95;
 const OK: u32 = 0x86d69c;
-const WARN: u32 = 0xf0c27a;
-const YOU: u32 = 0x7fc4f0;
-const YOU_FILL: u32 = 0x25292e;
+const FAIL: u32 = 0xff8f80;
+const YOU: u32 = 0xf0c27a;
+const AGENT: u32 = 0x8fb8ff;
+const CHIP: u32 = 0x19191e;
+const CHIP_EDGE: u32 = 0x26262c;
+const SURFACE: u32 = 0x17171b;
+const BAR_RULE: u32 = 0x222227;
 /// PutImage requests stay well under the smallest maximum request length.
 const PUT_IMAGE_CHUNK: usize = 60_000;
-/// The image's DejaVu; the bar has no second choice because it is ours.
-const SANS: &str = "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf";
-const MONO: &str = "/usr/share/fonts/truetype/dejavu/DejaVuSansMono.ttf";
+/// The image vendors these faces, so the bar and the viewer use the same type.
+const SANS: &str = "/usr/share/fonts/truetype/hotline/Geist-Regular.ttf";
+const MONO: &str = "/usr/share/fonts/truetype/hotline/GeistMono-Regular.ttf";
 /// Where menus drop from: under the mark, a hair below the bar.
 const POPUP_X: i16 = 8;
 const POPUP_Y: i16 = 40;
 /// The jobs list hangs from its chip instead, so it is where the eye
 /// already is; its right edge lines up with the chip's.
 const EDGE: i32 = 8;
-const ROW: i32 = 30;
+const ROW: i32 = 32;
 const PAD: i32 = 6;
 const MENU_WIDTH: u16 = 252;
 const ABOUT_WIDTH: u16 = 300;
@@ -84,8 +131,99 @@ const TRAY_ICON: i32 = 18;
 const APP_ICON: u16 = 16;
 const PILL_MAX: i32 = 220;
 const KEYSYM_ESCAPE: u32 = 0xff1b;
-/// The line between the observer and the person's shell in the right column.
-const STACK_GAP: u16 = 8;
+pub const GUTTER: u16 = 16;
+
+pub fn gutter() -> u16 {
+    std::env::var("HOTLINE_COMPUTER_GUTTER")
+        .ok()
+        .and_then(|v| v.parse().ok())
+        .unwrap_or(GUTTER)
+}
+
+fn work_area(width: u16, height: u16, gap: u16) -> (i16, i16, u16, u16) {
+    // An oversized setting must still leave a usable pixel on a small screen.
+    let gap = gap
+        .min(width.saturating_sub(1) / 2)
+        .min(height.saturating_sub(BAR_HEIGHT + 1) / 2);
+    (
+        gap as i16,
+        (BAR_HEIGHT + gap) as i16,
+        width.saturating_sub(2 * gap).max(1),
+        height.saturating_sub(BAR_HEIGHT + 2 * gap).max(1),
+    )
+}
+
+fn column_rect(
+    area: (i16, i16, u16, u16),
+    gap: u16,
+    shell: bool,
+    shell_open: bool,
+) -> (i16, i16, u16, u16) {
+    let (left, top, width, height) = area;
+    let split = width.saturating_sub(gap) * 2 / 3;
+    let x = left + (split + gap) as i16;
+    let width = width.saturating_sub(split + gap).max(1);
+    let shell_height = height / 3;
+    if shell {
+        (
+            x,
+            top + (height - shell_height + gap) as i16,
+            width,
+            shell_height.saturating_sub(gap).max(1),
+        )
+    } else if shell_open {
+        (x, top, width, height - shell_height)
+    } else {
+        (x, top, width, height)
+    }
+}
+
+/// The observer, activity and the person's shell share the right column.
+pub(crate) fn in_column(class: &str) -> bool {
+    class.contains("hotlineshell")
+        || class.contains("hotlineterminal")
+        || class.contains("hotlineactivity")
+}
+
+/// In the right column now. The person's shell can leave it for the app
+/// pane: maximized is what puts it there.
+fn docked(client: &Client) -> bool {
+    in_column(&client.class) && !client.maximized
+}
+
+/// The computer's own file manager and picker: Chromium app windows of
+/// classes that do not say "chromium", so they are never the agent's browser.
+fn files_window(class: &str) -> bool {
+    class.contains("hotlinefiles") || class.contains("hotlinepicker")
+}
+
+/// The space left of the column, where the app being watched goes while
+/// the observer, activity or the person's shell is open.
+fn main_rect(area: (i16, i16, u16, u16), gap: u16) -> (i16, i16, u16, u16) {
+    let (left, top, width, height) = area;
+    (
+        left,
+        top,
+        (width.saturating_sub(gap) * 2 / 3).max(1),
+        height,
+    )
+}
+
+pub(crate) fn activity_rect(
+    area: (i16, i16, u16, u16),
+    gap: u16,
+    activity: bool,
+) -> (i16, i16, u16, u16) {
+    let (x, y, w, h) = area;
+    let gap = gap.min(h.saturating_sub(2));
+    let available = h.saturating_sub(gap).max(2);
+    let observer = (available * 3 / 5).max(1);
+    if activity {
+        (x, y + (observer + gap) as i16, w, available - observer)
+    } else {
+        (x, y, w, observer)
+    }
+}
 
 pub fn run(
     display: &str,
@@ -117,7 +255,10 @@ pub fn run(
     }
 }
 
+const SEMIBOLD: &str = "/usr/share/fonts/truetype/hotline/Geist-SemiBold.ttf";
+
 struct Fonts {
+    semibold: Arc<fontdue::Font>,
     sans: Arc<fontdue::Font>,
     mono: Arc<fontdue::Font>,
 }
@@ -132,6 +273,7 @@ impl Fonts {
         };
         Ok(Self {
             sans: load(SANS)?,
+            semibold: load(SEMIBOLD)?,
             mono: load(MONO)?,
         })
     }
@@ -160,10 +302,14 @@ impl Rect {
 struct Layout {
     mark: Rect,
     apps: Vec<(Rect, Window)>,
+    agent: Rect,
+    sealed: Rect,
     jobs: Rect,
     lease: Rect,
     tray: Vec<Rect>,
     clock: Rect,
+    /// The layout glyph on the shell's pill: column or pane.
+    shell_place: Option<(Rect, Window)>,
 }
 
 enum Popup {
@@ -246,6 +392,8 @@ struct Atoms {
     tray_selection: Atom,
     tray_opcode: Atom,
     xembed: Atom,
+    agent: Atom,
+    sealed: Atom,
     jobs_running: Atom,
     jobs_summary: Atom,
     holder: Atom,
@@ -295,6 +443,8 @@ impl Atoms {
             tray_selection: atom(format!("_NET_SYSTEM_TRAY_S{screen_number}").as_bytes())?,
             tray_opcode: atom(b"_NET_SYSTEM_TRAY_OPCODE")?,
             xembed: atom(b"_XEMBED")?,
+            agent: atom(b"_HOTLINE_AGENT")?,
+            sealed: atom(b"_HOTLINE_SEALED")?,
             jobs_running: atom(b"_HOTLINE_JOBS_RUNNING")?,
             jobs_summary: atom(b"_HOTLINE_JOB_SUMMARY")?,
             holder: atom(b"_HOTLINE_HOLDER")?,
@@ -344,16 +494,26 @@ struct Desktop {
     requests: UnboundedSender<Request>,
     tray: Vec<Window>,
     popup: Option<Open>,
+    /// Each client's corner caps, kept directly beneath it: they show the
+    /// wallpaper through its cut corners, not the window stacked below.
+    caps: HashMap<Window, [Window; 4]>,
     fonts: Fonts,
     mark: Image,
     layout: Layout,
     lease: Option<Lease>,
-    /// The first keysym of every keycode, so a menu can read A to D and Escape.
+    /// The first keysym of every keycode, so a menu can read B, T, O, V, A and Escape.
     keysyms: (u8, usize, Vec<u32>),
     started: Instant,
     /// What the bar last showed of the clock and the lease, so a tick that
     /// changes neither draws nothing.
     shown: String,
+    agent: crate::agent::Agent,
+    sealed: u32,
+    hovered_app: Option<Window>,
+    hovered_row: Option<usize>,
+    gutter: u16,
+    wallpaper_dirty: bool,
+    wallpaper_painted: Instant,
 }
 
 impl Desktop {
@@ -418,6 +578,7 @@ impl Desktop {
             active: None,
             requests,
             tray: Vec::new(),
+            caps: HashMap::new(),
             popup: None,
             fonts,
             mark,
@@ -426,8 +587,16 @@ impl Desktop {
             keysyms,
             started: Instant::now(),
             shown: String::new(),
+            agent: crate::agent::Agent::default(),
+            sealed: 0,
+            hovered_app: None,
+            hovered_row: None,
+            gutter: work_area(screen.width_in_pixels, screen.height_in_pixels, gutter()).0 as u16,
+            wallpaper_dirty: true,
+            wallpaper_painted: Instant::now(),
         };
         desktop.announce()?;
+        desktop.read_identity()?;
         desktop.paint_wallpaper()?;
         desktop.create_bar(screen.root_visual)?;
         desktop.own_tray()?;
@@ -440,58 +609,134 @@ impl Desktop {
         Ok(desktop)
     }
 
-    /// The bar always retains its own work area.
-    fn work_height(&self) -> u16 {
-        self.height.saturating_sub(BAR_HEIGHT)
+    fn work_rect(&self) -> (i16, i16, u16, u16) {
+        work_area(self.width, self.height, self.gutter)
     }
 
-    /// Where a window of the right column goes: the observer above, the
-    /// person's shell in the bottom third under a line, or either one alone
-    /// when the other is closed. `shell_open` says whether the shell is or
-    /// is about to be there.
+    /// The observer and shell keep the same column when tiled by a tool.
     fn column(&self, shell: bool, shell_open: bool) -> (i16, i16, u16, u16) {
-        let x = self.width * 2 / 3;
-        let width = self.width - x;
-        let work = self.work_height();
-        let shell_height = work / 3;
-        if shell {
-            (
-                x as i16,
-                (BAR_HEIGHT + work - shell_height + STACK_GAP) as i16,
-                width,
-                shell_height.saturating_sub(STACK_GAP).max(1),
-            )
-        } else if shell_open {
-            (x as i16, BAR_HEIGHT as i16, width, work - shell_height)
+        column_rect(self.work_rect(), self.gutter, shell, shell_open)
+    }
+
+    fn main_area(&self) -> (i16, i16, u16, u16) {
+        main_rect(self.work_rect(), self.gutter)
+    }
+
+    /// Whether anything holds the right column, so a normal window opens
+    /// beside it rather than over it.
+    fn column_open(&self) -> bool {
+        self.clients.values().any(docked)
+    }
+
+    /// Where apps live: left of the column while it is open, else the whole
+    /// work area. A maximized app fills this, not the screen.
+    fn pane(&self) -> (i16, i16, u16, u16) {
+        if self.column_open() {
+            self.main_area()
         } else {
-            (x as i16, BAR_HEIGHT as i16, width, work)
+            self.work_rect()
+        }
+    }
+
+    fn activity_column(&self, activity: bool, shell_open: bool) -> (i16, i16, u16, u16) {
+        let area = self.column(false, shell_open);
+        if self.client_with_class("hotlineactivity").is_some()
+            && self.client_with_class("hotlineterminal").is_some()
+        {
+            activity_rect(area, self.gutter, activity)
+        } else {
+            area
         }
     }
 
     /// Restacks the right column after the observer or the shell opens or
     /// closes, so the observer takes the whole column when it is alone.
     fn stack_column(&mut self) -> Result<(), String> {
-        let shell_open = self.client_with_class("hotlineshell").is_some();
-        let column: Vec<(Window, bool)> = self
+        let shell_open = self
+            .clients
+            .values()
+            .any(|c| docked(c) && c.class.contains("hotlineshell"));
+        let column: Vec<(Window, bool, bool)> = self
             .clients
             .iter()
-            .filter(|(_, c)| {
-                c.class.contains("hotlineshell") || c.class.contains("hotlineterminal")
+            .filter(|(_, c)| docked(c))
+            .map(|(id, c)| {
+                (
+                    *id,
+                    c.class.contains("hotlineshell"),
+                    c.class.contains("hotlineactivity"),
+                )
             })
-            .map(|(id, c)| (*id, c.class.contains("hotlineshell")))
             .collect();
-        for (id, shell) in column {
-            let bounds = self.column(shell, shell_open);
+        for (id, shell, activity) in column {
+            let bounds = if shell {
+                self.column(true, shell_open)
+            } else {
+                self.activity_column(activity, shell_open)
+            };
             let Some(client) = self.clients.get_mut(&id) else {
                 continue;
             };
-            if client.maximized || client.saved != bounds {
-                client.maximized = false;
+            if client.saved != bounds {
                 client.saved = bounds;
                 self.apply_geometry(id)?;
             }
         }
         Ok(())
+    }
+
+    /// After the column gains or loses a window: restack it, then move the
+    /// apps. A column that opens squeezes what filled the work area into
+    /// the pane; one that closes gives the work area back to what sits in
+    /// the pane. A window moved since stays where it was put.
+    fn column_changed(&mut self, was_open: bool) -> Result<(), String> {
+        self.stack_column()?;
+        let open = self.column_open();
+        if open == was_open {
+            return Ok(());
+        }
+        let main = self.main_area();
+        let apps: Vec<Window> = self
+            .clients
+            .iter()
+            .filter(|(_, c)| !docked(c))
+            .map(|(id, _)| *id)
+            .collect();
+        for id in apps {
+            let Some(client) = self.clients.get_mut(&id) else {
+                continue;
+            };
+            let before = (client.maximized, client.saved);
+            // The shell in the pane stays maximized: that is what puts it there.
+            if !in_column(&client.class) {
+                if open && client.maximized {
+                    client.maximized = false;
+                    client.saved = main;
+                } else if !open && client.saved == main {
+                    client.maximized = true;
+                }
+            }
+            if client.maximized || (client.maximized, client.saved) != before {
+                self.apply_geometry(id)?;
+            }
+        }
+        Ok(())
+    }
+
+    /// Moves the person's shell between its place in the column and the app
+    /// pane, and brings it forward either way.
+    fn place_shell(&mut self, window: Window, in_pane: bool) -> Result<(), String> {
+        let was_open = self.column_open();
+        let Some(client) = self.clients.get_mut(&window) else {
+            return Ok(());
+        };
+        if client.maximized == in_pane {
+            return self.focus(window);
+        }
+        client.maximized = in_pane;
+        self.apply_geometry(window)?;
+        self.column_changed(was_open)?;
+        self.focus(window)
     }
 
     fn announce(&self) -> Result<(), String> {
@@ -557,17 +802,10 @@ impl Desktop {
             AtomEnum::CARDINAL,
             &[0, 0],
         )?;
-        self.property32(
-            root,
-            atoms.net_workarea,
-            AtomEnum::CARDINAL,
-            &[
-                0,
-                u32::from(BAR_HEIGHT),
-                u32::from(self.width),
-                u32::from(self.work_height()),
-            ],
-        )?;
+        self.property32(root, atoms.net_workarea, AtomEnum::CARDINAL, &{
+            let (x, y, w, h) = self.work_rect();
+            [x as u32, y as u32, u32::from(w), u32::from(h)]
+        })?;
         self.property32(root, atoms.net_client_list, AtomEnum::WINDOW, &[])?;
         self.property32(root, atoms.net_active_window, AtomEnum::WINDOW, &[])?;
         Ok(())
@@ -599,29 +837,104 @@ impl Desktop {
         Ok(())
     }
 
-    /// Black, with the mark centred in the work area below the bar.
-    fn paint_wallpaper(&self) -> Result<(), String> {
-        let pixmap: Pixmap = self
-            .connection
-            .generate_id()
-            .map_err(|error| error.to_string())?;
+    /// Paint separation on the root, without frames or a compositor. Only
+    /// managed, visible clients contribute; popups and tray windows never do.
+    fn paint_wallpaper(&mut self) -> Result<(), String> {
+        let mut canvas = Canvas::new(self.width, self.height, BACKGROUND);
+        // The mark is a watermark, not a logo on a splash screen: a shade
+        // above the ground, at a third of its source size.
+        let source = decode_png(MARK)?;
+        let mark = resample(&source, source.width / 3, source.height / 3);
+        let x = (self.width.saturating_sub(mark.width) / 2) as i32;
+        let y =
+            i32::from(BAR_HEIGHT + self.height.saturating_sub(BAR_HEIGHT + mark.height) / 2) - 28;
+        canvas.stamp(x, y, &mark, WATERMARK);
+        let mut rects = Vec::new();
+        for window in &self.order {
+            let attributes = self
+                .connection
+                .get_window_attributes(*window)
+                .map_err(|e| e.to_string())?
+                .reply();
+            if !attributes.is_ok_and(|a| a.map_state == MapState::VIEWABLE && !a.override_redirect)
+            {
+                continue;
+            }
+            if let Ok(g) = self
+                .connection
+                .get_geometry(*window)
+                .map_err(|e| e.to_string())?
+                .reply()
+            {
+                if g.x == 0 && g.y == 0 && g.width >= self.width && g.height >= self.height {
+                    continue;
+                }
+                rects.push((
+                    i32::from(g.x),
+                    i32::from(g.y),
+                    i32::from(g.width),
+                    i32::from(g.height),
+                ));
+            }
+        }
+        if rects.is_empty() {
+            let title = Face::new(&self.fonts.semibold, 15.0);
+            let note = Face::new(&self.fonts.sans, 13.0);
+            let line = format!("{}'s computer", self.agent.name);
+            let center = i32::from(self.width) / 2;
+            let top = y + i32::from(mark.height) + 14;
+            canvas.text(
+                &title,
+                center - title.width(&line) / 2,
+                top + 14,
+                &line,
+                INK_2,
+            );
+            let hint = "Windows open here as the agent works.";
+            canvas.text(&note, center - note.width(hint) / 2, top + 38, hint, MUTED);
+        }
+        for &(x, y, w, h) in &rects {
+            canvas.shadow(x, y, w, h);
+        }
+        // Rings go last so a neighbour's shadow cannot dim their one-pixel
+        // edge. Each is a rounded rectangle one pixel larger than its window,
+        // filled back with the ground inside, so the antialiased curve sits
+        // exactly where SHAPE cut the window's corner.
+        let radius = if self.gutter == 0 {
+            0.0
+        } else {
+            f32::from(CORNER)
+        };
+        for (x, y, w, h) in rects {
+            canvas.round_rect(x - 1, y - 1, w + 2, h + 2, radius + 1.0, RULE);
+            canvas.round_rect(x, y, w, h, radius, BACKGROUND);
+        }
+        let pixmap: Pixmap = self.connection.generate_id().map_err(|e| e.to_string())?;
         self.connection
             .create_pixmap(self.depth, pixmap, self.root, self.width, self.height)
-            .map_err(|error| error.to_string())?;
-        self.fill(pixmap, BACKGROUND, 0, 0, self.width, self.height)?;
-        let mark = decode_png(MARK)?;
-        let x = (self.width.saturating_sub(mark.width) / 2) as i16;
-        let y = (BAR_HEIGHT + self.work_height().saturating_sub(mark.height) / 2) as i16;
-        self.put_image(pixmap, &mark, x, y, BACKGROUND)?;
+            .map_err(|e| e.to_string())?;
+        self.put_image(pixmap, &canvas.image, 0, 0, BACKGROUND)?;
         self.connection
             .change_window_attributes(
                 self.root,
                 &ChangeWindowAttributesAux::new().background_pixmap(pixmap),
             )
-            .map_err(|error| error.to_string())?;
+            .map_err(|e| e.to_string())?;
         self.connection
             .clear_area(false, self.root, 0, 0, 0, 0)
-            .map_err(|error| error.to_string())?;
+            .map_err(|e| e.to_string())?;
+        for cap in self.caps.values().flatten() {
+            self.connection
+                .clear_area(false, *cap, 0, 0, 0, 0)
+                .map_err(|e| e.to_string())?;
+        }
+        // X keeps the background reference; releasing our ID prevents a leak
+        // each time a client moves and the wallpaper is replaced.
+        self.connection
+            .free_pixmap(pixmap)
+            .map_err(|e| e.to_string())?;
+        self.wallpaper_dirty = false;
+        self.wallpaper_painted = Instant::now();
         Ok(())
     }
 
@@ -641,7 +954,12 @@ impl Desktop {
                 &CreateWindowAux::new()
                     .override_redirect(1)
                     .background_pixel(BAR_FILL)
-                    .event_mask(EventMask::EXPOSURE | EventMask::BUTTON_PRESS),
+                    .event_mask(
+                        EventMask::EXPOSURE
+                            | EventMask::BUTTON_PRESS
+                            | EventMask::POINTER_MOTION
+                            | EventMask::LEAVE_WINDOW,
+                    ),
             )
             .map_err(|error| error.to_string())?;
         self.connection
@@ -672,6 +990,45 @@ impl Desktop {
             counts.get(1).copied().unwrap_or(0),
             counts.get(2).copied().unwrap_or(0),
         )
+    }
+
+    fn read_identity(&mut self) -> Result<(), String> {
+        let identity = self
+            .connection
+            .get_property(
+                false,
+                self.root,
+                self.atoms.agent,
+                self.atoms.utf8_string,
+                0,
+                4096,
+            )
+            .map_err(|e| e.to_string())?
+            .reply();
+        self.agent = identity
+            .ok()
+            .and_then(|p| serde_json::from_slice(&p.value).ok())
+            .unwrap_or_default();
+        self.sealed = self
+            .connection
+            .get_property(
+                false,
+                self.root,
+                self.atoms.sealed,
+                AtomEnum::CARDINAL,
+                0,
+                1,
+            )
+            .map_err(|e| e.to_string())?
+            .reply()
+            .ok()
+            .and_then(|p| p.value32().and_then(|mut v| v.next()))
+            .unwrap_or(0);
+        Ok(())
+    }
+
+    fn agent_working(&self) -> bool {
+        self.job_counts().0 > 0 || recently_active(self.agent.last_action_ms, now_ms())
     }
 
     fn read_lease(&mut self) -> Result<(), String> {
@@ -772,16 +1129,19 @@ impl Desktop {
     fn draw_bar(&mut self) -> Result<(), String> {
         let width = i32::from(self.width);
         let height = i32::from(BAR_HEIGHT);
-        let sans = Face::new(&self.fonts.sans, 13.0);
-        let small = Face::new(&self.fonts.sans, 12.0);
+        let sans = Face::new(&self.fonts.sans, 12.5);
+        let small = sans.clone();
+        let name_face = Face::new(&self.fonts.semibold, 13.0);
+        let initial_face = Face::new(&self.fonts.semibold, 11.5);
+        let clock_face = Face::new(&self.fonts.sans, 13.0);
         let mono = Face::new(&self.fonts.mono, 10.0);
         let mut canvas = Canvas::new(self.width, BAR_HEIGHT, BAR_FILL);
-        canvas.fill_rect(0, height - 1, width, 1, RULE);
+        canvas.fill_rect(0, height - 1, width, 1, BAR_RULE);
         // The mark is the menu.
         let mut layout = Layout {
             mark: Rect {
                 x: 8,
-                y: 5,
+                y: 7,
                 w: 28,
                 h: 26,
             },
@@ -807,21 +1167,44 @@ impl Desktop {
 
         // The right cluster is laid out from the edge inwards.
         let clock = self.clock();
-        let clock_width = sans.width(&clock);
-        let mut right = width - 10;
+        let digit = (0..=9)
+            .map(|n| clock_face.width(&n.to_string()))
+            .max()
+            .unwrap_or(8);
+        let clock_width: i32 = clock
+            .chars()
+            .map(|c| {
+                if c.is_ascii_digit() {
+                    digit
+                } else {
+                    clock_face.width(&c.to_string())
+                }
+            })
+            .sum();
+        let mut right = width - 8;
         layout.clock = Rect {
-            x: right - clock_width - 4,
+            x: right - clock_width,
             y: 0,
-            w: clock_width + 8,
+            w: clock_width,
             h: height,
         };
-        canvas.text(
-            &sans,
-            layout.clock.x + 4,
-            sans.baseline_in(0, height),
-            &clock,
-            INK,
-        );
+        let mut clock_x = layout.clock.x;
+        for c in clock.chars() {
+            let text = c.to_string();
+            let w = if c.is_ascii_digit() {
+                digit
+            } else {
+                clock_face.width(&text)
+            };
+            canvas.text(
+                &clock_face,
+                clock_x + (w - clock_face.width(&text)) / 2,
+                clock_face.baseline_in(0, height),
+                &text,
+                INK,
+            );
+            clock_x += w;
+        }
         right = layout.clock.x - 4;
         if !self.tray.is_empty() {
             let count = self.tray.len() as i32;
@@ -839,103 +1222,241 @@ impl Desktop {
             }
             right = left - 6;
         }
+        let (running, completed, failed) = self.job_counts();
+        let working = running > 0 || recently_active(self.agent.last_action_ms, now_ms());
         let (text, color, fill) = match self.holding() {
-            Holding::Person => ("person in control", YOU, Some(YOU_FILL)),
-            Holding::Agent => ("agent in control", INK_2, None),
-            Holding::Nobody => ("agent at work", MUTED, None),
+            Holding::Person => (
+                "you're driving",
+                YOU,
+                Some(crate::paint::blend(YOU, BAR_FILL, 0.16)),
+            ),
+            _ if working => (
+                "agent at work",
+                AGENT,
+                Some(crate::paint::blend(AGENT, BAR_FILL, 0.16)),
+            ),
+            _ => ("agent idle", MUTED, None),
         };
         layout.lease = chip(&mut canvas, &small, right, text, color, color, fill);
-        right = layout.lease.x - 4;
-        let (running, completed, failed) = self.job_counts();
-        let jobs_text = if failed > 0 {
-            format!("{failed} failed · {running} running")
-        } else if running > 0 {
-            format!("{running} running · {completed} done")
-        } else if completed > 0 {
-            format!("{completed} done")
-        } else {
-            "no jobs".to_owned()
-        };
-        let (jobs_color, jobs_dot) = if failed > 0 {
-            (WARN, WARN)
-        } else if running > 0 {
-            (INK, OK)
-        } else {
-            (MUTED, MUTED)
-        };
-        layout.jobs = chip(
-            &mut canvas,
-            &small,
-            right,
-            &jobs_text,
-            jobs_color,
-            jobs_dot,
-            None,
-        );
-        right = layout.jobs.x - 16;
+        right = layout.lease.x - 8;
+        layout.jobs = jobs_chip(&mut canvas, &small, right, (running, completed, failed));
+        right = layout.jobs.x - 8;
+        if self.sealed > 0 {
+            let text = format!("{} sealed", self.sealed);
+            let w = small.width(&text) + 38;
+            layout.sealed = Rect {
+                x: right - w,
+                y: 7,
+                w,
+                h: 26,
+            };
+            canvas.round_rect(right - w, 7, w, 26, 8.0, CHIP_EDGE);
+            canvas.round_rect(right - w + 1, 8, w - 2, 24, 7.0, CHIP);
+            canvas.padlock(right - w + 9, 13, INK_2);
+            canvas.text(
+                &small,
+                right - w + 28,
+                small.baseline_in(7, 26),
+                &text,
+                INK_2,
+            );
+            right = layout.sealed.x - 8;
+        }
+        right -= 8;
 
-        // The middle is every managed window, in mapping order, as far as fits.
-        canvas.fill_rect(44, 9, 1, 18, RULE);
+        // Identity yields space to status chips on narrow screens. The task
+        // is a label, never command output, and is bounded before pixel fitting.
+        let room = (right - 52 - 16).clamp(0, 440);
+        let name = name_face.fit(&self.agent.name, (room - 30).clamp(0, 180));
+        let name_width = name_face.width(&name);
+        let task: String = self.agent.task.chars().take(40).collect();
+        let task = if self.agent.task.chars().count() > 40 {
+            format!("{}…", task.chars().take(39).collect::<String>())
+        } else {
+            task
+        };
+        let task_room = room - 30 - name_width - 8;
+        let task = if task_room >= 20 {
+            small.fit(&task, task_room)
+        } else {
+            String::new()
+        };
+        let task_width = if task.is_empty() {
+            0
+        } else {
+            8 + small.width(&task)
+        };
         let mut x = 52;
+        if room >= 60 {
+            layout.agent = Rect {
+                x,
+                y: 6,
+                w: 30 + name_width + task_width,
+                h: 28,
+            };
+            // The harness's mark when it has one; otherwise the initial.
+            let mark = harness_mark(&self.agent.harness);
+            let tint = match (&mark, self.agent.harness.as_str()) {
+                (Some(_), "claude") => CLAUDE,
+                (Some(_), _) => INK,
+                (None, _) => AGENT,
+            };
+            canvas.dot(
+                (x + 11) as f32,
+                20.0,
+                11.0,
+                crate::paint::blend(tint, BAR_FILL, 0.16),
+            );
+            match mark {
+                Some(mark) => canvas.stamp(x + 4, 13, mark, tint),
+                None => {
+                    let initial = self
+                        .agent
+                        .name
+                        .chars()
+                        .next()
+                        .unwrap_or('A')
+                        .to_uppercase()
+                        .to_string();
+                    canvas.text(
+                        &initial_face,
+                        x + (22 - initial_face.width(&initial)) / 2,
+                        initial_face.baseline_in(9, 22),
+                        &initial,
+                        AGENT,
+                    );
+                }
+            }
+            canvas.text(
+                &name_face,
+                x + 30,
+                name_face.baseline_in(0, height),
+                &name,
+                INK,
+            );
+            canvas.text(
+                &small,
+                x + 30 + name_width + 8,
+                small.baseline_in(0, height),
+                &task,
+                MUTED,
+            );
+            x += layout.agent.w + 12;
+        }
+        canvas.fill_rect(x, 11, 1, 18, RULE);
+        x += 12;
         for window in self.order.clone() {
             let title = self.title_of(window)?;
-            let text = sans.fit(&title, PILL_MAX - 8 - i32::from(APP_ICON) - 7 - 10);
+            let text = sans.fit(&title, PILL_MAX - 22 - i32::from(APP_ICON) - 8);
+            let shell = self
+                .clients
+                .get(&window)
+                .is_some_and(|c| c.class.contains("hotlineshell"));
             let pill = Rect {
                 x,
-                y: 5,
-                w: 8 + i32::from(APP_ICON) + 7 + sans.width(&text) + 10,
-                h: 26,
+                y: 6,
+                w: 22
+                    + i32::from(APP_ICON)
+                    + 8
+                    + sans.width(&text)
+                    + if shell { PLACE_WIDTH } else { 0 },
+                h: 28,
             };
             if pill.x + pill.w > right {
                 break;
             }
             let active = self.active == Some(window);
             if active {
-                canvas.round_rect(pill.x, pill.y, pill.w, pill.h, 6.0, BAR_RAISED);
-                canvas.fill_rect(pill.x + 6, pill.y + pill.h - 2, pill.w - 12, 2, INK_2);
+                canvas.round_rect(pill.x, pill.y, pill.w, pill.h, 8.0, RAISED_EDGE);
+                canvas.round_rect(
+                    pill.x + 1,
+                    pill.y + 1,
+                    pill.w - 2,
+                    pill.h - 2,
+                    7.0,
+                    BAR_RAISED,
+                );
+            } else if self.hovered_app == Some(window) {
+                canvas.round_rect(pill.x, pill.y, pill.w, pill.h, 8.0, BAR_RAISED);
             }
-            let icon_x = pill.x + 8;
+            let icon_x = pill.x + 11;
             let icon_y = pill.y + (pill.h - i32::from(APP_ICON)) / 2;
             let client = self.clients.get(&window);
             match client.and_then(|c| c.icon.as_ref()) {
                 Some(icon) => canvas.blit(icon_x, icon_y, icon),
                 None => {
-                    canvas.round_rect(icon_x, icon_y, 16, 16, 4.0, BAR_HOVER);
-                    let glyph = if client.is_some_and(|c| c.class.contains("hotlineterminal")) {
-                        ">_".to_owned()
-                    } else if client.is_some_and(|c| c.class.contains("hotlineshell")) {
-                        "$".to_owned()
+                    let ground = if active || self.hovered_app == Some(window) {
+                        BAR_RAISED
                     } else {
-                        title
+                        BAR_FILL
+                    };
+                    let ink = if active { INK } else { PILL_INK };
+                    let class = client.map_or("", |c| c.class.as_str());
+                    if class.contains("hotlineterminal") || class.contains("hotlineshell") {
+                        canvas.terminal_icon(icon_x, icon_y, ink, ground);
+                    } else if class.contains("hotlineactivity") {
+                        canvas.list_icon(icon_x, icon_y, ink);
+                    } else if files_window(class) {
+                        canvas.folder_icon(icon_x, icon_y, ink, ground);
+                    } else {
+                        canvas.round_rect(icon_x, icon_y, 16, 16, 4.0, BAR_HOVER);
+                        let glyph = title
                             .chars()
                             .next()
                             .map(|c| c.to_uppercase().to_string())
-                            .unwrap_or_default()
-                    };
-                    let glyph_width = mono.width(&glyph);
-                    canvas.text(
-                        &mono,
-                        icon_x + (16 - glyph_width) / 2,
-                        mono.baseline_in(icon_y, 16),
-                        &glyph,
-                        INK,
-                    );
+                            .unwrap_or_default();
+                        let glyph_width = mono.width(&glyph);
+                        canvas.text(
+                            &mono,
+                            icon_x + (16 - glyph_width) / 2,
+                            mono.baseline_in(icon_y, 16),
+                            &glyph,
+                            INK,
+                        );
+                    }
                 }
             }
             canvas.text(
                 &sans,
-                icon_x + i32::from(APP_ICON) + 7,
+                icon_x + i32::from(APP_ICON) + 8,
                 sans.baseline_in(pill.y, pill.h),
                 &text,
-                if active { INK } else { INK_2 },
+                if active { INK } else { PILL_INK },
             );
+            if shell {
+                // A small map of the screen with the shell's place filled
+                // in. Clicking it moves the shell to the other place.
+                let place = Rect {
+                    x: pill.x + pill.w - PLACE_WIDTH - 4,
+                    y: pill.y,
+                    w: PLACE_WIDTH,
+                    h: pill.h,
+                };
+                let ground = if active || self.hovered_app == Some(window) {
+                    BAR_RAISED
+                } else {
+                    BAR_FILL
+                };
+                let ink = if active { INK } else { PILL_INK };
+                let in_pane = self.clients.get(&window).is_some_and(|c| c.maximized);
+                let (gx, gy) = (place.x + 4, place.y + 8);
+                canvas.round_rect(gx, gy, 18, 12, 2.5, ink);
+                canvas.round_rect(gx + 1, gy + 1, 16, 10, 1.5, ground);
+                canvas.fill_rect(gx + 12, gy + 1, 1, 10, ink);
+                if in_pane {
+                    canvas.fill_rect(gx + 3, gy + 3, 7, 6, ink);
+                } else {
+                    canvas.fill_rect(gx + 14, gy + 6, 2, 3, ink);
+                }
+                layout.shell_place = Some((place, window));
+            }
             layout.apps.push((pill, window));
-            x += pill.w + 2;
+            x += pill.w + 8;
         }
 
         self.put_image(self.bar, &canvas.image, 0, 0, BAR_FILL)?;
         self.layout = layout;
-        self.shown = format!("{clock}|{:?}", self.holding());
+        self.shown = format!("{clock}|{:?}|{working}", self.holding());
         self.layout_tray()?;
         self.publish_layout()
     }
@@ -945,11 +1466,14 @@ impl Desktop {
         let layout = json!({
             "height": BAR_HEIGHT,
             "mark": self.layout.mark.json(),
+            "agent": self.layout.agent.json(),
+            "sealed": self.layout.sealed.json(),
             "apps": self.layout.apps.iter().map(|(rect, window)| json!({"window": window, "rect": rect.json()})).collect::<Vec<_>>(),
             "jobs": self.layout.jobs.json(),
             "lease": self.layout.lease.json(),
             "tray": self.layout.tray.iter().map(Rect::json).collect::<Vec<_>>(),
             "clock": self.layout.clock.json(),
+            "shell_place": self.layout.shell_place.as_ref().map(|(rect, window)| json!({"window": window, "rect": rect.json()})),
             "popup": {
                 "x": POPUP_X,
                 "y": POPUP_Y,
@@ -961,9 +1485,17 @@ impl Desktop {
         self.property_text(self.root, self.atoms.layout, &layout.to_string())
     }
 
-    /// A second has passed: redraw only if the bar would read differently.
+    /// Coalesce layout bursts; the bar redraws only when its words change.
     fn tick(&mut self) -> Result<(), String> {
-        let now = format!("{}|{:?}", self.clock(), self.holding());
+        if self.wallpaper_dirty && self.wallpaper_painted.elapsed() >= Duration::from_millis(50) {
+            self.paint_wallpaper()?;
+        }
+        let now = format!(
+            "{}|{:?}|{}",
+            self.clock(),
+            self.holding(),
+            self.agent_working()
+        );
         if now != self.shown {
             self.draw_bar()?;
         }
@@ -974,8 +1506,9 @@ impl Desktop {
 
     fn open_popup(&mut self, kind: Popup) -> Result<(), String> {
         self.close_popup()?;
+        self.hovered_row = None;
         let (width, height) = match &kind {
-            Popup::Menu => (MENU_WIDTH, (PAD + 4 * ROW + 11 + 22 + PAD) as u16),
+            Popup::Menu => (MENU_WIDTH, (PAD + 5 * ROW + 11 + 22 + PAD) as u16),
             Popup::Jobs { visible, .. } => (
                 self.width.saturating_sub(16).min(640),
                 ((*visible as i32 + 1) * ROW + 2 * PAD) as u16,
@@ -1001,10 +1534,14 @@ impl Desktop {
                 0,
                 &CreateWindowAux::new()
                     .override_redirect(1)
-                    .background_pixel(BAR_FILL)
+                    .background_pixel(SURFACE)
                     .border_pixel(RULE)
                     .event_mask(
-                        EventMask::EXPOSURE | EventMask::BUTTON_PRESS | EventMask::KEY_PRESS,
+                        EventMask::EXPOSURE
+                            | EventMask::BUTTON_PRESS
+                            | EventMask::KEY_PRESS
+                            | EventMask::POINTER_MOTION
+                            | EventMask::LEAVE_WINDOW,
                     ),
             )
             .map_err(|e| e.to_string())?;
@@ -1085,7 +1622,7 @@ impl Desktop {
             serde_json::from_slice(&reply.value).unwrap_or_default();
         let visible = jobs
             .len()
-            .min(usize::from(self.work_height().saturating_sub(30) / 30).min(12));
+            .min(usize::from(self.work_rect().3.saturating_sub(ROW as u16) / ROW as u16).min(12));
         self.open_popup(Popup::Jobs {
             jobs,
             first: 0,
@@ -1098,20 +1635,24 @@ impl Desktop {
             return Ok(());
         };
         let sans = Face::new(&self.fonts.sans, 13.0);
-        let small = Face::new(&self.fonts.sans, 12.0);
+        let small = Face::new(&self.fonts.sans, 13.0);
         let mono = Face::new(&self.fonts.mono, 11.0);
         let width = i32::from(open.width);
-        let mut canvas = Canvas::new(open.width, open.height, BAR_FILL);
+        let mut canvas = Canvas::new(open.width, open.height, SURFACE);
         match &open.kind {
             Popup::Menu => {
-                let rows: [(&str, &str, &str); 4] = [
+                let rows: [(&str, &str, &str); 5] = [
                     ("Browser", "open or focus", "B"),
                     ("Terminal", "a shell of your own", "T"),
-                    ("Observe", "the teammate's jobs", "O"),
+                    ("Observe", "the agent's jobs", "O"),
+                    ("Activity", "recent actions", "V"),
                     ("About this computer", "", "A"),
                 ];
                 for (index, (label, note, key)) in rows.iter().enumerate() {
                     let y = menu_row_y(index);
+                    if self.hovered_row == Some(index) {
+                        canvas.fill_rect(PAD, y, width - 2 * PAD, ROW, BAR_RAISED);
+                    }
                     let baseline = sans.baseline_in(y, ROW);
                     let advance = canvas.text(&sans, PAD + 10, baseline, label, INK);
                     if !note.is_empty() {
@@ -1133,7 +1674,7 @@ impl Desktop {
                         INK_2,
                     );
                 }
-                canvas.fill_rect(PAD + 4, PAD + 3 * ROW + 5, width - 2 * PAD - 8, 1, RULE);
+                canvas.fill_rect(PAD + 4, PAD + 4 * ROW + 5, width - 2 * PAD - 8, 1, RULE);
                 let foot = format!(
                     "hotline-computer {} · {}",
                     env!("CARGO_PKG_VERSION"),
@@ -1142,7 +1683,7 @@ impl Desktop {
                 canvas.text(
                     &mono,
                     PAD + 10,
-                    mono.baseline_in(PAD + 4 * ROW + 11, 22),
+                    mono.baseline_in(PAD + 5 * ROW + 11, 22),
                     &foot,
                     MUTED,
                 );
@@ -1152,13 +1693,20 @@ impl Desktop {
                 first,
                 visible,
             } => {
+                if self.hovered_row == Some(0) {
+                    canvas.fill_rect(PAD, PAD, width - 2 * PAD, ROW, BAR_RAISED);
+                }
                 let baseline = sans.baseline_in(PAD, ROW);
                 let advance = canvas.text(&sans, PAD + 10, baseline, "Jobs", INK);
                 canvas.text(
                     &small,
                     PAD + 10 + advance + 8,
                     baseline,
-                    "click a job to inspect it · scroll for more",
+                    if jobs.len() > *visible {
+                        "click a job to inspect it · scroll for more"
+                    } else {
+                        "click a job to inspect it"
+                    },
                     MUTED,
                 );
                 let open_terminal = "open terminal";
@@ -1171,13 +1719,16 @@ impl Desktop {
                 );
                 for (row, job) in jobs.iter().skip(*first).take(*visible).enumerate() {
                     let y = PAD + (row as i32 + 1) * ROW;
+                    if self.hovered_row == Some(row + 1) {
+                        canvas.fill_rect(PAD, y, width - 2 * PAD, ROW, BAR_RAISED);
+                    }
                     let (dot, note) = if job.state == "running" {
-                        (OK, "running".to_owned())
+                        (AGENT, "running".to_owned())
                     } else if job.exit_code == Some(0) {
-                        (MUTED, "exit 0".to_owned())
+                        (OK, "exit 0".to_owned())
                     } else {
                         (
-                            WARN,
+                            FAIL,
                             job.exit_code
                                 .map_or_else(|| job.state.clone(), |code| format!("exit {code}")),
                         )
@@ -1198,7 +1749,7 @@ impl Desktop {
             Popup::About => {
                 canvas.stamp(PAD + 10, PAD + 8 + 3, &self.mark, INK);
                 canvas.text(
-                    &sans,
+                    &Face::new(&self.fonts.semibold, 13.0),
                     PAD + 10 + 18 + 8,
                     sans.baseline_in(PAD + 8, 22),
                     "About this computer",
@@ -1246,10 +1797,10 @@ impl Desktop {
                 }
             }
         }
-        self.put_image(open.window, &canvas.image, 0, 0, BAR_FILL)
+        self.put_image(open.window, &canvas.image, 0, 0, SURFACE)
     }
 
-    /// The menu's letter or click: A to D.
+    /// The menu's letter or click: B, T, O, V, A.
     fn menu_pick(&mut self, index: usize) -> Result<(), String> {
         match index {
             0 => {
@@ -1264,7 +1815,11 @@ impl Desktop {
                 self.close_popup()?;
                 self.dock_action(Request::OpenTerminal)
             }
-            3 => self.open_popup(Popup::About),
+            3 => {
+                self.close_popup()?;
+                self.dock_action(Request::OpenActivity)
+            }
+            4 => self.open_popup(Popup::About),
             _ => Ok(()),
         }
     }
@@ -1301,7 +1856,7 @@ impl Desktop {
         let y = i32::from(event.event_y);
         match &mut open.kind {
             Popup::Menu => {
-                let index = (0..4)
+                let index = (0..MENU_KEYS.len())
                     .find(|index| (menu_row_y(*index)..menu_row_y(*index) + ROW).contains(&y));
                 match index {
                     Some(index) => self.menu_pick(index),
@@ -1437,38 +1992,6 @@ impl Desktop {
 
     // ---- pixels to the server ----------------------------------------------
 
-    fn fill(
-        &self,
-        drawable: u32,
-        color: u32,
-        x: i16,
-        y: i16,
-        width: u16,
-        height: u16,
-    ) -> Result<(), String> {
-        self.connection
-            .change_gc(
-                self.gc,
-                &x11rb::protocol::xproto::ChangeGCAux::new().foreground(color),
-            )
-            .map_err(|error| error.to_string())?;
-        self.connection
-            .poly_fill_rectangle(
-                drawable,
-                self.gc,
-                &[Rectangle {
-                    x,
-                    y,
-                    width,
-                    height,
-                }],
-            )
-            .map_err(|error| error.to_string())?;
-        Ok(())
-    }
-
-    /// Composite an RGBA image onto a solid colour and send it as 24-bit
-    /// ZPixmap rows, in chunks small enough for any server's request limit.
     fn put_image(
         &self,
         drawable: u32,
@@ -1528,7 +2051,14 @@ impl Desktop {
 
     fn handle(&mut self, event: Event) -> Result<(), String> {
         match event {
-            Event::MapRequest(event) => self.manage(event.window),
+            Event::MapRequest(event) => {
+                self.wallpaper_dirty = true;
+                self.manage(event.window)
+            }
+            Event::ConfigureNotify(event) if self.clients.contains_key(&event.window) => {
+                self.wallpaper_dirty = true;
+                Ok(())
+            }
             Event::ConfigureRequest(event) => self.configure_request(event),
             Event::UnmapNotify(event) => self.forget(event.window),
             Event::DestroyNotify(event) if self.tray.contains(&event.window) => {
@@ -1536,8 +2066,27 @@ impl Desktop {
                 self.draw_bar()
             }
             Event::DestroyNotify(event) => self.forget(event.window),
+            Event::ShapeNotify(event)
+                if event.shape_kind == SK::BOUNDING
+                    && self.clients.contains_key(&event.affected_window) =>
+            {
+                self.keep_corners(
+                    event.affected_window,
+                    event.extents_width,
+                    event.extents_height,
+                )
+            }
             Event::PropertyNotify(event) if event.window == self.root => {
-                if event.atom == self.atoms.jobs_running {
+                if event.atom == self.atoms.agent || event.atom == self.atoms.sealed {
+                    let named = self.agent.name.clone();
+                    self.read_identity()?;
+                    // The empty desktop names the agent; activity alone
+                    // must not repaint the whole wallpaper.
+                    if self.agent.name != named {
+                        self.wallpaper_dirty = true;
+                    }
+                    self.draw_bar()
+                } else if event.atom == self.atoms.jobs_running {
                     self.draw_bar()
                 } else if event.atom == self.atoms.holder {
                     self.read_lease()?;
@@ -1552,7 +2101,17 @@ impl Desktop {
                 if event.atom == self.atoms.net_wm_name {
                     self.draw_bar()
                 } else if event.atom == self.atoms.net_wm_icon {
-                    let icon = self.icon_of(event.window);
+                    // The computer's own windows keep their drawn glyph: the
+                    // file windows' page sets the Hotline mark as its icon.
+                    let own = self
+                        .clients
+                        .get(&event.window)
+                        .is_some_and(|c| in_column(&c.class) || files_window(&c.class));
+                    let icon = if own {
+                        None
+                    } else {
+                        self.icon_of(event.window)
+                    };
                     if let Some(client) = self.clients.get_mut(&event.window) {
                         client.icon = icon;
                     }
@@ -1578,6 +2137,48 @@ impl Desktop {
                 } else {
                     Ok(())
                 }
+            }
+            Event::MotionNotify(event) if event.event == self.bar => {
+                let hovered = self
+                    .layout
+                    .apps
+                    .iter()
+                    .find(|(r, _)| r.contains(i32::from(event.event_x), i32::from(event.event_y)))
+                    .map(|(_, w)| *w);
+                if hovered != self.hovered_app {
+                    self.hovered_app = hovered;
+                    self.draw_bar()?;
+                }
+                Ok(())
+            }
+            Event::MotionNotify(event)
+                if self.popup.as_ref().is_some_and(|p| p.window == event.event) =>
+            {
+                let y = i32::from(event.event_y);
+                let open = self.popup.as_ref().unwrap();
+                let hovered = match &open.kind {
+                    Popup::Menu => (0..MENU_KEYS.len())
+                        .find(|i| (menu_row_y(*i)..menu_row_y(*i) + ROW).contains(&y)),
+                    Popup::Jobs { visible, .. } => (PAD..PAD + (*visible as i32 + 1) * ROW)
+                        .contains(&y)
+                        .then(|| ((y - PAD) / ROW) as usize),
+                    Popup::About => None,
+                };
+                if hovered != self.hovered_row {
+                    self.hovered_row = hovered;
+                    self.draw_popup()?;
+                }
+                Ok(())
+            }
+            Event::LeaveNotify(event) if event.event == self.bar => {
+                self.hovered_app = None;
+                self.draw_bar()
+            }
+            Event::LeaveNotify(event)
+                if self.popup.as_ref().is_some_and(|p| p.window == event.event) =>
+            {
+                self.hovered_row = None;
+                self.draw_popup()
             }
             Event::ButtonPress(event) => self.button_press(event),
             Event::KeyPress(event) => self.key_press(event),
@@ -1626,29 +2227,44 @@ impl Desktop {
             .reply()
             .map_err(|error| error.to_string())?;
         let class = self.class_of(window)?;
-        let icon = if class.contains("hotlineterminal") || class.contains("hotlineshell") {
+        let icon = if class.contains("hotlineterminal")
+            || class.contains("hotlineactivity")
+            || class.contains("hotlineshell")
+            || files_window(&class)
+        {
             None
         } else {
             self.icon_of(window)
         };
-        let client = match self.kind(window)? {
+        // The picker is a dialog over the app that asked for a file, though
+        // Chromium marks its window as a normal one.
+        let kind = if class.contains("hotlinepicker") {
+            Kind::Dialog
+        } else {
+            self.kind(window)?
+        };
+        let client = match kind {
             Kind::Furniture => {
                 self.connection
                     .map_window(window)
                     .map_err(|error| error.to_string())?;
                 return Ok(());
             }
-            // The observer and the person's shell share the right column:
+            // The observer, activity and the person's shell share the right column:
             // the shell takes its bottom third when it is open, under a
-            // line, so whatever is on the left stays out of their way.
-            Kind::Normal if class.contains("hotlineshell") || class.contains("hotlineterminal") => {
-                Client {
-                    maximized: false,
-                    saved: self.column(class.contains("hotlineshell"), true),
-                    class,
-                    icon,
-                }
-            }
+            // gap, so whatever is on the left stays out of their way.
+            Kind::Normal if in_column(&class) => Client {
+                maximized: false,
+                saved: self.column(class.contains("hotlineshell"), true),
+                class,
+                icon,
+            },
+            Kind::Normal if self.column_open() => Client {
+                maximized: false,
+                saved: self.main_area(),
+                class,
+                icon,
+            },
             Kind::Normal => Client {
                 maximized: true,
                 saved: (geometry.x, geometry.y, geometry.width, geometry.height),
@@ -1656,13 +2272,14 @@ impl Desktop {
                 icon,
             },
             Kind::Dialog => {
-                let width = geometry.width.min(self.width);
-                let height = geometry.height.min(self.work_height());
+                let (left, top, work_width, work_height) = self.pane();
+                let width = geometry.width.min(work_width);
+                let height = geometry.height.min(work_height);
                 Client {
                     maximized: false,
                     saved: (
-                        ((self.width - width) / 2) as i16,
-                        (BAR_HEIGHT + (self.work_height() - height) / 2) as i16,
+                        left + ((work_width - width) / 2) as i16,
+                        top + ((work_height - height) / 2) as i16,
                         width,
                         height,
                     ),
@@ -1671,34 +2288,24 @@ impl Desktop {
                 }
             }
         };
-        // The terminal keeps the right third; the app being watched keeps the rest.
-        if client.class.contains("hotlineterminal") {
-            let width = self.width * 2 / 3;
-            let height = self.work_height();
-            let others: Vec<_> = self
-                .clients
-                .iter()
-                .filter(|(_, c)| c.maximized)
-                .map(|(id, _)| *id)
-                .collect();
-            for id in others {
-                if let Some(other) = self.clients.get_mut(&id) {
-                    other.maximized = false;
-                    other.saved = (0, BAR_HEIGHT as i16, width, height);
-                }
-                self.apply_geometry(id)?;
-            }
-        }
+        // The column keeps the right third; the app being watched keeps the rest.
+        let column = in_column(&client.class);
+        let was_open = self.column_open();
         self.connection
             .change_window_attributes(
                 window,
                 &ChangeWindowAttributesAux::new().event_mask(EventMask::PROPERTY_CHANGE),
             )
             .map_err(|e| e.to_string())?;
+        // Apps that draw their own frame (Chromium) reset their bounding
+        // shape after a resize; hearing about it lets the corners come back.
+        let _ = self.connection.shape_select_input(window, true);
         self.clients.insert(window, client);
         self.order.push(window);
         self.apply_geometry(window)?;
-        self.stack_column()?;
+        if column {
+            self.column_changed(was_open)?;
+        }
         self.property32(
             window,
             self.atoms.net_frame_extents,
@@ -1781,15 +2388,13 @@ impl Desktop {
 
     /// Put the window where its state says, tell it so, and record the
     /// state where other clients read it.
-    fn apply_geometry(&self, window: Window) -> Result<(), String> {
+    fn apply_geometry(&mut self, window: Window) -> Result<(), String> {
+        self.wallpaper_dirty = true;
         let Some(client) = self.clients.get(&window) else {
             return Ok(());
         };
-        let (x, y, width, height) = if client.maximized {
-            (0, BAR_HEIGHT as i16, self.width, self.work_height())
-        } else {
-            client.saved
-        };
+        let maximized = client.maximized;
+        let (x, y, width, height) = if maximized { self.pane() } else { client.saved };
         self.connection
             .configure_window(
                 window,
@@ -1801,6 +2406,8 @@ impl Desktop {
                     .border_width(0),
             )
             .map_err(|error| error.to_string())?;
+        self.round_corners(window, width, height)?;
+        self.place_caps(window, (x, y, width, height))?;
         let notify = ConfigureNotifyEvent {
             response_type: CONFIGURE_NOTIFY_EVENT,
             sequence: 0,
@@ -1817,7 +2424,7 @@ impl Desktop {
         self.connection
             .send_event(false, window, EventMask::STRUCTURE_NOTIFY, notify)
             .map_err(|error| error.to_string())?;
-        let state: Vec<Atom> = if client.maximized {
+        let state: Vec<Atom> = if maximized {
             vec![self.atoms.maximized_vert, self.atoms.maximized_horz]
         } else {
             Vec::new()
@@ -1825,7 +2432,167 @@ impl Desktop {
         self.property32(window, self.atoms.net_wm_state, AtomEnum::ATOM, &state)
     }
 
+    /// Rounds a managed window's corners with a bounding shape. Edge to
+    /// edge (no gutter) keeps square corners, since the screen edge is the frame.
+    fn round_corners(&self, window: Window, width: u16, height: u16) -> Result<(), String> {
+        if self.gutter == 0
+            || width < CORNER * 4
+            || height < CORNER * 4
+            || self.draws_own_frame(window)
+        {
+            return Ok(());
+        }
+        let rects = corner_rects(width, height, CORNER);
+        self.connection
+            .shape_rectangles(
+                SO::SET,
+                SK::BOUNDING,
+                x11rb::protocol::xproto::ClipOrdering::UNSORTED,
+                window,
+                0,
+                0,
+                &rects,
+            )
+            .map_err(|error| error.to_string())?;
+        Ok(())
+    }
+
+    /// Chromium draws its own frame and shape, and stops repainting its
+    /// toolbar if the window manager keeps replacing that shape.
+    fn draws_own_frame(&self, window: Window) -> bool {
+        self.clients.get(&window).is_some_and(|client| {
+            client.class.contains(BROWSER_CLASS) || files_window(&client.class)
+        })
+    }
+
+    /// Re-cuts the corners when a client replaced its bounding shape with
+    /// its own. Our own shape also notifies; its row count tells them apart,
+    /// so this never loops.
+    fn keep_corners(&self, window: Window, width: u16, height: u16) -> Result<(), String> {
+        if self.gutter == 0 || self.draws_own_frame(window) {
+            return Ok(());
+        }
+        // The server normalises rectangles, so compare what matters: a
+        // rounded shape leaves its top-left pixel out; the app's own
+        // rectangle covers it.
+        let square = self
+            .connection
+            .shape_get_rectangles(window, SK::BOUNDING)
+            .map_err(|e| e.to_string())?
+            .reply()
+            .is_ok_and(|reply| {
+                reply
+                    .rectangles
+                    .iter()
+                    .any(|r| r.x <= 0 && r.y <= 0 && r.width > 0 && r.height > 0)
+            });
+        if square && width >= CORNER * 4 && height >= CORNER * 4 {
+            self.round_corners(window, width, height)?;
+        }
+        Ok(())
+    }
+
+    /// Puts four corner-sized windows under a client's corners. Their
+    /// background is the wallpaper itself (`ParentRelative`), ring included,
+    /// so what shows through a cut corner is the ground, never the window
+    /// stacked below: two apps share the pane at the same bounds, and
+    /// Chromium's own corners are square at the bottom.
+    fn place_caps(&mut self, owner: Window, bounds: (i16, i16, u16, u16)) -> Result<(), String> {
+        let (x, y, width, height) = bounds;
+        if self.gutter == 0 || width < CORNER * 4 || height < CORNER * 4 {
+            return self.drop_caps(owner);
+        }
+        let fresh = !self.caps.contains_key(&owner);
+        if fresh {
+            let mut caps = [NONE; 4];
+            for cap in &mut caps {
+                *cap = self.connection.generate_id().map_err(|e| e.to_string())?;
+                self.connection
+                    .create_window(
+                        self.depth,
+                        *cap,
+                        self.root,
+                        0,
+                        0,
+                        CORNER,
+                        CORNER,
+                        0,
+                        WindowClass::INPUT_OUTPUT,
+                        0,
+                        &CreateWindowAux::new()
+                            .override_redirect(1)
+                            .background_pixmap(u32::from(BackPixmap::PARENT_RELATIVE)),
+                    )
+                    .map_err(|e| e.to_string())?;
+                // An empty input shape: a click on a cap reaches what is under it.
+                self.connection
+                    .shape_rectangles(
+                        SO::SET,
+                        SK::INPUT,
+                        x11rb::protocol::xproto::ClipOrdering::UNSORTED,
+                        *cap,
+                        0,
+                        0,
+                        &[],
+                    )
+                    .map_err(|e| e.to_string())?;
+            }
+            self.caps.insert(owner, caps);
+        }
+        let caps = self.caps[&owner];
+        let right = x + (width - CORNER) as i16;
+        let bottom = y + (height - CORNER) as i16;
+        for (cap, (left, top)) in
+            caps.iter()
+                .zip([(x, y), (right, y), (x, bottom), (right, bottom)])
+        {
+            self.connection
+                .configure_window(
+                    *cap,
+                    &ConfigureWindowAux::new()
+                        .x(i32::from(left))
+                        .y(i32::from(top))
+                        .sibling(owner)
+                        .stack_mode(StackMode::BELOW),
+                )
+                .map_err(|e| e.to_string())?;
+            if fresh {
+                self.connection
+                    .map_window(*cap)
+                    .map_err(|e| e.to_string())?;
+            }
+        }
+        Ok(())
+    }
+
+    /// Keeps a client's caps directly beneath it after it moves in the stack.
+    fn restack_caps(&self, owner: Window) -> Result<(), String> {
+        for cap in self.caps.get(&owner).into_iter().flatten() {
+            self.connection
+                .configure_window(
+                    *cap,
+                    &ConfigureWindowAux::new()
+                        .sibling(owner)
+                        .stack_mode(StackMode::BELOW),
+                )
+                .map_err(|e| e.to_string())?;
+        }
+        Ok(())
+    }
+
+    fn drop_caps(&mut self, owner: Window) -> Result<(), String> {
+        for cap in self.caps.remove(&owner).into_iter().flatten() {
+            self.connection
+                .destroy_window(cap)
+                .map_err(|e| e.to_string())?;
+        }
+        Ok(())
+    }
+
     fn configure_request(&mut self, event: ConfigureRequestEvent) -> Result<(), String> {
+        if self.clients.contains_key(&event.window) {
+            self.wallpaper_dirty = true;
+        }
         if self.tray.contains(&event.window) {
             return self.layout_tray();
         }
@@ -1844,13 +2611,15 @@ impl Desktop {
                 if event.value_mask.contains(ConfigWindow::HEIGHT) {
                     client.saved.3 = event.height;
                 }
+                let saved = client.saved;
                 self.connection
                     .configure_window(
                         event.window,
                         &ConfigureWindowAux::from_configure_request(&event),
                     )
                     .map_err(|error| error.to_string())?;
-                Ok(())
+                self.round_corners(event.window, saved.2, saved.3)?;
+                self.place_caps(event.window, saved)
             }
             None => {
                 self.connection
@@ -1888,6 +2657,13 @@ impl Desktop {
         if maximized == client.maximized {
             return Ok(());
         }
+        if in_column(&client.class) {
+            return if client.class.contains("hotlineshell") {
+                self.place_shell(window, maximized)
+            } else {
+                Ok(())
+            };
+        }
         if maximized {
             let geometry = self
                 .connection
@@ -1902,6 +2678,7 @@ impl Desktop {
     }
 
     fn focus(&mut self, window: Window) -> Result<(), String> {
+        self.wallpaper_dirty = true;
         self.connection
             .set_input_focus(InputFocus::POINTER_ROOT, window, CURRENT_TIME)
             .map_err(|error| error.to_string())?;
@@ -1911,6 +2688,7 @@ impl Desktop {
                 &ConfigureWindowAux::new().stack_mode(StackMode::ABOVE),
             )
             .map_err(|error| error.to_string())?;
+        self.restack_caps(window)?;
         self.connection
             .configure_window(
                 self.bar,
@@ -1936,13 +2714,16 @@ impl Desktop {
     }
 
     fn forget(&mut self, window: Window) -> Result<(), String> {
+        self.wallpaper_dirty = true;
+        let was_open = self.column_open();
         let Some(client) = self.clients.remove(&window) else {
             return Ok(());
         };
+        self.drop_caps(window)?;
         self.order.retain(|client| *client != window);
         self.publish_client_list()?;
-        if client.class.contains("hotlineshell") || client.class.contains("hotlineterminal") {
-            self.stack_column()?;
+        if in_column(&client.class) {
+            self.column_changed(was_open)?;
         }
         if client.class.contains(BROWSER_CLASS) && self.client_with_class(BROWSER_CLASS).is_none() {
             let _ = self.requests.send(Request::BrowserClosed);
@@ -2053,6 +2834,14 @@ impl Desktop {
             if self.layout.jobs.contains(x, y) {
                 return self.open_jobs();
             }
+            if let Some((place, window)) = &self.layout.shell_place
+                && place.contains(x, y)
+                && event.detail == 1
+            {
+                let window = *window;
+                let in_pane = self.clients.get(&window).is_some_and(|c| c.maximized);
+                return self.place_shell(window, !in_pane);
+            }
             if let Some((_, window)) = self
                 .layout
                 .apps
@@ -2086,7 +2875,10 @@ impl Desktop {
                 let _ = self.requests.send(request);
                 Ok(())
             }
-            Request::OpenTerminal | Request::OpenShell | Request::OpenJob(_) => {
+            Request::OpenTerminal
+            | Request::OpenActivity
+            | Request::OpenShell
+            | Request::OpenJob(_) => {
                 let _ = self.requests.send(request);
                 Ok(())
             }
@@ -2121,15 +2913,15 @@ impl Desktop {
     }
 }
 
-/// The letter that picks each menu row: the row's own initial.
-const MENU_KEYS: &str = "btoa";
+/// Stable menu shortcuts. V opens Activity so A still opens About.
+const MENU_KEYS: &str = "btova";
 
-/// The top of menu row `index`: three rows, a separator, then About.
+/// The top of menu row `index`: four rows, a separator, then About.
 fn menu_row_y(index: usize) -> i32 {
-    if index < 3 {
+    if index < 4 {
         PAD + index as i32 * ROW
     } else {
-        PAD + 3 * ROW + 11
+        PAD + 4 * ROW + 11
     }
 }
 
@@ -2145,14 +2937,17 @@ fn chip(
 ) -> Rect {
     let rect = Rect {
         x: right - (9 + 6 + 6 + face.width(text) + 9),
-        y: 6,
+        y: 7,
         w: 9 + 6 + 6 + face.width(text) + 9,
-        h: 24,
+        h: 26,
     };
     if let Some(fill) = fill {
-        canvas.round_rect(rect.x, rect.y, rect.w, rect.h, 12.0, fill);
+        canvas.round_rect(rect.x, rect.y, rect.w, rect.h, 8.0, fill);
+    } else {
+        canvas.round_rect(rect.x, rect.y, rect.w, rect.h, 8.0, CHIP_EDGE);
+        canvas.round_rect(rect.x + 1, rect.y + 1, rect.w - 2, rect.h - 2, 7.0, CHIP);
     }
-    canvas.dot((rect.x + 12) as f32, (rect.y + 12) as f32, 3.0, dot);
+    canvas.dot((rect.x + 12) as f32, (rect.y + 13) as f32, 3.0, dot);
     canvas.text(
         face,
         rect.x + 21,
@@ -2161,6 +2956,99 @@ fn chip(
         color,
     );
     rect
+}
+
+fn jobs_chip(canvas: &mut Canvas, face: &Face, right: i32, counts: (u32, u32, u32)) -> Rect {
+    let (running, completed, failed) = counts;
+    let (label, suffix, color, dot) = if failed > 0 {
+        (
+            format!("{failed} failed"),
+            if running > 0 {
+                format!(" · {running} running")
+            } else {
+                String::new()
+            },
+            FAIL,
+            FAIL,
+        )
+    } else if running > 0 {
+        (
+            format!("{running} running"),
+            format!(" · {completed} done"),
+            INK,
+            AGENT,
+        )
+    } else {
+        (
+            "no jobs".into(),
+            format!(" · {completed} done"),
+            MUTED,
+            MUTED,
+        )
+    };
+    let w = 30 + face.width(&label) + face.width(&suffix);
+    let rect = Rect {
+        x: right - w,
+        y: 7,
+        w,
+        h: 26,
+    };
+    canvas.round_rect(rect.x, rect.y, w, 26, 8.0, CHIP_EDGE);
+    canvas.round_rect(rect.x + 1, rect.y + 1, w - 2, 24, 7.0, CHIP);
+    if running > 0 && failed == 0 {
+        canvas.dot(
+            (rect.x + 12) as f32,
+            20.0,
+            6.0,
+            crate::paint::blend(AGENT, BAR_FILL, 0.16),
+        );
+    }
+    canvas.dot((rect.x + 12) as f32, 20.0, 3.0, dot);
+    let advance = canvas.text(face, rect.x + 21, face.baseline_in(7, 26), &label, color);
+    canvas.text(
+        face,
+        rect.x + 21 + advance,
+        face.baseline_in(7, 26),
+        &suffix,
+        MUTED,
+    );
+    rect
+}
+
+/// One-pixel rows that fill a rounded rectangle: the curve rows top and
+/// bottom, then one rectangle for the straight middle.
+fn corner_rects(width: u16, height: u16, radius: u16) -> Vec<x11rb::protocol::xproto::Rectangle> {
+    use x11rb::protocol::xproto::Rectangle;
+    let r = f32::from(radius);
+    let mut rects = Vec::with_capacity(usize::from(radius) * 2 + 1);
+    for row in 0..radius {
+        let dy = r - (f32::from(row) + 0.5);
+        let inset = (r - (r * r - dy * dy).max(0.0).sqrt()).round() as u16;
+        let w = width.saturating_sub(inset * 2);
+        rects.push(Rectangle {
+            x: inset as i16,
+            y: row as i16,
+            width: w,
+            height: 1,
+        });
+        rects.push(Rectangle {
+            x: inset as i16,
+            y: (height - 1 - row) as i16,
+            width: w,
+            height: 1,
+        });
+    }
+    rects.push(Rectangle {
+        x: 0,
+        y: radius as i16,
+        width,
+        height: height.saturating_sub(radius * 2),
+    });
+    rects
+}
+
+fn recently_active(last_action_ms: u64, now: u64) -> bool {
+    last_action_ms != 0 && now.saturating_sub(last_action_ms) < 10_000
 }
 
 fn now_ms() -> u64 {
@@ -2199,8 +3087,8 @@ fn best_icon(data: &[u32], size: u16) -> Option<Image> {
     Image::from_argb_scaled(width, height, pixels, size)
 }
 
-/// Once a second a property on the root changes, so the desktop's event loop
-/// wakes to move the clock and let a lapsed lease fade from the bar.
+/// A 50ms tick coalesces layout changes while the event loop sleeps on X.
+/// The clock and lease still paint only when their displayed value changes.
 fn spawn_ticker(display: String) {
     let _ = std::thread::Builder::new()
         .name("desktop-tick".to_owned())
@@ -2217,7 +3105,7 @@ fn spawn_ticker(display: String) {
             };
             let mut count: u32 = 0;
             loop {
-                std::thread::sleep(Duration::from_secs(1));
+                std::thread::sleep(Duration::from_millis(50));
                 count = count.wrapping_add(1);
                 if connection
                     .change_property32(
@@ -2295,13 +3183,74 @@ mod tests {
     use super::*;
 
     #[test]
-    fn the_mark_decodes_and_blends_onto_black() {
+    fn a_recent_action_expires_after_ten_seconds() {
+        assert!(!recently_active(0, 100));
+        assert!(recently_active(100, 10_099));
+        assert!(!recently_active(100, 10_100));
+    }
+
+    #[test]
+    fn work_area_and_column_share_gutters_including_the_opt_out() {
+        assert_eq!(work_area(1920, 1080, 16), (16, 56, 1888, 1008));
+        assert_eq!(
+            column_rect(work_area(1920, 1080, 16), 16, false, false),
+            (1280, 56, 624, 1008)
+        );
+        assert_eq!(
+            column_rect(work_area(1920, 1080, 16), 16, false, true),
+            (1280, 56, 624, 672)
+        );
+        assert_eq!(
+            column_rect(work_area(1920, 1080, 16), 16, true, true),
+            (1280, 744, 624, 320)
+        );
+        assert_eq!(work_area(1920, 1080, 0), (0, 40, 1920, 1040));
+        assert_eq!(
+            column_rect(work_area(1920, 1080, 0), 0, false, false),
+            (1280, 40, 640, 1040)
+        );
+        let (_, _, w, h) = work_area(80, 60, u16::MAX);
+        assert!(w > 0 && h > 0);
+    }
+
+    #[test]
+    fn a_window_beside_the_column_ends_one_gutter_short_of_it() {
+        // The same split the windows tool tiles to, so a tiled browser and
+        // a reopened one land in the same place.
+        assert_eq!(
+            main_rect(work_area(1920, 1080, 16), 16),
+            (16, 56, 1248, 1008)
+        );
+        assert_eq!(main_rect(work_area(1920, 1080, 0), 0), (0, 40, 1280, 1040));
+        for gap in [0, 16] {
+            let (x, _, width, _) = main_rect(work_area(1920, 1080, gap), gap);
+            let (column, ..) = column_rect(work_area(1920, 1080, gap), gap, false, false);
+            assert_eq!(x + width as i16 + gap as i16, column);
+        }
+        assert!(in_column("hotlineshell.hotlineshell"));
+        assert!(!in_column(
+            "chromium (/home/agent/.hotline/browser).chromium"
+        ));
+    }
+
+    #[test]
+    fn every_harness_mark_decodes_as_a_fourteen_pixel_mask() {
+        for (key, _) in MARKS {
+            let mark = harness_mark(key).unwrap_or_else(|| panic!("{key} has no mark"));
+            assert_eq!((mark.width, mark.height), (14, 14), "{key}");
+            assert!(mark.rgba.chunks(4).any(|p| p[3] == 255), "{key} is blank");
+        }
+        assert!(harness_mark("").is_none());
+    }
+
+    #[test]
+    fn the_mark_decodes_and_blends_onto_ground() {
         let mark = decode_png(MARK).unwrap();
         assert_eq!((mark.width, mark.height), (480, 480));
         let pixels = composite(&mark, BACKGROUND);
         assert_eq!(pixels.len(), 480 * 480 * 4);
-        // Transparent corners stay black; the body of the mark is grey.
-        assert_eq!(&pixels[..4], &[0, 0, 0, 0]);
+        // Transparent corners stay ground; the body of the mark is grey.
+        assert_eq!(&pixels[..4], &[13, 11, 11, 0]);
         let centre = (240 * 480 + 240) * 4;
         assert!(pixels[centre] > 0x30, "centre pixel is the mark's grey");
         let small = resample(&mark, 18, 18);
@@ -2346,7 +3295,8 @@ mod tests {
     fn menu_rows_leave_room_for_the_separator() {
         assert_eq!(menu_row_y(0), PAD);
         assert_eq!(menu_row_y(2), PAD + 2 * ROW);
-        assert_eq!(menu_row_y(3), PAD + 3 * ROW + 11);
-        assert_eq!(MENU_KEYS.len(), 4, "one letter per row");
+        assert_eq!(menu_row_y(3), PAD + 3 * ROW);
+        assert_eq!(menu_row_y(4), PAD + 4 * ROW + 11);
+        assert_eq!(MENU_KEYS.len(), 5, "one letter per row");
     }
 }

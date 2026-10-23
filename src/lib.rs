@@ -1,11 +1,18 @@
 pub mod a11y;
+pub mod activity;
+pub mod agent;
+pub mod authenticator;
+pub mod badge;
 pub mod boot;
+pub mod bridge;
 pub mod browser;
 pub mod clipboard;
 pub mod desktop;
 pub mod display;
 pub mod draft;
+pub mod files_ui;
 pub mod guide;
+pub mod holds;
 pub mod jobs;
 pub mod lease;
 pub mod limits;
@@ -15,6 +22,7 @@ pub mod manifest;
 pub mod observer;
 pub mod paint;
 pub mod passkeys;
+pub mod portal;
 pub mod ready;
 pub mod screen;
 pub mod secrets;
@@ -70,7 +78,13 @@ pub struct App {
     pub secrets: secrets::Secrets,
     /// The arming under which the browser may mint a passkey.
     pub passkeys: passkeys::Passkeys,
+    /// Uses of ask-me keys waiting for the person, and their allowances.
+    pub holds: holds::Holds,
     pub observer: observer::Observer,
+    pub activity: activity::Log,
+    pub badges: badge::Badges,
+    /// The file manager and picker windows, and the portal requests they answer.
+    pub files: files_ui::Files,
     pub a11y: Arc<tokio::sync::OnceCell<atspi::zbus::Connection>>,
     /// The screen stream, the hands, and the clipboard; `None` until a display is up.
     pub display: Option<Arc<display::Display>>,
@@ -86,8 +100,12 @@ impl App {
             a11y: Arc::new(tokio::sync::OnceCell::new()),
             jobs: jobs::Jobs::new(&config.home, &config.display, secrets.clone()),
             browser: BrowserManager::new(Arc::clone(&config), secrets.clone(), passkeys.clone()),
+            activity: activity::Log::new(&config.home, secrets.clone()),
+            badges: badge::Badges::default(),
+            files: files_ui::Files::default(),
             secrets,
             passkeys,
+            holds: holds::Holds::default(),
             observer: observer::Observer::new(&config.home, &config.display),
             config,
             display: None,

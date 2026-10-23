@@ -1,0 +1,16 @@
+{
+  "runtime": "Apple container 1.5.0",
+  "name": "hotline-look-011-baseline",
+  "port": 18788,
+  "image": "ghcr.io/1broseidon/hotline-computer:0.10.3",
+  "run_to_health_seconds": 1.603,
+  "memory_limit_bytes": 4294967296,
+  "shm_bytes": 1073741824,
+  "capabilities": "all dropped",
+  "no_new_privileges": "prctl before boot",
+  "process_limit": "RLIMIT_NPROC=1024 per uid, not a cgroup PID limit",
+  "host_mounts": [],
+  "published_address": "127.0.0.1",
+  "stats": "Container ID               Cpu %  Memory Usage           Net Rx/Tx             Block I/O               Pids\nhotline-look-011-baseline  0.73%  287.00 MiB / 4.00 GiB  5.80 KiB / 28.87 KiB  212.39 MiB / 12.00 KiB  35\n",
+  "arm64_compressed_image_bytes": 746149985
+}

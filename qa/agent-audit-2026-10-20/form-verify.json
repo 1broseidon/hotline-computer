@@ -1,0 +1,21 @@
+{
+  "label": "form-verify",
+  "client": "audit",
+  "tool": "wait",
+  "args": {
+    "text": "Submitted: Zo\u00eb \u5ba1\u6838",
+    "timeout": 5
+  },
+  "seconds": 0.128,
+  "jsonrpc": "2.0",
+  "id": 3,
+  "result": {
+    "content": [
+      {
+        "type": "text",
+        "text": "found \"Submitted: Zo\u00eb \u5ba1\u6838\""
+      }
+    ],
+    "isError": false
+  }
+}

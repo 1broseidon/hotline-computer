@@ -1,0 +1,20 @@
+{
+  "label": "lease-named-a-release",
+  "client": "named-a",
+  "tool": "state",
+  "args": {
+    "action": "release"
+  },
+  "seconds": 0.001,
+  "jsonrpc": "2.0",
+  "id": 4,
+  "result": {
+    "content": [
+      {
+        "type": "text",
+        "text": "{\"holder\":\"named-a\",\"released\":true}"
+      }
+    ],
+    "isError": false
+  }
+}

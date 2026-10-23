@@ -1,0 +1,25 @@
+{
+  "label": "shell-baseline",
+  "client": "audit",
+  "tool": "shell",
+  "args": {
+    "command": "python3",
+    "args": [
+      "-c",
+      "import platform,os; print(platform.platform()); print(os.getuid())"
+    ],
+    "label": "Identify audit computer"
+  },
+  "seconds": 0.257,
+  "jsonrpc": "2.0",
+  "id": 3,
+  "result": {
+    "content": [
+      {
+        "type": "text",
+        "text": "{\"duration_ms\":41,\"error\":null,\"exit_code\":0,\"job_id\":\"000001a15c04bb04-75203347\",\"observer_error\":null,\"signal\":null,\"state\":\"exited\",\"stderr\":\"\",\"stderr_bytes\":0,\"stdout\":\"Linux-6.18.35-aarch64-with-glibc2.41\\n1000\\n\",\"stdout_bytes\":42,\"truncated\":false}"
+      }
+    ],
+    "isError": false
+  }
+}

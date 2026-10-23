@@ -1,0 +1,21 @@
+{
+  "label": "project-verified",
+  "client": "audit",
+  "tool": "wait",
+  "args": {
+    "text": "It works",
+    "timeout": 5
+  },
+  "seconds": 0.128,
+  "jsonrpc": "2.0",
+  "id": 3,
+  "result": {
+    "content": [
+      {
+        "type": "text",
+        "text": "found \"It works\""
+      }
+    ],
+    "isError": false
+  }
+}

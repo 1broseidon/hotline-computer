@@ -1,0 +1,22 @@
+{
+  "label": "lease-anonymous-b-write",
+  "client": "client-b",
+  "tool": "files",
+  "args": {
+    "action": "put",
+    "path": "/home/agent/audit/client-b.txt",
+    "content": "written during client A lease"
+  },
+  "seconds": 0.001,
+  "jsonrpc": "2.0",
+  "id": 3,
+  "result": {
+    "content": [
+      {
+        "type": "text",
+        "text": "wrote /home/agent/audit/client-b.txt (29 bytes)"
+      }
+    ],
+    "isError": false
+  }
+}

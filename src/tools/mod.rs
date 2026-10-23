@@ -96,7 +96,7 @@ pub fn descriptors(home: &str) -> Vec<Tool> {
         ),
         Tool::new(
             "windows",
-            "Manage desktop windows: list them with IDs, classes, bounds, and focus; focus, close, maximize or restore; tile a primary_id/observer_id pair, or auto-tile with Chromium left and the rest stacked right. Tiling respects minimum sizes and the desktop work area and verifies the resulting geometry.",
+            "Manage desktop windows: list them with IDs, classes, bounds, and focus; focus, close, maximize or restore; tile a primary_id/observer_id pair, or auto-tile with every app sharing the left pane and the observer, activity and shell stacked right (apps take the whole area when none of those is open). Maximizing the person's shell moves it into the app pane; restoring it returns it to the column; auto-tile leaves a shell in the pane where it is. Tiling respects minimum sizes and the desktop work area and verifies the resulting geometry.",
             schema(json!({
                 "type":"object","properties":{
                     "action":{"type":"string","enum":["list","focus","close","maximize","tile"]},"window_id":{"type":"string"},"unmaximize":{"type":"boolean"},"primary_id":{"type":"string"},"observer_id":{"type":"string"}
@@ -135,6 +135,28 @@ fn schema(value: Value) -> Arc<JsonObject> {
 }
 
 pub async fn call(app: &App, name: &str, arguments: Value, holder: &str) -> ToolResult {
+    let moved = moves_something(name, &arguments);
+    let arguments_for_log = json!({"action": arguments["action"].clone()});
+    let mut activity = crate::activity::Entry::new(name, &arguments);
+    let secret_name = arguments["secret"].as_str().map(str::to_owned);
+    if name == "windows"
+        && let Some(id) = arguments["window_id"].as_str()
+    {
+        activity.target = crate::x11::windows(&app.config.display)
+            .ok()
+            .and_then(|windows| windows.into_iter().find(|w| w.id == id).map(|w| w.title))
+            .unwrap_or_default();
+    }
+    if name == "browser"
+        && matches!(
+            activity.action.as_str(),
+            "click_ref" | "check" | "select" | "hover"
+        )
+        && let Some(reference) = arguments["ref"].as_str()
+        && let Some(label) = browser::element_label(app, reference).await
+    {
+        activity.target = label;
+    }
     let result = match name {
         "capture" => capture::call(app, arguments).await,
         "input" => input::call(app, arguments, holder).await,
@@ -146,9 +168,61 @@ pub async fn call(app: &App, name: &str, arguments: Value, holder: &str) -> Tool
         "state" => state::call(app, arguments, holder).await,
         _ => Err(format!("unknown tool {name:?}")),
     };
+    if moved && result.is_ok() {
+        app.jobs.agent.acted();
+    }
+    if result.is_ok()
+        && ((name == "browser" && activity.action == "fill")
+            || (name == "input" && matches!(activity.action.as_str(), "type" | "paste")))
+    {
+        if let Ok(Some((name, _))) = tokio::time::timeout(
+            std::time::Duration::from_millis(200),
+            crate::a11y::focused_metadata(app),
+        )
+        .await
+        {
+            activity.target = name;
+        }
+        if let Some(secret) = secret_name {
+            if activity.target.is_empty() {
+                activity.target = "field".into();
+            }
+            activity
+                .target
+                .push_str(&format!(" from sealed secret {secret}"));
+        }
+    }
+    // Reads (captures, snapshots, listings) happen every few seconds and
+    // would bury what the agent did; the window shows only changes.
+    if worth_showing(name, &arguments_for_log) {
+        // A display failure must never turn a completed operation into a retry.
+        let log = app.activity.clone();
+        let ok = result.is_ok();
+        let _ = tokio::task::spawn_blocking(move || log.complete(activity, ok)).await;
+    }
     // Every answer leaves through here, so this is where the value of a
     // secret the person stored is taken out of it (see `crate::secrets`).
     app.secrets.redact_result(result)
+}
+
+fn worth_showing(tool: &str, arguments: &Value) -> bool {
+    let action = arguments["action"].as_str().unwrap_or("");
+    moves_something(tool, arguments)
+        || matches!(
+            (tool, action),
+            ("files", "put" | "download" | "extract" | "run") | ("state", "prepare")
+        )
+}
+
+fn moves_something(tool: &str, arguments: &Value) -> bool {
+    let action = arguments["action"].as_str().unwrap_or("");
+    match tool {
+        "input" => action != "clipboard_read",
+        "browser" => !matches!(action, "snapshot" | "text" | "tabs"),
+        "windows" => action != "list",
+        "shell" => matches!(action, "start" | "exec" | ""),
+        _ => false,
+    }
 }
 
 pub fn text(value: impl Into<String>) -> Vec<ContentBlock> {
@@ -163,4 +237,53 @@ pub fn json_text(value: impl serde::Serialize) -> ToolResult {
 
 pub fn action_error(tool: &str, action: &str, actions: &[&str]) -> String {
     format!("{tool}: unknown action {action:?} (one of: {actions:?})")
+}
+
+/// These words contain no argument values: text, scripts, commands and
+/// secret values must never become cursor labels.
+fn gesture_intent(action: &str) -> Option<&'static str> {
+    match action {
+        "click" | "right_click" | "rclick" | "click_ref" | "check" | "select" => Some("clicking"),
+        "double_click" | "dclick" => Some("double-clicking"),
+        "type" | "paste" | "key" | "fill" => Some("typing"),
+        "scroll" => Some("scrolling"),
+        "drag" => Some("dragging"),
+        _ => None,
+    }
+}
+
+#[cfg(test)]
+mod activity_tests {
+    use super::*;
+    #[test]
+    fn cursor_intent_uses_only_static_action_words() {
+        assert_eq!(gesture_intent("fill"), Some("typing"));
+        assert_eq!(gesture_intent("dclick"), Some("double-clicking"));
+        assert_eq!(gesture_intent("scroll"), Some("scrolling"));
+        assert_eq!(gesture_intent("drag"), Some("dragging"));
+        for action in ["eval", "exec", "a secret value", "navigate"] {
+            assert_eq!(gesture_intent(action), None);
+        }
+    }
+
+    #[test]
+    fn reads_do_not_make_the_agent_look_busy() {
+        for (tool, action) in [
+            ("capture", ""),
+            ("browser", "snapshot"),
+            ("browser", "text"),
+            ("windows", "list"),
+            ("shell", "status"),
+        ] {
+            assert!(!moves_something(tool, &json!({"action": action})));
+        }
+        for (tool, action) in [
+            ("input", "click"),
+            ("browser", "navigate"),
+            ("windows", "tile"),
+            ("shell", "start"),
+        ] {
+            assert!(moves_something(tool, &json!({"action": action})));
+        }
+    }
 }

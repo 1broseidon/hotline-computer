@@ -1,0 +1,22 @@
+[
+  {
+    "label": "health",
+    "status": 200,
+    "content_type": "text/plain; charset=utf-8"
+  },
+  {
+    "label": "mcp-no-auth",
+    "status": 401,
+    "body": "{\"error\":\"unauthorized\"}"
+  },
+  {
+    "label": "files-no-auth",
+    "status": 401,
+    "body": "{\"error\":\"unauthorized\"}"
+  },
+  {
+    "label": "foreign-origin",
+    "status": 200,
+    "content_type": "text/event-stream"
+  }
+]

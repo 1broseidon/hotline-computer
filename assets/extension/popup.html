@@ -1,0 +1,99 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Hotline</title>
+<style>
+/* The desk's palette (src/viewer.html, UI-SPEC-0.11). Geist is not bundled
+   here, so the system face stands in when it is not installed. */
+:root {
+  --ground:#0b0b0d; --surface:#17171b; --raised:#1f1f25; --raised-edge:#2e2e35; --rule:#2a2a30;
+  --ink:#ececef; --ink-2:#b4b4ba; --muted:#8e8e95;
+  --agent:#8fb8ff; --you:#f0c27a; --you-soft:#352d24; --ok:#86d69c; --fail:#ff8f80;
+  --mono:'Geist Mono', ui-monospace, monospace;
+}
+* { box-sizing:border-box; }
+[hidden] { display:none !important; }
+html { background:var(--surface); }
+body { margin:0; width:340px; color:var(--ink); font:13px/1.45 Geist, system-ui, sans-serif; }
+header { display:flex; align-items:center; gap:8px; height:44px; padding:0 14px; border-bottom:1px solid var(--rule); }
+header img { width:16px; height:16px; flex:none; }
+h1 { margin:0; font-size:13px; font-weight:600; }
+#site { margin-left:auto; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; color:var(--muted); font:12px var(--mono); }
+main { padding:6px; }
+section:not([hidden]) ~ section:not([hidden]) { border-top:1px solid var(--rule); margin-top:4px; padding-top:4px; }
+.sec { padding:10px 8px 4px; color:var(--muted); font:11px var(--mono); letter-spacing:.04em; }
+ul { list-style:none; margin:0; padding:0; }
+li.row { display:flex; align-items:center; gap:10px; padding:8px; border-radius:8px; }
+li.row:hover { background:var(--raised); }
+.ico { width:28px; height:28px; border-radius:8px; background:var(--raised); border:1px solid var(--raised-edge);
+  display:grid; place-items:center; flex:none; color:var(--ink-2); }
+.ico svg { width:14px; height:14px; }
+.who { flex:1; min-width:0; }
+.who div { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.t { font-weight:500; }
+.s { color:var(--muted); font-size:12px; }
+.when { flex:none; color:var(--muted); font-size:12px; }
+button { flex:none; height:28px; padding:0 12px; border:1px solid var(--raised-edge); border-radius:8px; background:var(--raised);
+  color:var(--ink); font:inherit; font-weight:500; cursor:pointer; }
+button:hover:not(:disabled) { background:var(--raised-edge); }
+button:disabled { opacity:.45; cursor:default; }
+button:focus-visible { outline:2px solid var(--agent); outline-offset:2px; }
+button.ghost { background:none; border-color:var(--rule); color:var(--ink-2); }
+button.you { background:var(--you-soft); border-color:transparent; color:var(--you); }
+.chip { display:inline-flex; align-items:center; gap:6px; height:22px; padding:0 8px; border-radius:6px; font-size:12px; }
+.chip i { width:6px; height:6px; border-radius:50%; flex:none; }
+.chip.you { background:var(--you-soft); color:var(--you); } .chip.you i { background:var(--you); }
+.pad { padding:8px; }
+.quote { margin:2px 8px 10px; padding:8px 10px; border-left:2px solid var(--rule); color:var(--ink-2); font-size:12.5px; }
+.acts { display:flex; gap:6px; padding:0 8px 8px; }
+.note { margin:0; padding:12px 8px; color:var(--ink-2); }
+.log { display:flex; gap:10px; padding:6px 8px; font-size:12.5px; color:var(--ink-2); }
+.log .at { width:40px; flex:none; color:var(--muted); font:12px var(--mono); }
+.log .dot { width:6px; height:6px; border-radius:50%; flex:none; margin-top:7px; }
+.log .dot.ok { background:var(--ok); } .log .dot.fail { background:var(--fail); }
+#error { margin:6px 2px 2px; padding:8px 10px; border-radius:8px; background:var(--raised); border:1px solid var(--raised-edge); color:var(--fail); }
+footer { padding:10px 14px 12px; border-top:1px solid var(--rule); color:var(--muted); font-size:12px; line-height:1.5; }
+#passkey .title { font-weight:600; }
+#passkey .rp { margin-top:2px; font:12px var(--mono); }
+#passkey p { margin:8px 0 0; color:var(--ink-2); }
+#passkey .left { margin-top:8px; color:var(--muted); font:11.5px var(--mono); }
+</style>
+</head>
+<body>
+<header>
+  <img src="icon-32.png" alt="">
+  <h1>Hotline</h1>
+  <span id="site"></span>
+</header>
+<main>
+  <section id="turn" hidden>
+    <div class="pad"><span class="chip you"><i></i>Your turn</span></div>
+    <div class="pad" style="padding-top:0"><div class="t" id="turn-title"></div></div>
+    <div class="quote" id="turn-task" hidden></div>
+    <div class="acts">
+      <button type="button" class="you" id="hand-back"></button>
+      <button type="button" class="ghost" id="not-now">Not now</button>
+    </div>
+  </section>
+  <section id="passkey" class="pad" aria-live="polite" hidden>
+    <div class="title" id="passkey-title"></div>
+    <div class="rp" id="passkey-rp"></div>
+    <p id="passkey-text"></p>
+    <div class="left" id="passkey-left"></div>
+  </section>
+  <section id="keys" hidden>
+    <ul id="key-rows" aria-label="Keys for this site"></ul>
+  </section>
+  <section id="record" hidden>
+    <div class="sec">today here</div>
+    <div id="record-rows"></div>
+  </section>
+  <p id="status" class="note">Asking this computer…</p>
+  <p id="empty" class="note" hidden>Nothing for this site. Grant a login or passkey from the desk.</p>
+  <div id="error" role="alert" hidden></div>
+</main>
+<footer>Keys never enter the browser.</footer>
+<script src="popup.js"></script>
+</body>
+</html>

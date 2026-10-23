@@ -1,0 +1,29 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Fieldnote · Sign in</title><link rel="icon" href="data:,">
+<style>
+*{box-sizing:border-box}
+body{margin:0;min-height:100vh;display:grid;place-items:center;background:#f5f5f2;color:#18181b;font:15px Geist,system-ui,sans-serif;-webkit-font-smoothing:antialiased}
+main{width:404px}
+.brand{display:flex;align-items:center;gap:10px;margin-bottom:34px;font-weight:600;font-size:18px;letter-spacing:-.01em}
+.logo{width:26px;height:26px;border-radius:7px;background:#18181b;display:grid;place-items:center}
+.logo i{width:10px;height:10px;border-radius:3px;background:#f5f5f2}
+h1{margin:0 0 6px;font-size:28px;font-weight:600;letter-spacing:-.02em}
+p{margin:0 0 28px;color:#5f5f66}
+label{display:block;font-size:13px;font-weight:500;color:#2a2a2e;margin:0 0 6px}
+input{width:100%;height:42px;border-radius:9px;border:1px solid #d9d9d4;background:#fff;padding:0 13px;font:inherit;font-size:14.5px;color:#18181b;margin-bottom:18px;outline:none}
+input:focus{border-color:#8fb8ff;box-shadow:0 0 0 4px rgba(143,184,255,.35)}
+button{width:100%;height:44px;border:0;border-radius:9px;background:#18181b;color:#fff;font:inherit;font-weight:500;margin-top:8px;cursor:pointer}
+a{display:block;text-align:center;margin-top:18px;font-size:13.5px;color:#5f5f66;text-decoration:none}
+</style></head>
+<body><main>
+<div class="brand"><div class="logo"><i></i></div>fieldnote</div>
+<h1>Sign in</h1>
+<p>Welcome back. Pick up where your team left off.</p>
+<form onsubmit="event.preventDefault();document.title='Fieldnote · Signed in'">
+<label for="email">Email</label><input id="email" type="email" autocomplete="username">
+<label for="password">Password</label><input id="password" type="password" autocomplete="current-password">
+<button id="go">Sign in</button>
+</form>
+<a href="#">Forgot password?</a>
+</main></body></html>

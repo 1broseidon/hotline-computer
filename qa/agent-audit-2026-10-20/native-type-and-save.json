@@ -1,0 +1,37 @@
+{
+  "label": "native-type-and-save",
+  "client": "audit",
+  "tool": "input",
+  "args": {
+    "action": "batch",
+    "steps": [
+      {
+        "action": "click",
+        "x": 250,
+        "y": 65
+      },
+      {
+        "action": "type",
+        "text": "Native Zo\u00eb \u5ba1\u6838"
+      },
+      {
+        "action": "click",
+        "x": 220,
+        "y": 135
+      }
+    ],
+    "capture_after": "final"
+  },
+  "seconds": 0.472,
+  "jsonrpc": "2.0",
+  "id": 3,
+  "result": {
+    "content": [
+      {
+        "type": "text",
+        "text": "{\"capture\":\"[0x02200003 Native audit app 0,36 1920x1044]\\n  [text]  0,48 1920x34 states=[editable,enabled,focusable,sensitive,showing,single-line,visible] value=\\\"Native Zo\u00eb \u5ba1\u6838\\\"\\n  [button] Save native text 0,118 1920x34 states=[enabled,focusable,focused,sensitive,showing,visible]\\n  [label] Saved: Native Zo\u00eb \u5ba1\u6838 0,188 1920x20 states=[enabled,multi-line,sensitive,showing,visible]\\n\\n\",\"steps\":[{\"duration_ms\":43,\"index\":0,\"ok\":true},{\"duration_ms\":374,\"index\":1,\"ok\":true},{\"duration_ms\":43,\"index\":2,\"ok\":true}],\"total_duration_ms\":470}"
+      }
+    ],
+    "isError": false
+  }
+}

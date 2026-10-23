@@ -1,0 +1,20 @@
+{
+  "label": "components-text",
+  "client": "audit",
+  "tool": "browser",
+  "args": {
+    "action": "text"
+  },
+  "seconds": 0.003,
+  "jsonrpc": "2.0",
+  "id": 4,
+  "result": {
+    "content": [
+      {
+        "type": "text",
+        "text": "page: Audit edge cases\nComponents\nOriginal action\n[e1] [h1] Components\n[e2] [button] Original action value=\"\""
+      }
+    ],
+    "isError": false
+  }
+}

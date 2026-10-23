@@ -1,0 +1,20 @@
+{
+  "label": "browser-recovered-text",
+  "client": "audit",
+  "tool": "browser",
+  "args": {
+    "action": "text"
+  },
+  "seconds": 0.005,
+  "jsonrpc": "2.0",
+  "id": 6,
+  "result": {
+    "content": [
+      {
+        "type": "text",
+        "text": "page: Recovered\nBrowser recovered\n[e1] [h1] Browser recovered"
+      }
+    ],
+    "isError": false
+  }
+}

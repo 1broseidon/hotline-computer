@@ -1,0 +1,21 @@
+{
+  "label": "form-submit",
+  "client": "audit",
+  "tool": "browser",
+  "args": {
+    "action": "click_ref",
+    "ref": "e5"
+  },
+  "seconds": 0.027,
+  "jsonrpc": "2.0",
+  "id": 3,
+  "result": {
+    "content": [
+      {
+        "type": "text",
+        "text": "clicked e5"
+      }
+    ],
+    "isError": false
+  }
+}

@@ -1,0 +1,22 @@
+{
+  "label": "project-file",
+  "client": "audit",
+  "tool": "files",
+  "args": {
+    "action": "put",
+    "path": "src/audit-project/app.py",
+    "content": "import http.server, os\nprint('audit server ready', flush=True)\nhttp.server.test(HandlerClass=http.server.SimpleHTTPRequestHandler, port=int(os.environ['PORT']), bind='127.0.0.1')\n"
+  },
+  "seconds": 0.002,
+  "jsonrpc": "2.0",
+  "id": 3,
+  "result": {
+    "content": [
+      {
+        "type": "text",
+        "text": "wrote /home/agent/src/audit-project/app.py (179 bytes)"
+      }
+    ],
+    "isError": false
+  }
+}

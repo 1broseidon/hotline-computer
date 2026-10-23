@@ -1,7 +1,7 @@
 [package]
 name = "hotline-computer"
 description = "A small Linux desktop for a coding agent: one binary boots it, owns it, and serves it over MCP."
-version = "0.10.3"
+version = "0.11.0"
 license = "MIT OR Apache-2.0"
 edition = "2024"
 
@@ -24,9 +24,10 @@ base64 = "0.22.1"
 # The agent is the window manager, the screenshotter, the screen streamer and
 # the person's hands, so it talks X11 itself: XGetImage, EWMH, the redirect of
 # every map and configure, DAMAGE for what changed, XTEST for input.
-x11rb = { version = "=0.14.0", default-features = false, features = ["damage", "shm", "xtest"] }
+x11rb = { version = "=0.14.0", default-features = false, features = ["damage", "shm", "xtest", "shape"] }
 # Odilia's protocol crate is the typed route to the desktop accessibility tree.
 atspi = { version = "=0.30.0", default-features = false, features = ["proxies", "tokio", "zbus"] }
+zbus = { version = "=5.19.0", default-features = false, features = ["tokio"] }
 # Chromium is visible on the desktop while this drives its DevTools protocol.
 chromiumoxide = { version = "=0.9.1", default-features = false }
 # Screenshots leave as PNG and the wallpaper mark and dock icons arrive as PNG.
@@ -34,8 +35,9 @@ png = "=0.18.1"
 # PID 1 duties: fork, block and wait on signals, reap what the kernel hands us.
 libc = "0.2"
 sha2 = "0.10"
+ring = "0.17"
 # The bar and its menus are drawn as pixels: antialiased text from the image's
-# DejaVu Sans rather than X core bitmap fonts.
+# Geist rather than X core bitmap fonts.
 fontdue = "0.9.4"
 # The clock in the bar shows the host's local time; the desk passes TZ.
 chrono = { version = "0.4", default-features = false, features = ["clock"] }

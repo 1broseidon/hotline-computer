@@ -1,0 +1,144 @@
+cargo fmt --all --check
+cargo clippy --all-targets -- -D warnings
+    Checking hotline-computer v0.10.3 (/Users/george/Library/Application Support/Hotline/workspaces/62e4a8d3-d558-4655-8c72-87c4501782db/look-0.11)
+    Finished `dev` profile [unoptimized] target(s) in 0.73s
+cargo test
+   Compiling hotline-computer v0.10.3 (/Users/george/Library/Application Support/Hotline/workspaces/62e4a8d3-d558-4655-8c72-87c4501782db/look-0.11)
+    Finished `test` profile [unoptimized] target(s) in 1.77s
+     Running unittests src/lib.rs (target/debug/deps/hotline_computer-abf00b4228b81a75)
+
+running 112 tests
+test desktop::tests::a_recent_action_expires_after_ten_seconds ... ok
+test desktop::tests::menu_rows_leave_room_for_the_separator ... ok
+test desktop::tests::work_area_and_column_share_gutters_including_the_opt_out ... ok
+test desktop::tests::compositing_is_a_straight_alpha_blend ... ok
+test boot::tests::a_screen_is_width_by_height ... ok
+test boot::tests::the_display_socket_is_named_by_its_number ... ok
+test a11y::tests::similar_titles_never_cross_application_boundaries ... ok
+test browser::tests::stale_profile_locks_are_cleared_before_launch ... ok
+test jobs::tests::only_fresh_failures_nobody_has_retried_need_attention ... ok
+test desktop::tests::the_bar_takes_the_smallest_icon_that_is_still_big_enough ... ok
+test jobs::tests::output_reads_as_plain_text ... ok
+test jobs::tests::an_unlabelled_job_is_named_by_its_command_line_cut_to_a_row ... ok
+test boot::tests::only_dead_endpoints_are_removed ... ok
+test lease::tests::a_hold_that_lapsed_is_taken_off_the_bar_when_it_ends ... ok
+test agent::tests::identity_tracks_the_last_named_holder_but_honors_an_override ... ok
+test lease::tests::only_another_holder_is_refused ... ok
+test links::tests::only_web_addresses_are_links ... ok
+test logins::tests::a_cookie_belongs_to_its_site_or_a_host_within_it ... ok
+test limits::tests::without_a_cgroup_the_available_cpus_decide ... ok
+test limits::tests::memory_bounds_jobs_even_when_the_host_reports_many_cpus ... ok
+test limits::tests::a_cpu_quota_bounds_both_and_unlimited_memory_follows_cpus ... ok
+test manifest::tests::layers_concatenate_lists_merge_maps_and_last_wins_for_scalars ... ok
+test manifest::tests::nix_strings_expand_only_package_references ... ok
+test manifest::tests::environment_gains_service_addresses_and_extends_paths ... ok
+test draft::tests::a_vite_app_gets_a_web_run_on_the_given_port ... ok
+test observer::tests::a_job_is_named_first_and_identified_underneath ... ok
+test observer::tests::the_banner_is_the_name_and_nothing_more_unless_narrowed ... ok
+test manifest::tests::errors_say_what_is_valid ... ok
+test observer::tests::the_ending_names_the_job_again_and_says_how_it_went ... ok
+test observer::tests::running_headers_use_the_agent_marker_and_a_white_label ... ok
+test observer::tests::the_rc_file_sets_the_prompt_and_leaves_room_for_the_operators_own ... ok
+test observer::tests::the_persons_bash_is_never_the_store_one ... ok
+test manifest::tests::platforms_pull_in_what_they_require_and_render_their_runtime ... ok
+test paint::tests::a_rounded_pill_leaves_its_corners_to_the_background ... ok
+test paint::tests::icons_downscale_with_their_alpha ... ok
+test passkeys::tests::a_request_that_left_with_its_page_is_forgotten_and_a_told_one_makes_way ... ok
+test passkeys::tests::a_denial_is_told_to_the_page_and_the_door_ends_the_arming ... ok
+test passkeys::tests::a_site_for_a_passkey_is_a_host_name ... ok
+test passkeys::tests::a_request_waits_for_the_person_and_an_approval_lets_one_credential_be_kept ... ok
+test passkeys::tests::an_arming_past_its_time_is_gone ... ok
+test draft::tests::a_tauri_workspace_gets_webkit_its_ui_install_and_an_app_run ... ok
+test manifest::tests::a_run_is_a_job_and_an_unknown_one_names_the_alternatives ... ok
+test screen::tests::a_frame_leads_with_its_geometry ... ok
+test screen::tests::a_union_is_the_bounding_box ... ok
+test secrets::tests::a_name_is_an_environment_variable_and_the_computers_own_are_refused ... ok
+test secrets::tests::a_site_allows_its_own_pages_and_no_other ... ok
+test secrets::tests::a_fill_resolves_a_field_by_name_and_a_code_from_the_seed ... ok
+test secrets::tests::a_login_and_a_passkey_are_kept_by_kind_and_a_job_never_sees_them ... ok
+test secrets::tests::every_value_is_taken_out_of_a_text_whole_and_in_its_json_spelling ... ok
+test secrets::tests::the_set_is_taken_whole_or_the_last_one_kept ... ok
+test paint::tests::shadows_are_soft_offset_and_bounded ... ok
+test serve::tests::secret_comparison_needs_equal_bytes ... ok
+test serve::tests::the_listing_carries_the_cache_hints_a_modern_client_requires ... ok
+test tools::activity_tests::reads_do_not_make_the_agent_look_busy ... ok
+test draft::tests::native_toolkits_choose_their_platform ... ok
+test tools::browser::tests::a_real_text_and_a_real_secret_together_is_an_error ... ok
+test tools::browser::tests::an_empty_text_alone_clears_the_field ... ok
+test tools::browser::tests::an_unused_empty_secret_alongside_text_still_fills_with_text ... ok
+test tools::browser::tests::neither_argument_is_an_error ... ok
+test tools::browser::tests::an_unused_empty_text_alongside_a_secret_still_fills_with_the_secret ... ok
+test tools::browser::tests::secret_only_fills_with_secret ... ok
+test tools::browser::tests::text_only_fills_with_text ... ok
+test draft::tests::python_gets_a_virtualenv_and_every_decision_is_explained ... ok
+test serve::tests::public_fonts_are_allowlisted_and_never_resolve_paths ... ok
+test serve::tests::only_an_authenticated_mcp_request_updates_the_displayed_name ... ok
+test tools::input::tests::the_wheel_scrolls_the_way_it_is_told ... ok
+test tools::shell::tests::a_line_goes_to_the_shell_and_a_name_does_not ... ok
+test tools::files::tests::refuses_a_symlink_that_leaves_home ... ok
+test tools::files::tests::refuses_an_existing_file_symlink_that_leaves_home ... ok
+test tools::windows::tests::a_large_application_gets_its_minimum_width_above_the_bar ... ok
+test tools::state::tests::names_cannot_escape_the_state_directories ... ok
+test tools::windows::tests::impossible_layouts_fail_before_moving_any_windows ... ok
+test tools::windows::tests::opting_out_removes_both_outer_and_inner_gaps ... ok
+test tools::windows::tests::the_persons_shell_takes_the_bottom_third_of_the_column_under_a_line ... ok
+test tools::files::tests::refuses_before_creating_a_parent_outside_home ... ok
+test jobs::tests::output_storage_failure_stops_and_reaps_the_job ... ok
+test viewer::tests::a_caller_that_can_set_headers_may_present_the_bearer_there_instead ... ok
+test desktop::tests::the_mark_decodes_and_blends_onto_ground ... ok
+test viewer::tests::the_control_bar_is_told_whose_screen_it_is ... ok
+test secrets::tests::the_door_takes_the_set_from_the_bearer_alone_and_answers_no_value ... ok
+test paint::tests::a_light_glyph_edge_gets_more_coverage_but_dark_ink_does_not ... ok
+test paint::tests::text_is_antialiased_and_measured ... ok
+test viewer::tests::the_files_panel_wants_the_token ... ok
+test viewer::tests::the_page_is_told_where_the_hands_are ... ok
+test viewer::tests::the_screen_is_the_teammate_s_until_a_person_takes_it ... ok
+test viewer::tests::cancelling_or_failing_an_upload_removes_its_private_spool ... ok
+test viewer::tests::a_file_from_the_persons_computer_lands_whole_under_the_home ... ok
+test workspace::tests::preparation_obeys_the_lease_and_home_boundary_through_the_state_tool ... ok
+test viewer::tests::the_files_panel_sees_the_home_and_nothing_above_it ... ok
+test workspace::tests::the_catalog_names_are_attribute_paths_and_read_well ... ok
+test workspace::tests::the_operator_spelling_takes_names_flags_and_a_workspace ... ok
+test x11::tests::a_region_is_clipped_to_the_screen ... ok
+test xtest::tests::characters_are_their_own_keysyms ... ok
+test xtest::tests::named_keys_are_looked_up ... ok
+test xtest::tests::x_names_and_browser_names_both_resolve ... ok
+test workspace::tests::image_versions_do_not_invalidate_existing_environment_but_missing_store_paths_do ... ok
+test workspace::tests::flakes_use_the_requested_local_shell_and_cannot_escape_home ... ok
+test jobs::tests::a_long_stream_answers_with_its_end_from_a_whole_character ... ok
+test viewer::tests::http_files_advertises_and_enforces_create_only_with_header_auth ... ok
+test workspace::tests::a_manifest_workspace_keeps_its_base_until_it_asks_for_the_new_one ... ok
+test viewer::tests::create_only_uploads_publish_once_and_keep_the_competing_file ... ok
+test workspace::tests::workspace_pins_survive_dependency_changes_and_unsafe_attributes_are_rejected ... ok
+test jobs::tests::stdin_works_without_a_visible_terminal_for_pipes_and_ptys ... ok
+test lease::tests::a_call_stuck_behind_another_reports_the_wait ... ok
+test jobs::tests::retry_ids_are_scoped_and_spawn_failures_are_queryable ... ok
+test jobs::tests::a_job_offered_the_persons_secrets_finds_them_by_name_and_never_the_bearer ... ok
+test workspace::tests::a_cached_definition_attaches_and_shell_jobs_inherit_it ... ok
+test secrets::tests::a_job_finds_a_secret_by_name_and_the_tools_answer_the_name_alone ... ok
+test jobs::tests::output_is_bounded_and_history_survives_a_new_service ... ok
+test tools::shell::tests::exec_answers_with_the_end_of_a_long_log_and_where_the_rest_is ... ok
+test jobs::tests::deadlines_retain_partial_output_and_cancellation_reaps_the_child ... ok
+test tools::shell::tests::a_waiting_command_does_not_lock_out_desktop_takeover ... ok
+
+test result: ok. 112 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.05s
+
+     Running unittests src/main.rs (target/debug/deps/hotline_computer-adcd039977ee61c7)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/contract.rs (target/debug/deps/contract-a3ff66384e6d6efc)
+
+running 1 test
+test image_honors_the_computer_contract ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+   Doc-tests hotline_computer
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+

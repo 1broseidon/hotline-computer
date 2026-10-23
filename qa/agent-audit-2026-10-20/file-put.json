@@ -1,0 +1,22 @@
+{
+  "label": "file-put",
+  "client": "audit",
+  "tool": "files",
+  "args": {
+    "action": "put",
+    "path": "audit/hello.txt",
+    "content": "Hello Zo\u00eb \u5ba1\u6838\n"
+  },
+  "seconds": 0.001,
+  "jsonrpc": "2.0",
+  "id": 14,
+  "result": {
+    "content": [
+      {
+        "type": "text",
+        "text": "path has no parent"
+      }
+    ],
+    "isError": true
+  }
+}

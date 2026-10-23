@@ -1,0 +1,21 @@
+{
+  "label": "form-navigate",
+  "client": "audit",
+  "tool": "browser",
+  "args": {
+    "action": "navigate",
+    "url": "data:text/html,<title>Agent audit form</title><h1>Order test</h1><form onsubmit=\"event.preventDefault();document.querySelector(\"\"output\"\").textContent=\"\"Submitted\"\"\"><label>Name <input name=name required></label><label>Plan <select name=plan><option>Basic</option><option>Pro</option></select></label><label><input type=checkbox name=terms>Accept terms</label><button type=button onclick=\"document.querySelector('output').textContent='Submitted: '+document.querySelector('input').value\">Submit</button><output></output></form>"
+  },
+  "seconds": 0.279,
+  "jsonrpc": "2.0",
+  "id": 3,
+  "result": {
+    "content": [
+      {
+        "type": "text",
+        "text": "navigated to data:text/html,<title>Agent audit form</title><h1>Order test</h1><form onsubmit=\"event.preventDefault();document.querySelector(\"\"output\"\").textContent=\"\"Submitted\"\"\"><label>Name <input name=name required></label><label>Plan <select name=plan><option>Basic</option><option>Pro</option></select></label><label><input type=checkbox name=terms>Accept terms</label><button type=button onclick=\"document.querySelector('output').textContent='Submitted: '+document.querySelector('input').value\">Submit</button><output></output></form>"
+      }
+    ],
+    "isError": false
+  }
+}

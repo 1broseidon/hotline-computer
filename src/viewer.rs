@@ -4,8 +4,8 @@
 //! The desk puts the bearer in the URL's fragment, which never leaves the
 //! browser; the page hands it back as the socket's `token` query. Frames go
 //! down as binary messages, input comes up as JSON. The page opens
-//! view-only and sends nothing, so watching a teammate work never takes the
-//! machine from it. `Take control` says otherwise, and from then on the
+//! view-only; its liveness pings never take control. `Take control` says
+//! otherwise, and from then on the
 //! person's input holds the machine for a few seconds at a time, so the
 //! teammate's mutating tools are refused while someone is driving, and
 //! nobody has to remember to give the desktop back.
@@ -335,7 +335,15 @@ async fn drive(mut ws: WebSocket, app: App, display: Arc<Display>) {
             },
             message = ws.recv() => match message {
                 Some(Ok(Message::Text(text))) => {
-                    match handle(&text, &display, &app, &holder, &mut driving).await {
+                    let message = match serde_json::from_str::<FromViewer>(&text) {
+                        Ok(message) => message,
+                        Err(_) => { let _ = ws.send(Message::Text(json!({"t":"error","error":"invalid viewer input","driving":driving}).to_string().into())).await; continue; }
+                    };
+                    if let Some(pong) = heartbeat(&message) {
+                        if ws.send(Message::Text(pong.into())).await.is_err() { break; }
+                        continue;
+                    }
+                    match handle(message, &display, &app, &holder, &mut driving).await {
                         Ok(true) => { let _ = ws.send(Message::Text(json!({"t":"paste","ok":true}).to_string().into())).await; }
                         Ok(false) => {},
                         Err(error) => { let _ = ws.send(Message::Text(json!({"t":"error","error":error,"driving":driving}).to_string().into())).await; }
@@ -379,13 +387,16 @@ async fn state_message(app: &App, holder: &str, driving: bool) -> String {
     };
     let jobs = app.jobs.list().await.unwrap_or_default();
     let [running, completed, failed] = crate::jobs::counts(&jobs, crate::jobs::now());
-    json!({"t":"state","holder":who,"driving":driving,"running":running,"completed":completed,"failed":failed})
+    json!({"t":"state","holder":who,"driving":driving,"running":running,"completed":completed,"failed":failed,"agent":app.jobs.agent.snapshot()})
         .to_string()
 }
 
 #[derive(Deserialize)]
 #[serde(tag = "t", rename_all = "lowercase")]
 enum FromViewer {
+    Ping {
+        id: u64,
+    },
     /// The person taking the screen, or handing it back. Taking it holds the
     /// machine at once rather than at the first twitch of the mouse, and
     /// handing it back frees the teammate now rather than in ten seconds.
@@ -416,15 +427,21 @@ enum FromViewer {
     },
 }
 
+fn heartbeat(message: &FromViewer) -> Option<String> {
+    if let FromViewer::Ping { id } = message {
+        Some(json!({"t":"pong","id":id}).to_string())
+    } else {
+        None
+    }
+}
+
 async fn handle(
-    text: &str,
+    message: FromViewer,
     display: &Display,
     app: &App,
     holder: &str,
     driving: &mut bool,
 ) -> Result<bool, String> {
-    let message: FromViewer =
-        serde_json::from_str(text).map_err(|_| "invalid viewer input".to_owned())?;
     if !reaches_the_hands(&message, app, holder, driving).await {
         if matches!(message, FromViewer::Paste { .. }) {
             return Err("Take control before pasting".into());
@@ -452,10 +469,7 @@ async fn handle(
                         .contains("hotlineterminal")
             })
         {
-            return Err(
-                "The terminal observer is read-only. Paste into the application you are testing."
-                    .into(),
-            );
+            return Err("The observer is read-only. Click the app you want to paste into.".into());
         }
         let display = app.display()?;
         tokio::task::spawn_blocking(move || {
@@ -492,7 +506,7 @@ async fn handle(
         }
         FromViewer::Key { key, down } => hands.key(&key, down),
         // Answered by `reaches_the_hands`, before the hands were taken.
-        FromViewer::Control { .. } | FromViewer::Paste { .. } => Ok(()),
+        FromViewer::Control { .. } | FromViewer::Paste { .. } | FromViewer::Ping { .. } => Ok(()),
     }?;
     Ok(false)
 }
@@ -508,6 +522,9 @@ async fn reaches_the_hands(
     holder: &str,
     driving: &mut bool,
 ) -> bool {
+    if matches!(message, FromViewer::Ping { .. }) {
+        return false;
+    }
     if let FromViewer::Control { take } = message {
         *driving = *take;
         if *take {
@@ -565,6 +582,26 @@ mod tests {
             format!("Bearer {token}").parse().unwrap(),
         );
         headers
+    }
+
+    #[tokio::test]
+    async fn ping_answers_without_taking_or_renewing_the_lease() {
+        let app = app();
+        let message: FromViewer = serde_json::from_str(r#"{"t":"ping","id":42}"#).unwrap();
+        assert_eq!(
+            serde_json::from_str::<serde_json::Value>(&heartbeat(&message).unwrap()).unwrap(),
+            json!({"t":"pong","id":42})
+        );
+        let mut driving = false;
+        assert!(!reaches_the_hands(&message, &app, "person-a", &mut driving).await);
+        assert!(app.access.holder().await.is_none());
+        app.access.seize("person-a", HOLD).await;
+        driving = true;
+        let before = app.access.holder().await;
+        tokio::time::sleep(std::time::Duration::from_millis(10)).await;
+        assert!(!reaches_the_hands(&message, &app, "person-a", &mut driving).await);
+        assert_eq!(app.access.holder().await, before);
+        assert!(driving);
     }
 
     #[tokio::test]
@@ -992,6 +1029,7 @@ mod tests {
             y: 360,
             button: None,
             down: false,
+            intent: None,
         }))
         .unwrap();
         assert_eq!(moved, json!({"t":"pointer","x":640,"y":360}));
@@ -1000,11 +1038,12 @@ mod tests {
             y: 360,
             button: Some(1),
             down: true,
+            intent: Some("clicking".into()),
         }))
         .unwrap();
         assert_eq!(
             pressed,
-            json!({"t":"pointer","x":640,"y":360,"button":1,"down":true})
+            json!({"t":"pointer","x":640,"y":360,"button":1,"down":true,"intent":"clicking"})
         );
     }
 

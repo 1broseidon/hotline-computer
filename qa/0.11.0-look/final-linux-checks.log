@@ -1,0 +1,213 @@
+#1 [resolver] fetching image...docker.io/library/rust:1-trixie
+#1 DONE 0.0s
+
+#2 [resolver] fetching image...docker.io/library/debian:trixie-slim@sha256:d7e12182ce18b85b93007c1dedf31f2d29e01ccf3182cc4017c709b6259bc132
+#2 DONE 0.0s
+
+#3 [internal] load build definition from Dockerfile
+#3 transferring dockerfile:
+#3 transferring dockerfile: 7.20kB 2.5s done
+#3 DONE 2.5s
+
+#4 [internal] load .dockerignore
+#4 transferring context:
+#4 transferring context: 138B 2.3s done
+#4 DONE 2.3s
+
+#5 oci-layout://docker.io/library/rust:1-trixie@sha256:7e9eb23ac694dda816c76933ab63b2703e6becbf3b10da90970124656788d47b
+#5 resolve docker.io/library/rust:1-trixie@sha256:7e9eb23ac694dda816c76933ab63b2703e6becbf3b10da90970124656788d47b done
+#5 DONE 0.0s
+
+#6 [internal] load build context
+#6 transferring context: 1.99MB 2.4s done
+#6 DONE 2.4s
+
+#7 [linux/arm64 build 1/8] RUN apt-get update && apt-get install -y --no-install-recommends cmake perl pkg-config && rm -rf /var/lib/apt/lists/*
+#7 CACHED
+
+#8 [linux/arm64 build 2/8] WORKDIR /src
+#8 CACHED
+
+#9 [linux/arm64 build 4/8] COPY src ./src
+#9 CACHED
+
+#10 [linux/arm64 build 6/8] COPY skills ./skills
+#10 CACHED
+
+#11 [linux/arm64 build 3/8] COPY Cargo.toml Cargo.lock ./
+#11 CACHED
+
+#12 [linux/arm64 build 5/8] COPY assets ./assets
+#12 CACHED
+
+#13 [linux/arm64 build 7/8] RUN --mount=type=cache,target=/usr/local/cargo/registry --mount=type=cache,target=/src/target cargo build --release --locked && cp target/release/hotline-computer /usr/local/bin/hotline-computer
+#13 CACHED
+
+#14 [linux/arm64 checks 1/3] RUN rustup component add rustfmt clippy
+#14 0.079 info: downloading 2 components
+#14 DONE 0.7s
+
+#15 [linux/arm64 checks 2/3] COPY tests ./tests
+#15 DONE 0.0s
+
+#16 [linux/arm64 checks 3/3] RUN --mount=type=cache,target=/usr/local/cargo/registry --mount=type=cache,target=/src/target rm -f target/debug/deps/contract-* && cargo fmt --check && CARGO_PROFILE_TEST_DEBUG=0 CARGO_INCREMENTAL=0 cargo test --locked && CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 cargo clippy --all-targets --locked -- -D warnings     && mkdir -p /acceptance     && for binary in target/debug/deps/contract-*; do if [ -f "$binary" ] && [ -x "$binary" ]; then cp "$binary" /acceptance/contract; fi; done     && test -x /acceptance/contract
+#16 0.210    Compiling hotline-computer v0.10.3 (/src)
+#16 8.113     Finished `test` profile [unoptimized] target(s) in 7.96s
+#16 8.135      Running unittests src/lib.rs (target/debug/deps/hotline_computer-018fc2a730f067ca)
+#16 8.137 
+#16 8.137 running 119 tests
+#16 8.139 test activity::tests::activity_omits_payloads_and_url_credentials_queries_fragments ... ok
+#16 8.139 test a11y::tests::similar_titles_never_cross_application_boundaries ... ok
+#16 8.139 test badge::tests::a_badge_stays_below_a_real_visible_field ... ok
+#16 8.139 test boot::tests::a_screen_is_width_by_height ... ok
+#16 8.139 test agent::tests::identity_tracks_the_last_named_holder_but_honors_an_override ... ok
+#16 8.139 test boot::tests::the_display_socket_is_named_by_its_number ... ok
+#16 8.140 test boot::tests::only_dead_endpoints_are_removed ... ok
+#16 8.140 test desktop::tests::compositing_is_a_straight_alpha_blend ... ok
+#16 8.140 test desktop::tests::a_recent_action_expires_after_ten_seconds ... ok
+#16 8.140 test desktop::tests::menu_rows_leave_room_for_the_separator ... ok
+#16 8.140 test browser::tests::stale_profile_locks_are_cleared_before_launch ... ok
+#16 8.140 test desktop::tests::work_area_and_column_share_gutters_including_the_opt_out ... ok
+#16 8.140 test desktop::tests::the_bar_takes_the_smallest_icon_that_is_still_big_enough ... ok
+#16 8.141 test draft::tests::a_vite_app_gets_a_web_run_on_the_given_port ... ok
+#16 8.142 test draft::tests::a_tauri_workspace_gets_webkit_its_ui_install_and_an_app_run ... ok
+#16 8.144 test draft::tests::native_toolkits_choose_their_platform ... ok
+#16 8.144 test draft::tests::python_gets_a_virtualenv_and_every_decision_is_explained ... ok
+#16 8.151 test desktop::tests::the_mark_decodes_and_blends_onto_ground ... ok
+#16 8.152 test jobs::tests::an_unlabelled_job_is_named_by_its_command_line_cut_to_a_row ... ok
+#16 8.160 test activity::tests::activity_redacts_before_truncation_and_never_follows_a_log_symlink ... ok
+#16 8.160 test jobs::tests::only_fresh_failures_nobody_has_retried_need_attention ... ok
+#16 8.190 test jobs::tests::a_long_stream_answers_with_its_end_from_a_whole_character ... ok
+#16 8.190 test jobs::tests::output_reads_as_plain_text ... ok
+#16 8.190 test jobs::tests::output_is_bounded_and_history_survives_a_new_service ... ok
+#16 8.210 test jobs::tests::output_storage_failure_stops_and_reaps_the_job ... ok
+#16 8.238 test jobs::tests::retry_ids_are_scoped_and_spawn_failures_are_queryable ... ok
+#16 8.242 test jobs::tests::a_job_offered_the_persons_secrets_finds_them_by_name_and_never_the_bearer ... ok
+#16 8.242 test lease::tests::a_hold_that_lapsed_is_taken_off_the_bar_when_it_ends ... ok
+#16 8.242 test lease::tests::only_another_holder_is_refused ... ok
+#16 8.242 test limits::tests::a_cpu_quota_bounds_both_and_unlimited_memory_follows_cpus ... ok
+#16 8.243 test limits::tests::memory_bounds_jobs_even_when_the_host_reports_many_cpus ... ok
+#16 8.243 test limits::tests::without_a_cgroup_the_available_cpus_decide ... ok
+#16 8.243 test links::tests::only_web_addresses_are_links ... ok
+#16 8.243 test logins::tests::a_cookie_belongs_to_its_site_or_a_host_within_it ... ok
+#16 8.257 test manifest::tests::a_run_is_a_job_and_an_unknown_one_names_the_alternatives ... ok
+#16 8.258 test jobs::tests::stdin_works_without_a_visible_terminal_for_pipes_and_ptys ... ok
+#16 8.258 test manifest::tests::environment_gains_service_addresses_and_extends_paths ... ok
+#16 8.258 test manifest::tests::layers_concatenate_lists_merge_maps_and_last_wins_for_scalars ... ok
+#16 8.258 test manifest::tests::nix_strings_expand_only_package_references ... ok
+#16 8.258 test manifest::tests::platforms_pull_in_what_they_require_and_render_their_runtime ... ok
+#16 8.258 test manifest::tests::errors_say_what_is_valid ... ok
+#16 8.258 test observer::tests::running_headers_use_the_agent_marker_and_a_white_label ... ok
+#16 8.258 test observer::tests::a_job_is_named_first_and_identified_underneath ... ok
+#16 8.259 test observer::tests::the_banner_is_the_name_and_nothing_more_unless_narrowed ... ok
+#16 8.259 test observer::tests::the_ending_names_the_job_again_and_says_how_it_went ... ok
+#16 8.259 test observer::tests::the_rc_file_sets_the_prompt_and_leaves_room_for_the_operators_own ... ok
+#16 8.259 test observer::tests::the_persons_bash_is_never_the_store_one ... ok
+#16 8.259 test paint::tests::a_rounded_pill_leaves_its_corners_to_the_background ... ok
+#16 8.259 test paint::tests::icons_downscale_with_their_alpha ... ok
+#16 8.261 test paint::tests::shadows_are_soft_offset_and_bounded ... ok
+#16 8.269 test paint::tests::a_light_glyph_edge_gets_more_coverage_but_dark_ink_does_not ... ok
+#16 8.269 test passkeys::tests::a_denial_is_told_to_the_page_and_the_door_ends_the_arming ... ok
+#16 8.269 test passkeys::tests::a_request_that_left_with_its_page_is_forgotten_and_a_told_one_makes_way ... ok
+#16 8.270 test passkeys::tests::a_request_waits_for_the_person_and_an_approval_lets_one_credential_be_kept ... ok
+#16 8.270 test passkeys::tests::a_site_for_a_passkey_is_a_host_name ... ok
+#16 8.270 test passkeys::tests::an_arming_past_its_time_is_gone ... ok
+#16 8.270 test screen::tests::a_frame_leads_with_its_geometry ... ok
+#16 8.270 test screen::tests::a_union_is_the_bounding_box ... ok
+#16 8.270 test secrets::tests::a_fill_resolves_a_field_by_name_and_a_code_from_the_seed ... ok
+#16 8.272 test paint::tests::text_is_antialiased_and_measured ... ok
+#16 8.272 test secrets::tests::a_login_and_a_passkey_are_kept_by_kind_and_a_job_never_sees_them ... ok
+#16 8.272 test secrets::tests::a_name_is_an_environment_variable_and_the_computers_own_are_refused ... ok
+#16 8.272 test secrets::tests::a_site_allows_its_own_pages_and_no_other ... ok
+#16 8.272 test secrets::tests::every_value_is_taken_out_of_a_text_whole_and_in_its_json_spelling ... ok
+#16 8.289 test lease::tests::a_call_stuck_behind_another_reports_the_wait ... ok
+#16 8.290 test secrets::tests::the_set_is_taken_whole_or_the_last_one_kept ... ok
+#16 8.292 test secrets::tests::a_job_finds_a_secret_by_name_and_the_tools_answer_the_name_alone ... ok
+#16 8.360 test serve::tests::public_fonts_are_allowlisted_and_never_resolve_paths ... ok
+#16 8.360 test serve::tests::only_an_authenticated_mcp_request_updates_the_displayed_name ... ok
+#16 8.360 test serve::tests::secret_comparison_needs_equal_bytes ... ok
+#16 8.360 test tools::activity_tests::cursor_intent_uses_only_static_action_words ... ok
+#16 8.360 test tools::activity_tests::reads_do_not_make_the_agent_look_busy ... ok
+#16 8.360 test tools::browser::tests::a_real_text_and_a_real_secret_together_is_an_error ... ok
+#16 8.360 test tools::browser::tests::an_empty_text_alone_clears_the_field ... ok
+#16 8.360 test tools::browser::tests::an_unused_empty_secret_alongside_text_still_fills_with_text ... ok
+#16 8.360 test tools::browser::tests::an_unused_empty_text_alongside_a_secret_still_fills_with_the_secret ... ok
+#16 8.360 test serve::tests::the_listing_carries_the_cache_hints_a_modern_client_requires ... ok
+#16 8.360 test tools::browser::tests::neither_argument_is_an_error ... ok
+#16 8.360 test tools::browser::tests::text_only_fills_with_text ... ok
+#16 8.360 test tools::browser::tests::secret_only_fills_with_secret ... ok
+#16 8.360 test secrets::tests::the_door_takes_the_set_from_the_bearer_alone_and_answers_no_value ... ok
+#16 8.361 test tools::files::tests::refuses_an_existing_file_symlink_that_leaves_home ... ok
+#16 8.361 test tools::input::tests::the_wheel_scrolls_the_way_it_is_told ... ok
+#16 8.361 test tools::shell::tests::a_line_goes_to_the_shell_and_a_name_does_not ... ok
+#16 8.361 test tools::files::tests::refuses_before_creating_a_parent_outside_home ... ok
+#16 8.362 test tools::files::tests::refuses_a_symlink_that_leaves_home ... ok
+#16 8.362 test tools::state::tests::names_cannot_escape_the_state_directories ... ok
+#16 8.362 test tools::windows::tests::a_large_application_gets_its_minimum_width_above_the_bar ... ok
+#16 8.362 test tools::windows::tests::activity_splits_the_observer_space_above_the_persons_shell ... ok
+#16 8.362 test tools::windows::tests::impossible_layouts_fail_before_moving_any_windows ... ok
+#16 8.362 test tools::windows::tests::opting_out_removes_both_outer_and_inner_gaps ... ok
+#16 8.362 test tools::windows::tests::the_persons_shell_takes_the_bottom_third_of_the_column_under_a_line ... ok
+#16 8.362 test viewer::tests::a_caller_that_can_set_headers_may_present_the_bearer_there_instead ... ok
+#16 8.476 test tools::shell::tests::exec_answers_with_the_end_of_a_long_log_and_where_the_rest_is ... ok
+#16 8.477 test viewer::tests::cancelling_or_failing_an_upload_removes_its_private_spool ... ok
+#16 8.507 test viewer::tests::a_file_from_the_persons_computer_lands_whole_under_the_home ... ok
+#16 8.583 test viewer::tests::http_files_advertises_and_enforces_create_only_with_header_auth ... ok
+#16 8.595 test viewer::tests::ping_answers_without_taking_or_renewing_the_lease ... ok
+#16 8.595 test viewer::tests::the_control_bar_is_told_whose_screen_it_is ... ok
+#16 8.597 test viewer::tests::the_files_panel_sees_the_home_and_nothing_above_it ... ok
+#16 8.597 test viewer::tests::the_files_panel_wants_the_token ... ok
+#16 8.597 test viewer::tests::the_page_is_told_where_the_hands_are ... ok
+#16 8.598 test viewer::tests::the_screen_is_the_teammate_s_until_a_person_takes_it ... ok
+#16 8.605 test viewer::tests::create_only_uploads_publish_once_and_keep_the_competing_file ... ok
+#16 8.608 test workspace::tests::a_manifest_workspace_keeps_its_base_until_it_asks_for_the_new_one ... ok
+#16 8.609 test workspace::tests::flakes_use_the_requested_local_shell_and_cannot_escape_home ... ok
+#16 8.620 test workspace::tests::image_versions_do_not_invalidate_existing_environment_but_missing_store_paths_do ... ok
+#16 8.620 test workspace::tests::a_cached_definition_attaches_and_shell_jobs_inherit_it ... ok
+#16 8.620 test workspace::tests::the_catalog_names_are_attribute_paths_and_read_well ... ok
+#16 8.621 test workspace::tests::the_operator_spelling_takes_names_flags_and_a_workspace ... ok
+#16 8.621 test workspace::tests::workspace_pins_survive_dependency_changes_and_unsafe_attributes_are_rejected ... ok
+#16 8.621 test x11::tests::a_region_is_clipped_to_the_screen ... ok
+#16 8.621 test xtest::tests::characters_are_their_own_keysyms ... ok
+#16 8.621 test xtest::tests::named_keys_are_looked_up ... ok
+#16 8.621 test xtest::tests::x_names_and_browser_names_both_resolve ... ok
+#16 8.637 test workspace::tests::preparation_obeys_the_lease_and_home_boundary_through_the_state_tool ... ok
+#16 9.164 test jobs::tests::deadlines_retain_partial_output_and_cancellation_reaps_the_child ... ok
+#16 9.364 test tools::shell::tests::a_waiting_command_does_not_lock_out_desktop_takeover ... ok
+#16 10.41 test activity::tests::activity_keeps_newest_500_and_removes_terminal_control_codes ... ok
+#16 10.41 
+#16 10.41 test result: ok. 119 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 2.28s
+#16 10.41 
+#16 10.41      Running unittests src/main.rs (target/debug/deps/hotline_computer-3c27e1a435d14df0)
+#16 10.42 
+#16 10.42 running 0 tests
+#16 10.42 
+#16 10.42 test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+#16 10.42 
+#16 10.42      Running tests/contract.rs (target/debug/deps/contract-c7e7ebe23d087351)
+#16 10.42 
+#16 10.42 running 1 test
+#16 10.42 test image_honors_the_computer_contract ... ok
+#16 10.42 
+#16 10.42 test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+#16 10.42 
+#16 10.42    Doc-tests hotline_computer
+#16 10.63 
+#16 10.63 running 0 tests
+#16 10.63 
+#16 10.63 test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+#16 10.63 
+#16 10.77     Checking hotline-computer v0.10.3 (/src)
+#16 13.82     Finished `dev` profile [unoptimized] target(s) in 3.16s
+#16 DONE 14.0s
+
+#17 exporting to oci image format
+#17 exporting layers
+#17 exporting layers 0.6s done
+#17 exporting manifest sha256:28ac4a08abd3ee702220f70bc394b7a265dab18d31fbcf5eeb176b27471cf0d6 done
+#17 exporting config sha256:2fddc13efba4f80c1f09c820b439a82287d9bfca47bcc030553ee4b588720dcc done
+#17 exporting manifest list sha256:ff5ba93c5c8ac3e86625b2ba3d6d0d9fa436d9f425c9a7a8830856ebaa677dda done
+#17 sending tarball
+#17 sending tarball 2.2s done
+#17 DONE 2.8s
+hotline-computer:look-0.11-checks

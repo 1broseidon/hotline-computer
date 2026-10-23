@@ -1,0 +1,21 @@
+{
+  "label": "project-open",
+  "client": "audit",
+  "tool": "browser",
+  "args": {
+    "action": "navigate",
+    "url": "http://localhost:39463"
+  },
+  "seconds": 0.028,
+  "jsonrpc": "2.0",
+  "id": 3,
+  "result": {
+    "content": [
+      {
+        "type": "text",
+        "text": "navigated to http://localhost:39463"
+      }
+    ],
+    "isError": false
+  }
+}

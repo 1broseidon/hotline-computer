@@ -1,0 +1,22 @@
+{
+  "label": "input-default-capture",
+  "client": "audit",
+  "tool": "input",
+  "args": {
+    "action": "move",
+    "x": 500,
+    "y": 400
+  },
+  "seconds": 0.048,
+  "jsonrpc": "2.0",
+  "id": 12,
+  "result": {
+    "content": [
+      {
+        "type": "text",
+        "text": "moved"
+      }
+    ],
+    "isError": false
+  }
+}

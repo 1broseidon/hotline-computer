@@ -1,0 +1,21 @@
+{
+  "label": "boundary-browser",
+  "client": "audit",
+  "tool": "browser",
+  "args": {
+    "action": "navigate",
+    "url": "data:text/html,<h1>Isolated boundary check</h1>"
+  },
+  "seconds": 0.308,
+  "jsonrpc": "2.0",
+  "id": 3,
+  "result": {
+    "content": [
+      {
+        "type": "text",
+        "text": "navigated to data:text/html,<h1>Isolated boundary check</h1>"
+      }
+    ],
+    "isError": false
+  }
+}

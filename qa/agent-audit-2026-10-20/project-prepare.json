@@ -1,0 +1,43 @@
+{
+  "label": "project-prepare",
+  "client": "audit",
+  "tool": "state",
+  "args": {
+    "action": "prepare",
+    "workspace": "src/audit-project",
+    "manifest": {
+      "packages": [
+        "python312"
+      ],
+      "runs": {
+        "test": {
+          "command": [
+            "python3",
+            "-m",
+            "py_compile",
+            "app.py"
+          ]
+        },
+        "app": {
+          "command": [
+            "python3",
+            "app.py"
+          ],
+          "kind": "web"
+        }
+      }
+    }
+  },
+  "seconds": 0.002,
+  "jsonrpc": "2.0",
+  "id": 6,
+  "result": {
+    "content": [
+      {
+        "type": "text",
+        "text": "{\"cached\":false,\"definition\":{\"base\":\"0.10.0-rc.4\",\"file\":\".hotline/manifest.json\",\"nixpkgs\":\"ef34387ddd751e1ab8857adf4676492d32eb24ec\",\"packages\":[\"python312\"],\"platform\":[],\"source\":\"manifest\"},\"job\":{\"args\":[\"prepare\",\"@request\",\"/home/agent/src/audit-project\",\"/home/agent\"],\"command\":\"/usr/bin/hotline-computer\",\"cwd\":\"/home/agent\",\"error\":null,\"exit_code\":null,\"fingerprint\":\"8a7e72ba35d439433a679b853227096cd762730a6ead623d1032a250b08bc990\",\"finished_at\":null,\"holder\":\"audit\",\"id\":\"000001a15c05ff5b-57224a36\",\"label\":\"Prepare workspace environment\",\"output_bytes\":0,\"pid\":393,\"pty\":false,\"request_id\":null,\"signal\":null,\"started_at\":1792545259356,\"state\":\"running\",\"truncated\":false},\"next\":\"wait for the job; then shell run NAME in this workspace. state manifest shows hooks and services as they start\",\"observer_error\":null,\"ready\":false,\"then\":{\"create_hooks\":[],\"runs\":[\"app\",\"test\"],\"services\":[],\"start_hooks\":[]},\"workspace\":\"/home/agent/src/audit-project\"}"
+      }
+    ],
+    "isError": false
+  }
+}

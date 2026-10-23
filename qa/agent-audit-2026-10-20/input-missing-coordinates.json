@@ -1,0 +1,20 @@
+{
+  "label": "input-missing-coordinates",
+  "client": "audit",
+  "tool": "input",
+  "args": {
+    "action": "click"
+  },
+  "seconds": 0.044,
+  "jsonrpc": "2.0",
+  "id": 11,
+  "result": {
+    "content": [
+      {
+        "type": "text",
+        "text": "clicked"
+      }
+    ],
+    "isError": false
+  }
+}

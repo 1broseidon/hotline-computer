@@ -1,0 +1,25 @@
+{
+  "label": "native-launch",
+  "client": "audit",
+  "tool": "shell",
+  "args": {
+    "action": "launch",
+    "command": "python3",
+    "args": [
+      "/home/agent/audit/native.py"
+    ],
+    "label": "Try native desktop controls"
+  },
+  "seconds": 0.003,
+  "jsonrpc": "2.0",
+  "id": 4,
+  "result": {
+    "content": [
+      {
+        "type": "text",
+        "text": "{\"args\":[\"/home/agent/audit/native.py\"],\"command\":\"python3\",\"cwd\":\"/home/agent\",\"error\":null,\"exit_code\":null,\"fingerprint\":\"cf0d71dda94d0f5f30d806a469a35c39a81ad8c55a0faee36c004140117297cf\",\"finished_at\":null,\"holder\":\"audit\",\"id\":\"000001a15c0672dc-96bd1fee\",\"label\":\"Try native desktop controls\",\"output_bytes\":0,\"pid\":644,\"pty\":false,\"request_id\":null,\"signal\":null,\"started_at\":1792545288924,\"state\":\"running\",\"truncated\":false}"
+      }
+    ],
+    "isError": false
+  }
+}

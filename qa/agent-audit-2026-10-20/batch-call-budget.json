@@ -1,0 +1,35 @@
+{
+  "label": "batch-call-budget",
+  "client": "audit",
+  "tool": "input",
+  "args": {
+    "action": "batch",
+    "steps": [
+      {
+        "action": "wait",
+        "text": "AUDIT_NEVER_PRESENT_1",
+        "timeout": 26
+      },
+      {
+        "action": "wait",
+        "text": "AUDIT_NEVER_PRESENT_2",
+        "timeout": 26
+      }
+    ],
+    "stop_on_error": false,
+    "capture_after": "none",
+    "capture_on_error": false
+  },
+  "seconds": 52.274,
+  "jsonrpc": "2.0",
+  "id": 3,
+  "result": {
+    "content": [
+      {
+        "type": "text",
+        "text": "{\"capture\":null,\"steps\":[{\"duration_ms\":26145,\"error\":\"text \\\"AUDIT_NEVER_PRESENT_1\\\" did not appear within 26s\",\"index\":0,\"ok\":false},{\"duration_ms\":26127,\"error\":\"text \\\"AUDIT_NEVER_PRESENT_2\\\" did not appear within 26s\",\"index\":1,\"ok\":false}],\"total_duration_ms\":52272}"
+      }
+    ],
+    "isError": false
+  }
+}

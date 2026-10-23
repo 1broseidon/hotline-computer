@@ -1,0 +1,28 @@
+{
+  "label": "job-start",
+  "client": "audit",
+  "tool": "shell",
+  "args": {
+    "action": "start",
+    "command": "python3",
+    "args": [
+      "-u",
+      "-c",
+      "import time; print(\"started\"); time.sleep(30); print(\"finished\")"
+    ],
+    "request_id": "audit-retry-1",
+    "label": "Check managed job retry"
+  },
+  "seconds": 0.003,
+  "jsonrpc": "2.0",
+  "id": 3,
+  "result": {
+    "content": [
+      {
+        "type": "text",
+        "text": "{\"args\":[\"-u\",\"-c\",\"import time; print(\\\"started\\\"); time.sleep(30); print(\\\"finished\\\")\"],\"command\":\"python3\",\"cwd\":\"/home/agent\",\"error\":null,\"exit_code\":null,\"fingerprint\":\"f833df98547046767e0e9ed1ca2a0edd2aca3c18b2bda902b1e642c96ba59c6b\",\"finished_at\":null,\"holder\":\"audit\",\"id\":\"000001a15c062a2b-384f692b\",\"label\":\"Check managed job retry\",\"output_bytes\":0,\"pid\":628,\"pty\":false,\"request_id\":\"audit-retry-1\",\"signal\":null,\"started_at\":1792545270315,\"state\":\"running\",\"truncated\":false}"
+      }
+    ],
+    "isError": false
+  }
+}

@@ -1,0 +1,21 @@
+{
+  "label": "job-cancel",
+  "client": "audit",
+  "tool": "shell",
+  "args": {
+    "action": "cancel",
+    "job_id": "000001a15c062a2b-384f692b"
+  },
+  "seconds": 0.002,
+  "jsonrpc": "2.0",
+  "id": 7,
+  "result": {
+    "content": [
+      {
+        "type": "text",
+        "text": "{\"id\":\"000001a15c062a2b-384f692b\",\"pid\":628,\"label\":\"Check managed job retry\",\"command\":\"python3\",\"args\":[\"-u\",\"-c\",\"import time; print(\\\"started\\\"); time.sleep(30); print(\\\"finished\\\")\"],\"cwd\":\"/home/agent\",\"holder\":\"audit\",\"state\":\"cancelled\",\"exit_code\":null,\"signal\":9,\"started_at\":1792545270315,\"finished_at\":1792545270325,\"error\":null,\"output_bytes\":8,\"truncated\":false,\"pty\":false,\"request_id\":\"audit-retry-1\",\"fingerprint\":\"f833df98547046767e0e9ed1ca2a0edd2aca3c18b2bda902b1e642c96ba59c6b\"}"
+      }
+    ],
+    "isError": false
+  }
+}

@@ -1,0 +1,21 @@
+{
+  "label": "lease-named-a",
+  "client": "named-a",
+  "tool": "state",
+  "args": {
+    "action": "control",
+    "duration": 30
+  },
+  "seconds": 0.0,
+  "jsonrpc": "2.0",
+  "id": 3,
+  "result": {
+    "content": [
+      {
+        "type": "text",
+        "text": "{\"duration_s\":30,\"expires_at\":1792545319,\"granted\":true,\"holder\":\"named-a\"}"
+      }
+    ],
+    "isError": false
+  }
+}

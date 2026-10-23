@@ -1,0 +1,23 @@
+[0/6] [0s]
+[1/6] Fetching image [0s]
+[2/6] Unpacking image [0s]
+[3/6] Fetching kernel [0s]
+[4/6] Fetching init image [0s]
+[5/6] Unpacking init image [0s]
+[6/6] Starting container [0s]
+[6/6] Starting container [0s]
+hotline-look-011-qa
+{
+  "runtime": "Apple container 1.5.0",
+  "name": "hotline-look-011-qa",
+  "port": 18787,
+  "image": "hotline-computer:look-0.11",
+  "run_to_health_seconds": 2.076,
+  "memory_limit_bytes": 4294967296,
+  "shm_bytes": 1073741824,
+  "capabilities": "all dropped",
+  "no_new_privileges": "prctl before boot",
+  "process_limit": "RLIMIT_NPROC=1024 per uid, not a cgroup PID limit",
+  "host_mounts": [],
+  "published_address": "127.0.0.1"
+}

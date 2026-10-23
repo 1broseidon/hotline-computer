@@ -1,0 +1,21 @@
+{
+  "label": "components-stale-result",
+  "client": "audit",
+  "tool": "browser",
+  "args": {
+    "action": "eval",
+    "js": "document.querySelector('output').textContent"
+  },
+  "seconds": 0.002,
+  "jsonrpc": "2.0",
+  "id": 9,
+  "result": {
+    "content": [
+      {
+        "type": "text",
+        "text": "\"DIFFERENT\""
+      }
+    ],
+    "isError": false
+  }
+}

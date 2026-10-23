@@ -2,7 +2,7 @@ use hotline_computer::display::Display;
 use hotline_computer::{App, Config, boot, serve};
 
 fn usage() -> &'static str {
-    "Usage: hotline-computer <boot|serve> [--addr ADDRESS] [--token TOKEN] [--home PATH] [--display DISPLAY] [--screen WIDTHxHEIGHT]\n\n  boot   start the display, the session bus and the desktop, then serve; the container entrypoint\n  serve  serve on a display that already exists\n\nAt the person's terminal:\n  hotline-computer prepare [--workspace DIR] [--packages NAME... | --flake DIR]\n  hotline-computer packages   common Nixpkgs names to choose from\n  hotline-computer open DIR   a fresh terminal in that folder; what the browser's Show in folder does"
+    "Usage: hotline-computer <boot|serve> [--addr ADDRESS] [--token TOKEN] [--home PATH] [--display DISPLAY] [--screen WIDTHxHEIGHT]\n\n  boot   start the display, the session bus and the desktop, then serve; the container entrypoint\n  serve  serve on a display that already exists\n\nAt the person's terminal:\n  hotline-computer prepare [--workspace DIR] [--packages NAME... | --flake DIR]\n  hotline-computer activity   the recent activity display\n  hotline-computer packages   common Nixpkgs names to choose from\n  hotline-computer open DIR   a fresh terminal in that folder; what the browser's Show in folder does"
 }
 
 enum Command {
@@ -41,6 +41,18 @@ fn parse() -> Result<(Command, Config), String> {
 
 fn main() {
     let arguments: Vec<_> = std::env::args().skip(1).collect();
+    // Chromium starts the extension's native messaging host with the
+    // extension's origin as its first argument.
+    if arguments
+        .first()
+        .is_some_and(|first| first.starts_with("chrome-extension://"))
+    {
+        if let Err(error) = hotline_computer::bridge::relay() {
+            eprintln!("{error}");
+            std::process::exit(1);
+        }
+        return;
+    }
     if matches!(arguments.first().map(String::as_str), Some("--version")) {
         println!("hotline-computer {}", env!("CARGO_PKG_VERSION"));
         return;
@@ -51,12 +63,20 @@ fn main() {
         println!("{}", usage());
         return;
     }
-    if arguments.first().map(String::as_str) == Some("observe") {
+    if matches!(
+        arguments.first().map(String::as_str),
+        Some("observe" | "activity")
+    ) {
         let home = arguments
             .get(1)
             .map(std::path::PathBuf::from)
             .unwrap_or_else(|| Config::from_env().home);
-        if let Err(error) = hotline_computer::observer::run(&home) {
+        let run = if arguments[0] == "activity" {
+            hotline_computer::activity::run
+        } else {
+            hotline_computer::observer::run
+        };
+        if let Err(error) = run(&home) {
             eprintln!("{error}");
             std::process::exit(1);
         }
@@ -82,7 +102,11 @@ fn main() {
         let opened = if hotline_computer::links::is_link(target) {
             hotline_computer::links::send(target)
         } else {
-            hotline_computer::observer::open(&Config::from_env().home, std::path::Path::new(target))
+            // A folder opens in the file manager; with no service to answer,
+            // the person's terminal in that folder still does.
+            let target = std::path::Path::new(target);
+            hotline_computer::files_ui::open_folder(target)
+                .or_else(|_| hotline_computer::observer::open(&Config::from_env().home, target))
         };
         if let Err(error) = opened {
             eprintln!("{error}");

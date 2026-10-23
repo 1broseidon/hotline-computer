@@ -1,0 +1,20 @@
+{
+  "label": "before-browser-close",
+  "client": "audit",
+  "tool": "windows",
+  "args": {
+    "action": "list"
+  },
+  "seconds": 0.002,
+  "jsonrpc": "2.0",
+  "id": 3,
+  "result": {
+    "content": [
+      {
+        "type": "text",
+        "text": "[{\"id\":\"0x01000003\",\"title\":\"Observer\",\"class\":\"HotlineTerminal.HotlineTerminal\",\"bounds\":[1280,36,640,1044],\"focused\":false,\"pid\":43,\"maximized\":false,\"minimum_size\":[1,1]},{\"id\":\"0x01a00002\",\"title\":\"Long page - Chromium\",\"class\":\"chromium (/home/agent/.hotline/browser).Chromium\",\"bounds\":[0,36,1920,1044],\"focused\":true,\"pid\":65,\"maximized\":true,\"minimum_size\":[500,87]},{\"id\":\"0x02200003\",\"title\":\"Native audit app\",\"class\":\"python3.Python3\",\"bounds\":[0,36,1280,1044],\"focused\":false,\"pid\":644,\"maximized\":false,\"minimum_size\":[168,184]}]"
+      }
+    ],
+    "isError": false
+  }
+}

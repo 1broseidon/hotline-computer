@@ -1,0 +1,21 @@
+{
+  "label": "browser-close",
+  "client": "audit",
+  "tool": "windows",
+  "args": {
+    "action": "close",
+    "window_id": "0x01a00002"
+  },
+  "seconds": 0.044,
+  "jsonrpc": "2.0",
+  "id": 4,
+  "result": {
+    "content": [
+      {
+        "type": "text",
+        "text": "{\"action\":\"close\",\"ok\":true,\"window_id\":\"0x01a00002\",\"windows\":[{\"bounds\":[1280,36,640,1044],\"class\":\"HotlineTerminal.HotlineTerminal\",\"focused\":false,\"id\":\"0x01000003\",\"maximized\":false,\"minimum_size\":[1,1],\"pid\":43,\"title\":\"Observer\"},{\"bounds\":[0,36,1280,1044],\"class\":\"python3.Python3\",\"focused\":true,\"id\":\"0x02200003\",\"maximized\":false,\"minimum_size\":[168,184],\"pid\":644,\"title\":\"Native audit app\"}]}"
+      }
+    ],
+    "isError": false
+  }
+}

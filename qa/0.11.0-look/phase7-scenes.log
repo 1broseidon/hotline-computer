@@ -1,0 +1,24 @@
+{
+  "retention and payload exclusion": "passed: 500 entries; rejected call retained without its payload",
+  "60/40 and shell placement": {
+    "hotlineterminal": [
+      1280,
+      56,
+      624,
+      393
+    ],
+    "hotlineactivity": [
+      1280,
+      465,
+      624,
+      263
+    ],
+    "hotlineshell": [
+      1280,
+      744,
+      624,
+      320
+    ]
+  },
+  "close restores observer": "passed"
+}

@@ -30,6 +30,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     # The Secret Service native apps keep passwords in, unlocked from boot,
     # and the tool that reads it from a shell.
     gnome-keyring libsecret-tools \
+    # The desktop portal, so an app's file dialog is the computer's own picker.
+    xdg-desktop-portal \
     # What AppImage tooling never bundles because every desktop is assumed
     # to have it (the AppImage exclude list), beyond glibc, Mesa and GTK above.
     libgpg-error0 libopengl0 libxcb-dri2-0 libjack-jackd2-0 libpipewire-0.3-0 libusb-1.0-0 \
@@ -61,11 +63,21 @@ COPY assets/chromium-policy.json /etc/chromium/policies/managed/hotline.json
 # Nix's fontconfig reads /etc/fonts/conf.d but not Debian's font directory, so
 # apps from a workspace see the image's fonts only through this.
 COPY assets/fonts-system.conf /etc/fonts/conf.d/05-hotline-system-fonts.conf
+COPY assets/fonts-hotline.conf /etc/fonts/conf.d/10-hotline-defaults.conf
+COPY assets/fonts/*.ttf /usr/share/fonts/truetype/hotline/
+RUN fc-cache -f
 COPY assets/bashrc /etc/bash.bashrc
 # "Show in folder" in the browser, and xdg-open on a folder, open the
-# person's terminal there. xdg-open on a web address opens it as a tab of the
-# managed browser.
+# computer's file manager there. xdg-open on a web address opens it as a tab
+# of the managed browser.
 COPY assets/hotline-open-folder.desktop assets/hotline-open-link.desktop assets/mimeapps.list /usr/share/applications/
+# File choosers go to the computer's own picker; see src/portal.rs.
+COPY assets/hotline.portal /usr/share/xdg-desktop-portal/portals/hotline.portal
+COPY assets/portals.conf /etc/xdg/xdg-desktop-portal/portals.conf
+# The browser extension that answers passkey requests, and its line to the
+# service; see src/bridge.rs.
+COPY assets/extension /usr/share/hotline-computer/extension
+COPY assets/native-host.json /etc/chromium/native-messaging-hosts/dev.hotline.computer.json
 COPY --from=build /usr/local/bin/hotline-computer /usr/bin/hotline-computer
 USER agent
 WORKDIR /home/agent
@@ -84,6 +96,7 @@ ENV HOTLINE_COMPUTER_ADDR=0.0.0.0:8787 \
     ELECTRON_DISABLE_SANDBOX=1 \
     GDK_BACKEND=x11 \
     APPIMAGE_EXTRACT_AND_RUN=1 \
+    GTK_USE_PORTAL=1 \
     BROWSER="hotline-computer open" \
     SHELL=/bin/bash
 RUN install -d /home/agent/src && nix-store --init

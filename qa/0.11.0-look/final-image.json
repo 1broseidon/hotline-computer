@@ -1,0 +1,6 @@
+{
+  "digest": "3343ee8a7b0eec3801200c7596fdb9e4b612a64ecb5ae561b2ef54052d69365c",
+  "arm64_compressed_bytes": 748936728,
+  "source_commit": "889cf3e",
+  "runtime": "Apple container 1.5.0"
+}

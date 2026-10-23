@@ -201,6 +201,11 @@ fn machine(config: Config, width: u16, height: u16) -> Result<(), String> {
                                 eprintln!("hotline-computer: terminal: {error}");
                             }
                         }
+                        desktop::Request::OpenActivity => {
+                            if let Err(error) = app.observer.open_activity().await {
+                                eprintln!("hotline-computer: activity: {error}");
+                            }
+                        }
                         desktop::Request::OpenShell => {
                             if let Err(error) = app.observer.open_shell().await {
                                 eprintln!("hotline-computer: shell: {error}");

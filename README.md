@@ -76,29 +76,30 @@ stop — at once when they give it back or close the page.
 
 `/health` and the viewer page never require authentication. When
 `HOTLINE_COMPUTER_TOKEN` is set, every method on `/mcp` and the desk's
-`/secrets`, `/passkeys/registration` (with its `/answer`) and `/logins/{name}` doors require `Authorization: Bearer <token>`, the viewer's socket
+`/secrets`, `/passkeys/registration` (with its `/answer`), `/logins/{name}` and `/pages` doors require `Authorization: Bearer <token>`, the viewer's socket
 and its `/files` routes
 require the same token as their `token` query, and otherwise all return a JSON 401. `X-Computer-Holder` names the teammate using a lease or
 run slot; an absent header means `anonymous`.
 
 ## The desktop
 
-The top bar is three answers. On the left, the Hotline mark opens a menu, and
-each row's initial picks it while the menu is open: **B** the browser
-(opened, or focused if open), **T** a terminal of the person's own, **O** the
-observer of the teammate's jobs, **A** an About card (version, channel,
-revision, architecture, nixpkgs revision, uptime); Escape closes it. In the middle, every open window is a pill with its own icon and title;
-click one to focus it, right-click to close it. On the right, a jobs chip
-(`no jobs`, `2 running · 5 done`, `1 failed · 2 running`) that drops the
-jobs list from under itself, a lease chip that reads `agent at work`, `agent in control` or
-`person in control`, an XEmbed application tray that appears when an app
-uses it, and a clock in the host's zone (`TZ`, which Hotline passes; UTC
-otherwise). Everything on the bar is published as `_HOTLINE_BAR_LAYOUT` on the
-root window, so tests find its parts by rectangle rather than by pixel.
-Normal apps occupy the work area below the bar. The observer opens in the
-right third of the screen, and the app being watched keeps the left two
-thirds; `windows tile` uses the same split. The person's terminal opens in
-the bottom third of that column, under an 8 px line, so it never covers
+The 40px top bar starts with the Hotline mark and the agent's identity and
+current job. `HOTLINE_COMPUTER_AGENT` names the agent; otherwise the latest
+named MCP holder does. The mark opens a menu: **B** the browser, **T** a shell
+of your own, **O** the agent's job observer, **V** recent activity, **A** About; Escape closes it.
+Window pills show each app's icon and title; click to focus, right-click to
+close. The right side shows the stored-secret count when nonzero, jobs
+(`no jobs · 0 done`, `2 running · 5 done`, `1 failed · 2 running`), and
+`agent at work`, `agent idle` or amber `you're driving`. The jobs chip opens
+the job list. An XEmbed tray appears when used, followed by the clock in
+`TZ` (UTC otherwise). `_HOTLINE_BAR_LAYOUT` publishes every rectangle,
+including `agent` and `sealed`, for tools and tests.
+
+Normal apps occupy the work area inside 16px gutters, with a painted ring
+and subtle shadow. `HOTLINE_COMPUTER_GUTTER=0` restores edge-to-edge layout.
+The observer and Activity use the right third, split 60/40 when both are open; `windows tile`
+reserves the same gap. The person's terminal takes the bottom third of
+that column with a 16px gap, so it never covers
 the app on the left: an interactive bash in the mounted workspace with the
 environment the teammate prepared there, for signing in to something or
 unblocking a stuck step. It is the system's bash with Hotline's own rc file,
@@ -111,6 +112,11 @@ the way the teammate's job would, and `hotline-computer packages` lists common
 Nixpkgs names to choose from. What the person installs for themselves runs
 by name: `~/.local/bin`, `~/go/bin` and `~/.cargo/bin` lead the shell's PATH.
 The computer has no file manager; a folder opens as a fresh terminal in it.
+
+`hotline-computer activity` displays the newest 500 completed tool calls from
+`~/.hotline/activity.jsonl`, with short redacted targets and success markers.
+It omits typed text, scripts, file contents and command lines. The file lives
+in the agent's home and the agent can edit it: display only, not an audit log.
 The browser's **Show in folder**, `xdg-open` on a folder, and
 `hotline-computer open DIR` all do that, through the image's desktop entry for
 `inode/directory`, titled with the folder (`~/Downloads`).
@@ -131,8 +137,12 @@ restart, unfinished jobs become `interrupted`; they are not resumed.
 The viewer's control bar sits at the foot of the page. Watching, it reads the
 machine's state (whose it is, how many jobs, how many failed) beside **Take
 control**; if another person holds the screen the button waits. Driving, it
-shows **Paste** and **Give it back** and fades while the pointer is still, so
-it never sits over the screen being driven. Ctrl+V, Ctrl+C and the rest
+shows amber **You're driving**, **Paste** and **Give it back**. Watching shows
+the agent name, job counts and measured ping latency; ten seconds without a
+pong shows **stalled**. The fitted screen reserves space for the 48px control
+bar. **1:1** shows native pixels; Settings also offers this and Fullscreen.
+On macOS, Settings defaults **Cmd as Ctrl** on. Ctrl+Alt+Shift gives control
+back, and focused driving shows **keys → computer**. Ctrl+V, Ctrl+C and the rest
 reach the machine as keys, so its apps use their own clipboard. Text from
 the viewer's computer comes in on Ctrl+Alt+V (⌥⌘V on a Mac) or the
 **Paste** button, as plain text, only while that viewer owns control. A
@@ -147,9 +157,11 @@ page's browser. Behind it, `GET /files?path=` lists a folder as JSON
 `GET /files/download?path=` streams a file as an attachment; both take the
 token as a query like `/ws`, an empty path means the home, and both stop at
 the home like the `files` tool. A file from the viewer's computer goes the
-other way with the panel's **+** button or a drop onto the panel: it lands
+other way with the panel's **Add files** button or a drop anywhere on the page: it lands
 where the panel is looking, through `POST /files?path=` with the file as
-the body, written whole or not at all, under the home only. Inside the
+the body, written whole or not at all, under the home only. Uploads show
+progress and use `create_only=true`; an existing name is replaced only after
+the person confirms **Replace {name}?**. File rows show modification dates. Inside the
 computer, the managed Chromium lists a folder at `file:///home/agent/`.
 
 Desk clients can request `POST /files?path=...&create_only=true` to publish an
@@ -286,9 +298,13 @@ has a kind that says where it goes:
   which page is the whole protection.
 - A **passkey** (`{"kind":"passkey","rpId":…,"credentialId":…,
   "privateKey":…,"userHandle":…,"userName":…}`) is the teammate's own
-  WebAuthn credential, kept in a virtual authenticator on every tab of the
-  managed browser. It signs in by itself when a site asks the browser for
-  one, without a prompt; nothing types it and no tool answers it.
+  WebAuthn credential. The browser's pinned Hotline extension takes every
+  passkey request a page makes, with the page's origin, and the computer's
+  service signs it; the private key never enters the browser. It signs in
+  by itself when a site asks for one, without a prompt; nothing types it
+  and no tool answers it. A site's passkey autofill is never answered:
+  with the extension as its WebAuthn proxy, Chromium offers none, so it
+  cannot race the passkey button.
 
 One bad entry refuses the whole set with a 400 that names it, keeping the
 last set. Nothing answers a value: there is no `GET`, `state info` lists
@@ -308,32 +324,43 @@ The desk arms this computer for one site with `PUT /passkeys/registration
 {"rpId":"github.com"}` — for ten minutes, one site at a time, answering
 `{"state":"armed","rpId":…,"expiresAt":…}` and starting the browser on
 that site if none is up. While armed, and for that site alone, a call to
-`navigator.credentials.create()` in the managed browser is not answered by
-the browser: a guard installed in every document of every tab that carries
-passkeys parks it and keeps what the site asked for — the site, the
-origin, the account's name and display name — and the next look (every
-action, every poll) records it as the request before the person.
-`GET /passkeys/registration` then answers `asked` with that `ask` (`id`,
-`rpId`, `origin`, `rpName`, `userName`, `userDisplayName`, `askedAt`); the
-desk shows the person a card and carries their answer back with
+`navigator.credentials.create()` in the managed browser waits: the
+extension carries it to the service, which records what the site asked
+for — the site, the origin, the account's name and display name — as the
+request before the person. `GET /passkeys/registration` then answers
+`asked` with that `ask` (`id`, `rpId`, `origin`, `rpName`, `userName`,
+`userDisplayName`, `askedAt`); the desk shows the person a card and
+carries their answer back with
 `POST /passkeys/registration/answer {"id":…,"approved":true}`. Approved,
-the page is told to go ahead, the tab's virtual authenticator mints, and
-`GET` answers `approved` and then `registered` with the minted
-`credential`, until the desk stores it in the vault, delivers the set with
-it, and ends the arming with `DELETE`. Denied, the site gets a
-`NotAllowedError` — as it would from a person cancelling the browser's own
-prompt — and the arming ends with the denial, so neither a site nor a
-teammate can keep asking; an answer to a request that is not waiting is a
-409. The guard rejects `create()` for any other site, or with none armed,
-with a `NotAllowedError` that says so, and holds one request before the
-person at a time. The credential's answer is the one time a private key
-leaves the computer, over the bearer-guarded loopback door the desk
-already uses. A credential the authenticator holds that is neither granted
-nor made under an approved request is removed at the next look, so a
-passkey made outside an arming never survives one, and a revoked passkey
-is gone from every tab as soon as the set without it arrives. DevTools on
-port 9222 inside the container can reach the same authenticators;
-nothing outside the container can.
+the service mints a P-256 key and answers the site, and `GET` answers
+`approved` and then `registered` with the minted `credential`, until the
+desk stores it in the vault, delivers the set with it, and ends the arming
+with `DELETE`. Denied, the site gets a `NotAllowedError` — as it would from
+a person cancelling the browser's own prompt — and the arming ends with the
+denial, so neither a site nor a teammate can keep asking; an answer to a
+request that is not waiting is a 409. A `create()` for any other site, or
+with none armed, is refused with a `NotAllowedError` that says so, and the
+browser holds one request at a time. A site that gives up withdraws its
+request. The credential's answer is the one time a private key leaves the
+computer, over the bearer-guarded loopback door the desk already uses.
+Keys live only in the service, which signs only for the page origin
+Chromium names. The extension's line to it is a socket only this user
+opens; a job runs as this user too, so until jobs and the browser have
+separate identities, that line is a convenience, not a wall.
+`HOTLINE_COMPUTER_PASSKEYS=virtual` keeps the older arrangement: Chromium's
+virtual authenticator, filled over DevTools on port 9222.
+
+`GET /pages`, with the bearer, names the sites the browser has open, so the
+desk can offer the person cookies for them: `{"pages":[{"origin":
+"https://porkbun.com","url":"https://porkbun.com/account","title":…,
+"openedAt":…}]}`, one entry per top-level tab on an `http://` or `https://`
+page, newest first. `openedAt` is the milliseconds since the epoch at which
+the computer first saw the tab, which keeps its time as it moves between
+sites. Chromium's own pages, the extension's, DevTools, a blank tab, frames
+and workers are never listed. The list comes from DevTools' own target list,
+so it never waits on a browser action and never starts a browser: with none
+running it is empty. A computer older than 0.11.0-rc.8 answers 404, which
+tells the desk there is no offer.
 
 `hotline-computer serve` serves on a display that already exists, for running
 the agent outside the container.
@@ -341,7 +368,7 @@ the agent outside the container.
 | variable | default | |
 | --- | --- | --- |
 | `HOTLINE_COMPUTER_ADDR` | `0.0.0.0:8787` | where `/mcp`, `/health`, and the viewer listen |
-| `HOTLINE_COMPUTER_TOKEN` | unset | bearer for `/mcp`, `/secrets`, `/passkeys/registration` (with its `/answer`) and `/logins/{name}`; unset means open |
+| `HOTLINE_COMPUTER_TOKEN` | unset | bearer for `/mcp`, `/secrets`, `/passkeys/registration` (with its `/answer`), `/logins/{name}` and `/pages`; unset means open |
 | `HOTLINE_COMPUTER_HOME` | `/home/agent` | the directory `files` is confined to |
 | `HOTLINE_COMPUTER_SCREEN` | `1920x1080` | the Xvfb screen `boot` creates |
 | `DISPLAY` | `:0` | the display `boot` creates and `serve` uses |

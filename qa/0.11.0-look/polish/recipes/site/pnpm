@@ -1,0 +1,27 @@
+#!/bin/bash
+# A stand-in pnpm for screenshots: plausible output, real exit codes.
+case "$*" in
+  "test")
+    printf '\n> fieldnote@0.4.2 test\n> vitest run\n\n'
+    sleep 0.4
+    printf ' \033[32m✓\033[0m auth/login.spec.ts \033[2m(14)\033[0m\n'
+    printf ' \033[32m✓\033[0m api/session.spec.ts \033[2m(31)\033[0m\n'
+    printf ' \033[32m✓\033[0m ui/settings.spec.ts \033[2m(22)\033[0m\n\n'
+    printf ' Test Files  \033[32m24 passed\033[0m (24)\n      Tests  \033[32m412 passed\033[0m (412)\n   Duration  18.2s\n'
+    ;;
+  "lint")
+    printf '\n> fieldnote@0.4.2 lint\n> eslint src\n\n'
+    printf 'src/auth/session.ts\n  41:9  \033[31merror\033[0m  Unexpected any  @typescript-eslint/no-explicit-any\n\n'
+    printf '\033[31m✖ 1 problem (1 error, 0 warnings)\033[0m\n'
+    exit 1
+    ;;
+  "exec playwright test e2e/login")
+    printf '\nRunning 12 tests using 2 workers\n\n'
+    sleep 0.3
+    printf '  \033[32m✓\033[0m  1 [chromium] › login.spec.ts › redirects when signed out \033[2m(1.2s)\033[0m\n'
+    printf '  \033[32m✓\033[0m  2 [chromium] › login.spec.ts › rejects a wrong password \033[2m(0.9s)\033[0m\n'
+    printf '     3 [chromium] › login.spec.ts › signs in with a sealed secret\n'
+    sleep 900
+    ;;
+  *) echo "pnpm $*"; ;;
+esac

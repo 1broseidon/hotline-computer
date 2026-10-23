@@ -1,0 +1,21 @@
+{
+  "label": "file-get-absolute",
+  "client": "audit",
+  "tool": "files",
+  "args": {
+    "action": "get",
+    "path": "/home/agent/audit/hello.txt"
+  },
+  "seconds": 0.001,
+  "jsonrpc": "2.0",
+  "id": 3,
+  "result": {
+    "content": [
+      {
+        "type": "text",
+        "text": "Hello Zo\u00eb \u5ba1\u6838\n"
+      }
+    ],
+    "isError": false
+  }
+}

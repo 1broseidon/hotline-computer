@@ -1,0 +1,21 @@
+{
+  "label": "native-wait",
+  "client": "audit",
+  "tool": "wait",
+  "args": {
+    "text": "Save native text",
+    "timeout": 5
+  },
+  "seconds": 0.739,
+  "jsonrpc": "2.0",
+  "id": 5,
+  "result": {
+    "content": [
+      {
+        "type": "text",
+        "text": "found \"Save native text\""
+      }
+    ],
+    "isError": false
+  }
+}

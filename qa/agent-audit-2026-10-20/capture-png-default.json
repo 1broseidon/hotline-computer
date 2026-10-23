@@ -1,0 +1,20 @@
+{
+  "label": "capture-png-default",
+  "client": "audit",
+  "tool": "capture",
+  "args": {
+    "mode": "png"
+  },
+  "seconds": 0.154,
+  "jsonrpc": "2.0",
+  "id": 17,
+  "result": {
+    "content": [
+      {
+        "type": "text",
+        "text": "/tmp/hotline-computer-1792545270465.png"
+      }
+    ],
+    "isError": false
+  }
+}

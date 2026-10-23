@@ -288,7 +288,7 @@ def desktop_job_menu(c):
     job = c.call('shell',{'action':'start','command':'sh','args':['-c','echo "A failed job stays inspectable"; exit 7'],'label':'Inspect a completed failure'})
     job = c.call('shell',{'action':'wait','job_id':job['id'],'wait_ms':5000})
     assert job['state']=='failed' and job['exit_code']==7,job
-    assert layout['height']==36 and layout['jobs'][2]>0, layout
+    assert layout['height']==40 and layout['jobs'][2]>0, layout
     jobs_x, jobs_y = centre(layout['jobs'])
     popup = layout['popup']
     def row(index):
@@ -311,7 +311,7 @@ def desktop_job_menu(c):
     c.call('input',{'action':'key','combo':'Escape'})
     c.screenshot('03g-menus-closed.png')
     # T opens the person's own shell: the bottom third of the observer's
-    # column, under a line, so the app on the left is not covered.
+    # column, with a gutter, so the app on the left is not covered.
     c.call('input',{'action':'click','x':mark_x,'y':mark_y})
     c.call('input',{'action':'key','combo':'t'})
     deadline = time.monotonic()+10
@@ -321,11 +321,11 @@ def desktop_job_menu(c):
         time.sleep(.2)
     assert shell, c.call('windows',{'action':'list'})
     x, y, w, h = shell['bounds']
-    assert x == 1280 and w == 640 and y + h == 1080 and h == 340, shell
+    assert x == 1280 and w == 624 and y + h == 1064 and h == 320, shell
     observer = next((w for w in c.call('windows',{'action':'list'}) if 'hotlineterminal' in w['class'].lower()), None)
     if observer:
         ox, oy, ow, oh = observer['bounds']
-        assert ox == 1280 and oy == 36 and oy + oh + 8 == y, (observer, shell)
+        assert ox == 1280 and oy == 56 and oy + oh + 16 == y, (observer, shell)
     c.screenshot('03h-person-shell.png', settle_ms=500)
     c.call('windows',{'action':'close','window_id':shell['id']})
 
@@ -431,11 +431,11 @@ def rootless(c):
 
 def open_folder(c):
     # The browser's "Show in folder" hands a folder to xdg-open; the image
-    # answers with a fresh terminal for the person in that folder.
+    # answers with its own file manager, open on that folder.
     execute(c, 'xdg-open', ['/home/agent/src'], label='Open a folder')
     deadline = time.monotonic()+5
     while True:
-        opened = next((w for w in c.call('windows', {'action': 'list'}) if 'hotlineshell' in w['class'].lower() and w['title'] == '~/src'), None)
+        opened = next((w for w in c.call('windows', {'action': 'list'}) if 'hotlinefiles' in w['class'].lower() and w['title'] == 'Files — src'), None)
         if opened or time.monotonic() > deadline:
             break
         time.sleep(.1)
@@ -813,8 +813,13 @@ def native_controls(c):
         assert len(native)==2,windows
         capture = str(c.call('capture',{}))
         assert 'hidden-native-password' not in capture
-        # Identical titles/PIDs/geometry are intentionally ambiguous until arranged.
-        assert capture.count('no unambiguous application/window match') >= 2, capture
+        # Same title and PID: each window's tree is either its own or marked
+        # ambiguous, never the other window's. (New windows are placed apart,
+        # so geometry usually tells them apart before they are arranged.)
+        for window in native:
+            tree = capture.split('['+window['id']+' ',1)[1].split('\n[0x',1)[0]
+            own, other = ('Primary', 'Secondary') if window['minimum_size'][0]>=640 else ('Secondary', 'Primary')
+            assert ('no unambiguous application/window match' in tree) or (own+' acceptance window' in tree and other+' acceptance window' not in tree), tree
         primary = next(w for w in native if w['minimum_size'][0]>=640)
         secondary = next(w for w in native if w['id']!=primary['id'])
         c.call('windows',{'action':'tile','primary_id':primary['id'],'observer_id':secondary['id']})

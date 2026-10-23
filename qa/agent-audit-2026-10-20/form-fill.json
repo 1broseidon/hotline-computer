@@ -1,0 +1,22 @@
+{
+  "label": "form-fill",
+  "client": "audit",
+  "tool": "browser",
+  "args": {
+    "action": "fill",
+    "ref": "e2",
+    "text": "Zo\u00eb \u5ba1\u6838"
+  },
+  "seconds": 0.057,
+  "jsonrpc": "2.0",
+  "id": 3,
+  "result": {
+    "content": [
+      {
+        "type": "text",
+        "text": "{\"action\":\"fill\",\"ok\":true,\"type\":\"text\",\"valid\":true,\"validation_message\":\"\",\"value\":\"Zo\u00eb \u5ba1\u6838\"}"
+      }
+    ],
+    "isError": false
+  }
+}

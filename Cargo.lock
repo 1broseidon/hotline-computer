@@ -989,7 +989,7 @@ dependencies = [
 
 [[package]]
 name = "hotline-computer"
-version = "0.10.3"
+version = "0.11.0"
 dependencies = [
  "atspi",
  "axum",
@@ -1003,6 +1003,7 @@ dependencies = [
  "libc",
  "png",
  "reqwest",
+ "ring",
  "rmcp",
  "serde",
  "serde_json",
@@ -1013,6 +1014,7 @@ dependencies = [
  "tokio-tungstenite 0.28.0",
  "tokio-util",
  "x11rb",
+ "zbus",
 ]
 
 [[package]]
