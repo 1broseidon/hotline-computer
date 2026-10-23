@@ -431,11 +431,11 @@ def rootless(c):
 
 def open_folder(c):
     # The browser's "Show in folder" hands a folder to xdg-open; the image
-    # answers with a fresh terminal for the person in that folder.
+    # answers with its own file manager, open on that folder.
     execute(c, 'xdg-open', ['/home/agent/src'], label='Open a folder')
     deadline = time.monotonic()+5
     while True:
-        opened = next((w for w in c.call('windows', {'action': 'list'}) if 'hotlineshell' in w['class'].lower() and w['title'] == '~/src'), None)
+        opened = next((w for w in c.call('windows', {'action': 'list'}) if 'hotlinefiles' in w['class'].lower() and w['title'] == 'Files — src'), None)
         if opened or time.monotonic() > deadline:
             break
         time.sleep(.1)
@@ -813,8 +813,13 @@ def native_controls(c):
         assert len(native)==2,windows
         capture = str(c.call('capture',{}))
         assert 'hidden-native-password' not in capture
-        # Identical titles/PIDs/geometry are intentionally ambiguous until arranged.
-        assert capture.count('no unambiguous application/window match') >= 2, capture
+        # Same title and PID: each window's tree is either its own or marked
+        # ambiguous, never the other window's. (New windows are placed apart,
+        # so geometry usually tells them apart before they are arranged.)
+        for window in native:
+            tree = capture.split('['+window['id']+' ',1)[1].split('\n[0x',1)[0]
+            own, other = ('Primary', 'Secondary') if window['minimum_size'][0]>=640 else ('Secondary', 'Primary')
+            assert ('no unambiguous application/window match' in tree) or (own+' acceptance window' in tree and other+' acceptance window' not in tree), tree
         primary = next(w for w in native if w['minimum_size'][0]>=640)
         secondary = next(w for w in native if w['id']!=primary['id'])
         c.call('windows',{'action':'tile','primary_id':primary['id'],'observer_id':secondary['id']})
