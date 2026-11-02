@@ -7,7 +7,7 @@ name: Deploy Docs
 on:
   push:
     branches: [main]
-    paths: ['MANUAL.md', 'CHANGELOG.md', 'LICENSE', 'docs/screens/**', 'site/**', '.github/workflows/docs.yml']
+    paths: ['MANUAL.md', 'CHANGELOG.md', 'LICENSE', 'docs/screens/**', 'guides/**', 'site/**', '.github/workflows/docs.yml']
   release:
     types: [published]
   workflow_dispatch:

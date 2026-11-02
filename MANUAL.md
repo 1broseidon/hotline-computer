@@ -264,5 +264,8 @@ Hotline Computer is the desktop each teammate gets in
 container per teammate and gives it the token; everything on this page works
 without it.
 
-The full protocol for the viewer, secrets, passkeys and the desk's routes is in
-the [README](https://github.com/1broseidon/hotline-computer#readme).
+The guides go further: the [viewer](/guides/viewer/) and its protocol, the
+[desktop](/guides/desktop/), [workspaces](/guides/workspaces/),
+[secrets](/guides/secrets/), [passkeys](/guides/passkeys/), every
+[HTTP route](/guides/routes/), the [contract](/guides/contract/) and
+[building](/guides/building/) from source.
