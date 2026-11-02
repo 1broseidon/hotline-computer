@@ -1,7 +1,8 @@
 ---
 title: Viewer
-description: The page that shows the computer's screen live, how taking control works, and the socket and file routes behind it.
+description: Watch it live, take control, and move files.
 cluster: Using it
+section: viewer
 reviewed: 2026-11-02
 ---
 
@@ -25,12 +26,18 @@ a pong shows **stalled**. While you drive it shows amber **You're driving**,
 
 ## Keys
 
-Ctrl+V, Ctrl+C and the rest reach the machine as keys, so its apps use their
-own clipboard. Text from your own computer comes in with Ctrl+Alt+V (⌥⌘V on a
-Mac) or the **Paste** button, as plain text, up to 1 MiB, and only while your
-viewer holds control; a stale viewer cannot paste over a newer one.
-Ctrl+Alt+Shift gives control back. On macOS, Settings turns **Cmd as Ctrl** on
-by default. **1:1** shows native pixels; Settings also offers Fullscreen.
+Keys reach the machine as keys, so its apps use their own clipboard.
+
+| Keys | Does |
+| --- | --- |
+| <kbd>Ctrl</kbd> <kbd>V</kbd>, <kbd>Ctrl</kbd> <kbd>C</kbd> | Paste and copy inside the computer, with its own clipboard |
+| <kbd>Ctrl</kbd> <kbd>Alt</kbd> <kbd>V</kbd> | Paste text from your own computer, up to 1 MiB (<kbd>⌥</kbd> <kbd>⌘</kbd> <kbd>V</kbd> on a Mac) |
+| <kbd>Ctrl</kbd> <kbd>Alt</kbd> <kbd>Shift</kbd> | Give control back |
+
+Pasting from your computer works only while your viewer holds control, and a
+stale viewer cannot paste over a newer one. On macOS, Settings turns **Cmd as
+Ctrl** on by default. **1:1** shows native pixels; Settings also offers
+Fullscreen.
 
 ## Files
 

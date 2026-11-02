@@ -265,8 +265,5 @@ Hotline Computer is the desktop each teammate gets in
 container per teammate and gives it the token; everything on this page works
 without it.
 
-The guides go further: the [viewer](/guides/viewer/) and its protocol, the
-[desktop](/guides/desktop/), [workspaces](/guides/workspaces/),
-[secrets](/guides/secrets/), [passkeys](/guides/passkeys/), every
-[HTTP route](/guides/routes/), the [contract](/guides/contract/) and
-[building](/guides/building/) from source.
+The [guides](/guides/) go further, one subject each, and the sections above link
+the ones that go deeper on them.

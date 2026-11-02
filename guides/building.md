@@ -1,6 +1,6 @@
 ---
 title: Building
-description: Building the image from source, the checks a change has to pass, and where each part of the code lives.
+description: Build the image, pass the checks, find the code.
 cluster: Development
 reviewed: 2026-11-02
 ---

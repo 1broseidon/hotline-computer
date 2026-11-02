@@ -1,7 +1,8 @@
 ---
 title: Workspaces
-description: How a project's toolchain gets onto the computer with Nix, where it is kept, and why there is no apt or sudo.
+description: Toolchains with Nix, kept per project.
 cluster: Using it
+section: workspaces
 reviewed: 2026-11-02
 ---
 

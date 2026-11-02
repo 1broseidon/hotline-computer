@@ -1,7 +1,8 @@
 ---
 title: Desktop
-description: What is on the computer's screen: the top bar, where windows go, the job observer, the Activity window and a terminal of your own.
+description: What's on the screen and where it goes.
 cluster: Using it
+section: viewer
 reviewed: 2026-11-02
 ---
 
