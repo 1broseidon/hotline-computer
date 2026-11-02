@@ -1,14 +1,42 @@
-# hotline.computer
+# Hotline Computer
 
-A small Linux desktop for a coding agent. One container is one machine: a
-display, a browser, a shell, a home directory, and one MCP server that lets
-an agent see the screen, act on it, and check what happened. Hotline starts one
-per teammate; anything else that speaks MCP can point at it too.
+**Your coding agent's own Linux desktop.** A rootless container on your
+machine with a screen, a browser and a shell. Claude Code, Codex or any MCP
+client drives it; you watch from your browser and take the mouse when it needs
+you.
+
+![The computer's desktop: Chromium on the left showing a site served at 127.0.0.1:4321, the job log on the right, and the top bar reading agent at work, 2 running, 43 done.](docs/screens/desk.webp)
+
+```sh
+export TOKEN=$(openssl rand -hex 24)
+docker run -d --name computer \
+  --cap-drop=ALL --security-opt no-new-privileges \
+  --pids-limit 1024 --memory 4g --shm-size 1g \
+  -p 127.0.0.1:8787:8787 -e HOTLINE_COMPUTER_TOKEN="$TOKEN" \
+  -v computer-home:/home/agent \
+  ghcr.io/1broseidon/hotline-computer:0.11.0
+
+claude mcp add --transport http computer http://127.0.0.1:8787/mcp \
+  --header "Authorization: Bearer $TOKEN"
+
+open "http://127.0.0.1:8787/#$TOKEN"   # watch it work
+```
+
+The manual is at **[computer.hotline.dev](https://computer.hotline.dev)**: the
+eight tools, the viewer, workspaces, and what the security model holds and
+where it has gaps. What follows here is the reference.
+
+## Contract
+
+One container is one machine: a display, a browser, a shell, a home
+directory, and one MCP server that lets an agent see the screen, act on it,
+and check what happened. Hotline starts one per teammate; anything else that
+speaks MCP can point at it too.
 
 The image is a contract, not a binary. Anything that serves these eight tools
 over streamable HTTP at `/mcp`, with `/health` open, is a valid computer.
 
-## What is in the box
+## Contents
 
 ```
 hotline-computer  PID 1, supervisor, window manager, bar, MCP server
@@ -35,7 +63,7 @@ and GPU-backed terminal emulators use llvmpipe when no hardware GPU exists.
 
 The agent sends input through XTEST and owns the CLIPBOARD selection directly.
 
-## The viewer
+## Viewer
 
 The machine serves its own screen. `/` is a page with one canvas; `/ws` is
 the socket behind it. Frames go down as binary messages, six little-endian
@@ -63,7 +91,7 @@ a unique viewer holder for ten seconds at a time, so the teammate's mutating too
 refused while someone is driving and the desktop hands itself back when they
 stop — at once when they give it back or close the page.
 
-## The tools
+## Tools
 
 - `capture` returns a scaled PNG and the AT-SPI tree, or writes an original PNG.
 - `input` clicks, moves, drags, scrolls, types, presses keys, and uses the clipboard.
@@ -81,7 +109,7 @@ and its `/files` routes
 require the same token as their `token` query, and otherwise all return a JSON 401. `X-Computer-Holder` names the teammate using a lease or
 run slot; an absent header means `anonymous`.
 
-## The desktop
+## Desktop
 
 The 40px top bar starts with the Hotline mark and the agent's identity and
 current job. `HOTLINE_COMPUTER_AGENT` names the agent; otherwise the latest
@@ -173,7 +201,7 @@ removed on a failed body or handler cancellation. Callers that omit `create_only
 retain the existing replace-on-finish behavior. Both modes require the same bearer
 and home-path checks; publication already dispatched is not rolled back on close.
 
-## Workspaces and the release guide
+## Workspaces
 
 Start an agent session with `state info` and `state guide`. The returned skill
 and SHA-256 come from the actual running binary, so any MCP client receives
@@ -373,7 +401,7 @@ the agent outside the container.
 | `HOTLINE_COMPUTER_SCREEN` | `1920x1080` | the Xvfb screen `boot` creates |
 | `DISPLAY` | `:0` | the display `boot` creates and `serve` uses |
 
-## Build and run
+## Building
 
 ```sh
 make image                # docker build -t hotline-computer:next .
