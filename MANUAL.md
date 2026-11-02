@@ -79,8 +79,11 @@ Every flag is there on purpose:
 | `-e HOTLINE_COMPUTER_TOKEN` | Without a token, every route is open |
 | `-v computer-home:/home/agent` | The home survives an upgrade or a recreate |
 
-To share a project, add `-v "$PWD:/home/agent/workspace"`. Mount the project,
-never your whole home and never the container runtime's socket.
+To share a project, add `-v "$PWD:/home/agent/workspace"`.
+
+> [!WARNING]
+> Mount the project, never your whole home and never the container runtime's
+> socket.
 
 ## Quickstart
 
@@ -199,6 +202,7 @@ all live in the home, so they survive an upgrade when the home is a volume.
 
 ## Security
 
+> [!IMPORTANT]
 > The container is the boundary. Inside it, the agent can do anything the
 > container's user can do.
 
