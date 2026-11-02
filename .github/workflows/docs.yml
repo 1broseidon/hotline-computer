@@ -35,6 +35,8 @@ jobs:
           cache-dependency-path: site/package-lock.json
       - name: Install
         run: cd site && npm ci
+      - name: Check
+        run: cd site && npx inkcap check
       - name: Build
         run: cd site && npm run build
         env:

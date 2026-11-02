@@ -7,6 +7,7 @@ export default {
   tagline: 'a Linux desktop for coding agents, over MCP',
   built: 'Built in Rust, one container image',
   clusters: ['Using it', 'Security', 'Reference', 'Development'],
+  host: 'github',
   /* Hotline's mint, the desk's and the phone's accent. */
   accent: {
     light: { accent: '#187552', soft: '#DDF5E9' },
