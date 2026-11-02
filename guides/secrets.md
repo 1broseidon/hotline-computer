@@ -1,7 +1,8 @@
 ---
 title: Secrets
-description: How the computer holds your secrets by name, where each kind goes, what redaction does, and what it does not stop.
+description: Where each secret goes, and what redaction stops.
 cluster: Security
+section: security
 reviewed: 2026-11-02
 ---
 

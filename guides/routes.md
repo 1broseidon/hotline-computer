@@ -1,7 +1,8 @@
 ---
 title: HTTP routes
-description: Every route the computer serves, which ones need the token, and the settings that change where and how it listens.
+description: Every route, its token, and the settings.
 cluster: Reference
+section: configuration
 reviewed: 2026-11-02
 ---
 

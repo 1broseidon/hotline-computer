@@ -1,7 +1,8 @@
 ---
 title: Contract
-description: What makes something a valid computer, what is inside the image, and how it starts.
+description: What a valid computer is, and what's inside.
 cluster: Reference
+section: overview
 reviewed: 2026-11-02
 ---
 

@@ -1,7 +1,8 @@
 ---
 title: Passkeys
-description: How a passkey is made for the agent with your approval, how it signs in, and where its private key lives.
+description: Made with your approval, kept in the service.
 cluster: Security
+section: security
 reviewed: 2026-11-02
 ---
 
