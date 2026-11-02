@@ -1,12 +1,9 @@
 # Hotline Computer
 
 A Linux desktop for your coding agent, in a rootless container on your machine.
-It has a screen, a browser, a shell and a home directory, and one MCP server
-that lets the agent see the screen, act on it and check what happened.
 
-Claude Code, Codex, ChatGPT desktop or any client that speaks MCP over HTTP can
-drive it. You watch the same desktop from your browser and take the mouse when
-it needs you.
+Any MCP client drives it with eight tools. You watch from your browser and take
+the mouse when it needs you.
 
 ![The computer's desktop: Chromium on the left showing a site served at 127.0.0.1:4321, the job log on the right with two jobs finished and one running, and the top bar reading agent at work, 2 running, 43 done.](docs/screens/desk.webp "Claude serving a site on its own computer, every job it ran logged on the right. 1920 by 1080.")
 
