@@ -12,12 +12,13 @@ opens watch-only, so watching never interrupts the agent.
 
 ## Control
 
-The page opens view-only, with **Take control** at the foot of the screen.
-Until that is pressed the socket shows the desktop and moves nothing. From
-then on your input holds the machine for ten seconds at a time: the agent's
-tools that change the screen are refused while you drive, and the desktop
-hands itself back when you stop, or at once when you press **Give it back**
-or close the page. If another person holds the screen, the button waits.
+The viewer opens in view-only mode, with **Take control** at the bottom of the
+screen. Mouse and keyboard input are disabled until you press it. Each input
+then renews your control for ten seconds. While you have control, the agent's
+tools that change the screen are rejected. Control returns to the agent after
+ten seconds without input, or immediately when you press **Give it back** or
+close the viewer. If another person has control, you must wait for them to
+release it.
 
 The control bar at the foot reads the machine's state while you watch: the
 agent's name, job counts, failures and the measured ping. Ten seconds without
@@ -26,7 +27,8 @@ a pong shows **stalled**. While you drive it shows amber **You're driving**,
 
 ## Keys
 
-Keys reach the machine as keys, so its apps use their own clipboard.
+Copy and paste shortcuts use the container's clipboard. To paste text from your
+own computer, use the shortcut listed below.
 
 | Keys | Does |
 | --- | --- |
@@ -41,11 +43,12 @@ Fullscreen.
 
 ## Files
 
-**Files** opens a panel over the screen with the home and what is under it.
-A folder opens, the arrow goes up as far as the home, and a file downloads to
-your own computer. **Add files**, or a drop anywhere on the page, uploads to
-the folder the panel is showing, whole or not at all. An existing name is
-replaced only after you confirm **Replace {name}?**.
+**Files** opens the container's home directory. Click a folder to open it, the
+up arrow to open its parent, or a file to download it. Navigation is limited to
+the home directory and its contents. Use **Add files** or drop files onto the
+page to upload them to the displayed folder. Each upload is atomic: the complete
+file is saved, or the upload leaves no partial file. Replacing an existing file
+requires confirmation through **Replace {name}?**.
 
 Behind the panel:
 
@@ -64,13 +67,15 @@ older computer.
 
 ## Protocol
 
-`/` is a page with one canvas, and `/ws` is the socket behind it. Frames go
-down as binary messages: six little-endian `u16` (x, y, width, height, screen
-width, screen height) followed by a PNG of that rectangle. X DAMAGE decides
-which rectangles, at most twenty a second, and an idle desktop sends nothing.
-A viewer that joins or falls behind gets the whole screen next.
+`/` is a page with one canvas, and `/ws` is the socket behind it. The server
+sends frames to the viewer as binary messages: six little-endian `u16` values
+(x, y, width, height, screen width, screen height), followed by a PNG of that
+rectangle. X DAMAGE identifies changed rectangles, with at most twenty sent per
+second. An idle desktop sends no frames. A viewer that connects or falls behind
+receives a full-screen update.
 
-Input comes up as JSON and reaches the X server through XTEST:
+The viewer sends input as JSON. The server passes it to the X server through
+XTEST:
 
 ```json
 {"t":"control","take":true}
@@ -80,6 +85,8 @@ Input comes up as JSON and reaches the X server through XTEST:
 {"t":"key","key":"Enter","down":true}
 ```
 
-The socket takes the bearer as a `token` query, because a browser cannot send
-a header on a WebSocket. The page reads it from the URL fragment, which never
-leaves the browser.
+The WebSocket connection supplies the bearer token in the `token` query
+parameter because the browser's WebSocket API does not support a custom
+`Authorization` header. The viewer reads the token from the URL fragment, which
+is omitted from the initial page request. It then sends the token in the query
+parameters of its WebSocket and file requests.

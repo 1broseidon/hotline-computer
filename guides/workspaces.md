@@ -45,11 +45,11 @@ revision across Computer upgrades. Shared caches live under
 `~/.cache/hotline/environments`, keyed by recipe and architecture rather
 than by Computer version.
 
-The image keeps nothing of its own in the home: its terminal configuration,
-bash rc and Chromium policy live under `/etc`. So a home on a volume carries
-the prepared environments, their cache, the jobs and their output, the shell
-history and the browser profile across a recreate, for an upgrade or a
-restart.
+The image's terminal configuration, base Bash configuration and Chromium policy
+are installed under `/etc`. The interactive terminal also writes
+`~/.hotline/bashrc` each time it opens. Mount the home directory as a volume to
+retain prepared environments, caches, job records and output, shell history, and
+the browser profile when the container is recreated.
 
 ## Flakes
 
@@ -62,14 +62,15 @@ generated flake and prepare with `"flake":".hotline/nix"`.
 
 ## Software
 
-Nothing runs as root, nothing can elevate, and the image has no `apt` or
-`sudo`. Software comes in this order: what the computer prepares, then Nix by
-hand (`nix shell nixpkgs#<name>` for one tool), then what the image already
-has. A `.deb` or a system-wide install belongs in an image build.
+Jobs run as an unprivileged user and cannot elevate. The image includes neither
+`apt` nor `sudo`. Use software in this order: packages prepared for the
+workspace, manual Nix commands such as `nix shell nixpkgs#<name>`, then tools
+already included in the image. Installing a `.deb` or other system-wide software
+requires rebuilding the image.
 
-An AppImage runs without FUSE, which a container cannot offer: the image sets
-`APPIMAGE_EXTRACT_AND_RUN=1` and carries every library on the AppImage
-exclude list, so an AppImage built anywhere finds what it expects.
+The image sets `APPIMAGE_EXTRACT_AND_RUN=1`, so AppImages extract themselves and
+run without FUSE. It also includes the libraries on the AppImage exclude list,
+which AppImages expect the system to provide.
 
 ## Artifacts
 

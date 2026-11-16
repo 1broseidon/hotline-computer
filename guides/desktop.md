@@ -1,6 +1,6 @@
 ---
 title: Desktop
-description: What's on the screen and where it goes.
+description: The top bar, window layout, job observer, activity list and terminal.
 cluster: Using it
 section: viewer
 reviewed: 2026-11-02
@@ -44,11 +44,11 @@ windows that remain.
 
 ## Observer
 
-The observer is a terminal window in the bar's colours that shows the
-agent's jobs without anyone typing into it. Each job is a block headed by
-its label, or its command line when it has none, with its id, start time
-and directory underneath, and a ✓ or ✗ line naming it again when it ends.
-Closing or reopening the observer never stops a job.
+The observer displays the agent's jobs in a terminal window using the top bar's
+colours. Each job shows its label, or its command line if no label is set,
+followed by its ID, start time and working directory. A final line repeats the
+label or command and marks success with ✓ or failure with ✗. Closing or
+reopening the observer does not stop jobs.
 
 Jobs keep 4 MiB of output each and report truncation; the newest 64 are
 kept and 16 run at once. Cancelling or a deadline kills the job's process
@@ -65,11 +65,11 @@ an audit log.
 
 ## Your terminal
 
-**T** opens an interactive bash in the bottom third of the right column, so
-it never covers the agent's app: for signing in to something or unblocking a
-stuck step. It starts in the workspace with the environment the agent
-prepared there. What you type is not a job: it is not kept, and the agent
-sees only what is on the screen.
+**T** opens an interactive Bash terminal in the bottom third of the right
+column, leaving the agent's app visible. Use it to sign in or unblock a step. It
+starts in the workspace with the prepared environment. Commands entered here are
+not recorded as managed jobs. Bash history is saved to
+`~/.hotline/shell_history`, subject to the shell's history settings.
 
 It is the system's bash with Hotline's own rc file, rewritten to
 `~/.hotline/bashrc` each time it opens. Your own `~/.bashrc` runs after it.

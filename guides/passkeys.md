@@ -1,22 +1,22 @@
 ---
 title: Passkeys
-description: Made with your approval, kept in the service.
+description: Passkey registration, approval, storage and sign-in.
 cluster: Security
 section: security
 reviewed: 2026-11-02
 ---
 
-**A passkey is made once, only for a site you armed and only with your
-approval, and after that it signs the agent in by itself.** Its private key
-stays in the computer's service and never enters the browser.
+**Creating a passkey requires registration to be enabled for the site and your
+approval of its request.** In the default mode, the service signs requests
+without sending the private key to the browser. During registration, it returns
+the new credential, including the private key, to the client for storage.
 
 ## Signing in
 
-The browser's pinned Hotline extension takes every passkey request a page
-makes, with the page's origin, and the service signs it for that origin. It
-signs in without a prompt; nothing types it and no tool answers it. A site's
-passkey autofill is never answered: with the extension as the WebAuthn
-proxy, Chromium offers none, so it cannot race the passkey button.
+Use the site's passkey button to sign in. The pinned Hotline extension forwards
+the request and the page's origin to the service, which signs for that origin.
+Passkey autofill is unavailable while the extension acts as Chromium's WebAuthn
+proxy.
 
 ## Registration
 
@@ -46,11 +46,10 @@ a site that gives up withdraws its request.
 
 ## Limits
 
-The registration answer is the one time a private key leaves the computer,
-over the bearer-guarded loopback route the client already uses. The
-extension's line to the service is a socket only the container's user can
-open, but jobs run as that user too: until jobs and the browser have
-separate identities, that line is a convenience, not a wall.
+During registration, the service returns the credential, including its private
+key, to the client over the authenticated loopback route. The extension connects
+to the service through a Unix socket restricted to the container's user. Jobs
+run as that same user and can access the socket.
 
 `HOTLINE_COMPUTER_PASSKEYS=virtual` keeps the older arrangement, Chromium's
 virtual authenticator filled over DevTools on port 9222.

@@ -46,7 +46,7 @@ one, and only then publishes the combined manifest.
 ```
 src/boot.rs        PID 1, Xvfb, dbus, then the agent
 src/desktop.rs     wallpaper, top bar, tray, window manager
-src/serve.rs       the HTTP door: /health, bearer auth, /mcp, the viewer routes
+src/serve.rs       the HTTP server: /health, bearer auth, /mcp, the viewer routes
 src/viewer.rs      the viewer page and its socket
 src/viewer.html    the page: one canvas, Take control, pointer and keys
 src/screen.rs      DAMAGE-driven PNG rectangles for the viewer
@@ -57,10 +57,10 @@ src/x11.rs         screenshots and EWMH window queries
 src/a11y.rs        the AT-SPI tree as text
 src/lease.rs       who holds the machine
 src/jobs.rs        job lifetime, retained output, PTY, cancellation
-src/secrets.rs     stored secrets by kind: the door, job environment, fill, redaction
-src/passkeys.rs    passkey arming and its door
+src/secrets.rs     stored secrets by kind: the HTTP API, job environment, fill, redaction
+src/passkeys.rs    passkey registration and its HTTP API
 src/observer.rs    the job observer
 src/workspace.rs   workspace-owned Nix definitions and preparation
 src/guide.rs       the bundled release-matched skill
-tests/contract.rs  the opt-in proof against a running container
+tests/contract.rs  opt-in integration tests against a running container
 ```

@@ -6,9 +6,9 @@ section: overview
 reviewed: 2026-11-02
 ---
 
-**The image is a contract, not a binary: anything that serves the same eight
-tools over streamable HTTP at `/mcp`, with `/health` open, is a valid
-computer.** One container is one machine.
+**A compatible computer exposes the same eight tools over streamable HTTP at
+`/mcp` and an unauthenticated `/health` endpoint.** Each container runs one
+computer.
 
 ## Image
 

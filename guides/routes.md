@@ -1,6 +1,6 @@
 ---
 title: HTTP routes
-description: Every route, its token, and the settings.
+description: HTTP endpoints, authentication requirements and server settings.
 cluster: Reference
 section: configuration
 reviewed: 2026-11-02
@@ -41,11 +41,11 @@ page, newest first, so a client can offer you cookies for those sites:
 {"pages":[{"origin":"https://porkbun.com","url":"https://porkbun.com/account","title":"…","openedAt":1793580000000}]}
 ```
 
-`openedAt` is when the computer first saw the tab, in milliseconds, and keeps
-its time as the tab moves between sites. Chromium's own pages, the
-extension's, DevTools, blank tabs, frames and workers are never listed. The
-list comes from DevTools' target list, so it never waits on the browser and
-never starts one. A computer older than 0.11.0-rc.8 answers 404.
+`openedAt` records when the computer first observed the tab, in milliseconds. It
+does not change when the tab navigates. Chromium's own pages, extension pages,
+DevTools, blank tabs, frames and workers are excluded. The list comes from
+DevTools' target list without waiting on or starting the browser. Versions older
+than 0.11.0-rc.8 return 404.
 
 ## Settings
 

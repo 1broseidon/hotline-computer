@@ -5,6 +5,14 @@ A Linux desktop for your coding agent, in a rootless container on your machine.
 Any MCP client drives it with eight tools. You watch from your browser and take
 the mouse when it needs you.
 
+![Pinta displaying an orange cat illustration on the left, with the job observer on the right.](docs/screens/02-native-app-pinta.png "An illustration open in Pinta. The observer shows a completed Nix preparation job.")
+
+![Chromium displaying the James Webb Space Telescope article on Wikipedia, with the job observer on the right.](docs/screens/01-browser-research.png "Reading Wikipedia in Chromium.")
+
+![A terminal filling the left pane runs btop, showing CPU, memory, network use and processes.](docs/screens/03-terminal-btop.png "btop running in a full-height terminal on the left.")
+
+![Chromium displaying an OpenStreetMap view of San Francisco, with the job observer on the right.](docs/screens/04-browser-openstreetmap.png "Exploring San Francisco in OpenStreetMap.")
+
 ![The computer's desktop: Chromium on the left showing a site served at 127.0.0.1:4321, the job log on the right with two jobs finished and one running, and the top bar reading agent at work, 2 running, 43 done.](docs/screens/desk.webp "Claude serving a site on its own computer, every job it ran logged on the right. 1920 by 1080.")
 
 ```console title="Install"
@@ -43,15 +51,15 @@ One container is one machine. Inside it:
 | Nix | Toolchains a project needs, prepared per workspace |
 | `hotline-computer` | PID 1: supervisor, window manager, top bar and MCP server |
 
-The agent connects straight to the container. There is no gateway, no account
-and no cloud service in between.
+The agent connects directly to the local container over MCP. No account or
+hosted relay is required.
 
-The image is a contract, not a binary: anything that serves the same eight
-tools over streamable HTTP at `/mcp`, with `/health` open, is a valid computer.
+A compatible computer exposes the same eight tools over streamable HTTP at
+`/mcp` and an unauthenticated `/health` endpoint.
 
 ## Install
 
-You need Docker, Podman or Apple container 1.5+, and 4 GB of memory for the
+You need Docker, Podman or Apple container 1.5+, and 4 GiB of memory for the
 container. The image ships for `arm64` and `amd64`.
 
 ```console title="Docker"
@@ -64,13 +72,11 @@ $ docker run -d --name computer \
     ghcr.io/1broseidon/hotline-computer:0.11.0
 ```
 
-Every flag is there on purpose:
-
 | Flag | Why |
 | --- | --- |
 | `--cap-drop=ALL` | The computer needs no Linux capabilities |
 | `--security-opt no-new-privileges` | Nothing inside can gain privileges it did not start with |
-| `--pids-limit 1024 --memory 4g` | A runaway job stops at the container, not your machine |
+| `--pids-limit 1024 --memory 4g` | Limits the container to 1,024 processes and 4 GiB of memory |
 | `--shm-size 1g` | Chromium needs a sized `/dev/shm` |
 | `-p 127.0.0.1:8787:8787` | Loopback only. Never publish it on every interface |
 | `-e HOTLINE_COMPUTER_TOKEN` | Without a token, every route is open |
@@ -155,13 +161,14 @@ the home.
 ## Viewer
 
 The computer serves its own screen. `/` is a page with one canvas, and `/ws` is
-the socket behind it. The page reads the token from the URL fragment, which
-never leaves your browser.
+the socket behind it. The page reads the token from the URL fragment. The
+fragment is omitted from the initial page request; the viewer then sends the
+token with its WebSocket and file requests.
 
-The viewer opens watch-only. Nothing you do moves the machine until you press
-**Take control**. While you drive, the agent's tools that change the screen are
-refused, and the desktop hands itself back when you press **Give it back**,
-close the page or stop for ten seconds.
+The viewer opens in view-only mode. Mouse and keyboard input are disabled until
+you press **Take control**. While you have control, the agent's tools that
+change the screen are rejected. Control returns to the agent when you press
+**Give it back**, close the viewer, or send no input for ten seconds.
 
 ![The Activity window: timestamped tool calls, among them Started Clone the Hotline site, a failed Opened 127.0.0.1/ and then a successful one, and Started Check the page answers.](docs/screens/activity.webp "The Activity window, failures included.")
 
@@ -203,7 +210,9 @@ all live in the home, so they survive an upgrade when the home is a volume.
 > The container is the boundary. Inside it, the agent can do anything the
 > container's user can do.
 
-### Holds
+<div id="holds"></div>
+
+### Protections
 
 - Nothing runs as root. The image has no `sudo` and no `apt`, and with
   `--cap-drop=ALL` and `no-new-privileges` nothing can elevate.
@@ -214,11 +223,13 @@ all live in the home, so they survive an upgrade when the home is a volume.
   variable. A login is typed only on its own sites. A passkey's private key is
   never put in the browser.
 
-### Gaps
+<div id="gaps"></div>
 
-- Redaction replaces secret values in tool output with `[redacted NAME]`. That
-  keeps them out of the agent's context. It does not stop code written to get
-  them out, in pieces or encoded, and the screen is never redacted.
+### Limitations
+
+- Redaction replaces secret values with `[redacted NAME]` in tool text
+  responses. Code can still expose values by splitting or encoding them.
+  Redaction does not cover non-text results or the screen.
 - Jobs and Chromium run as the same user, so a job can reach the browser's
   DevTools port inside the container.
 - The keyring's password is empty. Its file in the home is not encrypted, so
@@ -265,5 +276,4 @@ Hotline Computer is the desktop each teammate gets in
 container per teammate and gives it the token; everything on this page works
 without it.
 
-The [guides](/guides/) go further, one subject each, and the sections above link
-the ones that go deeper on them.
+The [guides](/guides/) cover each subject in more detail.

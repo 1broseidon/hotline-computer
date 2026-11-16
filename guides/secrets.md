@@ -1,25 +1,26 @@
 ---
 title: Secrets
-description: Where each secret goes, and what redaction stops.
+description: Secret types, access rules and redaction limits.
 cluster: Security
 section: security
 reviewed: 2026-11-02
 ---
 
-**You give the computer secrets by name, and each kind goes to exactly one
-place: a variable into the agent's jobs, a login into its own sites, a
-passkey into the service that signs for it.** The agent never reads a value
-back.
+**Secrets are supplied by name. Variables are added to job environments, logins
+are filled on their configured sites, and passkeys are used by the signing
+service.** Tools redact secret values in text responses. Code running in a job
+can still access variables in its environment.
 
 ## Kinds
 
-The set comes from the client that started the computer (Hotline's desk, or
-your own) with `PUT /secrets`, the bearer in the `Authorization` header and a
-JSON object of name to entry as the body. It replaces the whole set and stays
-in the service's memory; the computer writes no value to disk. A name is what
-a shell variable can be called (`GITHUB_TOKEN`), never one starting with
-`HOTLINE_` and never one the shell owns, such as `PATH` or `HOME`. One bad
-entry refuses the whole set with a 400 that names it, and the last set stays.
+The client that started the computer supplies the secrets with `PUT /secrets`,
+using a bearer token in the `Authorization` header. The JSON body maps each name
+to an entry. The update replaces the entire set, which the service keeps in
+memory without writing it to disk. Names must be valid shell variable names,
+such as `GITHUB_TOKEN`. Names beginning with `HOTLINE_` and reserved names such
+as `PATH` and `HOME` are rejected. An invalid entry causes the entire update to
+fail with HTTP 400, identifying the entry and leaving the previous set
+unchanged.
 
 | Kind | Entry | Goes to |
 | --- | --- | --- |
@@ -38,10 +39,10 @@ login its sites and username. Every text a tool returns has each value
 replaced with `[redacted NAME]`, in plain and in JSON spelling. Usernames and
 sites stay readable, so a page that says who is signed in still makes sense.
 
-That keeps a value out of the agent's context when a job prints it or a page
-echoes it. It does not stop a command written to get a value out, in pieces,
-encoded or into a file, and the screen you watch is never redacted. A job
-never inherits `HOTLINE_COMPUTER_TOKEN`.
+Redaction removes secret values from tool text responses when a job prints them
+or a page echoes them. It does not stop code from exposing values by splitting,
+encoding or writing them to a file. Non-text results and the screen are not
+redacted. Jobs never inherit `HOTLINE_COMPUTER_TOKEN`.
 
 ## Keyring
 
