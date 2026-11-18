@@ -67,6 +67,25 @@ impl Config {
     }
 }
 
+impl Config {
+    /// A computer with no token answers anyone who can reach its address:
+    /// the tools, the screen and the files alike. It does not start that
+    /// way by accident. `HOTLINE_COMPUTER_ALLOW_NO_TOKEN=1` says it is meant.
+    pub fn door(&self) -> Result<(), String> {
+        if self.token.is_some() {
+            return Ok(());
+        }
+        if std::env::var("HOTLINE_COMPUTER_ALLOW_NO_TOKEN").as_deref() == Ok("1") {
+            eprintln!(
+                "hotline-computer: WARNING: serving {} with no token; every route is open to whoever can reach it",
+                self.addr
+            );
+            return Ok(());
+        }
+        Err("no token: set HOTLINE_COMPUTER_TOKEN or pass --token. Without one every route would be open to whoever can reach this address. To run that way on purpose, set HOTLINE_COMPUTER_ALLOW_NO_TOKEN=1.".to_owned())
+    }
+}
+
 #[derive(Clone)]
 pub struct App {
     pub config: Arc<Config>,

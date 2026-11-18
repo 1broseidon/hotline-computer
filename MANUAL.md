@@ -154,9 +154,10 @@ Polls the accessibility tree and the browser's page text for a phrase.
 
 #### state — machine state
 
-The running version, your stored secrets by name, the release guide, workspace
-manifests and Nix preparation, desktop leases, browser logins and snapshots of
-the home.
+The running version and what the computer has to work with (CPUs, memory,
+the disk left under the home and the Nix store, software rendering), your
+stored secrets by name, the release guide, workspace manifests and Nix
+preparation, desktop leases, browser logins and snapshots of the home.
 
 ## Viewer
 
@@ -199,7 +200,17 @@ agent prepares it:
 Packages are Nixpkgs names, or the repository's own flake. Jobs started inside
 the workspace get the prepared environment. A `web` run gets a free `$PORT`
 and answers with its URL once it listens; a `desktop` run answers once its
-window is up, with a screenshot.
+window is up, with a screenshot. A desktop run's `ready_title`, part of the
+title its window has once it shows the right document, makes it wait for that
+window; without one the answer says it is only the first window, which a
+splash or an empty document can be.
+
+A workspace is ready when its environment is built, its create hooks have
+succeeded and its services are up, and `state manifest` says each of those in
+one answer: every hook ran, was done before, or failed with its job and the
+end of its output, and every service is up or not. A hook whose script is not
+in the workspace is refused before anything is built. A create hook that
+failed runs again on the next prepare; one that succeeded never does.
 
 The prepared environment, its cache, the job history and the browser profile
 all live in the home, so they survive an upgrade when the home is a volume.
@@ -277,3 +288,13 @@ container per teammate and gives it the token; everything on this page works
 without it.
 
 The [guides](/guides/) cover each subject in more detail.
+
+## Upgrading to 0.12.0
+
+Set `HOTLINE_COMPUTER_TOKEN` before starting the service. Startup now refuses a missing or empty bearer by default. Keep the endpoint private even with authentication enabled.
+
+Loopback and IP-address connections work without extra configuration. If you connect by DNS name, list it in `HOTLINE_COMPUTER_ALLOWED_HOSTS`. If a browser frontend calls from another origin, list that trusted origin (scheme, host and port if non-default) in `HOTLINE_COMPUTER_ALLOWED_ORIGINS`. Both settings accept comma-separated entries.
+
+HTTP uploads default to 50 MiB. Larger uploads receive HTTP 413; a deployment can set `HOTLINE_COMPUTER_UPLOAD_LIMIT_MIB` to another limit.
+
+Use a separate computer without credentials for workloads you do not trust. The browser, credential services and shell jobs are not isolated tenants. A desktop lease coordinates input; it is not a sandbox for background jobs. Grant only the folders and credentials needed for the task.

@@ -25,6 +25,9 @@ pub struct MachineAccess {
 struct ControlLease {
     holder: String,
     expires: Instant,
+    /// Set only where the viewer's socket takes the screen. A name is what
+    /// a caller says it is; this is what the service saw happen.
+    person: bool,
 }
 
 pub struct RunPermit {
@@ -80,6 +83,16 @@ impl MachineAccess {
                         .as_secs(),
                 )
             })
+    }
+
+    /// The person's hold, when the person at the viewer has the machine now.
+    /// Never inferred from a holder's name: an MCP caller picks its own.
+    pub async fn person(&self) -> Option<String> {
+        let lease = self.lease.lock().await;
+        lease
+            .as_ref()
+            .filter(|lease| lease.person && lease.expires > Instant::now())
+            .map(|lease| lease.holder.clone())
     }
 
     /// Tell the desktop's bar, off the runtime's threads, and never wait on it.
@@ -193,12 +206,14 @@ impl MachineAccess {
         *active = Some(ControlLease {
             holder: holder.to_owned(),
             expires: Instant::now() + Duration::from_secs(seconds),
+            person: false,
         });
         self.publish(active.as_ref());
         Ok((seconds, SystemTime::now() + Duration::from_secs(seconds)))
     }
 
     /// A driving socket may renew its own lease, but cannot steal a newer one.
+    /// Only the viewer's socket calls this, so the hold it leaves is a person's.
     pub async fn renew(&self, holder: &str, seconds: u64) -> bool {
         let mut active = self.lease.lock().await;
         if active
@@ -211,6 +226,7 @@ impl MachineAccess {
         *active = Some(ControlLease {
             holder: holder.to_owned(),
             expires: Instant::now() + Duration::from_secs(seconds),
+            person: true,
         });
         if changed {
             self.publish(active.as_ref());
@@ -219,12 +235,14 @@ impl MachineAccess {
     }
 
     /// The person at the screen outranks every lease: their hands on the
-    /// desktop hold it for `seconds` from now, whoever held it before.
+    /// desktop hold it for `seconds` from now, whoever held it before. Only
+    /// the viewer's socket calls this.
     pub async fn seize(&self, holder: &str, seconds: u64) {
         let mut active = self.lease.lock().await;
         *active = Some(ControlLease {
             holder: holder.to_owned(),
             expires: Instant::now() + Duration::from_secs(seconds),
+            person: true,
         });
         self.publish(active.as_ref());
     }

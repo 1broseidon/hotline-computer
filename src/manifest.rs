@@ -79,6 +79,11 @@ pub struct Run {
     pub env: BTreeMap<String, String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub label: Option<String>,
+    /// For a desktop run: part of the title its window has once it is what
+    /// the run is for, such as the document's file name. The run is ready
+    /// when such a window is up, not at its first window (`crate::ready`).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub ready_title: Option<String>,
 }
 
 #[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
@@ -216,7 +221,7 @@ pub fn parse(text: &str) -> Result<Manifest, String> {
 }
 
 /// Said with every shape error, because the error is the documentation.
-pub const SHAPE: &str = "A manifest is a JSON object with any of: packages (Nixpkgs attribute names), flake (a local flake instead of packages), platform (gl, gtk, gtk4, qt, native, webkit, prebuilt, qt-wheel), libraries (Nixpkgs attribute names put on the library path, for what a prebuilt binary loads beyond its platforms), env (NAME: \"value\", or NAME: [\"path\", ...] to extend a search path), services (NAME: {\"enable\": true}), hooks ({\"create\": {NAME: [argv]}, \"start\": {NAME: [argv]}}), runs (NAME: {\"command\": [argv], \"cwd\": \"subdir\", \"kind\": \"task\" | \"desktop\" | \"web\", \"env\": {}, \"label\": \"...\"}). state manifest shows an example and what this image offers.";
+pub const SHAPE: &str = "A manifest is a JSON object with any of: packages (Nixpkgs attribute names), flake (a local flake instead of packages), platform (gl, gtk, gtk4, qt, native, webkit, prebuilt, qt-wheel), libraries (Nixpkgs attribute names put on the library path, for what a prebuilt binary loads beyond its platforms), env (NAME: \"value\", or NAME: [\"path\", ...] to extend a search path), services (NAME: {\"enable\": true}), hooks ({\"create\": {NAME: [argv]}, \"start\": {NAME: [argv]}}), runs (NAME: {\"command\": [argv], \"cwd\": \"subdir\", \"kind\": \"task\" | \"desktop\" | \"web\", \"env\": {}, \"label\": \"...\", \"ready_title\": \"part of the title a desktop run's window has once it is ready\"}). state manifest shows an example and what this image offers.";
 
 fn concat(mut first: Vec<String>, second: Vec<String>) -> Vec<String> {
     for item in second {
@@ -395,6 +400,14 @@ fn validate(composed: &Composed) -> Result<(), String> {
             return Err(format!(
                 "runs.{run}.env name {bad:?} is not a shell variable name"
             ));
+        }
+        if let Some(title) = &entry.ready_title {
+            if entry.kind != Kind::Desktop {
+                return Err(format!(
+                    "runs.{run}.ready_title names a window, so it is for a desktop run"
+                ));
+            }
+            crate::ready::title(title).map_err(|e| format!("runs.{run}.{e}"))?;
         }
     }
     Ok(())
@@ -721,6 +734,10 @@ struct Activation {
     phase: String,
     #[serde(default)]
     error: Option<String>,
+    /// Create hooks that ran, and succeeded, in the latest activation; the
+    /// rest of those in `created` were done before it.
+    #[serde(default)]
+    ran: Vec<String>,
 }
 
 fn load(workspace: &Path) -> Activation {
@@ -809,6 +826,14 @@ pub async fn activate(
     let _one = ACTIVATING.lock().await;
     let mut state = load(&workspace);
     state.error = None;
+    state.ran.clear();
+    // A create hook that has not succeeded runs again, so its last attempt
+    // is not what it is now: until it runs, it waits.
+    let created = state.created.clone();
+    state.jobs.retain(|key, _| {
+        key.strip_prefix("create:")
+            .is_none_or(|name| created.contains_key(name))
+    });
     if let Some(id) = preparation {
         state.phase = "preparing".into();
         save(&workspace, &state);
@@ -869,6 +894,7 @@ pub async fn activate(
             );
         }
         state.created.insert(name.clone(), command.clone());
+        state.ran.push(name.clone());
         save(&workspace, &state);
     }
     state.phase = "starting".into();
@@ -933,6 +959,306 @@ fn fail(workspace: &Path, mut state: Activation, error: String) {
     state.phase = "failed".into();
     state.error = Some(error);
     save(workspace, &state);
+}
+
+/// Programs a hook names its script to, as `["bash", "scripts/setup.sh"]`.
+const INTERPRETERS: [&str; 14] = [
+    "sh", "bash", "zsh", "dash", "python", "python3", "node", "bun", "deno", "ruby", "perl", "php",
+    "lua", "tsx",
+];
+
+/// The script a hook runs from the workspace, when it names one: its command
+/// when that is a path, or an interpreter's first argument when that looks
+/// like a file. Anything else (`pnpm install`) names none.
+fn script(command: &[String]) -> Option<&str> {
+    let first = command.first()?;
+    if first.contains('/') {
+        return Some(first);
+    }
+    let next = command.get(1)?;
+    (INTERPRETERS.contains(&first.as_str())
+        && !next.starts_with('-')
+        && (next.contains('/')
+            || next
+                .rsplit_once('.')
+                .is_some_and(|(stem, _)| !stem.is_empty())))
+    .then_some(next.as_str())
+}
+
+/// What is wrong with a script a hook names, if anything can be told
+/// without running it. Only the workspace is looked in: an absolute path, a
+/// `..`, or a link on the way is not followed, and is taken as it is.
+fn script_problem(workspace: &Path, script: &str, executed: bool) -> Option<&'static str> {
+    use std::os::unix::fs::PermissionsExt;
+    if !relative(script) {
+        return None;
+    }
+    let mut path = workspace.to_path_buf();
+    let mut parts = Path::new(script)
+        .components()
+        .filter(|c| matches!(c, Component::Normal(_)))
+        .peekable();
+    while let Some(part) = parts.next() {
+        path.push(part);
+        let Ok(metadata) = std::fs::symlink_metadata(&path) else {
+            return Some("does not exist in the workspace");
+        };
+        if metadata.file_type().is_symlink() {
+            return None;
+        }
+        if parts.peek().is_none() {
+            if !metadata.is_file() {
+                return Some("is not a file");
+            }
+            if executed && metadata.permissions().mode() & 0o111 == 0 {
+                return Some("is not executable: chmod +x it, or run it with its interpreter");
+            }
+        }
+    }
+    None
+}
+
+/// What can be told about a manifest's hooks before anything is built: a
+/// script a hook names that is not in the workspace, which would make the
+/// hook fail only after the whole environment was. A create hook already
+/// done is not run again, so its script is not looked for.
+pub fn check_hooks(workspace: &Path, composed: &Composed) -> Result<(), String> {
+    let done = load(workspace).created;
+    let m = &composed.manifest;
+    let hooks = m
+        .hooks
+        .create
+        .iter()
+        .filter(|(name, command)| done.get(*name) != Some(command))
+        .map(|(name, command)| ("create", name, command))
+        .chain(
+            m.hooks
+                .start
+                .iter()
+                .map(|(name, command)| ("start", name, command)),
+        );
+    let mut problems = Vec::new();
+    for (label, name, command) in hooks {
+        let Some(script) = script(command) else {
+            continue;
+        };
+        let executed = command.first().is_some_and(|first| first == script);
+        if let Some(problem) = script_problem(workspace, script, executed) {
+            let shown: String = script.chars().take(200).collect();
+            problems.push(format!(
+                "hooks.{label}.{name} runs {shown:?}, which {problem}"
+            ));
+        }
+    }
+    if problems.is_empty() {
+        return Ok(());
+    }
+    Err(format!(
+        "{}. Nothing was prepared: write the script, or correct the hook in {FILE}, then state prepare again.",
+        problems.join("; ")
+    ))
+}
+
+/// The end of a job's output, as a report shows it: a few lines, plain.
+async fn tail(app: &App, id: &str) -> String {
+    const BYTES: u64 = 1500;
+    const LINES: usize = 15;
+    let Ok(record) = app.jobs.status(id).await else {
+        return String::new();
+    };
+    let start = (record.output_bytes as u64).saturating_sub(BYTES);
+    let text = app
+        .jobs
+        .read(id, start, BYTES as usize)
+        .await
+        .map(|o| crate::jobs::plain(&o.output))
+        .unwrap_or_default();
+    let lines: Vec<&str> = text.trim_end().lines().collect();
+    lines[lines.len().saturating_sub(LINES)..].join("\n")
+}
+
+/// The whole truth about a manifest workspace in one answer: its
+/// environment, each hook and each service, and whether all of that makes
+/// it ready. A workspace is ready only when its environment is prepared,
+/// every create hook has succeeded, every service is up and no start hook
+/// has failed; anything else says what is wrong and what to do.
+pub async fn readiness(app: &App, workspace: &Path, composed: &Composed) -> Value {
+    let state = load(workspace);
+    let m = &composed.manifest;
+    let building = matches!(state.phase.as_str(), "" | "preparing");
+    let mut problems: Vec<String> = Vec::new();
+    let mut failed_hook = false;
+    // A create hook that has not succeeded with the command it has now.
+    let mut hooks_left = false;
+    let environment = match state.phase.as_str() {
+        "" | "preparing" => json!({"status": "building"}),
+        "preparation failed" => {
+            problems.push(
+                state
+                    .error
+                    .clone()
+                    .unwrap_or_else(|| "the environment did not build".into()),
+            );
+            json!({"status": "failed"})
+        }
+        _ => json!({"status": "prepared"}),
+    };
+    let mut create = serde_json::Map::new();
+    for (name, command) in &m.hooks.create {
+        let id = state.jobs.get(&format!("create:{name}"));
+        let record = match id {
+            Some(id) => app.jobs.status(id).await.ok(),
+            None => None,
+        };
+        let entry = if state.created.get(name) == Some(command) {
+            let status = if state.ran.contains(name) {
+                "ran"
+            } else {
+                "done before"
+            };
+            json!({"status": status, "job_id": id})
+        } else {
+            hooks_left = true;
+            match record {
+                Some(r) if !r.finished() => json!({"status": "running", "job_id": r.id}),
+                Some(r) if r.exit_code != Some(0) => {
+                    failed_hook = true;
+                    problems.push(format!(
+                        "create hook {name} failed in job {} ({}, {})",
+                        r.id,
+                        r.state,
+                        exit(r.exit_code)
+                    ));
+                    json!({"status": "failed", "job_id": r.id, "exit_code": r.exit_code, "output_tail": tail(app, &r.id).await})
+                }
+                Some(r) => json!({"status": "runs again: its command changed", "job_id": r.id}),
+                None if building => json!({"status": "waits for the environment"}),
+                None => json!({"status": "not run"}),
+            }
+        };
+        create.insert(name.clone(), entry);
+    }
+    let mut long_running = |key: String, record: Option<crate::jobs::Record>, what: &str| {
+        let Some(r) = record else {
+            return (
+                json!({"status": if building {"waits for the environment"} else {"not started"}}),
+                false,
+            );
+        };
+        if !r.finished() {
+            return (json!({"status": "running", "job_id": r.id}), true);
+        }
+        if what == "start hook" && r.exit_code == Some(0) {
+            return (
+                json!({"status": "finished", "job_id": r.id, "exit_code": 0}),
+                true,
+            );
+        }
+        problems.push(format!(
+            "{what} {key} is not running: job {} ended ({}, {})",
+            r.id,
+            r.state,
+            exit(r.exit_code)
+        ));
+        (
+            json!({"status": "stopped", "job_id": r.id, "exit_code": r.exit_code}),
+            false,
+        )
+    };
+    let mut records = BTreeMap::new();
+    for (key, id) in &state.jobs {
+        if !key.starts_with("create:") {
+            records.insert(key.clone(), app.jobs.status(id).await.ok());
+        }
+    }
+    let mut tails = BTreeMap::new();
+    let mut services = serde_json::Map::new();
+    let mut all_up = true;
+    for (name, _) in enabled_services(composed) {
+        let record = records.get(&format!("service:{name}")).cloned().flatten();
+        let (mut entry, up) = long_running(name.clone(), record.clone(), "service");
+        entry["up"] = json!(up);
+        all_up &= up;
+        if let (false, Some(r)) = (up, record) {
+            tails.insert(format!("service:{name}"), r.id);
+        }
+        services.insert(name.clone(), entry);
+    }
+    let mut start = serde_json::Map::new();
+    for name in m.hooks.start.keys() {
+        let record = records.get(&format!("start:{name}")).cloned().flatten();
+        let (entry, fine) = long_running(name.clone(), record.clone(), "start hook");
+        all_up &= fine;
+        if let (false, Some(r)) = (fine, record) {
+            tails.insert(format!("start:{name}"), r.id);
+        }
+        start.insert(name.clone(), entry);
+    }
+    for (key, id) in tails {
+        let output = tail(app, &id).await;
+        let (kind, name) = key.split_once(':').unwrap_or(("", ""));
+        let map = if kind == "service" {
+            &mut services
+        } else {
+            &mut start
+        };
+        if let Some(entry) = map.get_mut(name) {
+            entry["output_tail"] = json!(output);
+        }
+    }
+    if state.phase == "failed"
+        && let Some(error) = &state.error
+        && problems.is_empty()
+    {
+        problems.push(error.clone());
+    }
+    let ready = state.phase == "ready" && problems.is_empty() && all_up && !hooks_left;
+    let next = if ready {
+        "shell run NAME in this workspace".to_owned()
+    } else if failed_hook {
+        format!(
+            "fix what the failed hook's output_tail says (its script, or its command in {FILE}), then state prepare again: a create hook that failed runs again, and one that succeeded does not"
+        )
+    } else if !problems.is_empty() {
+        "read the failed job's output with shell read, fix it, then state prepare again".to_owned()
+    } else if building {
+        "the environment is still building: shell wait on the preparation job, then state manifest with this workspace says whether the hooks ran and the services are up".to_owned()
+    } else {
+        "still setting up: state manifest with this workspace shows the hooks and services as they go, and says ready when they are".to_owned()
+    };
+    let mut value = json!({
+        "ready": ready,
+        "phase": state.phase,
+        "environment": environment,
+        "hooks": {"create": create, "start": start},
+        "services": services,
+        "next": next,
+    });
+    if !problems.is_empty() {
+        value["problems"] = json!(problems);
+    }
+    value
+}
+
+/// How a job ended, as a sentence says it.
+fn exit(code: Option<i32>) -> String {
+    code.map_or_else(
+        || "no exit code".to_owned(),
+        |code| format!("exit code {code}"),
+    )
+}
+
+/// The create hook a workspace that is not ready waits on, or failed in.
+pub fn hook_to_follow(report: &Value) -> Option<String> {
+    if report["ready"] == true {
+        return None;
+    }
+    report["hooks"]["create"]
+        .as_object()?
+        .values()
+        .find(|hook| matches!(hook["status"].as_str(), Some("running" | "failed")))
+        .and_then(|hook| hook["job_id"].as_str())
+        .map(str::to_owned)
 }
 
 /// An example worth copying, said when a workspace has no manifest yet.
@@ -1013,6 +1339,7 @@ pub async fn describe(app: &App, workspace: &Path) -> Result<Value, String> {
         "packages": packages(&composed),
         "services": services,
         "activation": {"phase": state.phase, "error": state.error, "created": state.created.keys().collect::<Vec<_>>(), "jobs": jobs},
+        "readiness": readiness(app, workspace, &composed).await,
         "base": {
             "version": composed.base.version,
             "nixpkgs": composed.base.nixpkgs,
@@ -1231,5 +1558,283 @@ mod tests {
         std::fs::write(workspace.join(FILE), r#"{"packages":["go","gopls"]}"#).unwrap();
         let error = job(workspace, &composed, "test", Start::default()).unwrap_err();
         assert!(error.contains("changed after the last prepare"), "{error}");
+    }
+
+    fn composed_with(value: Value) -> Composed {
+        compose(embedded(), manifest(value)).unwrap()
+    }
+
+    #[test]
+    fn a_hook_whose_script_is_not_there_is_said_before_anything_is_built() {
+        use std::os::unix::fs::PermissionsExt;
+        let home = tempfile::tempdir().unwrap();
+        let workspace = home.path().canonicalize().unwrap();
+        let composed = composed_with(json!({
+            "hooks": {
+                "create": {"db": ["bash", "scripts/db.sh"], "install": ["pnpm", "install"]},
+                "start": {"watch": ["./watch.sh"]}
+            }
+        }));
+        let error = check_hooks(&workspace, &composed).unwrap_err();
+        assert!(
+            error.contains(
+                r#"hooks.create.db runs "scripts/db.sh", which does not exist in the workspace"#
+            ),
+            "{error}"
+        );
+        assert!(error.contains("hooks.start.watch"), "{error}");
+        assert!(
+            !error.contains("install"),
+            "pnpm install names no script: {error}"
+        );
+        assert!(error.contains("then state prepare again"), "{error}");
+
+        std::fs::create_dir_all(workspace.join("scripts")).unwrap();
+        std::fs::write(workspace.join("scripts/db.sh"), "createdb app\n").unwrap();
+        std::fs::write(workspace.join("watch.sh"), "#!/bin/sh\n").unwrap();
+        let error = check_hooks(&workspace, &composed).unwrap_err();
+        assert!(
+            !error.contains("db"),
+            "bash reads it, so it need not be executable: {error}"
+        );
+        assert!(
+            error.contains("watch.sh\", which is not executable"),
+            "{error}"
+        );
+        std::fs::set_permissions(
+            workspace.join("watch.sh"),
+            std::fs::Permissions::from_mode(0o755),
+        )
+        .unwrap();
+        assert!(check_hooks(&workspace, &composed).is_ok());
+
+        // A directory is not a script.
+        let composed = composed_with(json!({"hooks": {"create": {"x": ["python3", "scripts/"]}}}));
+        let error = check_hooks(&workspace, &composed).unwrap_err();
+        assert!(error.contains("is not a file"), "{error}");
+    }
+
+    #[test]
+    fn only_the_workspace_is_looked_in_for_a_hooks_script() {
+        let outside = tempfile::tempdir().unwrap();
+        std::fs::write(outside.path().join("there.sh"), "").unwrap();
+        let home = tempfile::tempdir().unwrap();
+        let workspace = home.path().canonicalize().unwrap();
+        std::os::unix::fs::symlink(outside.path(), workspace.join("link")).unwrap();
+        for command in [
+            json!(["bash", "../there.sh"]),
+            json!(["bash", "link/missing.sh"]),
+            json!(["bash", "link/there.sh"]),
+            json!(["/usr/bin/env", "true"]),
+            json!([format!("{}/missing.sh", outside.path().display())]),
+            json!(["bash", "-c", "./missing.sh"]),
+        ] {
+            let composed = composed_with(json!({"hooks": {"create": {"x": command.clone()}}}));
+            assert!(
+                check_hooks(&workspace, &composed).is_ok(),
+                "{command} is not looked at, nor anything it points to"
+            );
+        }
+    }
+
+    #[test]
+    fn a_create_hook_already_done_is_not_looked_for_again() {
+        let home = tempfile::tempdir().unwrap();
+        let workspace = home.path().canonicalize().unwrap();
+        let command = vec!["bash".to_owned(), "once.sh".to_owned()];
+        let composed = composed_with(json!({"hooks": {"create": {"once": command.clone()}}}));
+        assert!(check_hooks(&workspace, &composed).is_err());
+        save(
+            &workspace,
+            &Activation {
+                created: BTreeMap::from([("once".to_owned(), command)]),
+                ..Activation::default()
+            },
+        );
+        assert!(check_hooks(&workspace, &composed).is_ok());
+    }
+
+    fn app(home: &Path) -> App {
+        App::new(crate::Config {
+            addr: String::new(),
+            token: None,
+            home: home.to_owned(),
+            display: ":0".into(),
+            screen: "800x600".into(),
+        })
+    }
+
+    #[tokio::test]
+    async fn a_workspace_whose_hook_failed_is_not_ready_and_says_what_failed() {
+        let home = tempfile::tempdir().unwrap();
+        let workspace = home.path().canonicalize().unwrap();
+        let app = app(&workspace);
+        std::fs::write(
+            workspace.join("seed.sh"),
+            "echo seeding\necho 'relation \"users\" does not exist' >&2\nexit 3\n",
+        )
+        .unwrap();
+        let mut base = embedded();
+        base.services.insert(
+            "sleeper".into(),
+            ServiceDefinition {
+                command: vec!["sleep".into(), "30".into()],
+                ..ServiceDefinition::default()
+            },
+        );
+        let composed = compose(
+            base,
+            manifest(json!({
+                "services": {"sleeper": {"enable": true}},
+                "hooks": {
+                    "create": {
+                        "a-install": ["sh", "-c", "echo once >> installs.txt"],
+                        "b-seed": ["sh", "seed.sh"]
+                    },
+                    "start": {"watch": ["sleep", "30"]}
+                }
+            })),
+        )
+        .unwrap();
+
+        activate(
+            app.clone(),
+            workspace.clone(),
+            composed.clone(),
+            "agent".into(),
+            None,
+        )
+        .await;
+        let report = readiness(&app, &workspace, &composed).await;
+        assert_eq!(report["ready"], false, "{report}");
+        assert_eq!(report["environment"]["status"], "prepared");
+        assert_eq!(report["hooks"]["create"]["a-install"]["status"], "ran");
+        let seed = &report["hooks"]["create"]["b-seed"];
+        assert_eq!(seed["status"], "failed", "{report}");
+        assert_eq!(seed["exit_code"], 3);
+        assert!(seed["job_id"].is_string());
+        let tail = seed["output_tail"].as_str().unwrap();
+        assert!(
+            tail.contains(r#"relation "users" does not exist"#),
+            "{tail}"
+        );
+        assert_eq!(report["services"]["sleeper"]["up"], false);
+        assert_eq!(report["services"]["sleeper"]["status"], "not started");
+        let problem = report["problems"][0].as_str().unwrap();
+        assert!(
+            problem.contains("create hook b-seed failed") && problem.contains("exit code 3)"),
+            "{report}"
+        );
+        assert!(
+            report["next"]
+                .as_str()
+                .unwrap()
+                .contains("state prepare again")
+        );
+
+        // Fixed, the failed hook runs again and the one that succeeded does not.
+        std::fs::write(workspace.join("seed.sh"), "echo seeded\n").unwrap();
+        activate(
+            app.clone(),
+            workspace.clone(),
+            composed.clone(),
+            "agent".into(),
+            None,
+        )
+        .await;
+        let report = readiness(&app, &workspace, &composed).await;
+        assert_eq!(
+            report["hooks"]["create"]["a-install"]["status"],
+            "done before"
+        );
+        assert_eq!(report["hooks"]["create"]["b-seed"]["status"], "ran");
+        assert_eq!(report["services"]["sleeper"]["up"], true, "{report}");
+        assert_eq!(report["hooks"]["start"]["watch"]["status"], "running");
+        assert_eq!(report["ready"], true, "{report}");
+        assert!(report.get("problems").is_none());
+        assert_eq!(
+            std::fs::read_to_string(workspace.join("installs.txt")).unwrap(),
+            "once\n"
+        );
+
+        // A service that stops makes the workspace not ready again.
+        let state = load(&workspace);
+        app.jobs
+            .request_cancel(&state.jobs["service:sleeper"])
+            .await
+            .unwrap();
+        app.jobs
+            .wait(&state.jobs["service:sleeper"], 5000)
+            .await
+            .unwrap();
+        let report = readiness(&app, &workspace, &composed).await;
+        assert_eq!(report["ready"], false);
+        assert_eq!(report["services"]["sleeper"]["status"], "stopped");
+        assert!(
+            report["problems"][0]
+                .as_str()
+                .unwrap()
+                .contains("service sleeper is not running"),
+            "{report}"
+        );
+        for key in ["start:watch"] {
+            let _ = app.jobs.request_cancel(&state.jobs[key]).await;
+        }
+    }
+
+    #[tokio::test]
+    async fn a_workspace_still_building_says_its_hooks_wait() {
+        let home = tempfile::tempdir().unwrap();
+        let workspace = home.path().canonicalize().unwrap();
+        let app = app(&workspace);
+        let composed = composed_with(json!({"hooks": {"create": {"install": ["true"]}}}));
+        // A failed attempt from before, and a preparation under way again.
+        save(
+            &workspace,
+            &Activation {
+                phase: "preparing".into(),
+                jobs: BTreeMap::new(),
+                ..Activation::default()
+            },
+        );
+        let report = readiness(&app, &workspace, &composed).await;
+        assert_eq!(report["ready"], false);
+        assert_eq!(report["environment"]["status"], "building");
+        assert_eq!(
+            report["hooks"]["create"]["install"]["status"],
+            "waits for the environment"
+        );
+    }
+
+    #[test]
+    fn a_desktop_run_may_name_the_title_it_is_ready_at() {
+        let composed = composed_with(json!({
+            "runs": {"app": {"command": ["inkscape", "drawing.svg"], "kind": "desktop", "ready_title": "drawing.svg"}}
+        }));
+        assert_eq!(
+            composed.manifest.runs["app"].ready_title.as_deref(),
+            Some("drawing.svg")
+        );
+        let error = compose(
+            embedded(),
+            manifest(json!({"runs": {"test": {"command": ["cargo", "test"], "ready_title": "x"}}})),
+        )
+        .unwrap_err();
+        assert!(error.contains("for a desktop run"), "{error}");
+        let error = compose(
+            embedded(),
+            manifest(
+                json!({"runs": {"app": {"command": ["x"], "kind": "desktop", "ready_title": ""}}}),
+            ),
+        )
+        .unwrap_err();
+        assert!(error.contains("runs.app.ready_title must be"), "{error}");
+        // A manifest without it reads and writes as it did.
+        let plain = manifest(json!({"runs": {"app": {"command": ["x"], "kind": "desktop"}}}));
+        assert!(
+            !serde_json::to_string(&plain)
+                .unwrap()
+                .contains("ready_title")
+        );
     }
 }

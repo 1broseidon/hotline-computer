@@ -81,10 +81,15 @@ proxy.onRequestCanceled.addListener((requestId) => {
 
 const refusal = (message) => ({ error: { name: 'NotAllowedError', message: `Hotline: ${message}` } });
 
-// The origin of a web page, or null for anything that is not one.
+// The origin of a web page, or null for anything that is not one. A frame
+// whose origin is opaque ('null') is a sandboxed document: its address may be
+// the site's, but the site has said its content is not the site's own, so it
+// is offered nothing. The address stands in only where Chromium gives no
+// origin at all (the popup asking for its tab).
 function webOrigin(origin, url) {
+  if (origin === 'null') return null;
   try {
-    const parsed = new URL(origin && origin !== 'null' ? origin : url);
+    const parsed = new URL(origin || url);
     return /^https?:$/.test(parsed.protocol) ? parsed.origin : null;
   } catch {
     return null;

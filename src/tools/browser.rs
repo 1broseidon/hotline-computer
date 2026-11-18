@@ -106,14 +106,32 @@ pub async fn call(app: &App, arguments: Value, holder: &str) -> ToolResult {
                 if let Some(sites) = &login {
                     let url = app.browser.current_url().await.unwrap_or_default();
                     site = crate::bridge::host_of(&url);
-                    let on_site = Origin::of_page(&url)
-                        .is_ok_and(|page| sites.iter().any(|site| site.allows(&page)));
+                    let page = Origin::of_page(&url);
+                    let on_site = page
+                        .as_ref()
+                        .is_ok_and(|page| sites.iter().any(|site| site.allows(page)));
+                    // Refused here, not left to the typing's own check a
+                    // moment later: a page that is off the site now and back
+                    // on it by then would otherwise pass an ask-me key
+                    // without the ask.
+                    if !on_site {
+                        let allowed = sites
+                            .iter()
+                            .map(ToString::to_string)
+                            .collect::<Vec<_>>()
+                            .join(", ");
+                        crate::bridge::record(app, &site, "was refused a login", false, None).await;
+                        return Err(match page {
+                            Ok(page) => {
+                                format!("{label} is typed only on {allowed}; this page is {page}")
+                            }
+                            Err(_) => format!(
+                                "{label} is typed only on {allowed}, and this page has no site"
+                            ),
+                        });
+                    }
                     // A username is who, not a secret: only what signs in waits.
-                    if on_site
-                        && field != "username"
-                        && app.secrets.use_of(name) == Some(Use::Ask)
-                        && !crate::bridge::person_has_it(app).await
-                    {
+                    if field != "username" && app.secrets.use_of(name) == Some(Use::Ask) {
                         let who = crate::bridge::who(app).await;
                         let path = crate::bridge::path_on(&url, &site);
                         match app.holds.fill(name, &site, &path, &who, crate::jobs::now()) {

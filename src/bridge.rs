@@ -215,14 +215,12 @@ async fn answer(app: &App, message: &Value) -> Value {
         // stops saying it is their turn.
         Some("hand_back") => {
             let handed = PERSON_SINCE.lock().unwrap().take().is_some();
-            match app.access.holder().await {
-                Some((holder, _)) if holder.starts_with(crate::viewer::PERSON) => {
-                    match app.access.release(&holder).await {
-                        Ok(_) => json!({"handedBack": true}),
-                        Err(error) => refused(authenticator_refusal("NotAllowedError", &error)),
-                    }
-                }
-                _ => json!({"handedBack": handed}),
+            match app.access.person().await {
+                Some(holder) => match app.access.release(&holder).await {
+                    Ok(_) => json!({"handedBack": true}),
+                    Err(error) => refused(authenticator_refusal("NotAllowedError", &error)),
+                },
+                None => json!({"handedBack": handed}),
             }
         }
         // The person's logins, for the page whose origin Chromium names:
@@ -265,9 +263,9 @@ enum Gate {
     Refused(Refusal),
 }
 
-/// A sign-in with `key`: through at once when the key is automatic, when
-/// the person has the computer, or inside an allowance; otherwise held
-/// until the person answers or the page's own time runs out.
+/// A sign-in with `key`: through at once when the key is automatic or
+/// inside an allowance; otherwise held until the person answers at the desk
+/// or the page's own time runs out.
 async fn passkey_gate(app: &App, details: &Value, key: &Passkey, site: &str) -> Gate {
     let named = app
         .secrets
@@ -278,7 +276,11 @@ async fn passkey_gate(app: &App, details: &Value, key: &Passkey, site: &str) -> 
         // One the arming just minted, not yet delivered back: automatic.
         return Gate::Through(None);
     };
-    if granted.use_ != KeyUse::Ask || person_has_it(app).await {
+    // Asked even while the person has the computer. A job started before
+    // they took it is still running and reaches this socket as the extension
+    // does, so "the person is at the screen" says nothing about who asks;
+    // the desk's card is the one answer a job cannot give.
+    if granted.use_ != KeyUse::Ask {
         return Gate::Through(None);
     }
     // A quiet request on load is never answered behind a site's back, and
@@ -306,7 +308,8 @@ async fn fill_gate(app: &App, message: &Value, site: &str) -> Gate {
         .logins_for(origin)
         .iter()
         .any(|(login, _, _)| login == name);
-    if !for_here || app.secrets.use_of(name) != Some(KeyUse::Ask) || person_has_it(app).await {
+    // Held whoever has the computer, for the reason `passkey_gate` gives.
+    if !for_here || app.secrets.use_of(name) != Some(KeyUse::Ask) {
         return Gate::Through(None);
     }
     held_until_answered(app, name, Kind::Login, site, holds::FILL_WAITS_MS).await
@@ -357,10 +360,13 @@ fn declined(name: &str, site: &str) -> Refusal {
     )
 }
 
-/// Whether the person has the computer (through the viewer) right now: their
-/// own uses are never held.
+/// Whether the person has the computer (through the viewer) right now, for
+/// the record of who a use was for. It waives nothing: an ask-me key is held
+/// whoever has the computer. The lease says so itself, set where the viewer's
+/// socket took the screen; a holder's name proves nothing, since an MCP
+/// caller chooses its own.
 pub(crate) async fn person_has_it(app: &App) -> bool {
-    matches!(app.access.holder().await, Some((holder, _)) if holder.starts_with(crate::viewer::PERSON))
+    app.access.person().await.is_some()
 }
 
 /// The path of the page the agent drives, when it is on `site`: what the
@@ -529,10 +535,13 @@ static PERSON_SINCE: std::sync::Mutex<Option<u64>> = std::sync::Mutex::new(None)
 
 async fn wheel(app: &App) -> Value {
     let agent = app.jobs.agent.snapshot();
-    let holder = app.access.holder().await;
+    let held = match app.access.person().await {
+        Some(_) => Some(true),
+        None => app.access.holder().await.map(|_| false),
+    };
     let driving = turn(
         &PERSON_SINCE,
-        holder.as_ref().map(|(h, _)| h.as_str()),
+        held,
         agent.last_action_ms,
         crate::jobs::now(),
     );
@@ -543,17 +552,17 @@ async fn wheel(app: &App) -> Value {
 /// has not handed it back while the agent stayed still; else whoever holds.
 fn turn(
     since: &std::sync::Mutex<Option<u64>>,
-    holder: Option<&str>,
+    person_holds: Option<bool>,
     agent_acted_ms: u64,
     now: u64,
 ) -> &'static str {
     let mut since = since.lock().unwrap();
-    match holder {
-        Some(holder) if holder.starts_with(crate::viewer::PERSON) => {
+    match person_holds {
+        Some(true) => {
             since.get_or_insert(now);
             "person"
         }
-        Some(_) => {
+        Some(false) => {
             *since = None;
             "agent"
         }
@@ -757,17 +766,17 @@ mod tests {
     fn the_turn_stays_with_the_person_until_handed_back_or_the_agent_acts() {
         let since = std::sync::Mutex::new(None);
         assert_eq!(turn(&since, None, 0, 1_000), "none");
-        assert_eq!(turn(&since, Some("person-1"), 500, 2_000), "person");
+        assert_eq!(turn(&since, Some(true), 500, 2_000), "person");
         // The viewer's hold lapsed; the agent has not moved since.
         assert_eq!(turn(&since, None, 500, 20_000), "person");
         // Renewing does not move when the turn began.
-        assert_eq!(turn(&since, Some("person-1"), 500, 21_000), "person");
+        assert_eq!(turn(&since, Some(true), 500, 21_000), "person");
         assert_eq!(turn(&since, None, 1_500, 30_000), "person");
         // The agent acting after the person took it ends the turn.
         assert_eq!(turn(&since, None, 2_500, 31_000), "none");
         assert_eq!(turn(&since, None, 2_500, 32_000), "none");
-        assert_eq!(turn(&since, Some("person-2"), 2_500, 40_000), "person");
-        assert_eq!(turn(&since, Some("agent"), 2_500, 41_000), "agent");
+        assert_eq!(turn(&since, Some(true), 2_500, 40_000), "person");
+        assert_eq!(turn(&since, Some(false), 2_500, 41_000), "agent");
         assert_eq!(turn(&since, None, 2_500, 42_000), "none");
     }
 
@@ -851,6 +860,43 @@ mod tests {
             .cloned()
             .unwrap();
         assert_eq!(serde_json::to_value(&line).unwrap()["how"], "you denied it");
+    }
+
+    /// A job started before the person took the screen is still running
+    /// while they hold it, and reaches this socket as the extension does. If
+    /// their turn waived the ask, that job would be handed the password.
+    #[tokio::test]
+    async fn an_ask_me_login_waits_for_the_desk_even_while_the_person_has_the_screen() {
+        let app = App::new(crate::Config {
+            addr: "127.0.0.1:0".to_owned(),
+            token: Some("test-only".to_owned()),
+            home: std::env::temp_dir(),
+            display: ":0".to_owned(),
+            screen: "1920x1080".to_owned(),
+        });
+        let set = serde_json::from_value(json!({
+            "ASKME": {"kind": "login", "sites": ["https://example.org"], "username": "u",
+                      "password": "kept-for-the-desk", "use": "ask"},
+        }))
+        .unwrap();
+        app.secrets.replace(set).unwrap();
+        app.access.seize("person-1", 60).await;
+        assert!(person_has_it(&app).await);
+
+        let message = json!({"kind": "fill", "origin": "https://example.org", "name": "ASKME"});
+        let asking = app.clone();
+        let fill = tokio::spawn(async move { answer(&asking, &message).await });
+        let mut held = Vec::new();
+        for _ in 0..100 {
+            held = app.holds.held(crate::jobs::now());
+            if !held.is_empty() {
+                break;
+            }
+            tokio::time::sleep(std::time::Duration::from_millis(50)).await;
+        }
+        assert_eq!(held.len(), 1, "the use waits for the desk's answer");
+        assert!(!fill.is_finished(), "nothing was handed over meanwhile");
+        fill.abort();
     }
 
     #[test]

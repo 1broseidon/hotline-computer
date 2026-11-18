@@ -193,13 +193,71 @@ pub async fn download(
 /// it lands whole or not at all, written beside its place and moved over
 /// once complete. The same rule as the `files` tool: under the home only.
 pub async fn upload(
+    state: State<App>,
+    headers: HeaderMap,
+    query: Query<FileRequest>,
+    body: Body,
+) -> Response {
+    upload_within(state, headers, query, body, upload_limit()).await
+}
+
+/// The largest file `POST /files` takes: the 50 MiB the Files panel
+/// states, or `HOTLINE_COMPUTER_UPLOAD_LIMIT_MIB` where a desk wants another.
+fn upload_limit() -> u64 {
+    std::env::var("HOTLINE_COMPUTER_UPLOAD_LIMIT_MIB")
+        .ok()
+        .and_then(|value| value.trim().parse::<u64>().ok())
+        .filter(|mebibytes| *mebibytes > 0)
+        .unwrap_or(50)
+        .saturating_mul(1024 * 1024)
+}
+
+fn too_large(limit: u64) -> Response {
+    (
+        StatusCode::PAYLOAD_TOO_LARGE,
+        Json(json!({"error": format!("file is larger than the {} MiB upload limit", limit / (1024 * 1024))})),
+    )
+        .into_response()
+}
+
+/// The refusal, once the sender has been heard out. A client still writing
+/// its file when the connection closes sees a broken pipe and never reads
+/// the answer, so what is left of the body is taken and thrown away first:
+/// a few times the limit at most, and not for long. Nothing of it is kept.
+async fn too_large_after(unread: impl tokio::io::AsyncRead + Unpin, limit: u64) -> Response {
+    let mut unread = tokio::io::AsyncReadExt::take(unread, limit.saturating_mul(4));
+    let _ = tokio::time::timeout(
+        std::time::Duration::from_secs(20),
+        tokio::io::copy(&mut unread, &mut tokio::io::sink()),
+    )
+    .await;
+    too_large(limit)
+}
+
+/// `upload`, counting. A body that says it is over `limit` is refused before
+/// a byte is staged; one that does not say, or says wrong, is cut off at the
+/// limit and what was staged of it is removed.
+async fn upload_within(
     State(app): State<App>,
     headers: HeaderMap,
     Query(request): Query<FileRequest>,
     body: Body,
+    limit: u64,
 ) -> Response {
     if !admitted(&app, &headers, &request.token) {
         return unauthorized();
+    }
+    if headers
+        .get(header::CONTENT_LENGTH)
+        .and_then(|value| value.to_str().ok())
+        .and_then(|value| value.parse::<u64>().ok())
+        .is_some_and(|length| length > limit)
+    {
+        let unread = tokio_util::io::StreamReader::new(
+            body.into_data_stream()
+                .map_err(|error| std::io::Error::other(error.to_string())),
+        );
+        return too_large_after(unread, limit).await;
     }
     if request.path.is_empty() {
         return refused("path names the file to write".to_owned());
@@ -231,14 +289,20 @@ pub async fn upload(
     };
     let (file, arriving) = temporary.into_parts();
     let mut file = tokio::fs::File::from_std(file);
-    let mut reader = tokio_util::io::StreamReader::new(
+    let reader = tokio_util::io::StreamReader::new(
         body.into_data_stream()
             .map_err(|error| std::io::Error::other(error.to_string())),
     );
+    // One byte past the limit is enough to know, and all that is written.
+    let mut reader = tokio::io::AsyncReadExt::take(reader, limit.saturating_add(1));
     let bytes = match tokio::io::copy(&mut reader, &mut file).await {
         Ok(bytes) => bytes,
         Err(error) => return refused(format!("receiving {name}: {error}")),
     };
+    if bytes > limit {
+        // `arriving` removes the staged part as it goes out of scope.
+        return too_large_after(reader.into_inner(), limit).await;
+    }
     if let Err(error) = file.sync_all().await {
         return refused(format!("staging {name}: {error}"));
     }
@@ -379,9 +443,10 @@ fn pointer_message(gesture: &crate::xtest::Gesture) -> String {
 /// What the page shows in its control bar: who holds the machine, from this
 /// socket's point of view, and the job counts the desktop's bar shows.
 async fn state_message(app: &App, holder: &str, driving: bool) -> String {
+    let person = app.access.person().await;
     let who = match app.access.holder().await {
         Some((current, _)) if current == holder => "you",
-        Some((current, _)) if current.starts_with(PERSON) => "person",
+        Some((current, _)) if person.as_deref() == Some(current.as_str()) => "person",
         Some(_) => "agent",
         None => "none",
     };
@@ -982,6 +1047,59 @@ mod tests {
             StatusCode::BAD_REQUEST
         );
         assert_eq!(std::fs::read_dir(home.path()).unwrap().count(), 0);
+    }
+
+    #[tokio::test]
+    async fn an_upload_over_the_limit_is_refused_and_leaves_nothing_behind() {
+        let home = tempfile::tempdir().unwrap();
+        let app = app_at(home.path().to_path_buf(), Some("secret"));
+        let target = home.path().join("big.bin");
+        let request = || {
+            Query(FileRequest {
+                token: String::new(),
+                path: target.display().to_string(),
+                create_only: false,
+            })
+        };
+        // Said up front: refused before anything is staged.
+        let mut declared = bearer("secret");
+        declared.insert(header::CONTENT_LENGTH, "17".parse().unwrap());
+        let refused = upload_within(
+            State(app.clone()),
+            declared,
+            request(),
+            Body::from("seventeen bytes!!"),
+            16,
+        )
+        .await;
+        assert_eq!(refused.status(), StatusCode::PAYLOAD_TOO_LARGE);
+        assert_eq!(std::fs::read_dir(home.path()).unwrap().count(), 0);
+        // Not said, and arriving in pieces: cut off, and the part removed.
+        let pieces = futures_util::stream::iter(
+            (0..8).map(|_| Ok::<_, std::io::Error>(axum::body::Bytes::from_static(b"12345678"))),
+        );
+        let streamed = upload_within(
+            State(app.clone()),
+            bearer("secret"),
+            request(),
+            Body::from_stream(pieces),
+            16,
+        )
+        .await;
+        assert_eq!(streamed.status(), StatusCode::PAYLOAD_TOO_LARGE);
+        assert!(!target.exists());
+        assert_eq!(std::fs::read_dir(home.path()).unwrap().count(), 0);
+        // Exactly the limit still lands whole.
+        let fits = upload_within(
+            State(app),
+            bearer("secret"),
+            request(),
+            Body::from("sixteen bytes!!!"),
+            16,
+        )
+        .await;
+        assert_eq!(fits.status(), StatusCode::OK);
+        assert_eq!(std::fs::read(&target).unwrap(), b"sixteen bytes!!!");
     }
 
     fn sent(text: &str) -> FromViewer {
