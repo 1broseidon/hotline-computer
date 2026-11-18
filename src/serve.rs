@@ -74,14 +74,20 @@ impl ServerHandler for ComputerTools {
         request: CallToolRequestParams,
         context: RequestContext<rmcp::RoleServer>,
     ) -> Result<CallToolResponse, ErrorData> {
-        let holder = context
-            .extensions
-            .get::<axum::http::request::Parts>()
-            .and_then(|parts| parts.headers.get("X-Computer-Holder"))
-            .and_then(|value| value.to_str().ok())
-            .filter(|value| !value.is_empty())
-            .unwrap_or("anonymous")
-            .to_owned();
+        let holder = match holder_of(
+            context
+                .extensions
+                .get::<axum::http::request::Parts>()
+                .and_then(|parts| parts.headers.get("X-Computer-Holder"))
+                .and_then(|value| value.to_str().ok()),
+        ) {
+            Ok(holder) => holder,
+            Err(error) => {
+                return Ok(
+                    CallToolResult::error(vec![rmcp::model::ContentBlock::text(error)]).into(),
+                );
+            }
+        };
         self.note_client(Some(&context.meta), &context.peer);
         let arguments = request.arguments.map_or(Value::Null, Value::Object);
         let result = match tools::call(&self.app, &request.name, arguments, &holder).await {
@@ -90,6 +96,23 @@ impl ServerHandler for ComputerTools {
         };
         Ok(result.into())
     }
+}
+
+/// The name a call acts under: what its `X-Computer-Holder` says, or
+/// `anonymous`. Names that begin like the viewer's own are the person's and
+/// no caller's to take: under one, a call would pass for the hold of the
+/// person at the screen, act during it, and end it.
+fn holder_of(header: Option<&str>) -> Result<String, String> {
+    let holder = header
+        .filter(|value| !value.is_empty())
+        .unwrap_or("anonymous");
+    if holder.starts_with(viewer::PERSON) {
+        return Err(format!(
+            "X-Computer-Holder {holder:?} is not a name a client may use: names beginning with {:?} belong to the person at the screen. Choose another.",
+            viewer::PERSON
+        ));
+    }
+    Ok(holder.to_owned())
 }
 
 /// The `tools/list` result, complete for the protocol a modern client
@@ -107,6 +130,7 @@ fn listing(home: &str) -> ListToolsResult {
 }
 
 pub async fn run(app: App) -> Result<(), String> {
+    app.config.door()?;
     tokio::fs::create_dir_all(&app.config.home)
         .await
         .map_err(|error| format!("create {}: {error}", app.config.home.display()))?;
@@ -151,10 +175,13 @@ pub(crate) fn router(app: App) -> Router {
                 })
             },
             Arc::new(LocalSessionManager::default()),
+            // `guard` below checks Host and Origin for every route, this
+            // one included, so rmcp's own list for `/mcp` alone stays off.
             StreamableHttpServerConfig::default()
                 .disable_allowed_hosts()
                 .with_max_request_body_bytes(MAX_REQUEST_BODY),
         );
+    let door = Arc::new(Door::from_env());
     Router::new()
         .route("/health", get(|| async { "ok" }))
         .route("/", get(viewer::page))
@@ -209,7 +236,139 @@ pub(crate) fn router(app: App) -> Router {
                 async move { authenticate(request, next, expected_token.as_deref()).await }
             },
         ))
+        // Outermost: a request from the wrong place is turned away before
+        // anything reads its token.
+        .layer(axum::middleware::from_fn(
+            move |request: Request, next: Next| {
+                let door = Arc::clone(&door);
+                async move { guard(request, next, &door).await }
+            },
+        ))
         .with_state(app)
+}
+
+/// Where a request may come from, beyond an address and this computer
+/// itself: the names it is reached by through a proxy or a network, in
+/// `HOTLINE_COMPUTER_ALLOWED_HOSTS`, and the other sites whose pages may
+/// call it, in `HOTLINE_COMPUTER_ALLOWED_ORIGINS`. Both are comma-separated.
+#[derive(Default)]
+pub(crate) struct Door {
+    hosts: Vec<String>,
+    origins: Vec<String>,
+}
+
+impl Door {
+    fn from_env() -> Self {
+        let list = |name: &str| -> Vec<String> {
+            std::env::var(name)
+                .unwrap_or_default()
+                .split(',')
+                .map(|entry| entry.trim().trim_end_matches('/').to_ascii_lowercase())
+                .filter(|entry| !entry.is_empty())
+                .collect()
+        };
+        Self {
+            hosts: list("HOTLINE_COMPUTER_ALLOWED_HOSTS"),
+            origins: list("HOTLINE_COMPUTER_ALLOWED_ORIGINS"),
+        }
+    }
+
+    /// A browser sends the name it looked up as `Host`. A page that rebinds
+    /// its own name to this computer's address still sends its own name, so
+    /// a name is only taken when it was listed. An address needs no listing:
+    /// nothing can rebind one.
+    fn admits_host(&self, authority: &str) -> bool {
+        let authority = authority.to_ascii_lowercase();
+        let host = host_of(&authority);
+        let address = host
+            .strip_prefix('[')
+            .and_then(|rest| rest.strip_suffix(']'))
+            .map_or_else(
+                || host.parse::<std::net::Ipv4Addr>().is_ok(),
+                |inner| inner.parse::<std::net::Ipv6Addr>().is_ok(),
+            );
+        address
+            || host == "localhost"
+            || self
+                .hosts
+                .iter()
+                .any(|allowed| allowed == host || *allowed == authority)
+    }
+
+    /// A browser names the page a request came from as `Origin` whenever
+    /// that is another site, and on every socket. The computer's own pages
+    /// come from the address they call; anything else was listed or is
+    /// turned away. No `Origin` is no browser, or a page of this computer.
+    fn admits_origin(&self, origin: &str, authority: &str) -> bool {
+        let origin = origin.trim().trim_end_matches('/').to_ascii_lowercase();
+        if self.origins.contains(&origin) {
+            return true;
+        }
+        origin
+            .split_once("://")
+            .is_some_and(|(_, from)| from == authority.to_ascii_lowercase())
+    }
+}
+
+/// The host of `host[:port]`, an IPv6 address kept in its brackets. What
+/// does not have that shape comes back whole, and is then no host anyone
+/// listed.
+fn host_of(authority: &str) -> &str {
+    let port = |port: &str| !port.is_empty() && port.bytes().all(|b| b.is_ascii_digit());
+    if authority.starts_with('[') {
+        return match authority.find(']') {
+            Some(end) => match &authority[end + 1..] {
+                "" => authority,
+                rest if rest.strip_prefix(':').is_some_and(port) => &authority[..=end],
+                _ => authority,
+            },
+            None => authority,
+        };
+    }
+    match authority.rsplit_once(':') {
+        Some((host, after)) if port(after) => host,
+        _ => authority,
+    }
+}
+
+/// Turns away a request addressed to a name this computer does not go by,
+/// or sent by a page of another site. The bearer already keeps a stranger
+/// out; this keeps a page in the person's own browser from reaching the
+/// computer with whatever that browser can do. `/health` says only "ok".
+async fn guard(request: Request, next: Next, door: &Door) -> Response {
+    if request.uri().path() == "/health" {
+        return next.run(request).await;
+    }
+    let refuse =
+        |error: &str| (StatusCode::FORBIDDEN, Json(json!({ "error": error }))).into_response();
+    let authority = request
+        .headers()
+        .get(header::HOST)
+        .and_then(|value| value.to_str().ok())
+        .or_else(|| {
+            request
+                .uri()
+                .authority()
+                .map(|authority| authority.as_str())
+        })
+        .unwrap_or("")
+        .to_owned();
+    if !door.admits_host(&authority) {
+        return refuse(
+            "host not allowed: reach this computer by address or localhost, or list the name in HOTLINE_COMPUTER_ALLOWED_HOSTS",
+        );
+    }
+    if let Some(origin) = request.headers().get(header::ORIGIN) {
+        let admitted = origin
+            .to_str()
+            .is_ok_and(|origin| door.admits_origin(origin, &authority));
+        if !admitted {
+            return refuse(
+                "origin not allowed: list the calling site in HOTLINE_COMPUTER_ALLOWED_ORIGINS",
+            );
+        }
+    }
+    next.run(request).await
 }
 
 /// `GET /pages`: `{"pages": [{"origin", "url", "title", "openedAt"}]}`,
@@ -470,6 +629,147 @@ mod tests {
             assert_eq!(identity.snapshot().name, "Tad");
         }
         server.abort();
+    }
+
+    #[test]
+    fn a_client_cannot_name_itself_the_person() {
+        assert_eq!(holder_of(None).unwrap(), "anonymous");
+        assert_eq!(holder_of(Some("")).unwrap(), "anonymous");
+        assert_eq!(holder_of(Some("Tad")).unwrap(), "Tad");
+        assert_eq!(holder_of(Some("Personal")).unwrap(), "Personal");
+        for taken in ["person", "person-1", "person-7 ", "personal-agent"] {
+            assert!(holder_of(Some(taken)).is_err(), "{taken}");
+        }
+    }
+
+    #[test]
+    fn a_request_is_taken_by_address_or_listed_name_only() {
+        let door = Door::default();
+        for host in [
+            "127.0.0.1",
+            "127.0.0.1:8787",
+            "192.168.65.89:8787",
+            "localhost",
+            "LOCALHOST:49152",
+            "[::1]",
+            "[::1]:8787",
+        ] {
+            assert!(door.admits_host(host), "{host}");
+        }
+        for host in [
+            "",
+            "evil.example",
+            "evil.example:8787",
+            "127.0.0.1.evil.example",
+            "localhost.evil.example:8787",
+            "[::1].evil.example",
+            "::1",
+            "computer.internal",
+        ] {
+            assert!(!door.admits_host(host), "{host}");
+        }
+        let listed = Door {
+            hosts: vec!["computer.internal".into(), "desk.example:8443".into()],
+            origins: vec!["http://localhost:6274".into()],
+        };
+        assert!(listed.admits_host("Computer.Internal:8787"));
+        assert!(listed.admits_host("desk.example:8443"));
+        assert!(!listed.admits_host("desk.example:9000"));
+        assert!(!listed.admits_host("evil.example"));
+
+        // The computer's own pages, whatever the scheme a proxy gave them.
+        assert!(door.admits_origin("http://127.0.0.1:8787", "127.0.0.1:8787"));
+        assert!(door.admits_origin("https://LocalHost:8787", "localhost:8787"));
+        assert!(door.admits_origin("http://[::1]:8787", "[::1]:8787"));
+        for origin in [
+            "null",
+            "http://evil.example",
+            "http://127.0.0.1:9999",
+            "http://127.0.0.1",
+            "127.0.0.1:8787",
+            "chrome-extension://abcdef",
+        ] {
+            assert!(!door.admits_origin(origin, "127.0.0.1:8787"), "{origin}");
+        }
+        assert!(listed.admits_origin("http://localhost:6274/", "127.0.0.1:8787"));
+        assert!(!listed.admits_origin("http://localhost:6275", "127.0.0.1:8787"));
+    }
+
+    #[tokio::test]
+    async fn another_sites_page_and_a_rebound_name_are_turned_away_before_the_token() {
+        let home = tempfile::tempdir().unwrap();
+        let app = App::new(crate::Config {
+            addr: "127.0.0.1:0".into(),
+            token: Some("test-only".into()),
+            home: home.path().into(),
+            display: String::new(),
+            screen: "1920x1080".into(),
+        });
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let address = listener.local_addr().unwrap();
+        let origin = format!("http://{address}");
+        let server = tokio::spawn(async move {
+            axum::serve(listener, router(app)).await.unwrap();
+        });
+        let http = reqwest::Client::builder().no_proxy().build().unwrap();
+        let ask = |host: Option<&str>, from: Option<&str>, path: &str| {
+            let mut request = http.get(format!("{origin}{path}")).bearer_auth("test-only");
+            if let Some(host) = host {
+                request = request.header(header::HOST, host);
+            }
+            if let Some(from) = from {
+                request = request.header(header::ORIGIN, from);
+            }
+            async move { request.send().await.unwrap().status() }
+        };
+        // The desk and every MCP client: an address, no Origin.
+        assert_eq!(ask(None, None, "/secrets/uses").await, StatusCode::OK);
+        // The computer's own page calling home.
+        assert_eq!(
+            ask(None, Some(&origin), "/secrets/uses").await,
+            StatusCode::OK
+        );
+        // A page of another site, even holding the right token.
+        assert_eq!(
+            ask(None, Some("https://evil.example"), "/secrets/uses").await,
+            StatusCode::FORBIDDEN
+        );
+        assert_eq!(
+            ask(None, Some("https://evil.example"), "/").await,
+            StatusCode::FORBIDDEN
+        );
+        // A name rebound to this address.
+        let rebound = format!("evil.example:{}", address.port());
+        assert_eq!(
+            ask(Some(&rebound), None, "/secrets/uses").await,
+            StatusCode::FORBIDDEN
+        );
+        assert_eq!(
+            ask(Some(&rebound), Some(&format!("http://{rebound}")), "/").await,
+            StatusCode::FORBIDDEN
+        );
+        // A probe needs neither.
+        assert_eq!(
+            ask(Some(&rebound), Some("https://evil.example"), "/health").await,
+            StatusCode::OK
+        );
+        server.abort();
+    }
+
+    #[test]
+    fn a_computer_with_no_token_does_not_start_by_accident() {
+        let config = |token: Option<&str>| crate::Config {
+            addr: "0.0.0.0:8787".into(),
+            token: token.map(str::to_owned),
+            home: "/home/agent".into(),
+            display: String::new(),
+            screen: "1920x1080".into(),
+        };
+        assert!(config(Some("a-token")).door().is_ok());
+        if std::env::var("HOTLINE_COMPUTER_ALLOW_NO_TOKEN").is_err() {
+            let refusal = config(None).door().unwrap_err();
+            assert!(refusal.contains("HOTLINE_COMPUTER_TOKEN"), "{refusal}");
+        }
     }
 
     #[test]

@@ -3,6 +3,11 @@
 //! Every build tool already reads one of a handful of standard variables, and
 //! the rest ask `nproc`, which GNU coreutils answers from `OMP_NUM_THREADS`.
 //! Deciding those once from the cgroup means no per-tool list ever grows.
+//!
+//! The same limits, with the disk the home and the Nix store have left, are
+//! what `state info` says the computer has ([`resources`]), so an agent plans
+//! to them rather than finding them out.
+use serde_json::{Value, json};
 use std::collections::BTreeMap;
 use std::path::Path;
 
@@ -60,6 +65,127 @@ fn variables(jobs: u64, cpus: u64) -> BTreeMap<String, String> {
     .collect()
 }
 
+/// A number from `/proc/meminfo`, in bytes.
+fn meminfo(text: &str, key: &str) -> Option<u64> {
+    text.lines()
+        .find_map(|line| line.strip_prefix(key)?.strip_prefix(':'))
+        .and_then(|rest| rest.split_whitespace().next()?.parse::<u64>().ok())
+        .map(|kib| kib * 1024)
+}
+
+fn gib(bytes: u64) -> String {
+    format!("{:.1} GiB", bytes as f64 / f64::from(1u32 << 30))
+}
+
+/// Memory: the cgroup's limit and use when it sets one, the machine's otherwise.
+fn memory_report(root: &Path, meminfo_text: &str) -> Value {
+    let (limit, source) = match memory(root) {
+        Some(bytes) => (Some(bytes), "cgroup"),
+        None => (meminfo(meminfo_text, "MemTotal"), "machine"),
+    };
+    let used = match source {
+        "cgroup" => read(root, "memory.current").and_then(|v| v.parse::<u64>().ok()),
+        _ => meminfo(meminfo_text, "MemTotal")
+            .zip(meminfo(meminfo_text, "MemAvailable"))
+            .map(|(total, available)| total.saturating_sub(available)),
+    };
+    let events = read(root, "memory.events").unwrap_or_default();
+    let count = |key: &str| {
+        events.lines().find_map(|line| {
+            let (name, value) = line.split_once(' ')?;
+            (name == key).then(|| value.trim().parse::<u64>().ok())?
+        })
+    };
+    json!({
+        "limit_bytes": limit,
+        "used_bytes": used,
+        "peak_bytes": read(root, "memory.peak").and_then(|v| v.parse::<u64>().ok()),
+        "limit_from": source,
+        "oom_kills": count("oom_kill"),
+    })
+}
+
+/// A file system's size and what is left of it, for whoever is not root.
+fn disk(path: &Path) -> Option<(u64, u64, u64)> {
+    use std::os::unix::ffi::OsStrExt;
+    let path = std::ffi::CString::new(path.as_os_str().as_bytes()).ok()?;
+    let mut stat: libc::statvfs = unsafe { std::mem::zeroed() };
+    if unsafe { libc::statvfs(path.as_ptr(), &raw mut stat) } != 0 {
+        return None;
+    }
+    let block = stat.f_frsize as u64;
+    let total = stat.f_blocks as u64 * block;
+    let free = stat.f_bavail as u64 * block;
+    let used = total.saturating_sub(stat.f_bfree as u64 * block);
+    Some((total, free, used))
+}
+
+/// What this computer has to work with: CPUs, memory, the disk under the
+/// home and under the Nix store, and how it draws. Nothing here is asked of
+/// anything but the kernel.
+pub fn resources(home: &Path) -> Value {
+    resources_from(
+        Path::new("/sys/fs/cgroup"),
+        &std::fs::read_to_string("/proc/meminfo").unwrap_or_default(),
+        home,
+        Path::new("/nix/store"),
+    )
+}
+
+fn resources_from(root: &Path, meminfo_text: &str, home: &Path, store: &Path) -> Value {
+    use std::os::unix::fs::MetadataExt;
+    let available = std::thread::available_parallelism().map_or(1, |n| n.get() as u64);
+    let (jobs, cpus) = parallelism(root, available);
+    let memory = memory_report(root, meminfo_text);
+    let device = |path: &Path| std::fs::metadata(path).ok().map(|m| m.dev());
+    let shared = device(home).is_some() && device(home) == device(store);
+    let mut disks = serde_json::Map::new();
+    let mut said = Vec::new();
+    for (name, path) in [("home", home), ("nix_store", store)] {
+        let Some((total, free, used)) = disk(path) else {
+            continue;
+        };
+        disks.insert(
+            name.into(),
+            json!({"path": path, "total_bytes": total, "free_bytes": free, "used_bytes": used}),
+        );
+        if name == "home" {
+            said.push(format!("home {} free of {}", gib(free), gib(total)));
+        } else if shared {
+            said.push("the Nix store on the same disk".to_owned());
+        } else {
+            said.push(format!("Nix store {} free of {}", gib(free), gib(total)));
+        }
+    }
+    if let Some(shared_disk) = disks.get_mut("nix_store") {
+        shared_disk["same_disk_as_home"] = json!(shared);
+    }
+    let memory_said = match (
+        memory["limit_bytes"].as_u64(),
+        memory["used_bytes"].as_u64(),
+    ) {
+        (Some(limit), Some(used)) => format!("{} memory, {} in use", gib(limit), gib(used)),
+        (Some(limit), None) => format!("{} memory", gib(limit)),
+        _ => "memory unknown".to_owned(),
+    };
+    json!({
+        "cpus": cpus,
+        "build_jobs": jobs,
+        "memory": memory,
+        "disk": disks,
+        "graphics": {
+            "rendering": "software",
+            "renderer": "Mesa llvmpipe on the CPU",
+            "gpu": false,
+            "note": "There is no GPU: OpenGL and Vulkan are drawn by the CPU, and CUDA, OpenCL on a GPU and other GPU compute are absent. A heavy real-time 3D viewport is slow; offline CPU renders work.",
+        },
+        "summary": format!(
+            "{cpus} CPUs ({jobs} build jobs at once); {memory_said}; {}; software rendering, no GPU",
+            said.join(", ")
+        ),
+    })
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -92,5 +218,61 @@ mod tests {
         let env = variables(4, 24);
         assert_eq!(env["MAKEFLAGS"], "-j4");
         assert_eq!(env["GOMAXPROCS"], "24");
+    }
+
+    #[test]
+    fn resources_say_the_cgroups_limits_and_the_disk_left() {
+        let root = cgroup("200000 100000\n", "4294967296\n");
+        std::fs::write(root.path().join("memory.current"), "1073741824\n").unwrap();
+        std::fs::write(
+            root.path().join("memory.events"),
+            "low 0\nhigh 0\nmax 2\noom 1\noom_kill 1\n",
+        )
+        .unwrap();
+        let home = tempfile::tempdir().unwrap();
+        let value = resources_from(root.path(), "", home.path(), home.path());
+        assert_eq!(value["cpus"], 2);
+        assert_eq!(value["memory"]["limit_bytes"], 4_294_967_296_u64);
+        assert_eq!(value["memory"]["used_bytes"], 1_073_741_824_u64);
+        assert_eq!(value["memory"]["limit_from"], "cgroup");
+        assert_eq!(value["memory"]["oom_kills"], 1);
+        let disk = &value["disk"]["home"];
+        assert!(disk["total_bytes"].as_u64().unwrap() > 0);
+        assert!(disk["free_bytes"].as_u64().unwrap() <= disk["total_bytes"].as_u64().unwrap());
+        assert_eq!(value["disk"]["nix_store"]["same_disk_as_home"], true);
+        assert_eq!(value["graphics"]["gpu"], false);
+        let summary = value["summary"].as_str().unwrap();
+        assert!(summary.starts_with("2 CPUs"), "{summary}");
+        assert!(
+            summary.contains("4.0 GiB memory, 1.0 GiB in use"),
+            "{summary}"
+        );
+        assert!(summary.contains("Nix store on the same disk"), "{summary}");
+    }
+
+    #[test]
+    fn without_a_memory_limit_the_machines_memory_is_said() {
+        let root = tempfile::tempdir().unwrap();
+        let meminfo =
+            "MemTotal:        8000000 kB\nMemFree:  100 kB\nMemAvailable:    6000000 kB\n";
+        let value = memory_report(root.path(), meminfo);
+        assert_eq!(value["limit_bytes"], 8_000_000_u64 * 1024);
+        assert_eq!(value["used_bytes"], 2_000_000_u64 * 1024);
+        assert_eq!(value["limit_from"], "machine");
+        assert!(value["oom_kills"].is_null());
+        let missing = tempfile::tempdir().unwrap();
+        let value = resources_from(
+            root.path(),
+            "",
+            missing.path(),
+            &missing.path().join("none"),
+        );
+        assert!(value["disk"].get("nix_store").is_none());
+        assert!(
+            value["summary"]
+                .as_str()
+                .unwrap()
+                .contains("memory unknown")
+        );
     }
 }

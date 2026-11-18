@@ -30,6 +30,9 @@ struct Input {
     wait_ms: Option<u64>,
     max_output: Option<usize>,
     name: Option<String>,
+    /// For a desktop run, and ready: part of the title its window has once
+    /// it is what the run is for.
+    ready_title: Option<String>,
 }
 
 pub async fn call(app: &App, arguments: Value, holder: &str) -> ToolResult {
@@ -93,14 +96,23 @@ pub async fn call(app: &App, arguments: Value, holder: &str) -> ToolResult {
                 .map(|p| if p.is_absolute() { p } else { home.join(p) })
                 .unwrap_or_else(|| home.clone());
             let (workspace, composed) = crate::manifest::find(home, &cwd)?;
-            let kind = composed.manifest.runs.get(name).map(|r| r.kind);
+            let entry = composed.manifest.runs.get(name);
+            let kind = entry.map(|r| r.kind);
+            // The call's own title is what ready means this time; else the run's.
+            let ready_title = match input.ready_title.as_deref() {
+                Some(_) if kind.is_some_and(|k| k != crate::manifest::Kind::Desktop) => {
+                    return Err("ready_title is for a desktop run, whose window it names".into());
+                }
+                Some(asked) => Some(crate::ready::title(asked)?),
+                None => entry.and_then(|r| r.ready_title.clone()),
+            };
             let (start, url) = crate::manifest::job(&workspace, &composed, name, input.start)?;
             let before = crate::ready::windows_now(app);
             let guard = app.access.mutate(holder).await?;
             let job = app.jobs.start(start, holder).await?;
             drop(guard);
             if let Some(kind) = kind.filter(|k| *k != crate::manifest::Kind::Task) {
-                crate::ready::remember(&job.id, kind, url.clone(), before);
+                crate::ready::remember(&job.id, kind, url.clone(), before, ready_title);
             }
             let observer_error = if app.display.is_some() {
                 app.observer.show(false).await.err()
@@ -121,7 +133,7 @@ pub async fn call(app: &App, arguments: Value, holder: &str) -> ToolResult {
             let wait = input.wait_ms.unwrap_or(45_000).min(CALL_BUDGET_MS);
             if kind.is_some_and(|k| k != crate::manifest::Kind::Task) && wait > 0 {
                 let id = result["id"].as_str().unwrap_or_default().to_owned();
-                let (ready, images) = crate::ready::wait(app, &id, wait).await?;
+                let (ready, images) = crate::ready::wait(app, &id, wait, None).await?;
                 result["ready"] = ready;
                 let mut blocks = json_text(result)?;
                 blocks.extend(images);
@@ -130,9 +142,18 @@ pub async fn call(app: &App, arguments: Value, holder: &str) -> ToolResult {
             json_text(result)
         }
         "ready" => {
-            let (ready, images) =
-                crate::ready::wait(app, id, input.wait_ms.unwrap_or(45_000).min(CALL_BUDGET_MS))
-                    .await?;
+            let title = input
+                .ready_title
+                .as_deref()
+                .map(crate::ready::title)
+                .transpose()?;
+            let (ready, images) = crate::ready::wait(
+                app,
+                id,
+                input.wait_ms.unwrap_or(45_000).min(CALL_BUDGET_MS),
+                title,
+            )
+            .await?;
             let mut blocks = json_text(ready)?;
             blocks.extend(images);
             Ok(blocks)

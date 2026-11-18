@@ -187,7 +187,7 @@
     return svg;
   }
 
-  let host = null, chip, menu, receipt;
+  let host = null, shadow = null, chip, menu, receipt;
   let field = null; // the field the chip sits in
   let receiptTimer = 0;
   let sizes = null;
@@ -197,7 +197,9 @@
     // Out of the page's flow and out of its styles: nothing here moves the page.
     const style = { all: 'initial', position: 'fixed', display: 'block', width: '0', top: '0', left: '0', 'z-index': '2147483647', 'pointer-events': 'none' };
     for (const [k, v] of Object.entries(style)) host.style.setProperty(k, v, 'important');
-    const root = host.attachShadow({ mode: 'open' });
+    // Closed, and every press checked for a real one: a script on the page
+    // must not be able to open the list and choose a login for itself.
+    const root = shadow = host.attachShadow({ mode: 'closed' });
     // A constructed sheet, not a <style>, so a page's style-src policy has no say.
     const sheet = new CSSStyleSheet();
     sheet.replaceSync(CSS);
@@ -208,7 +210,7 @@
     root.append(chip, menu, receipt);
     // Pressing the chip or an item keeps focus in the field, as a dropdown should.
     root.addEventListener('mousedown', (e) => e.preventDefault());
-    chip.addEventListener('click', () => (menu.hidden ? openMenu() : closeMenu()));
+    chip.addEventListener('click', (e) => { if (e.isTrusted) (menu.hidden ? openMenu() : closeMenu()); });
     root.addEventListener('keydown', onMenuKey);
     sizes = new ResizeObserver(place);
   }
@@ -264,13 +266,13 @@
       if (near.username || near.password) {
         const item = h('button', { type: 'button', 'aria-label': `Fill ${login.name} (${login.username || 'no username'})` },
           h('span', { class: 'name' }, login.name), h('span', { class: 'sub' }, login.username || ''));
-        item.addEventListener('click', () => choose(login, false));
+        item.addEventListener('click', (e) => { if (e.isTrusted) choose(login, false); });
         items.push(item);
       }
       if (login.code && near.code) {
         const item = h('button', { type: 'button', 'aria-label': `Fill code from ${login.name}` },
           h('span', { class: 'name' }, 'Fill code'), h('span', { class: 'sub' }, login.name));
-        item.addEventListener('click', () => choose(login, true));
+        item.addEventListener('click', (e) => { if (e.isTrusted) choose(login, true); });
         items.push(item);
       }
     }
@@ -294,12 +296,13 @@
   }
 
   function onMenuKey(e) {
+    if (!e.isTrusted) return;
     if (e.key === 'Escape') { e.stopPropagation(); closeMenu(); return; }
     if (e.key !== 'ArrowDown' && e.key !== 'ArrowUp') return;
     const items = [...menu.querySelectorAll('button')];
     if (!items.length) return;
     e.preventDefault();
-    const at = items.indexOf(host.shadowRoot.activeElement);
+    const at = items.indexOf(shadow.activeElement);
     items[(at + (e.key === 'ArrowDown' ? 1 : -1) + items.length) % items.length].focus();
   }
 

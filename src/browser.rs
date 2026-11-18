@@ -475,7 +475,13 @@ impl BrowserManager {
                         ));
                     }
                 }
-                form_action_on(&page, &selector, "fill", json!(filled.value)).await?;
+                // A fill the page did not keep answers with what the field
+                // holds instead. For a secret that is the value, or a page
+                // script's rewriting of it that no redaction would know, so
+                // it never leaves.
+                form_action_on(&page, &selector, "fill", json!(filled.value))
+                    .await
+                    .map_err(|error| without_value(&error))?;
                 Ok(format!("filled {reference} with {}", filled.label))
             })
         })
@@ -1174,6 +1180,17 @@ async fn form_action_on(
         return Err(value.to_string());
     }
     Ok(value)
+}
+
+/// A form action's refusal, less what the field held.
+fn without_value(error: &str) -> String {
+    match serde_json::from_str::<Value>(error) {
+        Ok(Value::Object(mut refusal)) => {
+            refusal.remove("value");
+            Value::Object(refusal).to_string()
+        }
+        _ => error.to_owned(),
+    }
 }
 
 async fn evaluate_value(page: &Page, script: &str) -> Result<Value, String> {
