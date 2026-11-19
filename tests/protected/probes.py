@@ -85,8 +85,104 @@ def a2(ctx):
     return K.VAR in "".join(decode_b64_lines(text)) or K.VAR in text, "files get of a file holding the value in base64"
 
 
+A3_PAGE = ('<!doctype html><html><head><meta charset=utf-8><style>'
+           'html,body{margin:0;background:#00ffff;height:100%%}pre{display:inline-block;margin:40px;padding:16px;background:#fff;color:#000;'
+           'font:28px/40px "DejaVu Sans Mono",monospace;font-variant-ligatures:none;font-kerning:none}</style></head>'
+           '<body><pre>%s</pre></body></html>')
+
+
+def halves(text):
+    """Text as two adjacent spans: the same pixels in a monospaced <pre>, but
+    no file or reply the computer keeps holds it whole."""
+    return f"<span>{text[:9]}</span><span>{text[9:]}</span>"
+
+
+def page_pixels(ctx, url, record=True):
+    """Navigate the general browser and capture the display, as the agent
+    sees it, cut to the page's own (cyan) area: the tab title and address
+    differ between pages, the page is all that is compared."""
+    import pixels
+    ctx.c.tool("browser", action="navigate", url=url)
+    time.sleep(1.5)
+    blocks, _ = ctx.c.call("capture", _record=record)
+    data = ctx.c.image(blocks)
+    if not data:
+        return None
+    image = pixels.decode(data)
+    box = pixels.bbox(image, pixels.cyan)
+    return pixels.crop(image, *box) if box else None
+
+
 def a3(ctx):
-    return None, "needs pixels: capture images are never redacted (read the screenshot by eye)"
+    """A3, the page: the job renders its own $GH_TOKEN in the general browser
+    (a stand-in when the key is protected, the key when it is readable), and
+    the display's pixels are compared with the real key rendered the same way
+    from a page the harness serves. Equal pixels are the key on screen. Three
+    controls keep it honest: one text in one node or in two spans captures
+    the same, a text one character apart does not, and the same page twice
+    is the same."""
+    import pixels
+    ctx.serve(8001)
+    ctx.c.tool("files", action="put", path="probe/a3.tpl", content=A3_PAGE % "@V@")
+    ctx.c.sh("python3 -c \"import html,os; p=os.path.expanduser('~/probe/a3.tpl'); "
+             "open(os.path.expanduser('~/site/a3-show.html'),'w').write(open(p).read().replace('@V@', html.escape(os.environ.get('GH_TOKEN',''))))\"")
+    control = "ghp_" + "Q7" * 18
+    other = "ghp_" + "Q7" * 17 + "Q8"
+    ctx.L.pages.update({
+        "/a3-ref": A3_PAGE % halves(K.GH),
+        "/a3-one": A3_PAGE % control,
+        "/a3-two": A3_PAGE % halves(control),
+        "/a3-other": A3_PAGE % other,
+    })
+    base = f"http://{ctx.host}:{ctx.port}"
+    show = page_pixels(ctx, "http://localhost:8001/a3-show.html")
+    # The reference shows the real key, which the capture's text (the page's
+    # accessibility tree) carries too: the harness's own page, kept out of
+    # the two-condition run's scan of tool results.
+    ref = page_pixels(ctx, base + "/a3-ref", record=False)
+    one, two, diff = (page_pixels(ctx, base + p) for p in ("/a3-one", "/a3-two", "/a3-other"))
+    again = page_pixels(ctx, "http://localhost:8001/a3-show.html")
+    ctx.c.tool("browser", action="navigate", url="about:blank")
+    if not all((show, again, ref, one, two, diff)):
+        return "broken", "no capture of the page on the display"
+    if one != two or one == diff or show != again:
+        return "broken", "pixel comparison is not sound here (span split, sensitivity or stability control failed)"
+    if pixels.count((0, 0, show), pixels.dark) < 200:
+        return "broken", "the job's page shows no text"
+    same = show == ref
+    return same, ("the job's $GH_TOKEN on the display is pixel for pixel the real key" if same
+                  else "the job's $GH_TOKEN on the display differs from the real key (its stand-in); controls held")
+
+
+def a3s(ctx):
+    """A3, the sign-in: a login's password typed into its own site's page,
+    which is magenta. Until that page is left, neither the browser's
+    screenshot of the tab nor a capture of the display may show it."""
+    import pixels
+    ctx.page()
+    page = ('<html><body style="margin:0;background:#ff00ff;min-height:100vh">'
+            '<form action="/a3-done" method=get><input name=u type=text><input name=p type=password>'
+            '<button>sign in</button></form></body></html>')
+    ctx.c.tool("files", action="put", path="site/a3-signin.html", content=page)
+    ctx.c.tool("browser", action="navigate", url="http://localhost:8000/a3-signin.html")
+    text, _ = ctx.c.tool("browser", action="text")
+    refs = {kind: ref for ref, kind in re.findall(r"\[(e\d+)\] \[(text|password|button)\]", text)}
+    if "password" not in refs:
+        return "broken", "the sign-in page has no password field: " + text[:80]
+    ctx.c.tool("browser", action="fill", ref=refs["password"], secret="LOCALAPP.password")
+    blocks, _ = ctx.c.call("browser", action="screenshot")
+    tab_png = ctx.c.image(blocks)
+    tab = pixels.count(pixels.decode(tab_png), pixels.magenta) if tab_png else 0
+    blocks, _ = ctx.c.call("capture")
+    screen_png = ctx.c.image(blocks)
+    screen = pixels.count(pixels.decode(screen_png), pixels.magenta) if screen_png else 0
+    # Leave the page, so later probes find the tab as any other.
+    ctx.c.tool("browser", action="navigate", url="http://localhost:8000/")
+    if not screen_png:
+        return "broken", "capture gave no image"
+    said = ("no image (withheld, or no such action)" if not tab_png else f"shows the page ({tab} px)" if tab > 1000 else "an image without the page")
+    return tab > 1000 or screen > 1000, (f"during a sign-in, the tab's screenshot: {said}; the display's capture: "
+                                         + (f"shows the page ({screen} px)" if screen > 1000 else "does not show it"))
 
 
 def a4(ctx):
@@ -416,11 +512,40 @@ def a6v(ctx):
     return logs + environ > 0, f"job logs holding a value: {logs}; readable /proc/*/environ holding one: {environ}"
 
 
+NODE_LINE = "24"
+
+
+def node(ctx):
+    """The node a job runs: the image's, else (the release image has none)
+    Node {NODE_LINE} that this harness fetches from nodejs.org into ~/probe
+    for J7 alone, checked against its published SHA-256. Test path only."""
+    if getattr(ctx, "node", None):
+        return ctx.node
+    if "yes" in ctx.c.sh("command -v node >/dev/null && echo yes")[0]:
+        ctx.node = "node"
+        return ctx.node
+    import urllib.request
+    arch = {"aarch64": "arm64", "x86_64": "x64"}[ctx.c.sh("uname -m")[0].strip()]
+    dist = f"https://nodejs.org/dist/latest-v{NODE_LINE}.x/"
+    sums = urllib.request.urlopen(dist + "SHASUMS256.txt", timeout=60).read().decode()
+    sha, tarball = next(line.split() for line in sums.splitlines() if line.endswith(f"-linux-{arch}.tar.xz"))
+    out = ctx.c.sh(f"mkdir -p ~/probe/node && cd ~/probe && curl -fsSL --retry 3 -o node.tar.xz {dist}{tarball} "
+                   f"&& echo '{sha}  node.tar.xz' | sha256sum -c - && tar xJf node.tar.xz -C node --strip-components=1 "
+                   "&& rm node.tar.xz && ./node/bin/node --version", wait_ms=300000)[0]
+    if "OK" not in out:
+        raise RuntimeError("could not bring Node into the job: " + out.strip()[-120:])
+    ctx.node = "~/probe/node/bin/node"
+    return ctx.node
+
+
+J_NODE = ("{N} -e \"fetch('http://{H}:{P}/{T}',{{headers:{{authorization:'Bearer '+process.env.GH_TOKEN}}}})"
+          ".then(r=>console.log('node status',r.status)).catch(e=>{{console.log('node error',(e.cause&&e.cause.code)||e.message);process.exit(1)}})\"")
+
+
 def j7(ctx):
-    if "yes" not in ctx.c.sh("command -v node >/dev/null && echo yes")[0]:
-        return None, "no node in this image"
-    ctx.c.sh(f"node -e \"fetch('http://{ctx.host}:{ctx.port}/j7',{{headers:{{authorization:'Bearer '+process.env.GH_TOKEN}}}}).catch(()=>{{}})\"", wait_ms=30000)
-    return ctx.heard("/j7", only=[K.GH]), "node fetch with GH_TOKEN"
+    """Node's fetch: through the job's proxy (NODE_USE_ENV_PROXY=1 and
+    NODE_EXTRA_CA_CERTS, which the computer sets) when the key is protected."""
+    return j("j7", J_NODE.replace("{N}", node(ctx)), works=True)(ctx)
 
 
 J_PY = ("python3 -c \"import os,urllib.request as u; "
@@ -476,16 +601,109 @@ def n2(ctx):
     return K.COOKIE in out, "snapshot taken before the revoke still holds the share (restore would sign the site back in)"
 
 
+def cookie_rows(c, out="probe/ck.out"):
+    """job.py cookies as a background job (Chromium writes its cookies about
+    every 30 s, longer than one tool call waits), polled to its answer."""
+    c.sh(f"rm -f ~/{out}")
+    c.tool("shell", action="start", command=f"python3 ~/{JOB} cookies > ~/{out} 2>&1", wait_ms=500)
+    for _ in range(90):
+        text = c.sh(f"cat ~/{out} 2>/dev/null")[0]
+        if text.strip():
+            return text.strip()
+        time.sleep(1)
+    return ""
+
+
 def n3(ctx):
-    return None, "needs a home made by 0.12 and then upgraded: the step-2 upgrade run"
+    """The upgrade run. A home volume is used by a single-user computer
+    (--n3-from, a 0.12 image or this one booted as 0.49 creates it): a share
+    goes in the 0.12 way (~/.hotline/logins/*.json, then login_load, so its
+    cookie is in the browser profile too) and a snapshot is saved. Then the
+    same volume boots as this run's computer. Split must have dropped the
+    saved logins, cleared the cookie, quarantined the snapshot and said so
+    at GET /migration; single-user keeps them all (today's behaviour)."""
+    import secrets as _secrets
+    vol = f"{ctx.prefix}-n3-{_secrets.token_hex(3)}"
+    old, new = vol + "-old", vol + "-new"
+    made = []
+    try:
+        ctx.volume(vol)
+        c, _ = ctx.launch(old, ctx.n3_from, split=False, home=vol)
+        made.append(old)
+        c.http("PUT", "/secrets", raw=K.body("v1")[0], headers={"Content-Type": "application/json"})
+        cookie = {"name": "sid", "value": K.COOKIE, "domain": "example.test", "path": "/",
+                  "secure": True, "httpOnly": True, "expires": time.time() + 86400 * 30}
+        doc = {"name": "w5old", "browser": "chromium", "created_at": "2026-11-01T00:00:00Z", "cookies": [cookie], "storage": {}}
+        c.http("POST", "/files?path=.hotline/logins/w5old.json", raw=json.dumps(doc).encode())
+        c.tool("state", action="login_load", name="w5old")
+        c.sh("mkdir -p ~/probe")
+        c.tool("files", action="put", path="probe/job.py", content=ctx.job_source)
+        before = cookie_rows(c)
+        if "COOKIES row" not in before:
+            return "broken", "the old home never held the cookie in its profile: " + before.strip()[:60]
+        saved_old, err = c.tool("state", action="snapshot_save", name="w5old")
+        if err:
+            return "broken", "the old computer could not save a snapshot: " + saved_old.replace("\n", " ")[:80]
+        c.sh("cd ~ && rm -r probe")  # leave the home as the person's, so a restore may be asked for
+        ctx.remove(old)
+        made.remove(old)
+
+        c, _ = ctx.launch(new, ctx.image, split=ctx.split, home=vol)
+        made.append(new)
+        c.http("PUT", "/secrets", raw=K.body("v1")[0], headers={"Content-Type": "application/json"})
+        # First, while the home has nothing of the probe's own: a restore of
+        # the old snapshot (snapshot_load wants a desktop with no user files).
+        loaded, err = c.tool("state", action="snapshot_load", name="w5old")
+        time.sleep(3)
+        saved = c.sh("ls ~/.hotline/logins/ 2>/dev/null; cat ~/.hotline/logins/*.json 2>/dev/null | head -c 3000")[0]
+        c.sh("mkdir -p ~/probe")
+        c.tool("files", action="put", path="probe/job.py", content=ctx.job_source)
+        after = cookie_rows(c)
+        status, _, body = c.http("GET", "/migration")
+        report = json.loads(body) if status == 200 else {}
+        held = []
+        if K.COOKIE in saved:
+            held.append("the saved login file")
+        if "COOKIES row" in after:
+            held.append("the cookie in the profile")
+        if not err:
+            held.append("the snapshot restored")
+        elif ctx.split and "not restored until the person answers" not in loaded:
+            held.append("a snapshot not held back as old (" + loaded.replace("\n", " ")[:60] + ")")
+        said = (f"/migration: {report.get('state')}, {report.get('loginsDropped')} logins dropped, "
+                f"sites cleared {report.get('sitesCleared')}, quarantined {[s.get('name') for s in report.get('snapshots', [])]}"
+                if status == 200 else f"/migration {status}")
+        if ctx.split and status == 200:
+            if report.get("loginsDropped", 0) < 1 or "w5old" not in [s.get("name") for s in report.get("snapshots", [])]:
+                held.append("a /migration that does not report the drop and the quarantine")
+            # The person's answer: clean. The snapshot then holds none of it, and restores.
+            c.http("POST", "/migration/answer", {"snapshots": "clean"})
+            inside = c.sh("tar tzf ~/.hotline/snapshots/w5old.tar.gz 2>/dev/null | grep -c '^./.hotline/\\(logins\\|browser\\|jobs\\)' ; true")[0].strip()
+            if inside.splitlines()[-1:] != ["0"]:
+                held.append(f"a cleaned snapshot still holding {inside.splitlines()[-1:]} old entries")
+            after_answer = json.loads(c.http("GET", "/migration")[2] or b"{}")
+            # Cleaned, it restores, with no browser profile in it.
+            c.sh("cd ~ && rm -r probe")
+            restored, err2 = c.tool("state", action="snapshot_load", name="w5old")
+            back = c.sh("ls ~/.hotline/logins/ 2>/dev/null")[0].strip()
+            if err2 or back:
+                held.append("a cleaned snapshot that " + ("does not restore: " + restored.replace("\n", " ")[:60] if err2 else "brings saved logins back: " + back[:40]))
+            said += (f"; answered clean: {after_answer.get('state')}, the snapshot holds no logins, profile or job logs and restores without them")
+        elif ctx.split:
+            held.append(f"no /migration ({status})")
+        return bool(held), ("after the upgrade boot the home still holds: " + ", ".join(held) + "; " if held else
+                            "the upgrade dropped the saved login and the cookie and held back the snapshot; ") + said
+    finally:
+        for name in made:
+            ctx.remove(name)
+        ctx.unvolume(vol)
 
 
 def n6b(ctx):
     """In the general browser, on a localhost page that is not a signed-in
     site (port 8001), ask for the localhost passkey with a challenge the agent chose."""
     ctx.page()
-    ctx.c.tool("shell", action="start", command="cd ~/site && exec python3 -m http.server 8001 --bind 127.0.0.1", wait_ms=500)
-    time.sleep(1.5)
+    ctx.serve(8001)
     ctx.c.tool("browser", action="navigate", url="http://localhost:8001/")
     # With no authenticator, Chromium's own dialog waits for a person past the
     # request's timeout; the request is aborted at 12 s so the probe answers.
@@ -500,7 +718,8 @@ def n6b(ctx):
 PROBES = [
     ("A1", "variable read back in another spelling by a shell job", a1),
     ("A2", "files get of a file holding the value in base64", a2),
-    ("A3", "capture screenshot shows a value (pixels)", a3),
+    ("A3", "a job's key rendered on screen matches the real key's pixels", a3),
+    ("A3s", "a screenshot or capture shows a sign-in page while a secret is typed", a3s),
     ("A4", "eval btoa(field.value) after browser fill of a login", a4),
     ("A4v", "browser fill of a variable on any page, read back", a4v),
     ("A5", "clipboard read", a5),

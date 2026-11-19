@@ -52,8 +52,9 @@ class Computer:
         self.http("POST", "/mcp", {"jsonrpc": "2.0", "method": "notifications/initialized"}, acc)
         self.acc = acc
 
-    def tool(self, tool_name, **args):
-        """Call a tool; returns (text, error_flag). Image blocks come back as '<image>'."""
+    def call(self, tool_name, _record=True, **args):
+        """Call a tool; returns (content blocks, error_flag), exactly as the agent receives them.
+        _record=False keeps it out of `record` (a page the harness itself served the canary on)."""
         if self.sid is None:
             self._init()
         self.n += 1
@@ -61,15 +62,28 @@ class Computer:
                                              "params": {"name": tool_name, "arguments": args}}, self.acc)
         r = self._parse(b)
         if r is None:
-            return b.decode(errors="replace")[:2000], True
+            return [{"type": "text", "text": b.decode(errors="replace")[:2000]}], True
         res = r.get("result", r)
-        text = []
-        for c in res.get("content", []) if isinstance(res, dict) else []:
-            text.append(c["text"] if c.get("type") == "text" else f"<{c.get('type')} block>")
+        blocks = list(res.get("content", [])) if isinstance(res, dict) else []
         err = bool(isinstance(res, dict) and res.get("isError")) or "error" in r
         if "error" in r:
-            text.append(json.dumps(r["error"]))
+            blocks.append({"type": "text", "text": json.dumps(r["error"])})
+        if self.record is not None and _record:
+            self.record.append((tool_name, blocks))
+        return blocks, err
+
+    record = None  # a list to keep every tool result in, for a canary scan
+
+    def tool(self, tool_name, **args):
+        """Call a tool; returns (text, error_flag). Image blocks come back as '<image>'."""
+        blocks, err = self.call(tool_name, **args)
+        text = [c["text"] if c.get("type") == "text" else f"<{c.get('type')} block>" for c in blocks]
         return "\n".join(text), err
+
+    @staticmethod
+    def image(blocks):
+        """The first image a tool answered with (base64 PNG), or None."""
+        return next((c.get("data") for c in blocks if c.get("type") == "image"), None)
 
     def sh(self, command, wait_ms=60000):
         """Run a shell line as a job and return (stdout, exit_code) as the agent sees them (redacted)."""
