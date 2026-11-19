@@ -484,11 +484,12 @@ impl Secrets {
             ));
         };
         match (secret, field) {
-            (Secret::Variable(Variable { value }), None) => Ok(Filled {
-                label: name.to_owned(),
-                value: value.clone(),
-                sites: None,
-            }),
+            // A variable has no site, so no page it belongs on: typed into
+            // one, that page's script could read it and send it anywhere.
+            // It is in every shell job's environment instead.
+            (Secret::Variable(_), None) => Err(format!(
+                "{name} is a variable: it is in the environment of every shell job as ${name}, and the browser never types one"
+            )),
             (Secret::Variable(_), Some(field)) => Err(format!(
                 "{name} is a variable and has no {field}; fill secret:{name:?}"
             )),
@@ -545,11 +546,16 @@ impl Secrets {
     /// whole; and a value with a quote, a backslash or a line break is also
     /// taken in the spelling JSON gives it, since most tools answer JSON.
     pub fn redact<'a>(&self, text: &'a str) -> Cow<'a, str> {
+        self.redact_at(text, unix_now())
+    }
+
+    fn redact_at<'a>(&self, text: &'a str, now: u64) -> Cow<'a, str> {
         let set = self.read();
         if set.is_empty() {
             return Cow::Borrowed(text);
         }
         let mut needles = Vec::with_capacity(set.len() * 2);
+        let mut codes = Vec::new();
         for (name, secret) in set.iter() {
             let values: Vec<(&str, String)> = match secret {
                 Secret::Variable(Variable { value }) => vec![(value, format!("[redacted {name}]"))],
@@ -560,6 +566,7 @@ impl Secrets {
                     )];
                     if let Some(seed) = &login.totp {
                         values.push((seed, format!("[redacted {name}.totp]")));
+                        codes.push((seed.clone(), format!("[redacted {name}.code]")));
                     }
                     values
                 }
@@ -587,6 +594,19 @@ impl Secrets {
                 text = Cow::Owned(text.replace(needle.as_str(), mark));
             }
         }
+        // A login's six digits are a password for a minute: the ones a page
+        // or a job could be showing now, from the step before last to the
+        // next, are taken out wherever they stand as a number of their own.
+        for (seed, mark) in codes {
+            for step in [-2_i64, -1, 0, 1] {
+                let at = now.saturating_add_signed(step * TOTP_STEP_SECONDS as i64);
+                if let Ok(code) = totp(&seed, at)
+                    && let Cow::Owned(redacted) = without_number(&text, &code, &mark)
+                {
+                    text = Cow::Owned(redacted);
+                }
+            }
+        }
         text
     }
 
@@ -608,6 +628,39 @@ impl Secrets {
             Err(error) => Err(self.redact(&error).into_owned()),
         }
     }
+}
+
+/// `text` with each standalone `number` (no digit right before or after it)
+/// replaced by `mark`: a code inside a longer number is that number's, not
+/// the code.
+fn without_number<'a>(text: &'a str, number: &str, mark: &str) -> Cow<'a, str> {
+    if !text.contains(number) {
+        return Cow::Borrowed(text);
+    }
+    let bytes = text.as_bytes();
+    let mut out = String::with_capacity(text.len());
+    let mut last = 0;
+    let mut changed = false;
+    for (at, _) in text.match_indices(number) {
+        if at < last {
+            continue;
+        }
+        let end = at + number.len();
+        let before = at > 0 && bytes[at - 1].is_ascii_digit();
+        let after = end < bytes.len() && bytes[end].is_ascii_digit();
+        if before || after {
+            continue;
+        }
+        out.push_str(&text[last..at]);
+        out.push_str(mark);
+        last = end;
+        changed = true;
+    }
+    if !changed {
+        return Cow::Borrowed(text);
+    }
+    out.push_str(&text[last..]);
+    Cow::Owned(out)
 }
 
 /// A name is the environment variable it becomes: capital letters, digits
@@ -1143,12 +1196,6 @@ mod tests {
                 "GITHUB_PASSKEY": {"kind": "passkey", "rpId": "github.com", "credentialId": "AQID", "privateKey": KEY_BASE64},
             })))
             .unwrap();
-        let token = secrets.resolve("GITHUB_TOKEN").ok().unwrap();
-        assert_eq!(
-            (token.label.as_str(), token.value.as_str()),
-            ("GITHUB_TOKEN", "ghp_notarealtoken0001")
-        );
-        assert!(token.sites.is_none(), "a variable has no site to check");
         let user = secrets.resolve("GITHUB.username").ok().unwrap();
         assert_eq!(
             (user.label.as_str(), user.value.as_str()),
@@ -1179,6 +1226,7 @@ mod tests {
             ("GITHUB", "username"),
             ("GITHUB.token", "not token"),
             ("GITHUB_TOKEN.value", "is a variable"),
+            ("GITHUB_TOKEN", "the browser never types one"),
             ("PLAIN.code", "no TOTP seed"),
             ("GITHUB_PASSKEY", "signs in by itself"),
             ("GITHUB_PASSKEY.password", "signs in by itself"),
@@ -1187,7 +1235,28 @@ mod tests {
             let error = secrets.resolve(reference).err().unwrap_or_default();
             assert!(error.contains(expect), "{reference}: {error}");
             assert!(!error.contains("battery"), "{reference}: {error}");
+            assert!(!error.contains("notarealtoken"), "{reference}: {error}");
         }
+    }
+
+    #[test]
+    fn the_codes_a_login_could_show_now_are_redacted() {
+        let secrets = Secrets::default();
+        secrets
+            .replace(typed(json!({
+                "GITHUB": {"kind": "login", "sites": ["https://github.com"], "username": "george",
+                           "password": "correct horse battery", "totp": RFC_SEED},
+            })))
+            .unwrap();
+        // RFC 6238, appendix B: 287082 at T = 59, the step before is 755224.
+        let shown = "code 287082, before it 755224, in a longer number 12870823";
+        assert_eq!(
+            secrets.redact_at(shown, 59),
+            "code [redacted GITHUB.code], before it [redacted GITHUB.code], in a longer number 12870823"
+        );
+        assert_eq!(secrets.redact_at("287082", 59), "[redacted GITHUB.code]");
+        // Long after, those digits are just a number.
+        assert_eq!(secrets.redact_at(shown, 59 + 3600), shown);
     }
 
     #[test]

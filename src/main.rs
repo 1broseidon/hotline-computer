@@ -115,6 +115,10 @@ fn main() {
         arguments.first().map(String::as_str),
         Some("observe" | "activity")
     ) {
+        // These windows read the jobs' output and the activity record, and
+        // run as the jobs' own user: sealed as the service is, so no job
+        // reads their memory or `/proc` entries.
+        seal();
         let home = arguments
             .get(1)
             .map(std::path::PathBuf::from)

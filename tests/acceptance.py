@@ -281,6 +281,10 @@ def centre(rect):
     return x+w//2, y+h//2
 
 
+def observer_view(c):
+    return json.loads(execute(c, 'cat', ['/home/agent/.hotline/observer-view.json'], label='Read the observer view'))
+
+
 def desktop_job_menu(c):
     # The layout lookup is itself a job, so it runs before the job under test
     # to keep that one newest, and so at the top of the list.
@@ -297,11 +301,13 @@ def desktop_job_menu(c):
     c.call('input',{'action':'click','x':jobs_x,'y':jobs_y})
     c.screenshot('03c-desktop-job-menu.png')
     c.call('input',{'action':'click','x':row(1)[0],'y':row(1)[1]})
-    assert c.call('files',{'action':'get','path':'/home/agent/.hotline/observer-view.json'}) == job['id']
+    # The computer's own records are not read through files; a job reads
+    # the observer's choice.
+    assert observer_view(c) == job['id']
     c.screenshot('03d-selected-failed-job.png',settle_ms=200)
     c.call('input',{'action':'click','x':jobs_x,'y':jobs_y})
     c.call('input',{'action':'click','x':row(0)[0],'y':row(0)[1]})
-    assert c.call('files',{'action':'get','path':'/home/agent/.hotline/observer-view.json'}) is None
+    assert observer_view(c) is None
     # The hotline menu: the mark opens it, a letter picks, Escape closes.
     mark_x, mark_y = centre(layout['mark'])
     c.call('input',{'action':'click','x':mark_x,'y':mark_y})

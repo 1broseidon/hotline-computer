@@ -167,6 +167,9 @@ pub async fn download(
         Ok(path) => path,
         Err(error) => return refused(error),
     };
+    if let Err(error) = crate::tools::files::refuse_private(&app, &path).await {
+        return refused(error);
+    }
     let file = match tokio::fs::File::open(&path).await {
         Ok(file) => file,
         Err(error) => return refused(format!("{}: {error}", path.display())),

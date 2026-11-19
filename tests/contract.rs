@@ -445,8 +445,8 @@ async fn image_honors_the_computer_contract() {
     );
     let after = call(
         &client,
-        "files",
-        json!({"action":"get","path":"/home/agent/.hotline/logins/contract-after-forget.json"}),
+        "shell",
+        json!({"action":"exec","command":"cat","args":["/home/agent/.hotline/logins/contract-after-forget.json"]}),
     )
     .await;
     let after_text = text(&after);
@@ -460,8 +460,8 @@ async fn image_honors_the_computer_contract() {
     );
     let document = call(
         &client,
-        "files",
-        json!({"action":"get","path":"/home/agent/.hotline/logins/import-contract-Default.json"}),
+        "shell",
+        json!({"action":"exec","command":"cat","args":["/home/agent/.hotline/logins/import-contract-Default.json"]}),
     )
     .await;
     assert!(
@@ -479,15 +479,37 @@ async fn image_honors_the_computer_contract() {
     assert_eq!(the_rest.status(), 200);
     let gone = call(
         &client,
-        "files",
-        json!({"action":"get","path":"/home/agent/.hotline/logins/import-contract-Default.json"}),
+        "shell",
+        json!({"action":"exec","command":"cat","args":["/home/agent/.hotline/logins/import-contract-Default.json"]}),
     )
     .await;
     assert!(
-        gone.is_error.unwrap_or(false),
+        text(&gone).contains("No such file"),
         "a login with nothing left is removed: {}",
         text(&gone)
     );
+    // The computer's own records are not fetched through files, nor by the
+    // desk's download, even by a link from elsewhere in the home.
+    let records = call(
+        &client,
+        "files",
+        json!({"action":"get","path":"/home/agent/.hotline/logins/contract-after-forget.json"}),
+    )
+    .await;
+    assert!(
+        records.is_error.unwrap_or(false) && text(&records).contains("computer's own records"),
+        "{}",
+        text(&records)
+    );
+    let download = http
+        .get(format!(
+            "{base}/files/download?path=/home/agent/.hotline/logins/contract-after-forget.json"
+        ))
+        .header(AUTHORIZATION, format!("Bearer {token}"))
+        .send()
+        .await
+        .expect("download a record");
+    assert_eq!(download.status(), 400, "the desk's download refuses it too");
     let nothing = http
         .delete(format!("{base}/logins/import-contract-Default"))
         .header(AUTHORIZATION, format!("Bearer {token}"))
@@ -1128,11 +1150,21 @@ async fn image_honors_the_computer_contract() {
         typed[1], "[redacted PROOF.password]",
         "a value read back is redacted"
     );
-    assert!(
-        typed[2].len() == 6 && typed[2].chars().all(|c| c.is_ascii_digit()),
-        "a code is six digits: {}",
-        typed[2]
+    // The six digits are a password for a minute: read back, they are
+    // redacted like one.
+    assert_eq!(
+        typed[2], "[redacted PROOF.code]",
+        "a code read back is redacted"
     );
+    let digits = text(
+        &call(
+            &client,
+            "browser",
+            json!({"action":"eval","js":"/^[0-9]{6}$/.test(code.value)"}),
+        )
+        .await,
+    );
+    assert_eq!(digits, "true", "the field holds six digits");
     let both = call(
         &client,
         "browser",
@@ -1192,20 +1224,12 @@ async fn image_honors_the_computer_contract() {
         json!({"action":"fill","ref":pass,"secret":"PROOF_TOKEN"}),
     )
     .await;
-    assert_eq!(
-        text(&variable),
-        format!("filled {pass} with PROOF_TOKEN"),
-        "a variable has no site to keep to"
+    assert!(
+        variable.is_error.unwrap_or(false)
+            && text(&variable).contains("the browser never types one"),
+        "a variable has no site to keep to, so no page gets it: {}",
+        text(&variable)
     );
-    let nothing_leaked = text(
-        &call(
-            &client,
-            "browser",
-            json!({"action":"eval","js":"pass.value"}),
-        )
-        .await,
-    );
-    assert_eq!(nothing_leaked, "\"[redacted PROOF_TOKEN]\"");
     // An ask-me key is used only once the person approves that use. The
     // setting rides with the set, and a change applies from the next use.
     let mut asking = credential.clone();
