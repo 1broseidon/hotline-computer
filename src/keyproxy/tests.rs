@@ -888,10 +888,19 @@ fn a_delivery_checks_every_use_and_its_generation() {
     assert!(bad(|b| b.use_.schemes = vec!["Bearer token".into()]));
     assert!(bad(|b| b.value = "ghp_abc\r\nX: y".into()));
     assert!(bad(|b| b.value = "short".into()));
-    assert!(bad(|b| b.use_.stand_in = Some(StandIn {
-        prefix: "ghp_".into(),
-        length: 10
-    })));
+    // A shape too short for a safe stand-in gets a longer one, not a refusal.
+    let mut short = github_token(&[API]);
+    short.use_.stand_in = Some(StandIn {
+        prefix: "sk-".into(),
+        length: 12,
+    });
+    let other = KeyProxy::new().unwrap();
+    other.deliver(1, vec![short]).unwrap();
+    let stand_in = other.begin("job").remove(0).1;
+    assert!(
+        stand_in.starts_with("sk-") && stand_in.len() == 23,
+        "{stand_in}"
+    );
     // A refused delivery changes nothing: the generation stays at 5.
     proxy.deliver(5, Vec::new()).unwrap();
     // The origin spellings are one.

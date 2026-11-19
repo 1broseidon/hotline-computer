@@ -26,7 +26,7 @@ const MAX_SCHEMES: usize = 8;
 const MAX_PREFIX_CHARS: usize = 32;
 const MAX_STAND_IN_CHARS: usize = 256;
 /// The random part of a stand-in is never shorter than this, whatever shape
-/// is asked for: about 119 bits.
+/// is asked for: about 119 bits. A shorter key's stand-in is longer than it.
 const MIN_RANDOM_CHARS: usize = 20;
 const DEFAULT_PREFIX: &str = "hl_";
 const DEFAULT_RANDOM_CHARS: usize = 40;
@@ -316,6 +316,8 @@ fn check(binding: Binding) -> Result<Bound, String> {
             "{name}: a scheme is one word, at most {MAX_SCHEMES}"
         ));
     }
+    // The shape is a courtesy to programs that check a token's look; it
+    // never costs randomness, and never refuses a delivery.
     let (prefix, random_chars) = match &use_.stand_in {
         None => (DEFAULT_PREFIX.to_owned(), DEFAULT_RANDOM_CHARS),
         Some(shape) => {
@@ -324,13 +326,16 @@ fn check(binding: Binding) -> Result<Bound, String> {
                     .prefix
                     .bytes()
                     .all(|b| b.is_ascii_alphanumeric() || b == b'_' || b == b'-');
-            let random_chars = shape.length.saturating_sub(shape.prefix.len());
-            if !prefix_ok || random_chars < MIN_RANDOM_CHARS || shape.length > MAX_STAND_IN_CHARS {
-                return Err(format!(
-                    "{name}: a stand-in is a short prefix and {MIN_RANDOM_CHARS} or more random characters, at most {MAX_STAND_IN_CHARS} in all"
-                ));
-            }
-            (shape.prefix.clone(), random_chars)
+            let prefix = if prefix_ok {
+                shape.prefix.clone()
+            } else {
+                DEFAULT_PREFIX.to_owned()
+            };
+            let random_chars = shape
+                .length
+                .saturating_sub(prefix.len())
+                .clamp(MIN_RANDOM_CHARS, MAX_STAND_IN_CHARS - prefix.len());
+            (prefix, random_chars)
         }
     };
     let refuse = match &use_.refuse {
