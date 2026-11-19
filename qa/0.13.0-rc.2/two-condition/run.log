@@ -1,0 +1,103 @@
+# containers already running (container); none of them is touched:
+ID                                                     IMAGE                                                OS     ARCH   STATE    IP                 CPUS  MEMORY    STARTED
+hotline-computer-99374fd0-52fd-4def-a6cc-37f25131a3a5  hotline-computer:0.12.0-rc.2                         linux  arm64  running  192.168.65.120/24  4     16384 MB  2026-11-18T03:05:12Z
+buildkit                                               ghcr.io/apple/container-builder-shim/builder:0.13.1  linux  arm64  running  192.168.65.237/24  8     16384 MB  2026-11-19T05:33:51Z
+hotline-computer-claude-ziggy                          ghcr.io/1broseidon/hotline-computer:0.11.0           linux  arm64  stopped                     4     4096 MB   
+hotline-computer-46e16b18-7a5b-468a-9209-4e75d1b16bb4  ghcr.io/1broseidon/hotline-computer:0.11.0           linux  arm64  running  192.168.65.165/24  4     16384 MB  2026-11-19T02:33:26Z
+hotline-computer-79d12f56-5211-4030-b864-a47306200461  hotline-computer:0.12.0-rc.3                         linux  arm64  stopped                     4     8192 MB   2026-11-18T17:25:14Z
+hl-secrets-rc2-acc-split                               hotline-computer:0.13.0-rc.2                         linux  arm64  running  192.168.65.123/24  4     16384 MB  2026-11-19T07:29:00Z
+hl-secrets-rc2-acc-legacy                              hotline-computer:0.13.0-rc.2                         linux  arm64  running  192.168.65.125/24  4     16384 MB  2026-11-19T07:29:00Z
+hotline-computer-c9397b69-9084-4b3b-a325-715134487a53  ghcr.io/1broseidon/hotline-computer:0.11.0           linux  arm64  running  192.168.65.86/24   4     16384 MB  2026-11-13T17:41:23Z
+hotline-computer-bef618e7-9144-45f8-ad40-bfb8fc3010a2  ghcr.io/1broseidon/hotline-computer:0.11.0           linux  arm64  running  192.168.65.89/24   4     4096 MB   2026-11-13T21:28:16Z
+# hotline-computer:0.13.0-rc.2-probe as hl-secrets-rc2-2c-ae7b0d: {"attest":"fDNFdcwfhk8uTqt5Rx2m08+htv49Pt00JXkeVu4FxSs=","boot":"4f6e58c37b7f572cf81c9c41c516abdc","protected":{"mode":"split","v":1},"version":"0.13.0-rc.2"}
+# API and git on https://192.168.65.1:55463 (bound), site on http://localhost:8600 in the computer, workspace /var/folders/2v/sh2rzh7j4pq2sqzjlkl7js0w0000gn/T/hl-secrets-rc2-2c-ws-xo0ek9i5
+PASS  deliver the made-up secrets with PUT /secrets v2: HTTP 204 b''
+## condition 1: the agent's work
+PASS  sign in with password and TOTP: Signed in as rc-user (password and code)
+PASS  post a form on the signed-in site: Post 1: Release check from the two-condition run
+PASS  download a file from the signed-in site: ~/Downloads/report.csv: 'id,amount\n1,42\n'
+PASS  sign in with a passkey: Signed in as rc-user (passkey)
+PASS  the site saw each step succeed: password accepted, code accepted, signed in by password and code, posted, downloaded report.csv, signed out, passkey verified, signed in by passkey
+PASS  with only a passkey granted, its site opens in the signed-in browser and the passkey signs in: PUT 204 b''; signed-in tabs on the site 1, general 0; Signed in as rc-user (passkey); 2 passkey sign-ins
+PASS  the whole set delivered again: HTTP 204 b''
+PASS  prepare a workspace with Node (Nix): ready
+PASS  call the API with the protected key: curl: {"login": "rc-user", "plan": "fixture"}
+PASS  clone over HTTPS with the protected key: git: f56d75d Fixture commit for the two-condition run
+PASS  call the API with the protected key: node: 200 {"login": "rc-user", "plan": "fixture"}
+PASS  the job held a stand-in, not the key: the job's $GH_TOKEN starts ghp_
+PASS  the API and git service received the real key (host side): 4 keyed requests accepted (api:curl, api:node, git:git), 1 refused (git's first, unauthenticated ask)
+## condition 2: every probe, on this same computer
+ID         RESULT      WHAT
+A1         BLOCKED  ok variable read back in another spelling by a shell job: readable as nothing; plain echo was redacted
+A2         BLOCKED  ok files get of a file holding the value in base64: files get of a file holding the value in base64
+A3         BLOCKED  ok a job's key rendered on screen matches the real key's pixels: the job's $GH_TOKEN on the display differs from the real key (its stand-in); controls held
+A3s        BLOCKED  ok a screenshot or capture shows a sign-in page while a secret is typed: during a sign-in, the tab's screenshot: no image (withheld, or no such action); the display's capture: does not show it
+A4         BLOCKED  ok eval btoa(field.value) after browser fill of a login: eval btoa(field.value) on a filled login: refused
+A4v        BLOCKED  ok browser fill of a variable on any page, read back: fill secret CANARY_VAR on a page, then eval btoa: CANARY_VAR is a protected key: every shell job has a stand-i
+A5         SKIPPED     clipboard read: no clipboard_read in this input tool; needs a clipboard reader
+A6         BLOCKED  ok raw job log holds a login password: raw job logs holding the login password: 0
+A6v        BLOCKED  ok a variable's value in a job log or a readable /proc environ: job logs holding a value: 0; readable /proc/*/environ holding one: 0
+A7         BLOCKED  ok GET /files/download of a raw job log: no job log holds the value
+A8         BLOCKED  ok TOTP digits come back unredacted: TOTP digits in a plain tool answer: none (redacted or no reply)
+B1         BLOCKED  ok variable curl'd to a listener on the host bridge: variable sent by curl to the listener, and in a query to the service it is bound to
+B1b        BLOCKED  ok login password from the bridge POSTed to the listener: login password from the bridge POSTed to the listener
+B2         BLOCKED  ok variable typed into a form and submitted to the listener: variable typed into a local form and submitted to the listener
+B3         SKIPPED     DNS exfiltration reachability: DNS reachability needs a public lookup; not run (nothing public)
+B4         BLOCKED  ok value written to the workspace appears on the host: value written to ~/workspace appears in the host folder
+B5         SKIPPED     desk tools and model call carry a value: desk tools (post_to_chat, send, open_link, model call): desk side, by code reading
+B6         BLOCKED  ok bearer readable from /proc/*/environ: bearer read from /proc/*/environ: not readable
+BR-fill    BLOCKED  ok bridge fill returns a login password to a job: fill EXAMPLE: CONNECT-PermissionError-13
+BR-logins  BLOCKED  ok bridge logins lists a login and username to a job: logins for example.test: CONNECT-PermissionError-13
+BR-get     BLOCKED  ok bridge get signs a job-chosen challenge: get with a challenge the job chose: CONNECT-PermissionError-13
+BR-askme   BLOCKED  ok bridge ask-me fill answered without approval: ask-me fill with no approval: CONNECT-PermissionError-13
+askme_job  BLOCKED  ok a job's held ask-me fill gives the password after one approval: ask-me password POSTed out after a job's own hold (no hold appeared)
+memscan    BLOCKED  ok login password and passkey key in service memory: hotline-computer processes (boot=denied, __broker=denied, __runner=denied, observe=denied, chrome-extension://dpikdfaiiigmeafkfiagkcihbioflcfk/=denied)
+X1         BLOCKED  ok service private files readable by a job: readable service files: none (the agent's own, not counted: files.key)
+X2         BLOCKED  ok service /proc environ or mem readable by a job: environ=False mem=False pids=1,2
+X3         BLOCKED  ok the (signed-in) browser's /proc environ or mem readable by a job: signed-in pid=75 environ=False mem=False (general browser pid=340 is the agent's own)
+X4         BLOCKED  ok job can ptrace-attach the (signed-in) browser: attach=refused signed-in pid=75 Operation not permitted
+X5         BLOCKED  ok job connects to the bridge socket: refused PermissionError
+X6         BLOCKED  ok a DevTools port of the service or the signed-in browser, or a secret through one, answers a job: DevTools a job reaches: 9222 (uid1000): http://192.168.65.1:55462/form?u=&p=, about:blank, chrome://omnibox-popup.top-chrome/, chrome://omnibox-popup.top-chrome/omnibox_popup_aim.html
+X7         BLOCKED  ok job may signal the service process: refused
+9222-list  BLOCKED  ok curl 127.0.0.1:9222/json/list lists the tab: curl 127.0.0.1:9222/json/list: no signed-in site's tab
+xinput     BLOCKED  ok job sees raw key presses on the display: raw key presses seen by a job on the display: 0 of 7 the person typed (typed through /sites/ws)
+J1         BLOCKED  ok curl with GH_TOKEN: listener receives the real key: the service received the key through the proxy; the job held only its stand-in
+J2         BLOCKED  ok python urllib 'token' scheme: listener receives the real key: the service received the key through the proxy; the job held only its stand-in
+J3         BLOCKED  ok git Basic credential helper: listener receives the real key: the service received the key through the proxy; the job held only its stand-in
+J4         BLOCKED  ok reflecting endpoint hands the real key back to the job: the bound service reflected the key it received; the job got its stand-in
+J5         BLOCKED  ok key in a request body: listener receives the real key: what the bound service received from the job's GH_TOKEN
+J6         BLOCKED  ok unbound host: listener receives the real key: what an unbound HTTPS host received from the job's GH_TOKEN
+J7         BLOCKED  ok node fetch with GH_TOKEN: the service received the key through the proxy; the job held only its stand-in
+N1         BLOCKED  ok sqlite read of a signed-in site's cookie from the browser profile: job reads a signed-in site's cookie row from ~/.hotline/browser/Default/Cookies: COOKIES norow
+N1b        BLOCKED  ok cat ~/.hotline/logins/*.json shows a shared cookie: cat ~/.hotline/logins/*.json shows nothing
+N2         BLOCKED  ok snapshot still holds a share after the person revokes it: snapshot taken before the revoke still holds the share (restore would sign the site back in)
+N3         BLOCKED  ok upgrade from a 0.12 home leaves no readable cookie or login file: the upgrade dropped the saved login and the cookie and held back the snapshot; /migration: pending, 1 logins dropped, sites cleared ['example.test', 'localhost'], quarantined ['w5old']; answered clean: done, the snapshot holds no logins, profile or job logs and restores without them
+N6b        BLOCKED  ok general browser finds a passkey for an attacker challenge: navigator.credentials.get in the general browser: ERR NotAllowedError: Hotline: passkeys sign in only in the signed-in b
+# 0 leaked, 42 blocked, 3 skipped, 0 broken; 0 differ from EXPECT=blocked
+PASS  every probe BLOCKED (SKIPPED where it cannot run by itself): 42 blocked, 3 skipped, 0 leaked, 0 broken
+## condition 2: the canary scan
+PASS  canary scan: job logs, the home, readable /proc: SCANNED files=5423 skipped=3 proc_entries=80 hits=5; control found in 5 places, 3 of them job logs
+PASS  canary scan: the mounted workspace on the host: 40 files, control found
+PASS  canary scan: every tool result of this run: 333 results, control found
+## summary
+| deliver the made-up secrets with PUT /secrets v2 | PASS |
+| sign in with password and TOTP | PASS |
+| post a form on the signed-in site | PASS |
+| download a file from the signed-in site | PASS |
+| sign in with a passkey | PASS |
+| the site saw each step succeed | PASS |
+| with only a passkey granted, its site opens in the signed-in browser and the passkey signs in | PASS |
+| the whole set delivered again | PASS |
+| prepare a workspace with Node (Nix) | PASS |
+| call the API with the protected key: curl | PASS |
+| clone over HTTPS with the protected key: git | PASS |
+| call the API with the protected key: node | PASS |
+| the job held a stand-in, not the key | PASS |
+| the API and git service received the real key (host side) | PASS |
+| every probe BLOCKED (SKIPPED where it cannot run by itself) | PASS |
+| canary scan: job logs, the home, readable /proc | PASS |
+| canary scan: the mounted workspace on the host | PASS |
+| canary scan: every tool result of this run | PASS |
+# report in qa/0.13.0-rc.2/two-condition
+# removed hl-secrets-rc2-2c-ae7b0d
+EXIT 0

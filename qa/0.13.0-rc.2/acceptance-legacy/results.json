@@ -1,0 +1,696 @@
+{
+  "info": {
+    "architecture": "aarch64",
+    "base": "0.10.0-rc.4",
+    "build": {
+      "channel": "candidate",
+      "revision": "2a8103cc4396ff831676691b9cc11f9190d23e62"
+    },
+    "capabilities": [
+      "capture",
+      "input",
+      "browser",
+      "shell",
+      "files",
+      "windows",
+      "wait",
+      "state"
+    ],
+    "catalog": {
+      "nixpkgs": "ef34387ddd751e1ab8857adf4676492d32eb24ec",
+      "packages": [
+        {
+          "group": "Languages",
+          "packages": [
+            {
+              "name": "python312",
+              "note": "Python 3.12; uv or poetry for project environments"
+            },
+            {
+              "name": "uv",
+              "note": "Python package and environment manager"
+            },
+            {
+              "name": "poetry",
+              "note": "Python dependency manager"
+            },
+            {
+              "name": "nodejs",
+              "note": "Node.js; pnpm or bun alongside as the project prefers"
+            },
+            {
+              "name": "pnpm",
+              "note": "Node package manager"
+            },
+            {
+              "name": "bun",
+              "note": "JavaScript runtime and package manager"
+            },
+            {
+              "name": "deno",
+              "note": "JavaScript and TypeScript runtime"
+            },
+            {
+              "name": "go",
+              "note": "Go toolchain; gopls for the language server"
+            },
+            {
+              "name": "gopls",
+              "note": "Go language server"
+            },
+            {
+              "name": "rustc",
+              "note": "Rust compiler; with cargo, clippy, rustfmt, rust-analyzer"
+            },
+            {
+              "name": "cargo",
+              "note": "Rust build tool"
+            },
+            {
+              "name": "clippy",
+              "note": "Rust lints"
+            },
+            {
+              "name": "rustfmt",
+              "note": "Rust formatter"
+            },
+            {
+              "name": "rust-analyzer",
+              "note": "Rust language server"
+            },
+            {
+              "name": "jdk21",
+              "note": "OpenJDK 21; maven or gradle to build"
+            },
+            {
+              "name": "maven",
+              "note": "Java build tool"
+            },
+            {
+              "name": "gradle",
+              "note": "Java and Kotlin build tool"
+            },
+            {
+              "name": "ruby",
+              "note": "Ruby"
+            },
+            {
+              "name": "php",
+              "note": "PHP with common extensions"
+            },
+            {
+              "name": "elixir",
+              "note": "Elixir and Erlang"
+            },
+            {
+              "name": "zig",
+              "note": "Zig"
+            },
+            {
+              "name": "dotnet-sdk_8",
+              "note": ".NET 8 SDK"
+            }
+          ]
+        },
+        {
+          "group": "Native builds",
+          "packages": [
+            {
+              "name": "gcc",
+              "note": "C and C++ compiler"
+            },
+            {
+              "name": "clang",
+              "note": "LLVM C and C++ compiler"
+            },
+            {
+              "name": "gnumake",
+              "note": "make"
+            },
+            {
+              "name": "cmake",
+              "note": "CMake"
+            },
+            {
+              "name": "ninja",
+              "note": "Ninja build"
+            },
+            {
+              "name": "pkg-config",
+              "note": "how builds find C libraries; most native builds need it"
+            },
+            {
+              "name": "openssl",
+              "note": "TLS library and headers"
+            },
+            {
+              "name": "zlib",
+              "note": "compression library"
+            },
+            {
+              "name": "sqlite",
+              "note": "SQLite library and shell"
+            },
+            {
+              "name": "libffi",
+              "note": "foreign function interface library"
+            },
+            {
+              "name": "perl",
+              "note": "Perl; the Rust openssl crate builds with it"
+            }
+          ]
+        },
+        {
+          "group": "Desktop apps",
+          "packages": [
+            {
+              "name": "gtk4",
+              "note": "GTK 4"
+            },
+            {
+              "name": "gtk3",
+              "note": "GTK 3"
+            },
+            {
+              "name": "glib",
+              "note": "GLib"
+            },
+            {
+              "name": "gobject-introspection",
+              "note": "bindings for GTK from other languages"
+            },
+            {
+              "name": "webkitgtk_4_1",
+              "note": "WebKitGTK, which Tauri and similar shells embed"
+            },
+            {
+              "name": "libsoup_3",
+              "note": "HTTP library WebKitGTK uses"
+            }
+          ]
+        },
+        {
+          "group": "Tools",
+          "packages": [
+            {
+              "name": "jq",
+              "note": "JSON processor"
+            },
+            {
+              "name": "ripgrep",
+              "note": "rg"
+            },
+            {
+              "name": "fd",
+              "note": "file finder"
+            },
+            {
+              "name": "gh",
+              "note": "GitHub CLI"
+            },
+            {
+              "name": "curl",
+              "note": "curl"
+            },
+            {
+              "name": "postgresql",
+              "note": "PostgreSQL server and client"
+            },
+            {
+              "name": "redis",
+              "note": "Redis"
+            },
+            {
+              "name": "ffmpeg",
+              "note": "audio and video"
+            },
+            {
+              "name": "imagemagick",
+              "note": "images"
+            },
+            {
+              "name": "pandoc",
+              "note": "document conversion"
+            },
+            {
+              "name": "awscli2",
+              "note": "AWS CLI"
+            },
+            {
+              "name": "kubectl",
+              "note": "Kubernetes CLI"
+            },
+            {
+              "name": "playwright-driver",
+              "note": "browsers for Playwright tests"
+            }
+          ]
+        }
+      ],
+      "sources": [
+        "packages",
+        "flake"
+      ],
+      "usage": "state prepare with workspace and either packages (Nixpkgs attribute names) or flake (local directory with optional #devShell). Omit both to reuse .hotline/environment-spec.json, or the repository's flake.nix on first use. Wait for the returned job; shell cwd then inherits the prepared environment. No framework presets; packages lists common attribute names to choose from.",
+      "version": "0.13.0-rc.2"
+    },
+    "display": ":0",
+    "executables": {
+      "alacritty": "/usr/bin/alacritty",
+      "bash": "/usr/bin/bash",
+      "chromium": "/usr/bin/chromium",
+      "curl": "/usr/bin/curl",
+      "git": "/usr/bin/git",
+      "nix": "/usr/bin/nix",
+      "python3": "/usr/bin/python3"
+    },
+    "graphics": "Mesa software rendering",
+    "home": "/home/agent",
+    "jobs": [
+      {
+        "args": [
+          "-c",
+          "\nimport json, os\nout = []\nfor pid in sorted(int(p) for p in os.listdir('/proc') if p.isdigit()):\n    try:\n        status = dict(line.split(':', 1) for line in open(f'/proc/{pid}/status').read().splitlines() if ':' in line)\n        cmdline = open(f'/proc/{pid}/cmdline', 'rb').read().split(b'\\0')\n    except Exception:\n        continue\n    out.append({\n        'pid': pid,\n        'uid': [int(x) for x in status['Uid'].split()],\n        'eff': int(status['CapEff'], 16), 'prm': int(status['CapPrm'], 16),\n        'inh': int(status['CapInh'], 16), 'amb': int(status.get('CapAmb', '0'), 16),\n        'nnp': int(status.get('NoNewPrivs', '0')),\n        'cmd': [c.decode(errors='replace') for c in cmdline if c],\n        'self': pid == os.getpid(),\n    })\nsockets = []\nfor fd in os.listdir('/proc/self/fd'):\n    try: sockets.append(os.readlink(f'/proc/self/fd/{fd}'))\n    except OSError: pass\nprint(json.dumps({'processes': out, 'fds': sockets}))\n"
+        ],
+        "command": "python3",
+        "cwd": "/home/agent",
+        "error": null,
+        "exit_code": 0,
+        "fingerprint": "6e0f4f14444f0d047101e65c24e97a6b665fa1a703cdc2711ca79ae4c02d8754",
+        "finished_at": 1795073362052,
+        "holder": "split-test",
+        "id": "000001a1f2b5c86c-46564598",
+        "label": "python3 -c import json, os out = [] for pid in sorted(int(p\u2026",
+        "output_bytes": 16559,
+        "pid": 712,
+        "pty": false,
+        "request_id": null,
+        "signal": null,
+        "started_at": 1795073362029,
+        "state": "exited",
+        "truncated": false
+      },
+      {
+        "args": [
+          "-c",
+          "\nimport ctypes\nx = ctypes.CDLL('libX11.so.6')\nx.XOpenDisplay.restype = ctypes.c_void_p\nd = x.XOpenDisplay(None)\nkeys = (ctypes.c_char * 32)()\nx.XQueryKeymap(ctypes.c_void_p(d), keys)\nheld = [byte * 8 + bit for byte in range(32) for bit in range(8) if keys[byte][0] & (1 << bit)]\nprint('held keys:', held or 'none')\n"
+        ],
+        "command": "python3",
+        "cwd": "/home/agent",
+        "error": null,
+        "exit_code": 0,
+        "fingerprint": "d8e197f2046bb939aba7fc3f66bd210501e0c8334b6b51628144efe8a7bfd451",
+        "finished_at": 1795073361190,
+        "holder": "contract",
+        "id": "000001a1f2b5c514-3fe2ba7d",
+        "label": "python3 -c import ctypes x = ctypes.CDLL('libX11.so.6') x.X\u2026",
+        "output_bytes": 16,
+        "pid": 711,
+        "pty": false,
+        "request_id": null,
+        "signal": null,
+        "started_at": 1795073361172,
+        "state": "exited",
+        "truncated": false
+      },
+      {
+        "args": [
+          "-m",
+          "http.server",
+          "8123",
+          "--bind",
+          "127.0.0.1",
+          "--directory",
+          "/home/agent/src/contract/proof"
+        ],
+        "command": "python3",
+        "cwd": "/home/agent",
+        "error": null,
+        "exit_code": null,
+        "fingerprint": "87b7bbd1dc2a95078f0fa6854c5e1037967417e95c9a2571a35684e1d6dd0506",
+        "finished_at": 1795073354596,
+        "holder": "contract",
+        "id": "000001a1f2b59b45-5cedb6df",
+        "label": "Serve the passkey proof",
+        "output_bytes": 653,
+        "pid": 524,
+        "pty": false,
+        "request_id": null,
+        "signal": 9,
+        "started_at": 1795073350469,
+        "state": "cancelled",
+        "truncated": false
+      },
+      {
+        "args": [
+          "-c",
+          "printf '%s' \"${CONTRACT_SECRET-absent}\""
+        ],
+        "command": "sh",
+        "cwd": "/home/agent",
+        "error": null,
+        "exit_code": 0,
+        "fingerprint": "029ef74cfba3c163c54f4b26010a81aed310202169eaad50e6a6baa990824ab6",
+        "finished_at": 1795073350365,
+        "holder": "contract",
+        "id": "000001a1f2b59adc-e7f699b7",
+        "label": "sh -c printf '%s' \"${CONTRACT_SECRET-absent}\"",
+        "output_bytes": 6,
+        "pid": 523,
+        "pty": false,
+        "request_id": null,
+        "signal": null,
+        "started_at": 1795073350364,
+        "state": "exited",
+        "truncated": false
+      },
+      {
+        "args": [
+          "-c",
+          "printf '%s' \"$CONTRACT_SECRET\""
+        ],
+        "command": "sh",
+        "cwd": "/home/agent",
+        "error": null,
+        "exit_code": 0,
+        "fingerprint": "987bb9e2d37e192c56bbfe23d557ed1c7c894a32571bac4ba835facab1a9e085",
+        "finished_at": 1795073350303,
+        "holder": "contract",
+        "id": "000001a1f2b59a9e-27b1699e",
+        "label": "sh -c printf '%s' \"$CONTRACT_SECRET\"",
+        "output_bytes": 26,
+        "pid": 522,
+        "pty": false,
+        "request_id": null,
+        "signal": null,
+        "started_at": 1795073350302,
+        "state": "exited",
+        "truncated": false
+      },
+      {
+        "args": [
+          "/home/agent/.hotline/logins/import-contract-Default.json"
+        ],
+        "command": "cat",
+        "cwd": "/home/agent",
+        "error": null,
+        "exit_code": 1,
+        "fingerprint": "af95af2290a6956b3f9ef2787f45c98ad1ceb4a9f57766b95ae76cbf310955bd",
+        "finished_at": 1795073350192,
+        "holder": "contract",
+        "id": "000001a1f2b59a2f-21dc6431",
+        "label": "cat /home/agent/.hotline/logins/import-contract-Default.json",
+        "output_bytes": 89,
+        "pid": 521,
+        "pty": false,
+        "request_id": null,
+        "signal": null,
+        "started_at": 1795073350192,
+        "state": "failed",
+        "truncated": false
+      },
+      {
+        "args": [
+          "/home/agent/.hotline/logins/import-contract-Default.json"
+        ],
+        "command": "cat",
+        "cwd": "/home/agent",
+        "error": null,
+        "exit_code": 0,
+        "fingerprint": "af95af2290a6956b3f9ef2787f45c98ad1ceb4a9f57766b95ae76cbf310955bd",
+        "finished_at": 1795073350143,
+        "holder": "contract",
+        "id": "000001a1f2b599fe-c2fbf928",
+        "label": "cat /home/agent/.hotline/logins/import-contract-Default.json",
+        "output_bytes": 224,
+        "pid": 520,
+        "pty": false,
+        "request_id": null,
+        "signal": null,
+        "started_at": 1795073350142,
+        "state": "exited",
+        "truncated": false
+      },
+      {
+        "args": [
+          "/home/agent/.hotline/logins/contract-after-forget.json"
+        ],
+        "command": "cat",
+        "cwd": "/home/agent",
+        "error": null,
+        "exit_code": 0,
+        "fingerprint": "f5c9f48dec437a7819833992fbe86add04403a174b05aef648d3f26590447c59",
+        "finished_at": 1795073350094,
+        "holder": "contract",
+        "id": "000001a1f2b599cc-86458d21",
+        "label": "cat /home/agent/.hotline/logins/contract-after-forget.json",
+        "output_bytes": 322,
+        "pid": 519,
+        "pty": false,
+        "request_id": null,
+        "signal": null,
+        "started_at": 1795073350093,
+        "state": "exited",
+        "truncated": false
+      },
+      {
+        "args": [
+          "-c",
+          "kill 63; sleep 2; echo closed"
+        ],
+        "command": "sh",
+        "cwd": "/home/agent",
+        "error": null,
+        "exit_code": 0,
+        "fingerprint": "7334f4a3690ecdec6d04e113bdea5421a433dac55f4704b685bee81c29859841",
+        "finished_at": 1795073347022,
+        "holder": "contract",
+        "id": "000001a1f2b585f3-8f811445",
+        "label": "sh -c kill 63; sleep 2; echo closed",
+        "output_bytes": 7,
+        "pid": 233,
+        "pty": false,
+        "request_id": null,
+        "signal": null,
+        "started_at": 1795073345011,
+        "state": "exited",
+        "truncated": false
+      },
+      {
+        "args": [
+          "-c",
+          "echo one two | wc -w"
+        ],
+        "command": "bash",
+        "cwd": "/home/agent",
+        "error": null,
+        "exit_code": 0,
+        "fingerprint": "0e8aad7386f6381050dab30ed9646f8406618d03e417a5567713db296c81f8cf",
+        "finished_at": 1795073344862,
+        "holder": "contract",
+        "id": "000001a1f2b5855c-579dff6b",
+        "label": "echo one two | wc -w",
+        "output_bytes": 2,
+        "pid": 230,
+        "pty": false,
+        "request_id": null,
+        "signal": null,
+        "started_at": 1795073344860,
+        "state": "exited",
+        "truncated": false
+      },
+      {
+        "args": [
+          "-c",
+          "echo computer-says-42"
+        ],
+        "command": "sh",
+        "cwd": "/home/agent",
+        "error": null,
+        "exit_code": 0,
+        "fingerprint": "995d2f4b2c81ac6495b8afc33e426aba33af1245b041a2b461b232d68f1f5c4b",
+        "finished_at": 1795073343594,
+        "holder": "contract",
+        "id": "000001a1f2b58069-4b3d5214",
+        "label": "sh -c echo computer-says-42",
+        "output_bytes": 17,
+        "pid": 42,
+        "pty": false,
+        "request_id": null,
+        "signal": null,
+        "started_at": 1795073343593,
+        "state": "exited",
+        "truncated": false
+      }
+    ],
+    "nixpkgs": "ef34387ddd751e1ab8857adf4676492d32eb24ec",
+    "parallelism": {
+      "CARGO_BUILD_JOBS": "4",
+      "CMAKE_BUILD_PARALLEL_LEVEL": "4",
+      "GOMAXPROCS": "4",
+      "MAKEFLAGS": "-j4",
+      "NIX_BUILD_CORES": "4",
+      "OMP_NUM_THREADS": "4"
+    },
+    "resources": {
+      "build_jobs": 4,
+      "cpus": 4,
+      "disk": {
+        "home": {
+          "free_bytes": 539537039360,
+          "path": "/home/agent",
+          "total_bytes": 541115342848,
+          "used_bytes": 1561526272
+        },
+        "nix_store": {
+          "free_bytes": 539537039360,
+          "path": "/nix/store",
+          "same_disk_as_home": true,
+          "total_bytes": 541115342848,
+          "used_bytes": 1561526272
+        }
+      },
+      "graphics": {
+        "gpu": false,
+        "note": "There is no GPU: OpenGL and Vulkan are drawn by the CPU, and CUDA, OpenCL on a GPU and other GPU compute are absent. A heavy real-time 3D viewport is slow; offline CPU renders work.",
+        "renderer": "Mesa llvmpipe on the CPU",
+        "rendering": "software"
+      },
+      "memory": {
+        "limit_bytes": 17179869184,
+        "limit_from": "cgroup",
+        "oom_kills": 0,
+        "peak_bytes": 1193701376,
+        "used_bytes": 1173245952
+      },
+      "summary": "4 CPUs (4 build jobs at once); 16.0 GiB memory, 1.1 GiB in use; home 502.5 GiB free of 504.0 GiB, the Nix store on the same disk; software rendering, no GPU"
+    },
+    "secrets": [],
+    "skill_sha256": "40bdd83cd26df144f45244fe3720e3e8a67c726164aa927aacb8fabcc4a2a35f",
+    "terminal": "Alacritty",
+    "version": "0.13.0-rc.2"
+  },
+  "cases": [
+    {
+      "name": "browser forms",
+      "passed": true,
+      "seconds": 1.024
+    },
+    {
+      "name": "three-step browser wizard",
+      "passed": true,
+      "seconds": 2.569
+    },
+    {
+      "name": "public Selenium form",
+      "passed": true,
+      "seconds": 0.657
+    },
+    {
+      "name": "no save-password bubble",
+      "passed": true,
+      "seconds": 2.449
+    },
+    {
+      "name": "managed jobs and observer",
+      "passed": true,
+      "seconds": 2.332
+    },
+    {
+      "name": "desktop job menu",
+      "passed": true,
+      "seconds": 1.811
+    },
+    {
+      "name": "clipboard between apps",
+      "passed": true,
+      "seconds": 1.223
+    },
+    {
+      "name": "tray counts match live jobs",
+      "passed": true,
+      "seconds": 0.342
+    },
+    {
+      "name": "Nix failure diagnostics",
+      "passed": true,
+      "seconds": 0.026
+    },
+    {
+      "name": "verified script execution",
+      "passed": true,
+      "seconds": 0.115
+    },
+    {
+      "name": "artifact failure recovery",
+      "passed": true,
+      "seconds": 0.286
+    },
+    {
+      "name": "rootless by design",
+      "passed": true,
+      "seconds": 0.025
+    },
+    {
+      "name": "a folder opens in a terminal",
+      "passed": true,
+      "seconds": 0.854
+    },
+    {
+      "name": "secrets have a home from boot",
+      "passed": true,
+      "seconds": 0.047
+    },
+    {
+      "name": "the keyboard has a map",
+      "passed": true,
+      "seconds": 0.009
+    },
+    {
+      "name": "package workspaces",
+      "passed": true,
+      "seconds": 18.512
+    },
+    {
+      "name": "second repository tests",
+      "passed": true,
+      "seconds": 2.532
+    },
+    {
+      "name": "Ketch installation and scraping",
+      "passed": true,
+      "seconds": 1.13
+    },
+    {
+      "name": "job durability and responsiveness",
+      "passed": true,
+      "seconds": 0.412
+    },
+    {
+      "name": "native Hotline build and screens",
+      "passed": true,
+      "seconds": 235.448
+    },
+    {
+      "name": "native controls and window identity",
+      "passed": true,
+      "seconds": 5.301
+    },
+    {
+      "name": "Qt wheel drafted and read",
+      "passed": true,
+      "seconds": 10.396
+    },
+    {
+      "name": "WebKitGTK typing and scrolling",
+      "passed": true,
+      "seconds": 13.809
+    },
+    {
+      "name": "legacy Xterm title",
+      "passed": true,
+      "seconds": 1.388
+    }
+  ]
+}
