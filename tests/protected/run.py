@@ -1,0 +1,219 @@
+#!/usr/bin/env python3
+"""Protected-secrets probes: does a granted secret still leave, or get read back?
+
+usage: run.py --runtime docker|podman|container --image REF --expect leak|blocked
+              [--only ID,ID] [--except ID,ID] [--keep]
+
+Starts one throwaway container (hl-secrets-w5-*) from IMAGE, delivers made-up
+secrets only (canaries.py), runs every probe and prints one line per probe:
+id, what it tries, LEAKED or BLOCKED (SKIPPED when it cannot run by itself).
+Exits 1 if any result differs from --expect. Ids in --except are shown but not
+counted. "Leaves the computer" probes talk only to a listener this script runs
+on the host's container bridge address; nothing is sent anywhere public.
+The container is removed with the runtime's own rm. Other containers are
+listed first and never touched.
+"""
+import argparse
+import base64
+import http.server
+import os
+import pathlib
+import re
+import secrets
+import socket
+import subprocess
+import sys
+import tempfile
+import threading
+import time
+import urllib.request
+
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import canaries as K  # noqa: E402
+import probes as P  # noqa: E402
+from mcpc import Computer  # noqa: E402
+
+HERE = pathlib.Path(__file__).resolve().parent
+LIST = {"docker": ["docker", "ps", "-a"], "podman": ["podman", "ps", "-a"], "container": ["container", "list", "--all"]}
+
+
+class Listener:
+    """The host side of every "leaves the computer" probe: records requests."""
+
+    def __init__(self, addr):
+        self.rows = []
+        me = self
+
+        class H(http.server.BaseHTTPRequestHandler):
+            def _h(self):
+                n = int(self.headers.get("Content-Length") or 0)
+                body = self.rfile.read(n).decode(errors="replace") if n else ""
+                auth = self.headers.get("Authorization", "")
+                text = f"{self.path}\n{auth}\n{body}"
+                m = re.match(r"Basic (\S+)", auth)
+                if m:
+                    try:
+                        text += "\n" + base64.b64decode(m.group(1)).decode(errors="replace")
+                    except Exception:
+                        pass
+                me.rows.append((self.path, text))
+                if self.path.startswith("/j3") and not auth:
+                    self.send_response(401)
+                    self.send_header("WWW-Authenticate", 'Basic realm="x"')
+                    self.end_headers()
+                    return
+                self.send_response(200)
+                self.end_headers()
+                self.wfile.write((auth if self.path.startswith("/echo") else "ok").encode())
+
+            do_GET = do_POST = do_PUT = _h
+
+            def log_message(self, *a):
+                pass
+
+        self.server = http.server.ThreadingHTTPServer((addr, 0), H)
+        self.port = self.server.server_address[1]
+        threading.Thread(target=self.server.serve_forever, daemon=True).start()
+
+    def heard(self, prefix, only=None):
+        return any(P.has_canary(t, only) for path, t in list(self.rows) if path.startswith(prefix))
+
+
+class Ctx:
+    def __init__(self, c, listener, host, ws, token, runtime, name):
+        self.c, self.L, self.host, self.port, self.ws, self.token = c, listener, host, listener.port, ws, token
+        self.runtime, self.name = runtime, name
+        self.shared = False
+        self.paged = False
+        self.refs = {}
+
+    def heard(self, prefix, only=None):
+        return self.L.heard(prefix, only)
+
+    def job(self, *a):
+        return P.job(self, *a)
+
+    def page(self):
+        """Serve a small form on localhost:8000 inside the container and open it in the browser."""
+        if not self.paged:
+            html = ('<html><body><form action="http://%s:%d/form" method=get>'
+                    '<input name=u type=text><input name=p type=password><button>go</button></form></body></html>'
+                    % (self.host, self.port))
+            self.c.sh("mkdir -p ~/site")
+            self.c.tool("files", action="put", path="site/index.html", content=html)
+            self.c.tool("shell", action="start", command="cd ~/site && exec python3 -m http.server 8000 --bind 127.0.0.1", wait_ms=500)
+            self.paged = True
+            time.sleep(1.5)
+        self.c.tool("browser", action="navigate", url="http://localhost:8000/")
+        text, _ = self.c.tool("browser", action="text")
+        self.refs = {kind: ref for ref, kind in re.findall(r"\[(e\d+)\] \[(text|password|button)\]", text)}
+
+    def ref(self, kind):
+        return self.refs[kind]
+
+
+def run(cmd, **kw):
+    return subprocess.run(cmd, capture_output=True, text=True, **kw)
+
+
+def free_port():
+    with socket.socket() as s:
+        s.bind(("127.0.0.1", 0))
+        return s.getsockname()[1]
+
+
+def main():
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--runtime", required=True, choices=list(LIST))
+    ap.add_argument("--image", required=True)
+    ap.add_argument("--expect", required=True, choices=["leak", "blocked"])
+    ap.add_argument("--only", default="")
+    ap.add_argument("--except", dest="skip", default="")
+    ap.add_argument("--keep", action="store_true", help="leave the container for inspection")
+    a = ap.parse_args()
+    rt = a.runtime
+
+    print(f"# containers already running ({rt}); none of them is touched:")
+    print(run(LIST[rt]).stdout.rstrip() or "(none)")
+    name = "hl-secrets-w5-" + secrets.token_hex(3)
+    token = secrets.token_hex(24)
+    port = free_port()
+    ws = pathlib.Path(tempfile.mkdtemp(prefix="hl-secrets-w5-ws-"))
+    os.chmod(ws, 0o777)
+    args = [rt, "run", "-d", "--name", name, "--cap-drop=ALL"]
+    if rt != "container":
+        args += ["--security-opt", "no-new-privileges", "--pids-limit", "1024"]
+    args += ["--memory", "4g", "--shm-size", "1g", "-p", f"127.0.0.1:{port}:8787",
+             "-e", "HOTLINE_COMPUTER_TOKEN", "-v", f"{ws}:/home/agent/workspace", a.image]
+    env = dict(os.environ, HOTLINE_COMPUTER_TOKEN=token)
+    made = run(args, env=env)
+    if made.returncode != 0:
+        print("could not start the container:", made.stderr.strip() or made.stdout.strip())
+        return 2
+    listener = None
+    results = []
+    try:
+        c = Computer(port, token)
+        for _ in range(90):
+            try:
+                if urllib.request.urlopen(f"http://127.0.0.1:{port}/health", timeout=2).status == 200:
+                    break
+            except Exception:
+                time.sleep(1)
+        else:
+            print("the computer did not come up")
+            return 2
+        status, _, _ = c.http("PUT", "/secrets", raw=K.body(), headers={"Content-Type": "application/json"})
+        if status != 204:
+            print("secrets delivery refused:", status)
+            return 2
+        # The host side as the container sees it: its default gateway is the host bridge.
+        route = c.sh("cat /proc/net/route")[0]
+        gw = next((l.split() for l in route.splitlines() if len(l.split()) > 2 and l.split()[1] == "00000000"), None)
+        host = os.environ.get("HOST_ADDR") or (socket.inet_ntoa(bytes.fromhex(gw[2])[::-1]) if gw else None)
+        if not host:
+            print("cannot tell the host's bridge address; set HOST_ADDR")
+            return 2
+        listener = Listener(os.environ.get("LISTEN_ADDR") or host)
+        print(f"# image {a.image} as {name}; listener on {host}:{listener.port}; expecting {a.expect.upper()}")
+        c.sh("mkdir -p ~/probe")
+        c.tool("files", action="put", path="probe/job.py", content=(HERE / "jobs/job.py").read_text())
+        ctx = Ctx(c, listener, host, ws, token, rt, name)
+        only = {x for x in a.only.split(",") if x}
+        skip = {x for x in a.skip.split(",") if x}
+        want_leak = a.expect == "leak"
+        bad = 0
+        print(f"{'ID':<10} {'RESULT':<8} {'':<2} WHAT")
+        for pid, what, fn in P.PROBES:
+            if only and pid not in only:
+                continue
+            try:
+                leaked, detail = fn(ctx)
+            except Exception as e:  # a probe that cannot run is reported, never silently BLOCKED
+                leaked, detail = None, f"probe error: {type(e).__name__}: {e}"
+            word = "SKIPPED" if leaked is None else "LEAKED" if leaked else "BLOCKED"
+            ok = leaked is None or pid in skip or leaked == want_leak
+            if not ok:
+                bad += 1
+            mark = "  " if leaked is None else ("ok" if ok else "!!")
+            note = " (excepted)" if pid in skip and leaked is not None and leaked != want_leak else ""
+            print(f"{pid:<10} {word:<8} {mark} {what}: {detail}{note}", flush=True)
+            results.append((pid, word, ok))
+        counts = {w: sum(1 for r in results if r[1] == w) for w in ("LEAKED", "BLOCKED", "SKIPPED")}
+        print(f"# {counts['LEAKED']} leaked, {counts['BLOCKED']} blocked, {counts['SKIPPED']} skipped; "
+              f"{bad} differ from EXPECT={a.expect}")
+        return 1 if bad else 0
+    finally:
+        if listener:
+            listener.server.shutdown()
+        if not a.keep:
+            if rt == "container":
+                run([rt, "stop", name])
+            r = run([rt, "rm"] + (["-f"] if rt != "container" else []) + [name])
+            print(f"# removed {name}" if r.returncode == 0 else f"# could not remove {name}: {r.stderr.strip()}")
+        else:
+            print(f"# kept {name} (port {port}, token {token})")
+
+
+if __name__ == "__main__":
+    sys.exit(main())
