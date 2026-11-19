@@ -301,6 +301,8 @@ async fn archive(home: &Path, path: &Path, limit: u64) -> Result<u64, String> {
             "czf",
             "-",
             "--exclude=.hotline/snapshots",
+            // A volume's own, root's and unreadable (see `desktop_fresh`).
+            "--exclude=./lost+found",
             "-C",
             path_str(home)?,
             ".",
@@ -374,6 +376,11 @@ async fn snapshot_load(app: &App, name: &str) -> ToolResult {
         "-C",
         path_str(&app.config.home)?,
         "--overwrite",
+        // Every member but the archive's root, `./`: the home keeps its own
+        // mode and times, which a home that is root's, the agent let in by
+        // its ACL (see `split::init`), could not take from the snapshot.
+        "--wildcards",
+        "./?*",
     ])
     .await?;
     // A snapshot cleaned of the old browser profile restores none.
@@ -448,7 +455,9 @@ async fn desktop_fresh(home: &Path) -> Result<bool, String> {
         .await
         .map_err(|error| error.to_string())?
     {
-        if !entry.file_name().to_string_lossy().starts_with('.') {
+        let name = entry.file_name();
+        // A fresh volume's lost+found is the filesystem's, not a user file.
+        if !name.to_string_lossy().starts_with('.') && name != "lost+found" {
             return Ok(false);
         }
     }
@@ -511,6 +520,29 @@ mod tests {
         let listed = String::from_utf8_lossy(&listed.stdout).into_owned();
         assert!(listed.contains("notes.txt"), "{listed}");
         assert!(!listed.contains("snapshots"), "{listed}");
+    }
+
+    /// A fresh volume's lost+found, root's and unreadable to the agent, is
+    /// in no snapshot and does not make a desktop look used.
+    #[tokio::test]
+    async fn lost_and_found_is_in_no_snapshot_and_no_user_file() {
+        let home = tempfile::tempdir().unwrap();
+        let found = home.path().join("lost+found");
+        std::fs::create_dir(&found).unwrap();
+        std::fs::write(found.join("#1234"), "the filesystem's").unwrap();
+        std::fs::write(home.path().join(".profile"), "kept").unwrap();
+        assert!(desktop_fresh(home.path()).await.unwrap());
+        let path = home.path().join(".hotline/snapshots/fresh.tar.gz");
+        archive(home.path(), &path, SNAPSHOT_LIMIT).await.unwrap();
+        let listed = std::process::Command::new("tar")
+            .args(["tzf", path.to_str().unwrap()])
+            .output()
+            .unwrap();
+        let listed = String::from_utf8_lossy(&listed.stdout).into_owned();
+        assert!(listed.contains(".profile"), "{listed}");
+        assert!(!listed.contains("lost+found"), "{listed}");
+        std::fs::write(home.path().join("notes.txt"), "a user file").unwrap();
+        assert!(!desktop_fresh(home.path()).await.unwrap());
     }
 
     #[test]

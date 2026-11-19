@@ -45,6 +45,7 @@ struct Start {
 pub fn run(config: Config) -> Result<(), String> {
     keep_only_setid()?;
     prepare_directories()?;
+    prepare_home(&config.home)?;
     let door = listen(&config.addr)?;
     // A job must not answer for the door over IPv6 either.
     let _door_v6 = hold_v6(&config.addr);
@@ -318,6 +319,126 @@ fn make_owned(path: &Path, uid: u32, gid: u32, mode: u32) -> Result<(), String> 
     } else {
         Err(format!("could not make {} as {uid}", path.display()))
     }
+}
+
+// ---- the home -------------------------------------------------------------
+
+/// A fresh volume for the home (Apple container's) comes up root's, with
+/// nothing in it but an empty `lost+found`, and the agent can write nothing
+/// there. Root without `CHOWN` cannot give it away, but as its owner PID 1
+/// may set its ACL: the empty `lost+found` goes, and the agent gets
+/// `rwx`, nobody else anything. A home that is not root's, holds anything
+/// else, or cannot be opened, is left as it is. Nothing here follows a link:
+/// the home is opened `O_NOFOLLOW` and worked on through that descriptor.
+fn prepare_home(home: &Path) -> Result<(), String> {
+    let shown = home.display();
+    let path = cstring(&home.to_string_lossy())?;
+    // Only a look, which needs no permission on the home itself: the
+    // agent's own 0700 home is closed to root without DAC capabilities.
+    // SAFETY: open with a NUL-terminated path; the descriptor is owned below.
+    let fd = unsafe {
+        libc::open(
+            path.as_ptr(),
+            libc::O_PATH | libc::O_DIRECTORY | libc::O_NOFOLLOW | libc::O_CLOEXEC,
+        )
+    };
+    if fd < 0 {
+        return Ok(());
+    }
+    // SAFETY: just opened, owned here alone.
+    let looked = unsafe { OwnedFd::from_raw_fd(fd) };
+    let mut status: libc::stat = unsafe { std::mem::zeroed() };
+    // SAFETY: fstat fills `status` for an open descriptor.
+    if unsafe { libc::fstat(looked.as_raw_fd(), &mut status) } != 0 || status.st_uid != 0 {
+        return Ok(());
+    }
+    // Root's: opened again through that descriptor, to read and set.
+    let dot = cstring(".")?;
+    // SAFETY: openat relative to the descriptor above.
+    let fd = unsafe {
+        libc::openat(
+            looked.as_raw_fd(),
+            dot.as_ptr(),
+            libc::O_RDONLY | libc::O_DIRECTORY | libc::O_CLOEXEC,
+        )
+    };
+    if fd < 0 {
+        return Ok(());
+    }
+    // SAFETY: just opened, owned here alone.
+    let home_fd = unsafe { OwnedFd::from_raw_fd(fd) };
+    let fd = home_fd.as_raw_fd();
+    let names = entries(fd)?;
+    if !names.iter().all(|name| name.as_bytes() == b"lost+found") {
+        return Ok(());
+    }
+    let found = cstring("lost+found")?;
+    if !names.is_empty() {
+        let mut inner: libc::stat = unsafe { std::mem::zeroed() };
+        // SAFETY: fstatat on the home's descriptor, not following a link.
+        let ours = unsafe {
+            libc::fstatat(fd, found.as_ptr(), &mut inner, libc::AT_SYMLINK_NOFOLLOW) == 0
+        } && inner.st_mode & libc::S_IFMT == libc::S_IFDIR
+            && inner.st_uid == 0;
+        // SAFETY: as above. A lost+found that holds something stays.
+        if !ours || unsafe { libc::unlinkat(fd, found.as_ptr(), libc::AT_REMOVEDIR) } != 0 {
+            eprintln!(
+                "hotline-computer: {shown}/lost+found stays: it is not an empty one of root's"
+            );
+        }
+    }
+    // POSIX ACL in the kernel's xattr form: owner rwx, the agent rwx, the
+    // group and others nothing, mask rwx.
+    const UNDEFINED: u32 = u32::MAX;
+    let mut acl = 2u32.to_le_bytes().to_vec();
+    for (tag, perm, id) in [
+        (0x01u16, 7u16, UNDEFINED),
+        (0x02, 7, AGENT_UID),
+        (0x04, 0, UNDEFINED),
+        (0x10, 7, UNDEFINED),
+        (0x20, 0, UNDEFINED),
+    ] {
+        acl.extend_from_slice(&tag.to_le_bytes());
+        acl.extend_from_slice(&perm.to_le_bytes());
+        acl.extend_from_slice(&id.to_le_bytes());
+    }
+    let name = cstring("system.posix_acl_access")?;
+    // SAFETY: fsetxattr on an open descriptor with a buffer of its length.
+    if unsafe { libc::fsetxattr(fd, name.as_ptr(), acl.as_ptr().cast(), acl.len(), 0) } != 0 {
+        return Err(format!(
+            "{shown} is root's and empty, and could not be given to the agent: {}; create it owned by uid {AGENT_UID}",
+            std::io::Error::last_os_error()
+        ));
+    }
+    eprintln!(
+        "hotline-computer: {shown} was a fresh volume of root's: the agent may write in it now"
+    );
+    Ok(())
+}
+
+/// The names in the directory open at `fd`, without `.` and `..`.
+fn entries(fd: RawFd) -> Result<Vec<OsString>, String> {
+    // SAFETY: fdopendir takes over a duplicate, which closedir closes.
+    let dir = unsafe { libc::fdopendir(libc::fcntl(fd, libc::F_DUPFD_CLOEXEC, 0)) };
+    if dir.is_null() {
+        return Err(format!("the home: {}", std::io::Error::last_os_error()));
+    }
+    let mut names = Vec::new();
+    loop {
+        // SAFETY: readdir on an open stream; the entry is read before the next call.
+        let entry = unsafe { libc::readdir(dir) };
+        if entry.is_null() {
+            break;
+        }
+        // SAFETY: d_name is NUL-terminated.
+        let name = unsafe { std::ffi::CStr::from_ptr((*entry).d_name.as_ptr()) };
+        if name.to_bytes() != b"." && name.to_bytes() != b".." {
+            names.push(OsString::from(std::ffi::OsStr::from_bytes(name.to_bytes())));
+        }
+    }
+    // SAFETY: closes the stream opened above.
+    unsafe { libc::closedir(dir) };
+    Ok(names)
 }
 
 // ---- sockets --------------------------------------------------------------
@@ -665,4 +786,72 @@ fn spawn_signin(arguments: &Value) -> Result<(libc::pid_t, OwnedFd, OwnedFd), St
     })?;
     drop((commands_read, events_write));
     Ok((pid, commands_write, events_read))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn acl(path: &Path) -> Option<Vec<u8>> {
+        let path = cstring(&path.to_string_lossy()).unwrap();
+        let name = cstring("system.posix_acl_access").unwrap();
+        let mut buffer = vec![0u8; 256];
+        // SAFETY: getxattr into a buffer of its length.
+        let size = unsafe {
+            libc::getxattr(
+                path.as_ptr(),
+                name.as_ptr(),
+                buffer.as_mut_ptr().cast(),
+                buffer.len(),
+            )
+        };
+        (size > 0).then(|| buffer[..size as usize].to_vec())
+    }
+
+    /// Run as root only (the image's checks are): a fresh root's home is
+    /// the agent's to write in, anything else is left alone.
+    #[test]
+    fn a_fresh_home_of_roots_is_given_to_the_agent_and_no_other() {
+        // SAFETY: geteuid has no preconditions.
+        if unsafe { libc::geteuid() } != 0 {
+            return eprintln!("skipped: not root");
+        }
+        let root = tempfile::tempdir().unwrap();
+        let fresh = root.path().join("fresh");
+        std::fs::create_dir_all(fresh.join("lost+found")).unwrap();
+        prepare_home(&fresh).unwrap();
+        assert!(
+            !fresh.join("lost+found").exists(),
+            "the empty lost+found goes"
+        );
+        let granted = acl(&fresh).expect("an ACL");
+        assert!(
+            granted[4..]
+                .chunks(8)
+                .any(|entry| entry[..2] == 2u16.to_le_bytes()
+                    && entry[4..] == AGENT_UID.to_le_bytes()),
+            "{granted:?}"
+        );
+        // A home that holds something is left as it is.
+        let used = root.path().join("used");
+        std::fs::create_dir_all(used.join("lost+found")).unwrap();
+        std::fs::write(used.join("notes.txt"), "kept").unwrap();
+        prepare_home(&used).unwrap();
+        assert!(used.join("lost+found").exists() && acl(&used).is_none());
+        // A link in the home's place is not followed.
+        let target = root.path().join("target");
+        std::fs::create_dir_all(&target).unwrap();
+        let link = root.path().join("link");
+        std::os::unix::fs::symlink(&target, &link).unwrap();
+        prepare_home(&link).unwrap();
+        assert!(acl(&target).is_none());
+        // The agent's own home, closed to root without DAC capabilities, is
+        // only looked at, and a boot goes on.
+        let agents = root.path().join("agents");
+        std::fs::create_dir(&agents).unwrap();
+        std::os::unix::fs::chown(&agents, Some(AGENT_UID), Some(AGENT_UID)).unwrap();
+        std::fs::set_permissions(&agents, std::fs::Permissions::from_mode(0o700)).unwrap();
+        prepare_home(&agents).unwrap();
+        assert!(acl(&agents).is_none());
+    }
 }
