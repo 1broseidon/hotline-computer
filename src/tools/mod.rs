@@ -55,10 +55,11 @@ pub fn descriptors(home: &str) -> Vec<Tool> {
         ),
         Tool::new(
             "browser",
-            "The managed Chromium, semantically. text returns an accessibility-style page snapshot with element refs; click_ref, fill, select, check, and hover act on those refs. Refs are stable within one snapshot. fill takes exactly one of text or secret — omit the other rather than sending it empty — and types that text (for example {\"action\":\"fill\",\"ref\":\"e3\",\"text\":\"QA\"}) or one of the person's stored secrets by name (for example {\"action\":\"fill\",\"ref\":\"e3\",\"secret\":\"GITHUB.username\"}): a login's field is typed only on that login's own sites and the value never appears in the answer. A stored passkey signs in by itself when a site asks for one. Also provides navigation, history, tabs, uploads, dialogs, and downloads.",
+            "The managed Chromium, semantically. text returns an accessibility-style page snapshot with element refs; click_ref, fill, select, check, and hover act on those refs. Refs are stable within one snapshot. fill takes exactly one of text or secret — omit the other rather than sending it empty — and types that text (for example {\"action\":\"fill\",\"ref\":\"e3\",\"text\":\"QA\"}) or one of the person's stored secrets by name (for example {\"action\":\"fill\",\"ref\":\"e3\",\"secret\":\"GITHUB.username\"}): a login's field is typed only on that login's own sites and the value never appears in the answer. A stored passkey signs in by itself when a site asks for one. Also provides navigation, history, tabs, uploads, dialogs, and downloads. On a computer with a signed-in browser, a login's sites and the sites the person shared open there: tabs lists them from index 100, eval does not run there (use text, links, read or screenshot), and while a sign-in is typed its page is hidden until it loads the next one.",
             schema(json!({
                 "type":"object","properties":{
-                    "action":{"type":"string","enum":["navigate","text","links","eval","click_ref","fill","select","check","hover","tabs","tab_new","tab_select","tab_close","upload","dialog_accept","dialog_dismiss","downloads","back","forward","reload"]},
+                    "action":{"type":"string","enum":["navigate","text","links","read","screenshot","eval","click_ref","fill","select","check","hover","tabs","tab_new","tab_select","tab_close","upload","dialog_accept","dialog_dismiss","downloads","back","forward","reload"]},
+                    "selector":{"type":"string","description":"read only: a CSS selector; answers the text of what matches, never a field's value"},
                     "url":{"type":"string"},"js":{"type":"string"},"ref":{"type":"string"},"button":{"type":"string"},
                     "text":{"type":"string","description":"fill only: the text to type (an explicit empty string clears the field); omit when using secret. Also used by dialog_accept."},"secret":{"type":"string","description":"fill only: the name of a stored secret to type instead of text; omit when using text. NAME for a variable; NAME.username, NAME.password or NAME.code (the six TOTP digits of this moment) for a login, which is typed only on a page of the login's own sites. state info lists them. The value never appears in the answer."},"value":{"type":"string","description":"Single option value for select."},"values":{"type":"array","items":{"type":"string"},"description":"Native select values; multiple selections require a multiple select."},"uncheck":{"type":"boolean"},"index":{"type":"integer","minimum":0},"path":{"type":"string"}
                 },"required":["action"],"additionalProperties":false
@@ -167,6 +168,7 @@ pub async fn call_prepared(
             "click_ref" | "check" | "select" | "hover"
         )
         && let Some(reference) = arguments["ref"].as_str()
+        && !app.signin.as_ref().is_some_and(|signin| signin.focused())
         && let Some(label) = browser::element_label(app, reference).await
     {
         activity.target = label;

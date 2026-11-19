@@ -28,6 +28,7 @@ pub mod ready;
 pub mod screen;
 pub mod secrets;
 pub mod serve;
+pub mod signin;
 pub mod split;
 pub mod tools;
 pub mod viewer;
@@ -112,6 +113,9 @@ pub struct App {
     /// In the split computer's broker: the runner, which does the work. The
     /// broker's own jobs, browser, files and desktop are never used.
     pub runner: Option<split::Runner>,
+    /// The browser for signed-in sites, which only this process drives;
+    /// `None` keeps today's one browser (see `signin`).
+    pub signin: Option<signin::Signin>,
 }
 
 impl App {
@@ -119,11 +123,18 @@ impl App {
         let config = Arc::new(config);
         let secrets = secrets::Secrets::default();
         let passkeys = passkeys::Passkeys::default();
+        let browser = BrowserManager::new(Arc::clone(&config), secrets.clone(), passkeys.clone());
+        // The split computer's broker sets its own (see `signin::split`).
+        let signin = signin::trial()
+            .then(|| signin::Signin::direct(browser.clone(), secrets.clone(), &config.home));
+        if let Some(signin) = &signin {
+            signin.arming_from(passkeys.clone());
+        }
         Self {
             access: MachineAccess::new().on_display(&config.display),
             a11y: Arc::new(tokio::sync::OnceCell::new()),
             jobs: jobs::Jobs::new(&config.home, &config.display, secrets.clone()),
-            browser: BrowserManager::new(Arc::clone(&config), secrets.clone(), passkeys.clone()),
+            browser,
             activity: activity::Log::new(&config.home, secrets.clone()),
             badges: badge::Badges::default(),
             files: files_ui::Files::default(),
@@ -134,6 +145,7 @@ impl App {
             config,
             display: None,
             runner: None,
+            signin,
         }
     }
 

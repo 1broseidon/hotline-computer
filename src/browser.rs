@@ -847,7 +847,8 @@ async fn reap(mut session: BrowserSession) {
 /// The extension that answers passkey requests itself, keys staying in the
 /// service (see `crate::bridge`), when the image carries it.
 fn extensions() -> Vec<String> {
-    if crate::bridge::extension_answers() {
+    // With a signed-in browser the extension is loaded there and only there.
+    if crate::bridge::extension_answers() && !crate::signin::enabled() {
         vec![crate::bridge::EXTENSION_DIR.to_owned()]
     } else {
         Vec::new()
@@ -937,7 +938,9 @@ async fn current_page(session: &mut BrowserSession) -> Result<Page, String> {
 async fn passkey_sync(session: &mut BrowserSession, page: &Page) -> Result<Option<String>, String> {
     // With the extension answering, Chromium's virtual authenticator and its
     // guard stay out of the way: two authenticators would race for a page.
-    if crate::bridge::extension_answers() {
+    // With a signed-in browser, no passkey is ever in this one: a page here
+    // asking for one finds none.
+    if crate::bridge::extension_answers() || crate::signin::enabled() {
         return Ok(None);
     }
     // Chromium's own authenticator signs without asking anyone, so a passkey

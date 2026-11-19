@@ -56,10 +56,6 @@ pub const BRIDGE_SOCKET: &str = "/run/hotline-computer/bridge/bridge.sock";
 /// What every user may read: the proxy's CA bundle. `hotline`, 0755.
 pub const PUBLIC_DIR: &str = "/run/hotline-computer/public";
 pub const CA_BUNDLE: &str = "/run/hotline-computer/public/ca-bundle.pem";
-/// The bridge for the general browser's extension, until the signed-in
-/// browser carries the extension instead: reachable by `agent`, as the
-/// single-user computer's is, and answering `agent` peers alone.
-pub const INTERIM_BRIDGE_SOCKET: &str = "/run/hotline-computer/public/bridge.sock";
 /// The signed-in browser's profile: `signin`, 0700, in the container's own
 /// layer, so a recreated computer starts it clean.
 pub const SIGNIN_DIR: &str = "/var/lib/hotline-computer/signin";
@@ -258,6 +254,14 @@ pub async fn current_url(app: &App) -> Result<String, String> {
 }
 
 pub async fn sync_passkeys(app: &App, launch: bool) -> Result<(), String> {
+    // A passkey is made in the signed-in browser, where the extension is:
+    // the person is shown the armed site there.
+    if let Some(signin) = &app.signin {
+        if launch && let Some((rp_id, _)) = app.passkeys.armed() {
+            signin.open_site(&format!("https://{rp_id}/")).await?;
+        }
+        return Ok(());
+    }
     match &app.runner {
         None => app.browser.sync_passkeys(launch).await,
         Some(runner) => runner
@@ -299,9 +303,9 @@ pub async fn delivered(app: &App) {
 }
 
 /// A tool call through the split computer's door: the runner does the work
-/// and the broker takes every value out of the answer. A login's field is
-/// looked up, checked and held here, and the runner is handed the value
-/// for that one fill.
+/// and the broker takes every value out of the answer. The signed-in
+/// browser's calls, and every fill of a login's field, are the broker's own:
+/// no value of a secret is ever handed to the runner.
 pub async fn call_tool(
     app: &App,
     runner: &Runner,
@@ -309,10 +313,37 @@ pub async fn call_tool(
     arguments: Value,
     holder: &str,
 ) -> crate::tools::ToolResult {
-    let result = if name == "browser" && crate::tools::browser::fills_a_secret(&arguments) {
-        crate::tools::browser::fill_secret_through(app, runner, arguments, holder).await
-    } else {
-        call_runner(runner, name, arguments, holder, None).await
+    let browser = name == "browser";
+    let signin = app.signin.as_ref().filter(|_| browser);
+    let routed = match signin {
+        Some(signin) => signin.route(app, &arguments, holder).await,
+        None => None,
+    };
+    let result = match (routed, signin) {
+        (Some(result), _) => result,
+        // What the signed-in browser did not take is never typed: not a
+        // variable, and not a login's field in the runner's browser.
+        (None, _) if browser && crate::tools::browser::fills_a_secret(&arguments) => {
+            let reference = arguments["secret"].as_str().unwrap_or_default();
+            Err(match app.secrets.resolve(reference) {
+                Err(error) => error,
+                Ok(_) => format!(
+                    "{reference} is typed only by the signed-in browser, which this computer has not started"
+                ),
+            })
+        }
+        (None, Some(signin)) if arguments["action"] == "tabs" => {
+            let general = call_runner(runner, name, arguments, holder)
+                .await
+                .map(|blocks| {
+                    blocks
+                        .iter()
+                        .filter_map(|block| block.as_text().map(|text| text.text.clone()))
+                        .collect::<String>()
+                });
+            crate::tools::browser::with_signed_in_tabs(general, signin).map(crate::tools::text)
+        }
+        (None, _) => call_runner(runner, name, arguments, holder).await,
     };
     app.secrets.redact_result(result)
 }
@@ -322,19 +353,11 @@ pub async fn call_runner(
     name: &str,
     arguments: Value,
     holder: &str,
-    filled: Option<&crate::secrets::Filled>,
 ) -> crate::tools::ToolResult {
-    let filled = filled.map(|filled| {
-        json!({
-            "label": filled.label,
-            "value": filled.value,
-            "sites": filled.sites.as_ref().map(|sites| sites.iter().map(ToString::to_string).collect::<Vec<_>>()),
-        })
-    });
     let answer = runner
         .call(
             "tool.call",
-            json!({"name": name, "arguments": arguments, "holder": holder, "filled": filled}),
+            json!({"name": name, "arguments": arguments, "holder": holder}),
         )
         .await?;
     serde_json::from_value(answer["content"].clone()).map_err(|error| error.to_string())

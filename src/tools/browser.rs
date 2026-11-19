@@ -36,6 +36,12 @@ pub async fn call(
     holder: &str,
     prepared: Option<Filled>,
 ) -> ToolResult {
+    // Signed-in sites, and a login's fields, are the signed-in browser's.
+    if let Some(signin) = &app.signin
+        && let Some(result) = signin.route(app, &arguments, holder).await
+    {
+        return result;
+    }
     let input: Input = serde_json::from_value(arguments).map_err(|error| error.to_string())?;
     let mutating = !matches!(
         input.action.as_str(),
@@ -154,7 +160,10 @@ pub async fn call(
         }
         "check" => app.browser.check(&input.r#ref, !input.uncheck).await,
         "hover" => app.browser.hover(&input.r#ref).await,
-        "tabs" => app.browser.tabs().await,
+        "tabs" => match &app.signin {
+            Some(signin) => with_signed_in_tabs(app.browser.tabs().await, signin),
+            None => app.browser.tabs().await,
+        },
         "tab_new" => app.browser.tab_new(&input.url).await,
         "tab_select" => {
             app.browser
@@ -303,26 +312,26 @@ async fn after_secret(app: &App, cleared: &Cleared, typed: Result<(), &str>) {
     }
 }
 
-/// The split computer's broker's side of a fill of a stored secret: looked
-/// up, checked and held here, typed by the runner, recorded here.
-pub(crate) async fn fill_secret_through(
-    app: &App,
-    runner: &crate::split::Runner,
-    arguments: Value,
-    holder: &str,
-) -> ToolResult {
-    let reference = arguments["secret"].as_str().unwrap_or_default().to_owned();
-    let cleared = clear_secret(app, &reference).await?;
-    let result =
-        crate::split::call_runner(runner, "browser", arguments, holder, Some(&cleared.filled))
-            .await;
-    after_secret(
-        app,
-        &cleared,
-        result.as_ref().map(|_| ()).map_err(String::as_str),
-    )
-    .await;
-    result
+/// The general browser's tabs, then the signed-in browser's, numbered from
+/// `SIGNED_IN_TABS`. Only one of the two is current.
+pub(crate) fn with_signed_in_tabs(
+    general: Result<String, String>,
+    signin: &crate::signin::Signin,
+) -> Result<String, String> {
+    let signed_in = signin.tab_list();
+    // A general browser that cannot start still leaves the signed-in tabs.
+    let general = match general {
+        Err(_) if !signed_in.is_empty() => "[]".to_owned(),
+        general => general?,
+    };
+    let mut tabs: Vec<Value> = serde_json::from_str(&general).unwrap_or_default();
+    if signin.focused() {
+        for tab in &mut tabs {
+            tab["current"] = Value::Bool(false);
+        }
+    }
+    tabs.extend(signed_in);
+    serde_json::to_string(&tabs).map_err(|error| error.to_string())
 }
 
 /// What a fill of an ask-me login answers while the person is asked: at

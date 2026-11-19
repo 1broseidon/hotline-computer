@@ -18,7 +18,7 @@ use rmcp::transport::streamable_http_server::{
 };
 use serde_json::{Value, json};
 
-use crate::{App, files_ui, holds, logins, passkeys, secrets, tools, viewer};
+use crate::{App, files_ui, holds, logins, passkeys, secrets, signin, tools, viewer};
 
 const MAX_REQUEST_BODY: usize = 50 * 1024 * 1024 * 4 / 3 + 1024 * 1024;
 
@@ -293,6 +293,16 @@ fn secret_routes() -> Router<App> {
                 .delete(passkeys::disarm),
         )
         .route("/passkeys/registration/answer", post(passkeys::answer))
+        // Shared sign-ins into the signed-in browser, and out of it.
+        // Bearer-only, like `/secrets`.
+        .route(
+            "/sessions/{name}",
+            put(signin::sessions::put).delete(signin::sessions::delete),
+        )
+        // The signed-in browser as a screen, in the viewer's protocol: the
+        // broker's, since only it drives that browser. Its socket checks the
+        // token itself, as `/ws` does.
+        .route("/sites/ws", get(signin::screen::socket))
 }
 
 /// The bearer check, the holder's name, and the Host and Origin guard
@@ -480,7 +490,7 @@ async fn authenticate(request: Request, next: Next, token: Option<&str>) -> Resp
     // presents the token as a query, and those routes check it themselves.
     if matches!(
         request.uri().path(),
-        "/health" | "/" | "/ws" | "/files" | "/files/download"
+        "/health" | "/" | "/ws" | "/sites/ws" | "/files" | "/files/download"
     ) || request.uri().path().starts_with("/assets/fonts/")
         || request.uri().path().starts_with("/fm/")
         || token.is_none()

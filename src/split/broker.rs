@@ -128,6 +128,9 @@ pub fn run(config: Config) -> Result<(), String> {
             handoff: Arc::new(Mutex::new(handoff)),
             ready: readiness,
         });
+        // The signed-in browser, which PID 1 starts as `signin`; its bridge
+        // is the only one, and answers `signin` alone.
+        app.signin = Some(crate::signin::split::for_broker(&app));
         tokio::spawn(crate::bridge::serve(app.clone()));
         let listener = std::net::TcpListener::from(door);
         listener
@@ -608,16 +611,12 @@ mod home_tests {
                 "the bearer never reaches the runner: {page}"
             );
         }
-        // Every tool is the runner's; a login's field is cleared here and
-        // handed over for that one fill.
+        // Every tool is the runner's, but no secret's value is ever handed
+        // to it: a login's field is the signed-in browser's to type.
         for (tool, arguments) in [
             ("capture", json!({})),
             ("input", json!({"action": "click", "x": 1, "y": 1})),
             ("browser", json!({"action": "text"})),
-            (
-                "browser",
-                json!({"action": "fill", "ref": "e1", "secret": "SITE.password"}),
-            ),
             ("shell", json!({"action": "exec", "command": "true"})),
             (
                 "files",
@@ -643,10 +642,21 @@ mod home_tests {
         .await
         .unwrap_err();
         assert!(filled.contains("never types one"), "{filled}");
+        let login = crate::split::call_tool(
+            &app,
+            &runner,
+            "browser",
+            json!({"action": "fill", "ref": "e1", "secret": "SITE.password"}),
+            "test",
+        )
+        .await
+        .unwrap_err();
+        assert!(login.contains("signed-in browser"), "{login}");
         let ops = ops.lock().unwrap().clone();
-        assert!(
-            ops.iter().filter(|op| *op == "tool.call").count() >= 9,
-            "{ops:?}"
+        assert_eq!(
+            ops.iter().filter(|op| *op == "tool.call").count(),
+            8,
+            "neither fill reached the runner: {ops:?}"
         );
         assert!(ops.contains(&"secrets.set".to_owned()), "{ops:?}");
         server.abort();

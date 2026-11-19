@@ -49,6 +49,36 @@ pub enum Kind {
     Login,
 }
 
+/// What a held use would do, as the signed-in browser's broker saw it.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "lowercase")]
+pub enum OperationKind {
+    Signin,
+    Passkey,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Operation {
+    pub kind: OperationKind,
+    /// The page's origin, from the browser itself.
+    pub origin: String,
+    /// The login's username, or the passkey's account.
+    pub account: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub rp_id: Option<String>,
+}
+
+/// A use bound to one operation in one flow: a sign-in on one signed-in tab.
+/// "Allow" then covers that flow only, and only when the broker itself saw
+/// the request (`attested`); unattested, it lets this one use through.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize)]
+pub struct Bound {
+    pub operation: Operation,
+    pub attested: bool,
+    pub flow: String,
+}
+
 /// A use the computer is holding: what `GET /secrets/uses` lists.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -61,6 +91,10 @@ pub struct Held {
     /// Unix milliseconds.
     pub asked_at: u64,
     pub expires_at: u64,
+    /// `operation`, `attested` and `flow`, for a use the signed-in browser
+    /// asked for; absent for one from the single-user computer.
+    #[serde(flatten)]
+    pub bound: Option<Bound>,
     /// Who the use is for, for the card's record.
     #[serde(skip)]
     who: String,
@@ -146,15 +180,26 @@ enum Ticket {
     Denied,
 }
 
+/// A key on a site, in one flow when the use is bound to one.
+type Scope = (String, String, Option<String>);
+
+fn scope(secret: &str, site: &str, bound: Option<&Bound>) -> Scope {
+    (
+        secret.to_owned(),
+        site.to_owned(),
+        bound.map(|bound| bound.flow.clone()),
+    )
+}
+
 #[derive(Default)]
 struct Inner {
     /// Oldest first.
     held: Vec<Held>,
     settled: VecDeque<Settled>,
     seq: u64,
-    /// (secret, site) to when its allowance ends.
-    allowed: HashMap<(String, String), u64>,
-    tickets: HashMap<(String, String), Ticket>,
+    /// (secret, site, flow) to when its allowance ends.
+    allowed: HashMap<Scope, u64>,
+    tickets: HashMap<Scope, Ticket>,
 }
 
 /// The uses held now, the answers given lately and the allowances standing.
@@ -183,9 +228,25 @@ impl Holds {
         wait_ms: u64,
         now: u64,
     ) -> Pass {
+        self.ask_bound(secret, kind, site, path, who, wait_ms, now, None)
+    }
+
+    /// `ask`, bound to an operation and its flow.
+    #[allow(clippy::too_many_arguments)]
+    pub fn ask_bound(
+        &self,
+        secret: &str,
+        kind: Kind,
+        site: &str,
+        path: &str,
+        who: &str,
+        wait_ms: u64,
+        now: u64,
+        bound: Option<Bound>,
+    ) -> Pass {
         let mut inner = self.lock();
         prune(&mut inner, now);
-        if allowed(&inner, secret, site, now) {
+        if allowed(&inner, &scope(secret, site, bound.as_ref()), now) {
             return Pass::Within;
         }
         let id = hold(
@@ -198,6 +259,7 @@ impl Holds {
             now + wait_ms.min(WAIT_CAP_MS),
             false,
             now,
+            bound,
         );
         Pass::Held { id, lapsed: false }
     }
@@ -206,12 +268,26 @@ impl Holds {
     /// allowed or approved, else the id it is held under (the one already
     /// held, if the agent tries again before the person answers).
     pub fn fill(&self, secret: &str, site: &str, path: &str, who: &str, now: u64) -> Pass {
+        self.fill_bound(secret, site, path, who, now, None)
+    }
+
+    /// `fill`, bound to an operation and its flow: an approval or allowance
+    /// in one flow is not one in another.
+    pub fn fill_bound(
+        &self,
+        secret: &str,
+        site: &str,
+        path: &str,
+        who: &str,
+        now: u64,
+        bound: Option<Bound>,
+    ) -> Pass {
         let mut inner = self.lock();
         prune(&mut inner, now);
-        if allowed(&inner, secret, site, now) {
+        let key = scope(secret, site, bound.as_ref());
+        if allowed(&inner, &key, now) {
             return Pass::Within;
         }
-        let key = (secret.to_owned(), site.to_owned());
         let mut lapsed = false;
         match inner.tickets.get(&key).cloned() {
             Some(Ticket::Signing { outcome, until }) if until > now => {
@@ -247,6 +323,7 @@ impl Holds {
             now + FILL_WAITS_MS,
             true,
             now,
+            bound,
         );
         inner.tickets.insert(key, Ticket::Pending(id.clone()));
         Pass::Held { id, lapsed }
@@ -290,15 +367,18 @@ impl Holds {
             ));
         };
         let held = inner.held.remove(at);
+        let unattested = held.bound.as_ref().is_some_and(|bound| !bound.attested);
         let outcome = match answer {
             Answer::Approve => Outcome::Approved,
+            // Nobody vouches for where an unattested request came from, so
+            // ten minutes of it could be anyone's: this one use goes through.
+            Answer::Allow if unattested => Outcome::Approved,
             Answer::Allow => Outcome::Allowed,
             Answer::Deny => Outcome::Denied,
         };
+        let key = scope(&held.secret, &held.site, held.bound.as_ref());
         if outcome == Outcome::Allowed {
-            inner
-                .allowed
-                .insert((held.secret.clone(), held.site.clone()), now + ALLOW_FOR_MS);
+            inner.allowed.insert(key.clone(), now + ALLOW_FOR_MS);
         }
         if held.retry {
             let ticket = match outcome {
@@ -308,9 +388,7 @@ impl Holds {
                     until: now + APPROVAL_KEPT_MS,
                 },
             };
-            inner
-                .tickets
-                .insert((held.secret.clone(), held.site.clone()), ticket);
+            inner.tickets.insert(key, ticket);
         }
         settle(&mut inner, held, outcome, now);
         Ok(outcome)
@@ -327,13 +405,15 @@ impl Holds {
     pub fn settled(&self) -> Vec<Settled> {
         self.lock().settled.iter().cloned().collect()
     }
+
+    #[cfg(test)]
+    fn allowed_is_empty(&self) -> bool {
+        self.lock().allowed.is_empty()
+    }
 }
 
-fn allowed(inner: &Inner, secret: &str, site: &str, now: u64) -> bool {
-    inner
-        .allowed
-        .get(&(secret.to_owned(), site.to_owned()))
-        .is_some_and(|until| *until > now)
+fn allowed(inner: &Inner, key: &Scope, now: u64) -> bool {
+    inner.allowed.get(key).is_some_and(|until| *until > now)
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -347,6 +427,7 @@ fn hold(
     expires_at: u64,
     retry: bool,
     now: u64,
+    bound: Option<Bound>,
 ) -> String {
     let id = use_id();
     inner.held.push(Held {
@@ -359,6 +440,7 @@ fn hold(
         expires_at,
         who: who.to_owned(),
         retry,
+        bound,
     });
     id
 }
@@ -634,6 +716,74 @@ mod tests {
             Pass::Held { id, lapsed: true } => assert_ne!(id, asked_again),
             other => panic!("{other:?}"),
         }
+    }
+
+    fn bound(flow: &str, attested: bool) -> Option<Bound> {
+        Some(Bound {
+            operation: Operation {
+                kind: OperationKind::Signin,
+                origin: "https://github.com".into(),
+                account: "george".into(),
+                rp_id: None,
+            },
+            attested,
+            flow: flow.into(),
+        })
+    }
+
+    #[test]
+    fn allow_ten_minutes_covers_the_same_flow_only() {
+        let holds = Holds::default();
+        let fill = |flow: &str, at: u64| {
+            holds.fill_bound("GH", "github.com", "/login", "Rex", at, bound(flow, true))
+        };
+        let id = held_id(fill("flow-a", T));
+        let listed = serde_json::to_value(&holds.held(T)[0]).unwrap();
+        assert_eq!(listed["operation"]["kind"], "signin");
+        assert_eq!(listed["operation"]["origin"], "https://github.com");
+        assert_eq!(listed["operation"]["account"], "george");
+        assert_eq!(listed["attested"], true);
+        assert_eq!(listed["flow"], "flow-a");
+        assert_eq!(
+            holds.answer(&id, Answer::Allow, T + 1),
+            Ok(Outcome::Allowed)
+        );
+        // The password, then the code on the next page: the same flow.
+        assert_eq!(fill("flow-a", T + 2), Pass::Within);
+        assert_eq!(fill("flow-a", T + 120_000), Pass::Within);
+        // Another tab's sign-in, or the same key unbound, is asked again.
+        assert!(matches!(fill("flow-b", T + 3), Pass::Held { .. }));
+        assert!(matches!(
+            holds.fill("GH", "github.com", "/login", "Rex", T + 4),
+            Pass::Held { .. }
+        ));
+        let passkey = holds.ask_bound(
+            "GH",
+            Kind::Passkey,
+            "github.com",
+            "/",
+            "Rex",
+            60_000,
+            T + 5,
+            bound("flow-c", true),
+        );
+        assert!(matches!(passkey, Pass::Held { .. }));
+        // The allowance is over, and the sign-in's own minute with it.
+        assert!(matches!(
+            fill("flow-a", T + 1 + ALLOW_FOR_MS),
+            Pass::Held { .. }
+        ));
+    }
+
+    #[test]
+    fn an_unattested_allow_lets_one_use_through() {
+        let holds = Holds::default();
+        let id = held_id(holds.fill_bound("GH", "github.com", "/", "Rex", T, bound("f", false)));
+        assert_eq!(
+            holds.answer(&id, Answer::Allow, T + 1),
+            Ok(Outcome::Approved)
+        );
+        assert!(holds.allowed_is_empty());
     }
 
     #[test]

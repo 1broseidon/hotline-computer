@@ -13,7 +13,7 @@ use base64::Engine;
 use serde_json::{Value, json};
 
 use super::{fd, wire};
-use crate::secrets::{Delivered, Filled, Origin};
+use crate::secrets::Delivered;
 use crate::{App, Config};
 
 /// The process PID 1 starts as `agent`.
@@ -126,21 +126,19 @@ fn text_of<'a>(args: &'a Value, key: &str) -> &'a str {
 }
 
 /// The broker's requests. None of them carries a value a job could not
-/// already read, except the one login field `tool.call` brings for a fill
-/// in the general browser, which types it.
+/// already read: a login's fields are typed by the broker's signed-in
+/// browser, and a `tool.call` that brings one is refused.
 async fn answer(app: &App, op: &str, args: Value) -> Result<Value, String> {
     match op {
         "tool.call" => {
-            let filled = match args.get("filled") {
-                None | Some(Value::Null) => None,
-                Some(filled) => Some(filled_from(filled)?),
-            };
-            let content = crate::tools::call_prepared(
+            if !matches!(args.get("filled"), None | Some(Value::Null)) {
+                return Err("the runner never takes a secret's value".to_owned());
+            }
+            let content = crate::tools::call(
                 app,
                 text_of(&args, "name"),
                 args["arguments"].clone(),
                 text_of(&args, "holder"),
-                filled,
             )
             .await?;
             Ok(json!({"content": content}))
@@ -251,21 +249,4 @@ async fn read_capped(path: &Path) -> Result<Vec<u8>, String> {
     tokio::fs::read(path)
         .await
         .map_err(|error| error.to_string())
-}
-
-fn filled_from(filled: &Value) -> Result<Filled, String> {
-    let sites = match filled["sites"].as_array() {
-        None => None,
-        Some(sites) => Some(
-            sites
-                .iter()
-                .map(|site| Origin::site(site.as_str().unwrap_or_default()))
-                .collect::<Result<Vec<_>, _>>()?,
-        ),
-    };
-    Ok(Filled {
-        label: text_of(filled, "label").to_owned(),
-        value: text_of(filled, "value").to_owned(),
-        sites,
-    })
 }
