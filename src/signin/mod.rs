@@ -23,6 +23,7 @@
 //! (`sessions`) clears the site's cookies and storage and closes its tabs.
 
 pub mod cdp;
+mod downloads;
 pub mod lock;
 pub mod pending;
 pub mod screen;
@@ -30,7 +31,7 @@ pub mod sessions;
 pub mod spawn;
 pub mod split;
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, HashMap};
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicBool, AtomicU64, AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex};
@@ -90,7 +91,31 @@ pub trait General: Send + Sync {
         let path = path.to_owned();
         Box::pin(async move { Ok(path) })
     }
+    /// A file the signed-in browser downloaded, handed to the agent's
+    /// Downloads under `name`; answers where it landed.
+    fn deliver(&self, name: String, bytes: Vec<u8>) -> Delivered {
+        let _ = (name, bytes);
+        Box::pin(async {
+            Err("this computer keeps no downloads from the signed-in browser".to_owned())
+        })
+    }
 }
+
+/// A download handed over.
+pub type Delivered =
+    std::pin::Pin<Box<dyn std::future::Future<Output = Result<String, String>> + Send>>;
+
+/// Where the signed-in browser's downloads go: straight into a folder the
+/// agent reads (one user), or into a staging folder only the broker and the
+/// browser reach, from which each is handed to the agent (`General::deliver`).
+#[derive(Clone, Debug)]
+pub enum Downloads {
+    Into(PathBuf),
+    Staged(PathBuf),
+}
+
+/// The largest download handed to the agent: what an upload may be.
+const DOWNLOAD_CAP: u64 = 50 << 20;
 
 /// The general browser in this process.
 pub struct InProcess(pub crate::browser::BrowserManager);
@@ -129,7 +154,9 @@ struct Inner {
     /// When the person last gave input on the site screen.
     person_at: AtomicU64,
     viewers: AtomicUsize,
-    downloads: Option<PathBuf>,
+    downloads: Option<Downloads>,
+    /// Downloads begun, by DevTools' guid: the file's name and its tab.
+    begun: Mutex<HashMap<String, (String, String)>>,
 }
 
 #[derive(Clone)]
@@ -186,7 +213,7 @@ impl Signin {
         spawner: Box<dyn Spawner>,
         general: Box<dyn General>,
         secrets: Secrets,
-        downloads: Option<PathBuf>,
+        downloads: Option<Downloads>,
     ) -> Self {
         Self(Arc::new(Inner {
             spawner,
@@ -203,6 +230,7 @@ impl Signin {
             person_at: AtomicU64::new(0),
             viewers: AtomicUsize::new(0),
             downloads,
+            begun: Mutex::default(),
         }))
     }
 
@@ -219,7 +247,7 @@ impl Signin {
             )),
             Box::new(InProcess(app_browser)),
             secrets,
-            Some(home.join("Downloads")),
+            Some(Downloads::Into(home.join("Downloads"))),
         )
     }
 
@@ -401,13 +429,29 @@ impl Signin {
             json!({"autoAttach": true, "waitForDebuggerOnStart": true, "flatten": true}),
         )
         .await?;
-        if let Some(downloads) = &self.0.downloads {
-            let _ = cdp
-                .call(
-                    "Browser.setDownloadBehavior",
-                    json!({"behavior": "allow", "downloadPath": downloads, "eventsEnabled": true}),
-                )
-                .await;
+        match &self.0.downloads {
+            Some(Downloads::Into(folder)) => {
+                let _ = cdp
+                    .call(
+                        "Browser.setDownloadBehavior",
+                        json!({"behavior": "allow", "downloadPath": folder, "eventsEnabled": true}),
+                    )
+                    .await;
+            }
+            // Named by their guid, so nothing a site names lands there.
+            Some(Downloads::Staged(folder)) => {
+                let _ = cdp
+                    .call(
+                        "Browser.setDownloadBehavior",
+                        json!({"behavior": "allowAndName", "downloadPath": folder, "eventsEnabled": true}),
+                    )
+                    .await;
+            }
+            None => {
+                let _ = cdp
+                    .call("Browser.setDownloadBehavior", json!({"behavior": "deny"}))
+                    .await;
+            }
         }
         // What a stop kept, and what the profile kept, less any site no
         // longer granted or shared.
@@ -579,6 +623,46 @@ impl Signin {
                 let this = self.clone();
                 let running = running.clone();
                 tokio::spawn(async move { this.set_up(&running, &target, &session).await });
+            }
+            "Browser.downloadWillBegin" => {
+                let name = std::path::Path::new(
+                    params["suggestedFilename"].as_str().unwrap_or("download"),
+                )
+                .file_name()
+                .map_or_else(
+                    || "download".to_owned(),
+                    |name| name.to_string_lossy().into_owned(),
+                );
+                self.0
+                    .begun
+                    .lock()
+                    .unwrap_or_else(std::sync::PoisonError::into_inner)
+                    .insert(
+                        params["guid"].as_str().unwrap_or_default().to_owned(),
+                        (
+                            name,
+                            params["frameId"].as_str().unwrap_or_default().to_owned(),
+                        ),
+                    );
+            }
+            "Browser.downloadProgress" if params["state"] != "inProgress" => {
+                let guid = params["guid"].as_str().unwrap_or_default().to_owned();
+                let begun = self
+                    .0
+                    .begun
+                    .lock()
+                    .unwrap_or_else(std::sync::PoisonError::into_inner)
+                    .remove(&guid);
+                if let (Some((name, frame)), Some(Downloads::Staged(folder))) =
+                    (begun, &self.0.downloads)
+                {
+                    let this = self.clone();
+                    let staged = folder.join(&guid);
+                    let completed = params["state"] == "completed";
+                    tokio::spawn(
+                        async move { this.hand_over(staged, name, frame, completed).await },
+                    );
+                }
             }
             "Target.targetInfoChanged" => {
                 let info = &params["targetInfo"];

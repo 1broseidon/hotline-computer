@@ -17,6 +17,9 @@ use crate::split::{self, Runner};
 /// `hotline:signin` and setgid, so a file the broker writes there 0640 is
 /// the broker's and `signin`'s to read and no job's.
 const UPLOADS: &str = "/run/hotline-computer/bridge/uploads";
+/// Where the signed-in browser saves downloads for the broker to hand on:
+/// the same directory, the browser's group writing.
+const DOWNLOADS: &str = "/run/hotline-computer/bridge/downloads";
 
 pub struct Pid1;
 
@@ -85,6 +88,18 @@ impl General for ByRunner {
             Ok(staged)
         })
     }
+
+    fn deliver(&self, name: String, bytes: Vec<u8>) -> super::Delivered {
+        let runner = self.0.clone();
+        Box::pin(async move {
+            let path = format!("{}/Downloads/{name}", split::AGENT_HOME);
+            let content = base64::engine::general_purpose::STANDARD.encode(bytes);
+            runner
+                .call("download.write", json!({"path": path, "content": content}))
+                .await?;
+            Ok(path)
+        })
+    }
 }
 
 /// The broker's signed-in browser.
@@ -93,11 +108,22 @@ pub fn for_broker(app: &App) -> Signin {
         .runner
         .clone()
         .expect("the broker has its runner before its signed-in browser");
+    // Created here by the broker, which owns the bridge's directory: it
+    // takes that directory's group, `signin`, whose browser writes into it.
+    let downloads = Path::new(DOWNLOADS);
+    let made = std::fs::create_dir_all(downloads).and_then(|()| {
+        use std::os::unix::fs::PermissionsExt;
+        std::fs::set_permissions(downloads, std::fs::Permissions::from_mode(0o770))
+    });
+    if let Err(error) = &made {
+        eprintln!("signin: {DOWNLOADS}: {error}");
+    }
     let signin = Signin::new(
         Box::new(Pid1),
         Box::new(ByRunner(runner)),
         app.secrets.clone(),
-        None,
+        made.is_ok()
+            .then(|| super::Downloads::Staged(downloads.to_owned())),
     );
     signin.arming_from(app.passkeys.clone());
     signin

@@ -30,6 +30,12 @@ impl General for Recorder {
     fn open(&self, url: String) {
         self.0.lock().unwrap().push(url);
     }
+
+    fn deliver(&self, name: String, bytes: Vec<u8>) -> Delivered {
+        let line = format!("download {name} {}", String::from_utf8_lossy(&bytes));
+        self.0.lock().unwrap().push(line);
+        Box::pin(async move { Ok(format!("~/Downloads/{name}")) })
+    }
 }
 
 /// A sign-in site: `/login` (username and password), `/totp` (the code),
@@ -102,6 +108,8 @@ async fn site(off_site: u16) -> u16 {
                         .catch(e => document.getElementById('r').textContent = 'refused ' + e.name + ' ' + e.message);</script>"#.to_owned()),
                     "/leaky" => ("200 OK", String::new(), format!(r#"<title>Leaky</title>
                         <form action="http://127.0.0.1:{off_site}/form" method="get"><label>Password <input name="p" type="password"></label><button>Sign in</button></form>"#)),
+                    "/files" => ("200 OK", String::new(), r#"<title>Files</title><a href="/report.csv">Report</a>"#.to_owned()),
+                    "/report.csv" => ("200 OK\r\nContent-Disposition: attachment; filename=\"report.csv\"", String::new(), "a,b\n1,2\n".to_owned()),
                     "/whoami" => ("200 OK", String::new(), format!("<title>Who</title><p>cookies: [{cookie}]</p>")),
                     _ => ("200 OK", String::new(), "<title>Plain</title>plain page".to_owned()),
                 };
@@ -145,7 +153,11 @@ async fn rig(logins: Value) -> Rig {
         Box::new(spawn::Direct::new(root.path().join("signin"))),
         Box::new(general.clone()),
         app.secrets.clone(),
-        None,
+        Some(Downloads::Staged({
+            let staged = root.path().join("downloads");
+            std::fs::create_dir_all(&staged).unwrap();
+            staged
+        })),
     );
     app.signin = Some(signin.clone());
     let mut set: BTreeMap<String, crate::secrets::Delivered> = BTreeMap::new();
@@ -912,5 +924,39 @@ async fn a_sign_in_waiting_on_the_person_is_listed_for_the_desk() {
     assert_eq!(rig.signin.pending().await.len(), 1);
     rig.app.secrets.replace(BTreeMap::new()).unwrap();
     assert!(rig.signin.pending().await.is_empty());
+    rig.signin.stop().await;
+}
+
+/// A download in the signed-in browser lands in the staging folder and is
+/// handed to the agent's Downloads; the staged file goes.
+#[tokio::test]
+async fn a_download_is_handed_to_the_agents_downloads() {
+    if !have_chromium() {
+        return eprintln!("skipped: no chromium");
+    }
+    let _serial = SERIAL.lock().await;
+    let rig = rig(login()).await;
+    rig.browser(json!({"action": "navigate", "url": rig.url("/files")}))
+        .await
+        .unwrap();
+    let report = rig.find("Report").await;
+    rig.browser(json!({"action": "click_ref", "ref": report}))
+        .await
+        .unwrap();
+    let mut handed = Vec::new();
+    for _ in 0..50 {
+        handed = rig.general.0.lock().unwrap().clone();
+        if !handed.is_empty() {
+            break;
+        }
+        tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+    }
+    assert_eq!(handed, vec!["download report.csv a,b\n1,2\n".to_owned()]);
+    let told = rig.browser(json!({"action": "text"})).await.unwrap();
+    assert!(told.contains("downloaded report.csv"), "{told}");
+    let staged: Vec<_> = std::fs::read_dir(rig._root.path().join("downloads"))
+        .unwrap()
+        .collect();
+    assert!(staged.is_empty(), "the staged file is removed");
     rig.signin.stop().await;
 }
