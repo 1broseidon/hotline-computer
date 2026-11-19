@@ -330,9 +330,9 @@ def main():
         c = R.Computer(port, token)
         c.record = []
         host = R.host_address(c)
-        listener = R.Listener(host)
+        listener = R.Listener(os.environ.get("LISTEN_ADDR") or host)
         leaf = ca.leaf(host)
-        bound, free = R.Listener(host, tls=leaf), R.Listener(host, tls=leaf)
+        bound, free = R.Listener(os.environ.get("LISTEN_ADDR") or host, tls=leaf), R.Listener(os.environ.get("LISTEN_ADDR") or host, tls=leaf)
         listeners = [listener, bound, free]
         origin = f"https://{host}:{bound.port}"
         seen = []
