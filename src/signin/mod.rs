@@ -30,6 +30,7 @@ pub mod screen;
 pub mod sessions;
 pub mod spawn;
 pub mod split;
+mod wait;
 
 use std::collections::{BTreeMap, HashMap};
 use std::path::PathBuf;

@@ -327,9 +327,11 @@ pub async fn call_tool(
 ) -> crate::tools::ToolResult {
     let browser = name == "browser";
     let signin = app.signin.as_ref().filter(|_| browser);
-    let routed = match signin {
-        Some(signin) => signin.route(app, &arguments, holder).await,
-        None => None,
+    let routed = match (signin, app.signin.as_ref()) {
+        (Some(signin), _) => signin.route(app, &arguments, holder).await,
+        // A wait on the signed-in tab the agent is driving.
+        (None, Some(signin)) if name == "wait" => signin.wait(&arguments).await,
+        _ => None,
     };
     let result = match (routed, signin) {
         (Some(result), _) => result,

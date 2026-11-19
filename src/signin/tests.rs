@@ -198,6 +198,14 @@ impl Rig {
         Ok(text)
     }
 
+    async fn browser_wait(&self, arguments: Value) -> Result<String, String> {
+        let blocks = crate::tools::call(&self.app, "wait", arguments, "Rex").await?;
+        Ok(blocks
+            .iter()
+            .filter_map(|block| block.as_text().map(|text| text.text.clone()))
+            .collect())
+    }
+
     async fn blocks(&self, arguments: Value) -> Vec<ContentBlock> {
         crate::tools::call(&self.app, "browser", arguments, "Rex")
             .await
@@ -958,5 +966,44 @@ async fn a_download_is_handed_to_the_agents_downloads() {
         .unwrap()
         .collect();
     assert!(staged.is_empty(), "the staged file is removed");
+    rig.signin.stop().await;
+}
+
+/// A wait spanning a sign-in answers only from the next document, never
+/// from the page the secret was typed into.
+#[tokio::test]
+async fn a_wait_during_sign_in_resolves_only_after_the_next_document() {
+    if !have_chromium() {
+        return eprintln!("skipped: no chromium");
+    }
+    let _serial = SERIAL.lock().await;
+    let rig = rig(login()).await;
+    rig.browser(json!({"action": "navigate", "url": rig.url("/login")}))
+        .await
+        .unwrap();
+    let found = rig
+        .browser_wait(json!({"text": "Sign in to the test site", "timeout": 2}))
+        .await
+        .unwrap();
+    assert!(found.contains("found"), "{found}");
+    let password = rig.find("Password").await;
+    let button = rig.find("[button] Sign in").await;
+    rig.browser(json!({"action": "fill", "ref": password, "secret": "SITE.password"}))
+        .await
+        .unwrap();
+    let refused = rig
+        .browser_wait(json!({"text": "Sign in to the test site", "timeout": 2}))
+        .await
+        .unwrap_err();
+    assert!(refused.contains("was not looked for"), "{refused}");
+    let (waited, _) = tokio::join!(
+        rig.browser_wait(json!({"text": "Verify", "timeout": 15})),
+        async {
+            tokio::time::sleep(std::time::Duration::from_millis(1200)).await;
+            rig.browser(json!({"action": "click_ref", "ref": button}))
+                .await
+        }
+    );
+    assert!(waited.unwrap().contains("found"));
     rig.signin.stop().await;
 }
