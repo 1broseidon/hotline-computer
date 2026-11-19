@@ -1,0 +1,13 @@
+Hotline Computer 0.13.0 keeps the person's secrets out of what the agent runs.
+
+- **The split computer.** Created with `--user 0 --cap-add SETUID --cap-add SETGID` beside `--cap-drop=ALL`, PID 1 keeps those two capabilities alone, holds the door on 8787 and the key proxy on `127.0.0.1:3128`, and runs each part as its own user: the broker as `hotline` with the token and the secrets, the signed-in browser as `signin`, and every job, the desktop and the visible browser as `agent`, as before. `GET /capabilities?nonce=` says which computer is running.
+- **Protected keys.** A v2 delivery (`application/vnd.hotline.secrets.v2+json`, `{v: 2, generation, secrets}`) marks a variable `readable: true`, in every job's environment as before, or binds it to a service with `use`. A job then holds a stand-in of its own; the key proxy puts the real key only in that service's header, only for its origins, never follows a redirect, writes the stand-in back over the key in replies, and refuses key-minting routes. `curl`, `git`, Python and Node work unchanged.
+- **The signed-in browser.** Logins, passkeys and shared sites (`PUT` and `DELETE /sessions/{name}`) live in a second, headless Chromium with DevTools on a pipe and no port. `eval` is refused there, and a tab is hidden from the agent from the first secret typed until it shows a new page. `GET /signin/pending` lists sign-ins waiting for the person, and `/sites/ws` is that browser's screen, which Open Browser opens. Its downloads land in the agent's `~/Downloads`.
+- **Four leaks closed, on both computers.** `files` and the viewer's download refuse `~/.hotline`; a login's current TOTP digits are redacted; `browser fill` refuses a variable; the Activity and observer windows are sealed from jobs.
+- **Migration.** A home's first split boot drops `~/.hotline/logins`, clears those sites' cookies from the visible browser and quarantines older snapshots until the person answers `POST /migration/answer` with `clean`, `delete` or `keep`. `GET /migration` reports it.
+
+A Hotline 0.49 desk creates the single-user computer and sends v1 deliveries: it gets the four leak fixes and nothing else changes. Every route it uses is unchanged, and the single-user computer refuses a protected key rather than keep one. A Hotline 0.50 desk creates the split computer and sends v2. The new fields and routes are additions.
+
+Image: `ghcr.io/1broseidon/hotline-computer:0.13.0@<digest>`, built and checked in <run>.
+
+Existing computers keep their running version until they are updated from the teammate's pane, and one becomes the split computer only when it is created with the new flags. `state info` and `state guide` identify the attached computer.

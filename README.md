@@ -1,9 +1,9 @@
 # Hotline Computer
 
-**Your coding agent's own Linux desktop.** A rootless container on your
-machine with a screen, a browser and a shell. Claude Code, Codex or any MCP
-client drives it; you watch from your browser and take the mouse when it needs
-you.
+**Your coding agent's own Linux desktop.** A container on your machine with a
+screen, a browser and a shell, where nothing the agent runs is root. Claude
+Code, Codex or any MCP client drives it; you watch from your browser and take
+the mouse when it needs you.
 
 ![The computer's desktop: Chromium on the left showing a site served at 127.0.0.1:4321, the job log on the right, and the top bar reading agent at work, 2 running, 43 done.](docs/screens/desk.webp)
 

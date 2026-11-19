@@ -1,6 +1,6 @@
 # Hotline Computer
 
-A Linux desktop for your coding agent, in a rootless container on your machine.
+A Linux desktop for your coding agent, in a container on your machine.
 
 Any MCP client drives it with eight tools. You watch from your browser and take
 the mouse when it needs you.
@@ -46,10 +46,11 @@ One container is one machine. Inside it:
 | --- | --- |
 | Xvfb and Mesa | The X11 display and software OpenGL. No GPU needed |
 | Chromium | The visible browser, driven over its DevTools protocol |
+| Signed-in browser | A second, headless Chromium for the sites you sign the agent in to. Split computer only |
 | D-Bus and AT-SPI | The accessibility tree the agent reads native apps by |
 | gnome-keyring | The Secret Service that apps and CLIs keep passwords in |
 | Nix | Toolchains a project needs, prepared per workspace |
-| `hotline-computer` | PID 1: supervisor, window manager, top bar and MCP server |
+| `hotline-computer` | PID 1: supervisor, window manager, top bar and MCP server. On the split computer, PID 1 only holds the ports and starts each part as its own user |
 
 The agent connects directly to the local container over MCP. No account or
 hosted relay is required.
@@ -74,13 +75,38 @@ $ docker run -d --name computer \
 
 | Flag | Why |
 | --- | --- |
-| `--cap-drop=ALL` | The computer needs no Linux capabilities |
+| `--cap-drop=ALL` | The single-user computer needs no Linux capabilities |
 | `--security-opt no-new-privileges` | Nothing inside can gain privileges it did not start with |
 | `--pids-limit 1024 --memory 4g` | Limits the container to 1,024 processes and 4 GiB of memory |
 | `--shm-size 1g` | Chromium needs a sized `/dev/shm` |
 | `-p 127.0.0.1:8787:8787` | Loopback only. Never publish it on every interface |
-| `-e HOTLINE_COMPUTER_TOKEN` | Without a token, every route is open |
+| `-e HOTLINE_COMPUTER_TOKEN` | Without a token, the computer refuses to start |
 | `-v computer-home:/home/agent` | The home survives an upgrade or a recreate |
+
+This command starts the single-user computer: everything runs as one
+non-root user, `agent`. From 0.13.0, three more flags start the split computer
+instead, and Hotline 0.50 creates it that way:
+
+```console title="Split computer flags"
+    --user 0 --cap-add SETUID --cap-add SETGID
+```
+
+| Flag | Why |
+| --- | --- |
+| `--user 0` | PID 1 starts as root, so it can start each part as its own user |
+| `--cap-add SETUID --cap-add SETGID` | The only capabilities PID 1 keeps. It drops every other one, and nothing it starts keeps these |
+
+On the split computer, PID 1 holds port 8787 and the key proxy's port
+`127.0.0.1:3128`, so no job can take either. Then it runs:
+
+| User | Runs |
+| --- | --- |
+| `hotline` (1001) | The broker: the MCP endpoint, the token, logins, passkeys and protected keys |
+| `signin` (1002) | The signed-in browser, with DevTools on a pipe and no port |
+| `agent` (1000) | Every job, the files, the desktop, Xvfb, D-Bus, the keyring and the visible browser on port 9222 |
+
+`GET /capabilities?nonce=…` says which of the two is running. See
+[HTTP routes](/guides/routes/).
 
 To share a project, add `-v "$PWD:/home/agent/workspace"`.
 
@@ -140,7 +166,8 @@ newest 64 are kept. `run` starts a named entry from the workspace manifest.
 
 #### files — file transfer
 
-Gets, puts and lists paths under the home. Downloads URLs and GitHub release
+Gets, puts and lists paths under the home, except the computer's own records
+under `~/.hotline`. Downloads URLs and GitHub release
 assets with optional SHA-256 checks, extracts archives safely, and runs scripts
 as managed jobs.
 
@@ -179,7 +206,8 @@ shows every job by its label, with its output and a ✓ or ✗ when it ends. The
 Activity window lists the last 500 tool calls, failures included.
 
 **Files** in the viewer opens the home: download anything from it, or drop a
-file on the page to upload it.
+file on the page to upload it. The computer's own records under `~/.hotline`
+cannot be downloaded.
 
 ## Workspaces
 
@@ -225,14 +253,26 @@ all live in the home, so they survive an upgrade when the home is a volume.
 
 ### Protections
 
-- Nothing runs as root. The image has no `sudo` and no `apt`, and with
-  `--cap-drop=ALL` and `no-new-privileges` nothing can elevate.
+- No job runs as root. The image has no `sudo` and no `apt`, and with
+  `--cap-drop=ALL` and `no-new-privileges` nothing a job starts can elevate.
+  On the single-user computer nothing runs as root. On the split computer
+  PID 1 is root with `SETUID` and `SETGID` alone, and runs nothing a job
+  wrote.
 - The MCP endpoint, the viewer's socket and its file routes all require the
   token. Only `/health` and the viewer page itself are open.
-- A job never inherits `HOTLINE_COMPUTER_TOKEN`.
-- Stored secrets are sent by name. A variable reaches jobs as an environment
-  variable. A login is typed only on its own sites. A passkey's private key is
-  never put in the browser.
+- A job never inherits `HOTLINE_COMPUTER_TOKEN`. On the split computer the
+  token is held by the broker's user, out of a job's reach.
+- Stored secrets are sent by name. A readable variable reaches jobs as an
+  environment variable. A login is typed only on its own sites. A passkey's
+  private key is never put in the browser.
+- On the split computer, a protected key never reaches a job. Each job gets a
+  stand-in, and the key proxy puts the real value only in the service's own
+  header, only for the origins it is bound to.
+- On the split computer, logins, passkeys and the sites you share cookies for
+  are used only in the signed-in browser. The agent cannot run scripts there, and
+  sees nothing of a tab from the first secret typed into it until it shows a
+  new page. Your typing on its screen goes through DevTools, never the X
+  display jobs can listen to.
 
 <div id="gaps"></div>
 
@@ -241,11 +281,17 @@ all live in the home, so they survive an upgrade when the home is a volume.
 - Redaction replaces secret values with `[redacted NAME]` in tool text
   responses. Code can still expose values by splitting or encoding them.
   Redaction does not cover non-text results or the screen.
-- Jobs and Chromium run as the same user, so a job can reach the browser's
-  DevTools port inside the container.
+- On the single-user computer, jobs and Chromium run as the same user, so a
+  job can reach the browser's DevTools port and the extension's socket, and
+  the browser's cookies are in reach. On the split computer this is still
+  true of the visible browser on port 9222, which holds none of your logins
+  or shared sites.
+- A readable variable is in every job's environment, so any code a job runs
+  can read it.
 - The keyring's password is empty. Its file in the home is not encrypted, so
   the home volume is the boundary around what is kept there.
-- Chromium runs with `--no-sandbox`; the container is its sandbox.
+- Chromium runs with `--no-sandbox`, both browsers; the container is their
+  sandbox.
 
 ## Limits
 
@@ -260,7 +306,7 @@ all live in the home, so they survive an upgrade when the home is a volume.
 
 | Variable | Default | |
 | --- | --- | --- |
-| `HOTLINE_COMPUTER_TOKEN` | unset | The bearer for `/mcp`, the viewer and its files. Unset means open |
+| `HOTLINE_COMPUTER_TOKEN` | unset | The bearer for `/mcp`, the viewer and its files. Unset, the computer refuses to start unless `HOTLINE_COMPUTER_ALLOW_NO_TOKEN=1` |
 | `HOTLINE_COMPUTER_ADDR` | `0.0.0.0:8787` | Where the server listens inside the container |
 | `HOTLINE_COMPUTER_SCREEN` | `1920x1080` | The display's size |
 | `HOTLINE_COMPUTER_HOME` | `/home/agent` | The directory `files` is confined to |
@@ -298,3 +344,41 @@ Loopback and IP-address connections work without extra configuration. If you con
 HTTP uploads default to 50 MiB. Larger uploads receive HTTP 413; a deployment can set `HOTLINE_COMPUTER_UPLOAD_LIMIT_MIB` to another limit.
 
 Use a separate computer without credentials for workloads you do not trust. The browser, credential services and shell jobs are not isolated tenants. A desktop lease coordinates input; it is not a sandbox for background jobs. Grant only the folders and credentials needed for the task.
+
+## Upgrading to 0.13.0
+
+Created as before, the computer is the single-user computer, as in 0.12.0,
+with four leaks closed:
+
+- `files` and the viewer's download refuse paths under `~/.hotline`: job
+  output, the browser profile, saved logins and snapshots. A job can still
+  read them.
+- A login's current six TOTP digits are redacted as `[redacted NAME.code]`.
+- `browser fill` refuses a variable. It stays in every job's environment.
+- The Activity and job observer windows are sealed as the service is, so a
+  job cannot attach to them or read their memory.
+
+Created with `--user 0 --cap-add SETUID --cap-add SETGID` beside
+`--cap-drop=ALL`, it is the split computer, described under [Install](#install). Hotline 0.50 creates it that
+way. A Hotline 0.49 desk creates the single-user computer and works with it
+unchanged.
+
+`PUT /secrets` also takes a v2 body. A variable in it is either readable, as
+before, or a protected key bound to a service. Only the split computer takes a
+protected key; the single-user computer refuses one. A v1 body is read as
+before. See [Secrets](/guides/secrets/).
+
+The first time a home boots as a split computer, it is migrated once:
+
+- The saved logins in `~/.hotline/logins` are deleted.
+- The visible browser's cookies for those sites, and for every login's sites,
+  are cleared.
+- Snapshots made before are quarantined, since they hold the old browser
+  profile, saved logins and job output. `state snapshot_load` refuses them.
+
+`GET /migration` reports what was done and lists the quarantined snapshots.
+`POST /migration/answer {"snapshots": "clean"}` removes those parts from them,
+`"delete"` deletes them, and `"keep"` leaves them quarantined. Nothing is
+erased without that answer. The snapshots stay the agent's own files, so a
+job can still unpack one by hand; `clean` is the answer that removes what
+they hold.
