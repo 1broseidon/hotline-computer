@@ -45,6 +45,18 @@ hmac = "0.12"
 sha1 = "0.10"
 data-encoding = "2"
 tempfile = "3.27.0"
+# The key proxy (src/keyproxy): HTTP/1.1 both ways over TLS it ends itself,
+# a CA made at boot, and the web roots an upstream must chain to.
+hyper = { version = "1.11", features = ["client", "server", "http1"] }
+hyper-util = { version = "0.1.20", default-features = false, features = ["tokio"] }
+http = "1"
+http-body = "1"
+http-body-util = "0.1.5"
+bytes = "1"
+rustls = { version = "0.23.43", default-features = false, features = ["aws_lc_rs", "std", "tls12"] }
+tokio-rustls = { version = "0.26.4", default-features = false, features = ["tls12"] }
+rcgen = { version = "0.14.10", default-features = false, features = ["crypto", "pem", "aws_lc_rs"] }
+webpki-roots = "1"
 
 [dev-dependencies]
 # The contract test opens the viewer's WebSocket the way the page does.

@@ -14,6 +14,7 @@ pub mod files_ui;
 pub mod guide;
 pub mod holds;
 pub mod jobs;
+pub mod keyproxy;
 pub mod lease;
 pub mod limits;
 pub mod links;
