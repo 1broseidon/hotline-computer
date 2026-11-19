@@ -703,6 +703,23 @@ impl Signin {
             // Frames inside a signed-in page load as the page asks.
             Hop::Stay
         };
+        // A plain link is only plain if it carries nothing typed here: not a
+        // secret's value (a sign-in form sent off the site by GET), and
+        // nothing from a tab that is in the middle of signing in.
+        let signing_in = self
+            .lock_tabs()
+            .list
+            .iter()
+            .any(|tab| tab.session == session && tab.withheld());
+        let hop = match hop {
+            Hop::General if signing_in || self.0.secrets.redact(&url) != url => {
+                Hop::Blocked(format!(
+                    "a page in the middle of signing in tried to send you to {}; it was stopped",
+                    crate::bridge::host_of(&url)
+                ))
+            }
+            hop => hop,
+        };
         let cdp = &running.cdp;
         let note = match hop {
             Hop::Stay => {

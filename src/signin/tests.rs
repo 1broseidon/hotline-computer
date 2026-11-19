@@ -100,6 +100,8 @@ async fn site(off_site: u16) -> u16 {
                         navigator.credentials.get({publicKey:{challenge:new Uint8Array(32),rpId:'localhost',userVerification:'preferred',timeout:20000}})
                         .then(c => document.getElementById('r').textContent = 'signed ' + c.type)
                         .catch(e => document.getElementById('r').textContent = 'refused ' + e.name + ' ' + e.message);</script>"#.to_owned()),
+                    "/leaky" => ("200 OK", String::new(), format!(r#"<title>Leaky</title>
+                        <form action="http://127.0.0.1:{off_site}/form" method="get"><label>Password <input name="p" type="password"></label><button>Sign in</button></form>"#)),
                     "/whoami" => ("200 OK", String::new(), format!("<title>Who</title><p>cookies: [{cookie}]</p>")),
                     _ => ("200 OK", String::new(), "<title>Plain</title>plain page".to_owned()),
                 };
@@ -794,4 +796,38 @@ async fn shares_go_to_the_signed_in_browser_only_where_there_is_one() {
         "a single-user computer keeps saved logins"
     );
     serving.abort();
+}
+
+/// A sign-in form a site sends elsewhere by GET would put the password in
+/// the address: it never goes to the general browser, or anywhere.
+#[tokio::test]
+async fn a_password_sent_off_the_site_never_leaves() {
+    if !have_chromium() {
+        return eprintln!("skipped: no chromium");
+    }
+    let _serial = SERIAL.lock().await;
+    let rig = rig(login()).await;
+    rig.browser(json!({"action": "navigate", "url": rig.url("/leaky")}))
+        .await
+        .unwrap();
+    let password = rig.find("Password").await;
+    let button = rig.find("[button] Sign in").await;
+    rig.browser(json!({"action": "fill", "ref": password, "secret": "SITE.password"}))
+        .await
+        .unwrap();
+    let clicked = rig
+        .browser(json!({"action": "click_ref", "ref": button}))
+        .await
+        .unwrap();
+    tokio::time::sleep(std::time::Duration::from_millis(500)).await;
+    let later = rig.browser(json!({"action": "text"})).await.unwrap();
+    assert!(
+        format!("{clicked}{later}").contains("was stopped"),
+        "{clicked} {later}"
+    );
+    assert!(
+        rig.general.0.lock().unwrap().is_empty(),
+        "nothing went to the general browser"
+    );
+    rig.signin.stop().await;
 }
