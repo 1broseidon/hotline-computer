@@ -108,6 +108,7 @@ class Ctx:
         # v2 protected runs: the HTTPS fixture the variables are bound to, and
         # one on another port they are not (an unbound host).
         self.delivery, self.bound, self.free = delivery, bound, free
+        self.split = False
         self.shared = False
         self.paged = False
         self.refs = {}
@@ -231,6 +232,7 @@ def main():
         c.sh("mkdir -p ~/probe")
         c.tool("files", action="put", path="probe/job.py", content=(HERE / "jobs/job.py").read_text())
         ctx = Ctx(c, listener, host, ws, token, rt, name, a.delivery, bound, free)
+        ctx.split = a.split
         only = {x for x in a.only.split(",") if x}
         skip = {x for x in a.skip.split(",") if x}
         want_leak = a.expect == "leak"

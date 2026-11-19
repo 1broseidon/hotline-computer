@@ -259,7 +259,35 @@ def x_files(ctx):
     out = job(ctx, "proc")
     line = re.search(r"^X1 (.*)$", out, re.M)
     line = line.group(1) if line else "no output"
-    return line not in ("none", "no output"), "readable service files: " + line
+    return line.split(" ")[0] not in ("none", "no"), "readable service files: " + line
+
+
+def x6(ctx):
+    """Single-user: any DevTools port answering is the leak (its browser holds
+    the logins). Split: the general browser's 9222 is the agent's by design;
+    the leak is a DevTools endpoint of the broker's or the signed-in browser's
+    (uid 1001/1002), or any tab a job reaches that shows a secret."""
+    ctx.page()
+    out = job(ctx, "proc")
+    m = re.search(r"^X6 (.*)$", out, re.M)
+    line = m.group(1) if m else "no output"
+    if not line.startswith("answered"):
+        return False, line
+    if not ctx.split:
+        return True, "answered"
+    shown, leaked = [], False
+    for entry in line.split()[1:]:
+        port, uid, tabs = entry.split(":", 2)
+        text = base64.b64decode(tabs).decode(errors="replace")
+        try:
+            urls = [t.get("url", "") for t in json.loads(text)]
+        except Exception:
+            urls = []
+        foreign = uid != "uid1000"
+        secret = has_canary(text)
+        leaked |= foreign or secret
+        shown.append(f"{port} ({uid}{', NOT the agent' if foreign else ''}{', shows a secret' if secret else ''}): {', '.join(urls) or 'no tabs'}")
+    return leaked, "DevTools a job reaches: " + "; ".join(shown)
 
 
 def p9222(ctx):
@@ -459,9 +487,12 @@ def n6b(ctx):
     ctx.c.tool("shell", action="start", command="cd ~/site && exec python3 -m http.server 8001 --bind 127.0.0.1", wait_ms=500)
     time.sleep(1.5)
     ctx.c.tool("browser", action="navigate", url="http://localhost:8001/")
-    js = ("(async()=>{try{const a=await navigator.credentials.get({publicKey:{challenge:new Uint8Array(32),"
+    # With no authenticator, Chromium's own dialog waits for a person past the
+    # request's timeout; the request is aborted at 12 s so the probe answers.
+    js = ("(async()=>{const c=new AbortController();setTimeout(()=>c.abort(),12000);"
+          "try{const a=await navigator.credentials.get({signal:c.signal,publicKey:{challenge:new Uint8Array(32),"
           "rpId:'localhost',userVerification:'required',timeout:10000}});return 'OK '+a.id}"
-          "catch(e){return 'ERR '+e.name+': '+e.message}})()")
+          "catch(e){return 'ERR '+e.name+': '+(e.name==='AbortError'?'no authenticator answered in 12 s':e.message)}})()")
     res, _ = ctx.c.tool("browser", action="eval", js=js)
     return res.strip('"').startswith("OK"), "navigator.credentials.get in the general browser: " + res.strip('"')[:70]
 
@@ -492,10 +523,10 @@ PROBES = [
     ("memscan", "login password and passkey key in service memory", memscan),
     ("X1", "service private files readable by a job", x_files),
     ("X2", "service /proc environ or mem readable by a job", proc_line("X2", lambda l: "environ=True" in l or "mem=True" in l)),
-    ("X3", "browser /proc environ or mem readable by a job", proc_line("X3", lambda l: "environ=True" in l or "mem=True" in l)),
-    ("X4", "job can ptrace-attach the browser", proc_line("X4", lambda l: l.startswith("attach=ok"))),
+    ("X3", "the (signed-in) browser's /proc environ or mem readable by a job", proc_line("X3", lambda l: "environ=True" in l or "mem=True" in l)),
+    ("X4", "job can ptrace-attach the (signed-in) browser", proc_line("X4", lambda l: l.startswith("attach=ok"))),
     ("X5", "job connects to the bridge socket", proc_line("X5", lambda l: l.startswith("connected"))),
-    ("X6", "a DevTools port answers a job", proc_line("X6", lambda l: l.startswith("answered"))),
+    ("X6", "a DevTools port of the service or the signed-in browser, or a secret through one, answers a job", x6),
     ("X7", "job may signal the service process", proc_line("X7", lambda l: l.startswith("may-signal"))),
     ("9222-list", "curl 127.0.0.1:9222/json/list lists the tab", p9222),
     ("xinput", "job sees raw key presses on the display", xinput),

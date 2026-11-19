@@ -156,16 +156,39 @@ def readable(path, n=1):
         return False
 
 
+def listening():
+    """(port, uid) of every TCP socket listening on this computer."""
+    out = []
+    for table in ("/proc/net/tcp", "/proc/net/tcp6"):
+        try:
+            rows = open(table).read().splitlines()[1:]
+        except Exception:
+            continue
+        for row in rows:
+            f = row.split()
+            if len(f) > 7 and f[3] == "0A":
+                out.append((int(f[1].rsplit(":", 1)[1], 16), int(f[7])))
+    return sorted(set(out))
+
+
 def proc():
-    service = []
+    """X1-X7 and B6. In the split computer (0.13) the service is PID 1 and the
+    broker (uid hotline), and the browser that matters is the signed-in one
+    (uid signin, DevTools on a pipe); the runner, the general browser and
+    their files are the agent's own uid by design, and are only listed. In
+    the single-user computer the service and the one browser are as 0.12."""
+    service, runner = [], []
     for p in os.listdir("/proc"):
         try:
             cmd = open(f"/proc/{p}/cmdline", "rb").read().split(b"\0")
         except Exception:
             continue
-        if p.isdigit() and cmd[0].endswith(b"hotline-computer") and cmd[1:2] == [b"boot"]:
+        if p.isdigit() and cmd[0].endswith(b"hotline-computer") and cmd[1:2] in ([b"boot"], [b"__broker"]):
             service.append(p)
-    chromium = None
+        if p.isdigit() and cmd[0].endswith(b"hotline-computer") and cmd[1:2] == [b"__runner"]:
+            runner.append(p)
+    split = bool(runner)
+    general = signed_in = None
     for p in os.listdir("/proc"):
         if p.isdigit():
             try:
@@ -173,13 +196,27 @@ def proc():
             except Exception:
                 continue
             line = b" ".join(cmd)
-            if b"/chromium" in line.split(b" ")[0] and b"--remote-debugging-port=9222" in line and b"--type=" not in line:
-                chromium = p
-                break
+            if b"/chromium" not in line.split(b" ")[0] or b"--type=" in line:
+                continue
+            if b"--remote-debugging-pipe" in line and b"/var/lib/hotline-computer/signin" in line:
+                signed_in = signed_in or p
+            elif b"--remote-debugging-port=9222" in line:
+                general = general or p
+    browser = signed_in if split else general
     # X1: the service's private files
-    files = [p for p in glob.glob("/tmp/hotline-computer/*") + glob.glob("/run/hotline-computer/broker/*")
-             if os.path.isfile(p)]
-    print("X1", ",".join(os.path.basename(p) for p in files if readable(p)) or "none")
+    if split:
+        roots = ["/run/hotline-computer/broker", "/run/hotline-computer/bridge", "/var/lib/hotline-computer/signin"]
+        files = []
+        for root in roots:
+            for d, _, names in os.walk(root):
+                files += [os.path.join(d, n) for n in names]
+        own = [os.path.basename(p) for p in glob.glob("/tmp/hotline-computer/*") if os.path.isfile(p) and readable(p)]
+        print("X1", ",".join(p for p in files if os.path.isfile(p) and readable(p)) or "none",
+              f"(the agent's own, not counted: {','.join(own) or 'none'})")
+    else:
+        files = [p for p in glob.glob("/tmp/hotline-computer/*") + glob.glob("/run/hotline-computer/broker/*")
+                 if os.path.isfile(p)]
+        print("X1", ",".join(os.path.basename(p) for p in files if readable(p)) or "none")
     # X2 / B6: the service's environment and memory; the bearer in any environ
     mine = os.getpid()
     x2e = any(readable(f"/proc/{p}/environ") for p in service)
@@ -195,21 +232,23 @@ def proc():
             except Exception:
                 pass
     print("B6", ",".join(tokens) or "none")
-    # X3 / X4: the browser
-    if chromium:
-        print("X3", f"pid={chromium} environ={readable(f'/proc/{chromium}/environ')} mem={readable(f'/proc/{chromium}/mem')}")
+    # X3 / X4: the browser that holds signed-in sessions
+    which = "signed-in" if split else "general"
+    if browser:
+        print("X3", f"{which} pid={browser} environ={readable(f'/proc/{browser}/environ')} mem={readable(f'/proc/{browser}/mem')}"
+              + (f" (general browser pid={general} is the agent's own)" if split and general else ""))
         libc = ctypes.CDLL(None, use_errno=True)
-        r = libc.ptrace(16, int(chromium), 0, 0)
+        r = libc.ptrace(16, int(browser), 0, 0)
         err = os.strerror(ctypes.get_errno())
         if r == 0:
             # Attached: let it stop, then detach and continue so the browser is left as found.
-            libc.waitpid(int(chromium), None, 0x40000000)
-            libc.ptrace(17, int(chromium), 0, 0)
-            os.kill(int(chromium), 18)
-        print("X4", f"attach={'ok' if r == 0 else 'refused'} {err}")
+            libc.waitpid(int(browser), None, 0x40000000)
+            libc.ptrace(17, int(browser), 0, 0)
+            os.kill(int(browser), 18)
+        print("X4", f"attach={'ok' if r == 0 else 'refused'} {which} pid={browser} {err}")
     else:
-        print("X3 nochromium")
-        print("X4 nochromium")
+        print("X3", f"no{which}browser")
+        print("X4", f"no{which}browser")
     # X5: the bridge socket
     res = "refused"
     for path in SOCKS:
@@ -222,12 +261,22 @@ def proc():
         except Exception as e:
             res = f"refused {type(e).__name__}"
     print("X5", res)
-    # X6: any DevTools port
-    try:
-        v = urllib.request.urlopen("http://127.0.0.1:9222/json/version", timeout=3).read().decode()
-        print("X6", "answered" if "webSocketDebuggerUrl" in v else "odd")
-    except Exception as e:
-        print("X6", "refused " + type(e).__name__)
+    # X6: every DevTools endpoint a job reaches, whose socket it is, and what
+    # its tabs show (base64'd, for the harness to look for a secret in).
+    found = []
+    for port, uid in listening():
+        try:
+            v = urllib.request.urlopen(f"http://127.0.0.1:{port}/json/version", timeout=2).read().decode()
+        except Exception:
+            continue
+        if "webSocketDebuggerUrl" not in v:
+            continue
+        try:
+            tabs = urllib.request.urlopen(f"http://127.0.0.1:{port}/json/list", timeout=3).read()
+        except Exception:
+            tabs = b""
+        found.append(f"{port}:uid{uid}:{b64(tabs)}")
+    print("X6", "answered " + " ".join(found) if found else "none")
     # X7: signal the service (signal 0 only: it checks permission and kills nothing)
     ok = False
     for p in service:
