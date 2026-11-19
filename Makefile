@@ -41,3 +41,13 @@ acceptance:
 	docker build --target checks -t hotline-computer:checks .
 	docker build -t $(IMAGE) .
 	tests/run-image-acceptance.sh $(IMAGE) hotline-computer:checks qa/latest
+
+# The protected-secrets probes (tests/protected/): a throwaway container from
+# IMAGE, made-up secrets only, one line per probe, exit 1 if any result
+# differs from EXPECT. RUNTIME is docker, podman or container.
+#   make protected-probes RUNTIME=container IMAGE=hotline-computer:0.12.0-rc.3 EXPECT=leak
+.PHONY: protected-probes
+protected-probes:
+	@test -n "$(RUNTIME)" -a -n "$(IMAGE)" -a -n "$(EXPECT)" || { echo "usage: make protected-probes RUNTIME=docker|podman|container IMAGE=<ref> EXPECT=leak|blocked [ONLY=id,id] [EXCEPT=id,id]"; exit 2; }
+	python3 tests/protected/run.py --runtime $(RUNTIME) --image $(IMAGE) --expect $(EXPECT) \
+	  $(if $(ONLY),--only $(ONLY)) $(if $(EXCEPT),--except $(EXCEPT))
