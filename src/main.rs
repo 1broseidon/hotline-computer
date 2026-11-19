@@ -231,6 +231,38 @@ fn main() {
         }
         return;
     }
+    // The split computer's two halves, which PID 1 starts as their users
+    // with their lines at fixed descriptors (see `split`).
+    if let Some(half @ ("__broker" | "__runner")) = arguments.first().map(String::as_str) {
+        let config = Config::from_env();
+        let expected = if half == "__broker" {
+            hotline_computer::split::BROKER_UID
+        } else {
+            hotline_computer::split::AGENT_UID
+        };
+        // SAFETY: geteuid takes nothing and cannot fail.
+        if unsafe { libc::geteuid() } != expected {
+            eprintln!("hotline-computer: {half} is started by the computer's PID 1");
+            std::process::exit(2);
+        }
+        if half == "__broker"
+            && let Err(message) = config.door()
+        {
+            eprintln!("hotline-computer: {message}");
+            std::process::exit(2);
+        }
+        seal();
+        let result = if half == "__broker" {
+            hotline_computer::split::broker::run(config)
+        } else {
+            hotline_computer::split::runner::run(config)
+        };
+        if let Err(error) = result {
+            eprintln!("hotline-computer: {half}: {error}");
+            std::process::exit(1);
+        }
+        return;
+    }
     let (command, config) = match parse() {
         Ok(parsed) => parsed,
         Err(message) => {
@@ -244,6 +276,12 @@ fn main() {
     }
     seal();
     let result = match command {
+        // Started as root, the computer splits into its users; started as
+        // anyone else, it is the single-user computer it always was.
+        #[cfg(target_os = "linux")]
+        Command::Boot if hotline_computer::split::booted_as_root() => {
+            hotline_computer::split::init::run(config)
+        }
         Command::Boot => boot::run(config),
         Command::Serve => Display::open(&config.display).and_then(|display| {
             tokio::runtime::Builder::new_multi_thread()

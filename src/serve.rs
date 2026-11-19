@@ -39,10 +39,17 @@ impl ComputerTools {
             .or_else(|| peer.peer_info().map(|info| info.client_info.clone()))
             .filter(|client| client.name != placeholder.name || client.title.is_some());
         if let Some(client) = client {
-            self.app
-                .jobs
-                .agent
-                .client(&client.name, client.title.as_deref());
+            match &self.app.runner {
+                None => self
+                    .app
+                    .jobs
+                    .agent
+                    .client(&client.name, client.title.as_deref()),
+                Some(runner) => runner.line.tell(
+                    "agent.client",
+                    json!({"name": client.name, "title": client.title}),
+                ),
+            }
         }
     }
 }
@@ -90,7 +97,13 @@ impl ServerHandler for ComputerTools {
         };
         self.note_client(Some(&context.meta), &context.peer);
         let arguments = request.arguments.map_or(Value::Null, Value::Object);
-        let result = match tools::call(&self.app, &request.name, arguments, &holder).await {
+        let called = match &self.app.runner {
+            None => tools::call(&self.app, &request.name, arguments, &holder).await,
+            Some(runner) => {
+                crate::split::call_tool(&self.app, runner, &request.name, arguments, &holder).await
+            }
+        };
+        let result = match called {
             Ok(content) => CallToolResult::success(content),
             Err(error) => CallToolResult::error(vec![rmcp::model::ContentBlock::text(error)]),
         };
@@ -163,54 +176,75 @@ pub async fn run(app: App) -> Result<(), String> {
         .map_err(|error| error.to_string())
 }
 
-/// Every route, behind the bearer check.
+/// Every route, behind the bearer check: the single-user computer's door.
 pub(crate) fn router(app: App) -> Router {
-    let expected_token = app.config.token.clone();
-    let tools_app = app.clone();
-    let service: StreamableHttpService<ComputerTools, LocalSessionManager> =
-        StreamableHttpService::new(
-            move || {
-                Ok(ComputerTools {
-                    app: tools_app.clone(),
-                })
-            },
-            Arc::new(LocalSessionManager::default()),
-            // `guard` below checks Host and Origin for every route, this
-            // one included, so rmcp's own list for `/mcp` alone stays off.
-            StreamableHttpServerConfig::default()
-                .disable_allowed_hosts()
-                .with_max_request_body_bytes(MAX_REQUEST_BODY),
-        );
+    let service = mcp(&app);
+    gated(
+        app.clone(),
+        desktop_routes()
+            .merge(secret_routes())
+            .route("/health", get(|| async { "ok" }))
+            .nest_service("/mcp", service),
+    )
+}
+
+/// The split computer's door, which the broker serves: the secrets and the
+/// tools here, and every page of the desktop's handed to the runner.
+pub(crate) fn broker_router(app: App) -> Router {
+    let service = mcp(&app);
+    gated(
+        app.clone(),
+        secret_routes()
+            .route("/health", get(crate::split::broker::health))
+            .nest_service("/mcp", service)
+            .fallback(crate::split::broker::proxy),
+    )
+}
+
+/// The runner's side of the split computer: the desktop's own pages, for
+/// connections the broker hands over once it has checked the bearer. It
+/// has no secrets door and no tools door of its own.
+pub(crate) fn runner_router(app: App) -> Router {
     let door = Arc::new(Door::from_env());
+    desktop_routes()
+        .layer(axum::middleware::from_fn(
+            move |request: Request, next: Next| {
+                let door = Arc::clone(&door);
+                async move { guard(request, next, &door).await }
+            },
+        ))
+        .with_state(app)
+}
+
+fn mcp(app: &App) -> StreamableHttpService<ComputerTools, LocalSessionManager> {
+    let tools_app = app.clone();
+    StreamableHttpService::new(
+        move || {
+            Ok(ComputerTools {
+                app: tools_app.clone(),
+            })
+        },
+        Arc::new(LocalSessionManager::default()),
+        // `guard` below checks Host and Origin for every route, this
+        // one included, so rmcp's own list for `/mcp` alone stays off.
+        StreamableHttpServerConfig::default()
+            .disable_allowed_hosts()
+            .with_max_request_body_bytes(MAX_REQUEST_BODY),
+    )
+}
+
+/// The desktop: the viewer and its socket, the Files panel, the file
+/// manager, and the browser's pages and brought-over logins.
+fn desktop_routes() -> Router<App> {
     Router::new()
-        .route("/health", get(|| async { "ok" }))
         .route("/", get(viewer::page))
         .route("/assets/fonts/{name}", get(font))
         .route("/ws", get(viewer::socket))
         .route("/files", get(viewer::files).post(viewer::upload))
         .route("/files/download", get(viewer::download))
-        // The desk's door for the person's stored secrets: the whole set
-        // goes in, and no method answers one. It is not among the open
-        // routes below, so the bearer rides in the header as on `/mcp`.
-        .route("/secrets", put(secrets::replace))
-        // Uses of an ask-me key the computer is holding for the person, and
-        // the desk carrying their answer back. Bearer-only, like `/secrets`.
-        .route("/secrets/uses", get(holds::list))
-        .route("/secrets/uses/answer", post(holds::answer))
         // The web pages the browser has open, newest first, for the desk to
         // offer the person cookies on. Bearer-only, like `/secrets`.
         .route("/pages", get(pages))
-        // The one moment a passkey is made: the desk arms it, polls for
-        // the request the site makes and then for what was minted, carries
-        // the person's answer back, and ends it. Bearer-only, like
-        // `/secrets`.
-        .route(
-            "/passkeys/registration",
-            put(passkeys::arm)
-                .get(passkeys::registration)
-                .delete(passkeys::disarm),
-        )
-        .route("/passkeys/registration/answer", post(passkeys::answer))
         // The person taking a brought-over login back out of the browser,
         // by domain or whole. Bearer-only, like `/secrets`.
         .route("/logins/{name}", delete(logins::forget))
@@ -225,7 +259,41 @@ pub(crate) fn router(app: App) -> Router {
         .route("/fm/request/{id}/cancel", post(files_ui::cancel))
         .route("/fm/open", post(files_ui::open))
         .route("/fm/terminal", post(files_ui::terminal))
-        .nest_service("/mcp", service)
+}
+
+/// What holds values: the person's secrets, the uses waiting for them, the
+/// making of a passkey, and what this computer can keep.
+fn secret_routes() -> Router<App> {
+    Router::new()
+        // What this computer keeps, and proof the bearer's holder answers.
+        .route("/capabilities", get(crate::split::capabilities))
+        // The desk's door for the person's stored secrets: the whole set
+        // goes in, and no method answers one. It is not among the open
+        // routes below, so the bearer rides in the header as on `/mcp`.
+        .route("/secrets", put(secrets::replace))
+        // Uses of an ask-me key the computer is holding for the person, and
+        // the desk carrying their answer back. Bearer-only, like `/secrets`.
+        .route("/secrets/uses", get(holds::list))
+        .route("/secrets/uses/answer", post(holds::answer))
+        // The one moment a passkey is made: the desk arms it, polls for
+        // the request the site makes and then for what was minted, carries
+        // the person's answer back, and ends it. Bearer-only, like
+        // `/secrets`.
+        .route(
+            "/passkeys/registration",
+            put(passkeys::arm)
+                .get(passkeys::registration)
+                .delete(passkeys::disarm),
+        )
+        .route("/passkeys/registration/answer", post(passkeys::answer))
+}
+
+/// The bearer check, the holder's name, and the Host and Origin guard
+/// around `routes`.
+fn gated(app: App, routes: Router<App>) -> Router {
+    let expected_token = app.config.token.clone();
+    let door = Arc::new(Door::from_env());
+    routes
         .layer(axum::middleware::from_fn_with_state(
             app.clone(),
             record_holder,
@@ -390,7 +458,10 @@ async fn record_holder(State(app): State<App>, request: Request, next: Next) -> 
             .get("X-Computer-Holder")
             .and_then(|v| v.to_str().ok())
     {
-        app.jobs.agent.holder(holder);
+        match &app.runner {
+            None => app.jobs.agent.holder(holder),
+            Some(runner) => runner.line.tell("agent.holder", json!({"holder": holder})),
+        }
     }
     next.run(request).await
 }
@@ -494,7 +565,7 @@ pub(crate) fn same_secret(left: &[u8], right: &[u8]) -> bool {
 }
 
 /// Ctrl-C at a terminal, or the SIGTERM a container stop forwards.
-async fn shutdown() {
+pub(crate) async fn shutdown() {
     let mut terminate =
         match tokio::signal::unix::signal(tokio::signal::unix::SignalKind::terminate()) {
             Ok(signal) => signal,

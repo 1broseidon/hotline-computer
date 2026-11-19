@@ -27,6 +27,7 @@ pub mod ready;
 pub mod screen;
 pub mod secrets;
 pub mod serve;
+pub mod split;
 pub mod tools;
 pub mod viewer;
 pub mod workspace;
@@ -107,6 +108,9 @@ pub struct App {
     pub a11y: Arc<tokio::sync::OnceCell<atspi::zbus::Connection>>,
     /// The screen stream, the hands, and the clipboard; `None` until a display is up.
     pub display: Option<Arc<display::Display>>,
+    /// In the split computer's broker: the runner, which does the work. The
+    /// broker's own jobs, browser, files and desktop are never used.
+    pub runner: Option<split::Runner>,
 }
 
 impl App {
@@ -128,6 +132,7 @@ impl App {
             observer: observer::Observer::new(&config.home, &config.display),
             config,
             display: None,
+            runner: None,
         }
     }
 

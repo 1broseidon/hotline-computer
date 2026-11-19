@@ -333,6 +333,9 @@ pub struct Filled {
 pub struct Secrets {
     set: Arc<RwLock<BTreeMap<String, Secret>>>,
     arrivals: Arc<Mutex<(u64, VecDeque<Arrival>)>>,
+    /// In the split computer's runner, which holds the variables alone: the
+    /// whole set as `state info` lists it, from the broker.
+    listing: Arc<RwLock<Option<Vec<Value>>>>,
 }
 
 impl Secrets {
@@ -413,10 +416,26 @@ impl Secrets {
     /// What `state info` lists: name, kind, and for a login its sites and
     /// username, for a passkey its site. Never a value.
     pub fn catalog(&self) -> Vec<Value> {
+        if let Some(listing) = self
+            .listing
+            .read()
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
+            .clone()
+        {
+            return listing;
+        }
         self.read()
             .iter()
             .map(|(name, secret)| secret.describe(name))
             .collect()
+    }
+
+    /// What `catalog` answers from now on, in place of this set's own.
+    pub fn list_as(&self, listing: Vec<Value>) {
+        *self
+            .listing
+            .write()
+            .unwrap_or_else(|poisoned| poisoned.into_inner()) = Some(listing);
     }
 
     /// What a job offered the set starts with: the variables.
@@ -857,11 +876,7 @@ pub async fn replace(
 ) -> Response {
     match app.secrets.replace(set) {
         Ok(()) => {
-            let _ =
-                crate::x11::publish_sealed(&app.config.display, app.secrets.names().len() as u32);
-            if let Err(error) = app.browser.sync_passkeys(false).await {
-                eprintln!("secrets: the browser did not take the passkeys: {error}");
-            }
+            crate::split::delivered(&app).await;
             StatusCode::NO_CONTENT.into_response()
         }
         Err(error) => (StatusCode::BAD_REQUEST, Json(json!({"error": error}))).into_response(),

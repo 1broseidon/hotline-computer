@@ -1,4 +1,4 @@
-mod browser;
+pub(crate) mod browser;
 mod capture;
 pub(crate) mod files;
 mod input;
@@ -136,6 +136,19 @@ fn schema(value: Value) -> Arc<JsonObject> {
 }
 
 pub async fn call(app: &App, name: &str, arguments: Value, holder: &str) -> ToolResult {
+    call_prepared(app, name, arguments, holder, None).await
+}
+
+/// A call, with the value of a `browser fill secret` already looked up,
+/// checked and approved where the secrets are: the split computer's broker
+/// hands the runner that one field for that one fill.
+pub async fn call_prepared(
+    app: &App,
+    name: &str,
+    arguments: Value,
+    holder: &str,
+    filled: Option<crate::secrets::Filled>,
+) -> ToolResult {
     let moved = moves_something(name, &arguments);
     let arguments_for_log = json!({"action": arguments["action"].clone()});
     let mut activity = crate::activity::Entry::new(name, &arguments);
@@ -161,7 +174,7 @@ pub async fn call(app: &App, name: &str, arguments: Value, holder: &str) -> Tool
     let result = match name {
         "capture" => capture::call(app, arguments).await,
         "input" => input::call(app, arguments, holder).await,
-        "browser" => browser::call(app, arguments, holder).await,
+        "browser" => browser::call(app, arguments, holder, filled).await,
         "shell" => shell::call(app, arguments, holder).await,
         "files" => files::call(app, arguments, holder).await,
         "windows" => windows::call(app, arguments, holder).await,

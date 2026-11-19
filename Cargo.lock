@@ -1000,6 +1000,8 @@ dependencies = [
  "fontdue",
  "futures-util",
  "hmac",
+ "hyper",
+ "hyper-util",
  "libc",
  "png",
  "reqwest",

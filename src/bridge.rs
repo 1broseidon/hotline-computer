@@ -29,24 +29,67 @@ pub fn extension_answers() -> bool {
         && std::env::var("HOTLINE_COMPUTER_PASSKEYS").as_deref() != Ok("virtual")
 }
 
-pub fn socket_path() -> PathBuf {
+/// The single-user computer's socket, in the service's own directory.
+fn single_user_socket() -> PathBuf {
     std::env::temp_dir().join("hotline-computer/bridge.sock")
+}
+
+/// Where the relay finds the service: in the split computer, the bridge
+/// the relay's user may reach (`signin`'s, or the general browser's for
+/// `agent`); otherwise the single-user computer's.
+pub fn socket_path() -> PathBuf {
+    [
+        crate::split::BRIDGE_SOCKET,
+        crate::split::INTERIM_BRIDGE_SOCKET,
+    ]
+    .into_iter()
+    .map(PathBuf::from)
+    .find(|path| path.exists())
+    .unwrap_or_else(single_user_socket)
 }
 
 /// Answers the extension for as long as the computer runs.
 pub async fn serve(app: App) {
-    use std::os::unix::fs::PermissionsExt;
-    let path = socket_path();
-    if let Some(directory) = path.parent() {
-        let _ = std::fs::create_dir_all(directory);
+    if crate::split::mode() == crate::split::Mode::Split {
+        // The signed-in browser's native host, as `signin` alone; and until
+        // that browser carries the extension, the general browser's, as
+        // `agent`, which reaches it as it reached the single-user one.
+        tokio::spawn(listen(
+            app.clone(),
+            PathBuf::from(crate::split::BRIDGE_SOCKET),
+            0o660,
+            Some(crate::split::SIGNIN_UID),
+        ));
+        listen(
+            app,
+            PathBuf::from(crate::split::INTERIM_BRIDGE_SOCKET),
+            0o666,
+            Some(crate::split::AGENT_UID),
+        )
+        .await;
+    } else {
+        let path = single_user_socket();
+        if let Some(directory) = path.parent() {
+            let _ = std::fs::create_dir_all(directory);
+        }
+        listen(app, path, 0o600, None).await;
     }
+}
+
+async fn listen(app: App, path: PathBuf, mode: u32, peer: Option<u32>) {
+    use std::os::unix::fs::PermissionsExt;
     let _ = std::fs::remove_file(&path);
     let listener = match tokio::net::UnixListener::bind(&path) {
         Ok(listener) => listener,
         Err(error) => return eprintln!("extension bridge: {}: {error}", path.display()),
     };
-    let _ = std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o600));
+    let _ = std::fs::set_permissions(&path, std::fs::Permissions::from_mode(mode));
     while let Ok((stream, _)) = listener.accept().await {
+        if let Some(expected) = peer
+            && stream.peer_cred().map(|cred| cred.uid()).ok() != Some(expected)
+        {
+            continue;
+        }
         tokio::spawn(conversation(app.clone(), stream));
     }
 }
@@ -215,8 +258,8 @@ async fn answer(app: &App, message: &Value) -> Value {
         // stops saying it is their turn.
         Some("hand_back") => {
             let handed = PERSON_SINCE.lock().unwrap().take().is_some();
-            match app.access.person().await {
-                Some(holder) => match app.access.release(&holder).await {
+            match crate::split::person(app).await {
+                Some(holder) => match crate::split::release(app, &holder).await {
                     Ok(_) => json!({"handedBack": true}),
                     Err(error) => refused(authenticator_refusal("NotAllowedError", &error)),
                 },
@@ -366,7 +409,7 @@ fn declined(name: &str, site: &str) -> Refusal {
 /// socket took the screen; a holder's name proves nothing, since an MCP
 /// caller chooses its own.
 pub(crate) async fn person_has_it(app: &App) -> bool {
-    app.access.person().await.is_some()
+    crate::split::person(app).await.is_some()
 }
 
 /// The path of the page the agent drives, when it is on `site`: what the
@@ -377,7 +420,7 @@ async fn page_path(app: &App, site: &str) -> String {
     for _ in 0..6 {
         let url = tokio::time::timeout(
             std::time::Duration::from_millis(300),
-            app.browser.current_url_if_idle(),
+            crate::split::current_url_if_idle(app),
         )
         .await
         .ok()
@@ -534,10 +577,10 @@ fn request_id() -> String {
 static PERSON_SINCE: std::sync::Mutex<Option<u64>> = std::sync::Mutex::new(None);
 
 async fn wheel(app: &App) -> Value {
-    let agent = app.jobs.agent.snapshot();
-    let held = match app.access.person().await {
+    let agent = crate::split::agent(app).await;
+    let held = match crate::split::person(app).await {
         Some(_) => Some(true),
-        None => app.access.holder().await.map(|_| false),
+        None => crate::split::holder(app).await.map(|_| false),
     };
     let driving = turn(
         &PERSON_SINCE,
@@ -601,7 +644,7 @@ pub(crate) async fn who(app: &App) -> String {
     if person_has_it(app).await {
         "you".to_owned()
     } else {
-        app.jobs.agent.snapshot().name
+        crate::split::agent(app).await.name
     }
 }
 

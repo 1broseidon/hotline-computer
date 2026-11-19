@@ -45,6 +45,10 @@ hmac = "0.12"
 sha1 = "0.10"
 data-encoding = "2"
 tempfile = "3.27.0"
+# The split computer's broker hands the desktop's own pages to the runner
+# over a socketpair, upgrades and all: HTTP/1 on both ends of it.
+hyper = { version = "1.11", features = ["client", "server", "http1"] }
+hyper-util = { version = "0.1.20", features = ["tokio", "service"] }
 
 [dev-dependencies]
 # The contract test opens the viewer's WebSocket the way the page does.

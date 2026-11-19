@@ -404,7 +404,7 @@ pub async fn arm(State(app): State<App>, Json(arm): Json<Arm>) -> Response {
     if let Err(error) = app.passkeys.arm(&arm.rp_id) {
         return (StatusCode::BAD_REQUEST, Json(json!({"error": error}))).into_response();
     }
-    if let Err(error) = app.browser.sync_passkeys(true).await {
+    if let Err(error) = crate::split::sync_passkeys(&app, true).await {
         app.passkeys.disarm();
         return (
             StatusCode::SERVICE_UNAVAILABLE,
@@ -423,7 +423,7 @@ pub async fn arm(State(app): State<App>, Json(arm): Json<Arm>) -> Response {
 /// and a passkey just made is kept, without any tool being used.
 pub async fn registration(State(app): State<App>) -> Response {
     if app.passkeys.armed().is_some()
-        && let Err(error) = app.browser.sync_passkeys(false).await
+        && let Err(error) = crate::split::sync_passkeys(&app, false).await
     {
         eprintln!("passkeys: the browser could not be looked at: {error}");
     }
@@ -446,12 +446,12 @@ pub async fn answer(State(app): State<App>, Json(answer): Json<Answer>) -> Respo
     if let Err(error) = answered {
         return (StatusCode::CONFLICT, Json(json!({"error": error}))).into_response();
     }
-    if let Err(error) = app.browser.sync_passkeys(false).await {
+    if let Err(error) = crate::split::sync_passkeys(&app, false).await {
         eprintln!("passkeys: the browser could not be told the answer: {error}");
     }
     if !answer.approved {
         app.passkeys.disarm();
-        if let Err(error) = app.browser.sync_passkeys(false).await {
+        if let Err(error) = crate::split::sync_passkeys(&app, false).await {
             eprintln!("passkeys: the browser did not drop the arming: {error}");
         }
     }
@@ -462,7 +462,7 @@ pub async fn answer(State(app): State<App>, Json(answer): Json<Answer>) -> Respo
 /// in the authenticators only if the set delivered since carries it.
 pub async fn disarm(State(app): State<App>) -> Response {
     app.passkeys.disarm();
-    if let Err(error) = app.browser.sync_passkeys(false).await {
+    if let Err(error) = crate::split::sync_passkeys(&app, false).await {
         eprintln!("passkeys: the browser did not drop the arming: {error}");
     }
     StatusCode::NO_CONTENT.into_response()
