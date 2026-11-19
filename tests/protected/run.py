@@ -68,14 +68,20 @@ class Listener:
                     except Exception:
                         pass
                 me.rows.append((self.path, text))
+                # Every reply has a length: over TLS a reply that ends with the
+                # connection is a truncation to a strict client (Python's
+                # server closes without close_notify), and git never sees the 401.
                 if self.path.startswith("/j3") and not auth:
                     self.send_response(401)
                     self.send_header("WWW-Authenticate", 'Basic realm="x"')
+                    self.send_header("Content-Length", "0")
                     self.end_headers()
                     return
+                reply = (auth if self.path.startswith("/echo") else "ok").encode()
                 self.send_response(200)
+                self.send_header("Content-Length", str(len(reply)))
                 self.end_headers()
-                self.wfile.write((auth if self.path.startswith("/echo") else "ok").encode())
+                self.wfile.write(reply)
 
             do_GET = do_POST = do_PUT = _h
 
