@@ -24,6 +24,7 @@
 
 pub mod cdp;
 pub mod lock;
+pub mod pending;
 pub mod screen;
 pub mod sessions;
 pub mod spawn;
@@ -159,6 +160,8 @@ struct Tab {
     /// of the tab is shown to the agent. Only a look at the browser's own
     /// answer clears them, never an event that may arrive late.
     secret_doc: Option<String>,
+    /// The login whose secret that was: what the person is asked to finish.
+    secret_name: Option<String>,
     person_doc: Option<String>,
     secret_at: u64,
     flow: Option<Flow>,
@@ -875,7 +878,7 @@ impl Signin {
 
     /// The extension is about to fill a login into a page of `origin`:
     /// those tabs are withheld as if the broker had typed it.
-    pub async fn withhold_origin(&self, origin: &str) {
+    pub async fn withhold_origin(&self, origin: &str, name: &str) {
         let running = self.0.running.lock().await.clone();
         let Some(running) = running else { return };
         let tabs: Vec<Tab> = self
@@ -897,6 +900,7 @@ impl Signin {
             {
                 entry.secret_doc = Some(doc);
                 entry.secret_at = crate::jobs::now();
+                entry.secret_name = Some(name.to_owned());
             }
         }
     }
@@ -1641,6 +1645,7 @@ impl Signin {
             {
                 entry.secret_doc = Some(doc);
                 entry.secret_at = crate::jobs::now();
+                entry.secret_name = Some(name.to_owned());
             }
         }
         let focused = self

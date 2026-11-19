@@ -301,7 +301,10 @@ async fn answer(app: &App, message: &Value) -> Value {
                 && let Some(signin) = &app.signin
             {
                 signin
-                    .withhold_origin(message["origin"].as_str().unwrap_or_default())
+                    .withhold_origin(
+                        message["origin"].as_str().unwrap_or_default(),
+                        message["name"].as_str().unwrap_or_default(),
+                    )
                     .await;
             }
             if reply.get("error").is_some() {

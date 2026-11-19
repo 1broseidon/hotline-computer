@@ -206,15 +206,17 @@ impl Rig {
             .to_owned()
     }
 
+    /// Waits up to 20 s, a page's own WebAuthn patience here, for `until`.
     async fn settle(&self, until: &str) -> String {
-        for _ in 0..50 {
-            let text = self.browser(json!({"action": "text"})).await.unwrap();
+        let mut text = String::new();
+        for _ in 0..200 {
+            text = self.browser(json!({"action": "text"})).await.unwrap();
             if text.contains(until) {
                 return text;
             }
             tokio::time::sleep(std::time::Duration::from_millis(100)).await;
         }
-        panic!("the page never showed {until}");
+        panic!("the page never showed {until}: {text}");
     }
 }
 
@@ -829,5 +831,86 @@ async fn a_password_sent_off_the_site_never_leaves() {
         rig.general.0.lock().unwrap().is_empty(),
         "nothing went to the general browser"
     );
+    rig.signin.stop().await;
+}
+
+/// Finish signing in reaches the desk: a sign-in the broker could not finish
+/// is listed for the person until the tab moves on or the login goes.
+#[tokio::test]
+async fn a_sign_in_waiting_on_the_person_is_listed_for_the_desk() {
+    if !have_chromium() {
+        return eprintln!("skipped: no chromium");
+    }
+    let _serial = SERIAL.lock().await;
+    let rig = rig(login()).await;
+    rig.browser(json!({"action": "navigate", "url": rig.url("/stuck")}))
+        .await
+        .unwrap();
+    let password = rig.find("Password").await;
+    rig.browser(json!({"action": "fill", "ref": password, "secret": "SITE.password"}))
+        .await
+        .unwrap();
+    assert!(
+        rig.signin.pending().await.is_empty(),
+        "not yet: the broker may still finish it"
+    );
+    let age = |rig: &Rig| {
+        for tab in rig.signin.lock_tabs().list.iter_mut() {
+            tab.secret_at = tab.secret_at.saturating_sub(FINISH_AFTER_MS + 1);
+        }
+    };
+    age(&rig);
+    let pending = rig.signin.pending().await;
+    assert_eq!(pending.len(), 1, "{pending:?}");
+    assert_eq!(pending[0]["kind"], "finish");
+    assert_eq!(pending[0]["name"], "SITE");
+    assert_eq!(pending[0]["origin"], rig.url(""));
+    assert_eq!(pending[0]["account"], "george");
+    assert!(pending[0]["since"].as_u64().unwrap() > 0);
+    // The agent is still told, as before.
+    let told = rig.browser(json!({"action": "text"})).await.unwrap();
+    assert!(told.contains("Finish signing in"), "{told}");
+    // Through the door, bearer-only.
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let base = format!("http://{}", listener.local_addr().unwrap());
+    let router = crate::serve::router(rig.app.clone());
+    let serving = tokio::spawn(async move {
+        let _ = axum::serve(listener, router).await;
+    });
+    let http = reqwest::Client::builder().no_proxy().build().unwrap();
+    let naked = http
+        .get(format!("{base}/signin/pending"))
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(naked.status(), 401);
+    let listed: Value = http
+        .get(format!("{base}/signin/pending"))
+        .bearer_auth("test-only")
+        .send()
+        .await
+        .unwrap()
+        .json()
+        .await
+        .unwrap();
+    assert_eq!(listed["pending"][0]["name"], "SITE");
+    serving.abort();
+    // A new document ends it.
+    rig.browser(json!({"action": "navigate", "url": rig.url("/home")}))
+        .await
+        .unwrap();
+    assert!(rig.signin.pending().await.is_empty());
+    // So does revoking the login.
+    rig.browser(json!({"action": "navigate", "url": rig.url("/stuck")}))
+        .await
+        .unwrap();
+    let password = rig.find("Password").await;
+    rig.browser(json!({"action": "fill", "ref": password, "secret": "SITE.password"}))
+        .await
+        .unwrap();
+    age(&rig);
+    assert_eq!(rig.signin.pending().await.len(), 1);
+    rig.app.secrets.replace(BTreeMap::new()).unwrap();
+    assert!(rig.signin.pending().await.is_empty());
     rig.signin.stop().await;
 }

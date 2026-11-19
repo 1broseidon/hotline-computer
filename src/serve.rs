@@ -303,6 +303,8 @@ fn secret_routes() -> Router<App> {
         // broker's, since only it drives that browser. Its socket checks the
         // token itself, as `/ws` does.
         .route("/sites/ws", get(signin::screen::socket))
+        // Sign-ins waiting on the person. Bearer-only, like `/secrets`.
+        .route("/signin/pending", get(signin::pending::list))
 }
 
 /// The bearer check, the holder's name, and the Host and Origin guard
