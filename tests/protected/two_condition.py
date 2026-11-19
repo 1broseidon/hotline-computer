@@ -7,6 +7,8 @@ as an agent calls them, with made-up credentials delivered by PUT /secrets v2:
   2. post a form on the signed-in site;
   3. download a file from it;
   4. sign out and sign in again with a passkey;
+  4b. with only that passkey granted, its site still opens in the signed-in
+     browser (not the general one) and the passkey signs in there;
   5. call an API with a protected key through curl, git (a real clone over
      smart HTTP) and Node, in a workspace prepared with Nix as an agent would.
 Condition 2, nothing leaks. On the same computer, afterwards: the full probe
@@ -158,7 +160,7 @@ def look(c, want, seconds=20):
     return text
 
 
-def agent_work(c, run, host, api_port, out):
+def agent_work(c, run, host, api_port, out, deliver):
     sh = c.sh
     # The site, started as a job (the computer's only way to run one).
     c.tool("shell", action="start", command=f"exec python3 ~/probe/site.py ~/probe/site.json", label="Fixture site (test only)", wait_ms=500)
@@ -219,6 +221,27 @@ def agent_work(c, run, host, api_port, out):
                  ("password accepted", "code accepted", "signed in by password and code", "posted",
                   "downloaded report.csv", "passkey verified", "signed in by passkey")),
              ", ".join(e["event"] for e in events.get("events", [])))
+
+    # 4b. Only the passkey granted: no login names the site, so its RP id is
+    # what sends it to the signed-in browser. Withdrawing the login signs the
+    # site out, so this sign-in is the passkey's alone.
+    status, said = deliver(["SITEKEY"], 2)
+    time.sleep(2)  # the signed-in browser notices the withdrawn login within a second
+    c.tool("browser", action="navigate", url=SITE + "/passkey")
+    text = look(c, "Sign in with a passkey")
+    tabs = json.loads(c.tool("browser", action="tabs")[0] or "[]")
+    here = [t for t in tabs if t.get("signedIn") and str(t.get("url", "")).startswith(SITE)]
+    general = [t for t in tabs if not t.get("signedIn") and str(t.get("url", "")).startswith(SITE)]
+    c.tool("browser", action="click_ref", ref=ref_for(text, "button", "passkey"))
+    text = look(c, "Signed in as", 30)
+    events = json.loads(sh(f"curl -s {SITE}/_events")[0] or "{}")
+    by_passkey = sum(e["event"] == "signed in by passkey" for e in events.get("events", []))
+    run.step("with only a passkey granted, its site opens in the signed-in browser and the passkey signs in",
+             status == 204 and here and not general and "Signed in as rc-user (passkey)" in text and by_passkey >= 2,
+             f"PUT {status} {said[:60]!r}; signed-in tabs on the site {len(here)}, general {len(general)}; "
+             + (re.search(r"(Signed in as|Passkey)[^\n]*", text) or [text[:80]])[0] + f"; {by_passkey} passkey sign-ins")
+    status, said = deliver(None, 3)
+    run.step("the whole set delivered again", status == 204, f"HTTP {status} {said[:80]!r}")
 
     # 5. The API with a protected key, in a workspace prepared as an agent would.
     ws = "/home/agent/workspace/api"
@@ -329,6 +352,13 @@ def main():
                                       "userHandle": base64.b64encode(b"rc-user-1").decode(), "privateKey": private, "userName": "rc-user"}
         canaries = K.ALL + [K.TOTP_SEED, password, seed, private]
         status, _, said = c.http("PUT", "/secrets", raw=json.dumps(body).encode(), headers={"Content-Type": K.V2})
+
+        def deliver(names, generation):
+            """PUT /secrets v2 with only the entries `names`, or the whole set again when None."""
+            sent = {"v": 2, "generation": generation,
+                    "secrets": {k: v for k, v in body["secrets"].items() if names is None or k in names}}
+            got, _, reply = c.http("PUT", "/secrets", raw=json.dumps(sent).encode(), headers={"Content-Type": K.V2})
+            return got, reply
         _, _, caps = c.http("GET", "/capabilities?nonce=2c")
         print(f"# {a.image} as {name}: {caps.decode()[:200]}")
         print(f"# API and git on {origin} (bound), site on {SITE} in the computer, workspace {ws}")
@@ -348,7 +378,7 @@ def main():
         c.tool("files", action="put", path="probe/scan_home.py", content=(HERE / "jobs/scan_home.py").read_text())
 
         print("## condition 1: the agent's work")
-        agent_work(c, run, host, bound.port, out)
+        agent_work(c, run, host, bound.port, out, deliver)
         good = [s for s in seen if s[2]]
         run.step("the API and git service received the real key (host side)",
                  any(s[0] == "api" and "curl" in s[1] for s in good) and any(s[0] == "git" for s in good)

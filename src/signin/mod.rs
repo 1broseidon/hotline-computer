@@ -143,7 +143,7 @@ struct Inner {
     tabs: Mutex<Tabs>,
     /// Shared sites by share name: what `PUT /sessions` brought.
     sessions: Mutex<BTreeMap<String, Vec<Origin>>>,
-    /// The login sites as of the last look, to notice one revoked.
+    /// The granted sites as of the last look, to notice one revoked.
     logins: Mutex<Vec<Origin>>,
     /// The making of a passkey: the armed site opens here while it lasts.
     arming: Mutex<Option<crate::passkeys::Passkeys>>,
@@ -297,10 +297,33 @@ impl Signin {
             .collect()
     }
 
-    /// Every site that opens here: the logins', the shares', and the site
-    /// a passkey is being made for while the person has it armed.
-    pub fn sites(&self) -> Vec<Origin> {
+    /// The sites a granted login or passkey signs in on. A passkey comes
+    /// with its RP id alone, so its site is that host as WebAuthn scopes it
+    /// (`Origin::relying_party`), unless a login or a share names a site on
+    /// the same host: the person said where that host signs in, and that
+    /// is where the passkey is used.
+    fn granted_sites(&self) -> Vec<Origin> {
         let mut sites = self.login_sites();
+        let named: Vec<String> = sites
+            .iter()
+            .chain(self.shared_sites().iter())
+            .map(|site| site.host().to_owned())
+            .collect();
+        for (_, passkey) in self.0.secrets.passkeys() {
+            sites.extend(
+                Origin::relying_party(&passkey.rp_id)
+                    .into_iter()
+                    .filter(|site| !named.iter().any(|host| host == site.host())),
+            );
+        }
+        sites
+    }
+
+    /// Every site that opens here: the logins' and passkeys', the shares',
+    /// and the site a passkey is being made for while the person has it
+    /// armed.
+    pub fn sites(&self) -> Vec<Origin> {
+        let mut sites = self.granted_sites();
         sites.extend(self.shared_sites());
         let armed = self
             .0
@@ -534,19 +557,19 @@ impl Signin {
     }
 
     /// While the browser runs: stops it when idle, and signs a revoked
-    /// login's sites out.
+    /// login's or passkey's sites out.
     async fn watch(self, running: Running) {
         *self
             .0
             .logins
             .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner) = self.login_sites();
+            .unwrap_or_else(std::sync::PoisonError::into_inner) = self.granted_sites();
         loop {
             tokio::time::sleep(Duration::from_secs(1)).await;
             if running.cdp.is_closed() {
                 return;
             }
-            let now = self.login_sites();
+            let now = self.granted_sites();
             let before = std::mem::replace(
                 &mut *self
                     .0

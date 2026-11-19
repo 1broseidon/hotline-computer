@@ -800,6 +800,8 @@ pub struct Origin {
     scheme: String,
     host: String,
     port: u16,
+    /// A passkey's site, which WebAuthn scopes by host alone: any port.
+    any_port: bool,
 }
 
 impl Origin {
@@ -861,14 +863,47 @@ impl Origin {
         if !(named || bracketed) {
             return Err(format!("{text:?} has no host"));
         }
-        Ok((Origin { scheme, host, port }, rest))
+        Ok((
+            Origin {
+                scheme,
+                host,
+                port,
+                any_port: false,
+            },
+            rest,
+        ))
+    }
+
+    /// The sites a passkey for `rp_id` signs in on, as WebAuthn scopes them:
+    /// the host and those under it, over https on any port, and over http
+    /// too on localhost. Empty for an RP id that is not a host.
+    pub fn relying_party(rp_id: &str) -> Vec<Origin> {
+        let Ok(https) = Origin::site(&format!("https://{rp_id}")) else {
+            return Vec::new();
+        };
+        let mut sites = vec![Origin {
+            any_port: true,
+            ..https.clone()
+        }];
+        if is_local(&https.host) {
+            sites.push(Origin {
+                scheme: "http".into(),
+                ..sites[0].clone()
+            });
+        }
+        sites
+    }
+
+    /// The site's host.
+    pub fn host(&self) -> &str {
+        &self.host
     }
 
     /// Whether a login for this site may be typed on `page`: same scheme and
     /// port, and the page's host is the site's or lies under it.
     pub fn allows(&self, page: &Origin) -> bool {
         self.scheme == page.scheme
-            && self.port == page.port
+            && (self.any_port || self.port == page.port)
             && (self.host == page.host || page.host.ends_with(&format!(".{}", self.host)))
     }
 }
@@ -881,7 +916,7 @@ impl fmt::Display for Origin {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "{}://{}", self.scheme, self.host)?;
         let default = if self.scheme == "https" { 443 } else { 80 };
-        if self.port != default {
+        if !self.any_port && self.port != default {
             write!(f, ":{}", self.port)?;
         }
         Ok(())
@@ -1481,6 +1516,38 @@ mod tests {
         assert_eq!(secrets.redact_at("287082", 59), "[redacted GITHUB.code]");
         // Long after, those digits are just a number.
         assert_eq!(secrets.redact_at(shown, 59 + 3600), shown);
+    }
+
+    #[test]
+    fn a_passkeys_site_is_its_rp_id_on_any_port() {
+        let pages = |rp_id: &str, page: &str| {
+            let page = Origin::of_page(page).unwrap();
+            Origin::relying_party(rp_id)
+                .iter()
+                .any(|site| site.allows(&page))
+        };
+        for page in [
+            "https://github.com/login",
+            "https://github.com:8443/",
+            "https://login.github.com/sso",
+        ] {
+            assert!(pages("github.com", page), "{page}");
+        }
+        for page in [
+            "http://github.com/",
+            "https://github.com.evil.example/",
+            "https://evilgithub.com/",
+        ] {
+            assert!(!pages("github.com", page), "{page}");
+        }
+        assert!(pages("localhost", "http://localhost:8600/passkey"));
+        assert!(pages("localhost", "https://localhost/"));
+        assert!(!pages("localhost", "http://127.0.0.1:8600/"));
+        assert_eq!(
+            Origin::relying_party("github.com")[0].to_string(),
+            "https://github.com"
+        );
+        assert!(Origin::relying_party("not a host").is_empty());
     }
 
     #[test]

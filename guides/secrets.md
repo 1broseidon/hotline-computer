@@ -95,16 +95,22 @@ redacted. Jobs never inherit `HOTLINE_COMPUTER_TOKEN`.
 
 ## The signed-in browser
 
-On the split computer, a login's sites, the sites you shared cookies for with
-`PUT /sessions/{name}`, and a site armed for a new passkey open in a second,
+On the split computer, a login's sites, a granted passkey's site, the sites
+you shared cookies for with `PUT /sessions/{name}`, and a site armed for a new
+passkey open in a second,
 headless Chromium that runs as `signin`, with DevTools on a pipe and no port.
 The agent drives it with site actions only: `eval` is refused. From the first
 secret typed into a tab until the tab shows another page, nothing of it
 reaches the agent. A sign-in still on that page 30 seconds on is listed by
 `GET /signin/pending`, and the agent is told to ask you to finish it. Open
 Browser in the desk shows this browser through `/sites/ws`. A form that would
-carry what was typed to another site is stopped. Revoking a login or a share
-clears its site's cookies and data and closes its tabs.
+carry what was typed to another site is stopped. Revoking a login, a passkey
+or a share clears its site's cookies and data and closes its tabs.
+
+A passkey comes with its `rpId` alone, so its site is that host and those
+under it, over https on any port (and http on localhost), as WebAuthn scopes
+it. Where a login or a share names a site on the same host, the passkey is
+used on the sites they name.
 
 On the single-user computer none of this applies. A shared sign-in is a saved
 login in `~/.hotline/logins`, loaded into the visible browser, and

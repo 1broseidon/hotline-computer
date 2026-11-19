@@ -582,6 +582,85 @@ async fn a_passkey_signs_only_for_a_signed_in_tabs_own_origin() {
     rig.signin.stop().await;
 }
 
+/// A passkey comes with its RP id alone: that host opens here as WebAuthn
+/// scopes it, unless a login names a site on it, and goes with the grant.
+#[test]
+fn a_granted_passkeys_site_opens_here_unless_a_login_names_its_host() {
+    let root = tempfile::tempdir().unwrap();
+    let secrets = crate::secrets::Secrets::default();
+    let signin = Signin::new(
+        Box::new(spawn::Direct::new(root.path().join("signin"))),
+        Box::new(Recorder::default()),
+        secrets.clone(),
+        None,
+    );
+    let passkey = json!({"kind": "passkey", "rpId": "localhost", "credentialId": "AQID",
+        "privateKey": "MIGHAgEAMBMGByqGSM49AgEGCCqGSM49AwEHBG0wawIBAQQgB9aEvdD1k7n55Wu+sDtf5cUbUumdw/XyKmgddnpO1eihRANCAASw/VbAXHGTIuqCMysLtvnlfwqu+ZFr7EQiwzWmLuynjO5Z/X+o4fuRzcMX916P1LxoWt4Ywc5KEVBuTzUzjBVI"});
+    let deliver = |set: Value| {
+        secrets
+            .replace(serde_json::from_value(set).unwrap())
+            .unwrap()
+    };
+    assert!(!signin.routes("http://localhost:8600/passkey"));
+    deliver(json!({"PK": passkey}));
+    assert!(signin.routes("http://localhost:8600/passkey"));
+    assert!(signin.routes("https://localhost/"));
+    assert!(!signin.routes("http://127.0.0.1:8600/"));
+    let mut login = login()["SITE"].clone();
+    login["sites"] = json!(["http://localhost:8000"]);
+    deliver(json!({"PK": passkey, "SITE": login}));
+    assert!(signin.routes("http://localhost:8000/login"));
+    assert!(
+        !signin.routes("http://localhost:8001/"),
+        "a login names where its host signs in"
+    );
+    deliver(json!({}));
+    assert!(!signin.routes("http://localhost:8600/passkey"));
+}
+
+/// With nothing granted but a passkey, its site opens here, not in the
+/// general browser, and the passkey signs in on that tab.
+#[tokio::test]
+async fn a_passkey_alone_opens_its_site_here_and_signs_in() {
+    let manifest =
+        std::path::Path::new("/etc/chromium/native-messaging-hosts/dev.hotline.computer.json");
+    let host = std::fs::read_to_string(manifest)
+        .ok()
+        .and_then(|text| serde_json::from_str::<Value>(&text).ok())
+        .and_then(|manifest| manifest["path"].as_str().map(std::path::PathBuf::from));
+    if !have_chromium()
+        || !crate::bridge::extension_answers()
+        || !host.is_some_and(|host| host.exists())
+    {
+        return eprintln!("skipped: no chromium, extension or native host");
+    }
+    let _serial = SERIAL.lock().await;
+    let details = json!({"rp": {"id": "localhost", "name": "Test"}, "user": {"id": "dXNlcg", "name": "george"},
+        "challenge": "AAAA", "pubKeyCredParams": [{"type": "public-key", "alg": -7}],
+        "extensions": {"remoteDesktopClientOverride": {"origin": "http://localhost:1", "sameOriginWithAncestors": true}}});
+    let (passkey, _) =
+        crate::authenticator::mint(&crate::authenticator::creation(&details).unwrap()).unwrap();
+    let mut key = serde_json::to_value(&passkey).unwrap();
+    key["kind"] = json!("passkey");
+    let rig = rig(json!({})).await;
+    let mut set: BTreeMap<String, crate::secrets::Delivered> = BTreeMap::new();
+    set.insert("PK".into(), serde_json::from_value(key).unwrap());
+    rig.app.secrets.replace(set).unwrap();
+    let bridge = tokio::spawn(crate::bridge::serve(rig.app.clone()));
+    rig.browser(json!({"action": "navigate", "url": rig.url("/pk")}))
+        .await
+        .unwrap();
+    let signed = rig.settle("signed public-key").await;
+    assert!(!signed.contains("refused"), "{signed}");
+    assert!(rig.signin.flow_on(&rig.url("")).is_some());
+    assert!(
+        rig.general.0.lock().unwrap().is_empty(),
+        "nothing went to the general browser"
+    );
+    bridge.abort();
+    rig.signin.stop().await;
+}
+
 #[tokio::test]
 async fn site_input_never_reaches_display_0() {
     if !have_chromium() {
