@@ -60,14 +60,15 @@ async fn computer(mode: &str) -> Option<Computer> {
 }
 
 impl Computer {
-    /// A Python program run as a job; its stdout, parsed as JSON.
+    /// A Python program run as a job; its stdout, parsed as JSON. All of it:
+    /// with the signed-in browser up, the process list is past exec's 8 KiB.
     async fn job(&self, program: &str) -> Value {
         let answer = self
             .client
             .peer()
             .call_tool(
                 CallToolRequestParams::new("shell").with_arguments(
-                    json!({"action": "exec", "command": "python3", "args": ["-c", program], "timeout": 40})
+                    json!({"action": "exec", "command": "python3", "args": ["-c", program], "timeout": 40, "max_output": 1048576})
                         .as_object()
                         .unwrap()
                         .clone(),
