@@ -42,6 +42,11 @@ pub async fn serve(app: App) -> Result<(), String> {
         eprintln!("file windows: {error}");
     }
     tokio::spawn(crate::portal::serve(app.clone()));
+    // A home the single-user computer used is migrated before the broker
+    // is told the desktop is up.
+    if let Err(error) = super::migration::on_boot(&app).await {
+        eprintln!("hotline-computer: migration: {error}");
+    }
     // SAFETY of ownership: these were inherited for this alone; `run` marked
     // them close-on-exec before anything was started.
     let line = wire::inherited(fd::LINE)?;
@@ -150,9 +155,10 @@ async fn answer(app: &App, op: &str, args: Value) -> Result<Value, String> {
                     .map(|(name, value)| (name, Delivered::Value(value)))
                     .collect(),
             )?;
-            app.secrets.list_as(
-                serde_json::from_value(args["catalog"].clone()).map_err(|e| e.to_string())?,
-            );
+            let catalog: Vec<Value> =
+                serde_json::from_value(args["catalog"].clone()).map_err(|e| e.to_string())?;
+            super::migration::on_delivery(app, &catalog).await;
+            app.secrets.list_as(catalog);
             let count = args["count"].as_u64().unwrap_or_default() as u32;
             let _ = crate::x11::publish_sealed(&app.config.display, count);
             Ok(Value::Null)
@@ -225,6 +231,8 @@ async fn answer(app: &App, op: &str, args: Value) -> Result<Value, String> {
                 .map_err(|error| error.to_string())?;
             Ok(json!({"path": path}))
         }
+        "migration.status" => Ok(super::migration::status(app).await),
+        "migration.answer" => super::migration::answer(app, text_of(&args, "snapshots")).await,
         other => Err(format!("the runner does not know {other:?}")),
     }
 }

@@ -196,6 +196,13 @@ pub(crate) fn broker_router(app: App) -> Router {
         app.clone(),
         secret_routes()
             .route("/health", get(crate::split::broker::health))
+            // A home the single-user computer used, after the first split
+            // boot. Bearer-only, like `/secrets`.
+            .route("/migration", get(crate::split::broker::migration))
+            .route(
+                "/migration/answer",
+                post(crate::split::broker::migration_answer),
+            )
             .nest_service("/mcp", service)
             .fallback(crate::split::broker::proxy),
     )

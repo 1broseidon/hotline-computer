@@ -26,6 +26,7 @@
 pub mod broker;
 #[cfg(target_os = "linux")]
 pub mod init;
+pub mod migration;
 pub mod runner;
 pub mod wire;
 

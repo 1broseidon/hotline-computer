@@ -267,6 +267,7 @@ const SNAPSHOT_LIMIT: u64 = 500 * 1024 * 1024;
 async fn snapshot_save(app: &App, name: &str) -> ToolResult {
     let path = snapshot_path(app, name);
     let size = archive(&app.config.home, &path, SNAPSHOT_LIMIT).await?;
+    crate::split::migration::release(&app.config.home, name).await;
     json_text(
         json!({"saved":true,"name":name,"size_mb":format!("{:.1}",size as f64/1_048_576.0),"browser_state":true}),
     )
@@ -364,6 +365,9 @@ async fn snapshot_load(app: &App, name: &str) -> ToolResult {
     if !path.is_file() {
         return Err(format!("snapshot {name:?} not found"));
     }
+    if let Some(refusal) = crate::split::migration::refusal(&app.config.home, name).await {
+        return Err(refusal);
+    }
     tar(&[
         "xzf",
         path_str(&path)?,
@@ -372,7 +376,9 @@ async fn snapshot_load(app: &App, name: &str) -> ToolResult {
         "--overwrite",
     ])
     .await?;
-    json_text(json!({"loaded":true,"name":name,"browser_restored":true}))
+    // A snapshot cleaned of the old browser profile restores none.
+    let browser = app.config.home.join(".hotline/browser").is_dir();
+    json_text(json!({"loaded":true,"name":name,"browser_restored":browser}))
 }
 
 async fn snapshot_list(app: &App) -> ToolResult {
@@ -412,6 +418,7 @@ async fn snapshot_delete(app: &App, name: &str) -> ToolResult {
     tokio::fs::remove_file(snapshot_path(app, name))
         .await
         .map_err(|_| format!("snapshot {name:?} not found"))?;
+    crate::split::migration::release(&app.config.home, name).await;
     json_text(json!({"deleted":true,"name":name}))
 }
 

@@ -162,6 +162,42 @@ pub async fn health(State(app): State<App>) -> Response {
     }
 }
 
+/// `GET /migration`: what the first split boot did with a home the
+/// single-user computer used, and the old snapshots waiting for an answer.
+pub async fn migration(State(app): State<App>) -> Response {
+    match &app.runner {
+        None => StatusCode::NOT_FOUND.into_response(),
+        Some(runner) => answered(runner.call("migration.status", Value::Null).await),
+    }
+}
+
+/// `POST /migration/answer {snapshots: "clean"|"delete"|"keep"}`.
+pub async fn migration_answer(
+    State(app): State<App>,
+    axum::Json(body): axum::Json<Value>,
+) -> Response {
+    match &app.runner {
+        None => StatusCode::NOT_FOUND.into_response(),
+        Some(runner) => answered(
+            runner
+                .call(
+                    "migration.answer",
+                    json!({"snapshots": body["snapshots"].as_str().unwrap_or_default()}),
+                )
+                .await,
+        ),
+    }
+}
+
+fn answered(answer: Result<Value, String>) -> Response {
+    match answer {
+        Ok(value) => axum::Json(value).into_response(),
+        Err(error) => {
+            (StatusCode::BAD_REQUEST, axum::Json(json!({"error": error}))).into_response()
+        }
+    }
+}
+
 /// Routes whose callers present the bearer as `?token=` because a page
 /// cannot set a header; the single-user computer checks it in each.
 fn takes_a_query_token(path: &str) -> bool {
