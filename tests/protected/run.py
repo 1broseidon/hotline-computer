@@ -229,12 +229,13 @@ def remove(rt, name):
 def home_volume(rt, name, image):
     """A named volume for /home/agent, owned by the agent. Docker and Podman
     seed a new volume from the image; Apple container hands it over as root's,
-    so a one-off root container gives it to the agent first, and takes away
+    so a one-off root container gives it to the agent first (Docker and Podman also have the seed emptied: a seeded home is not the fresh desktop N3's restore step assumes), and takes away
     the filesystem's empty root-only lost+found, which no snapshot could read."""
     run([rt, "volume", "create", name])
     run([rt, "run", "--rm", "--name", name + "-chown", "--user", "0", "--entrypoint", "/bin/sh",
          "-v", f"{name}:/home/agent", image, "-c",
-         "chown 1000:1000 /home/agent && chmod 0700 /home/agent && { rmdir /home/agent/lost+found 2>/dev/null; true; }"])
+         """chown 1000:1000 /home/agent && chmod 0700 /home/agent && { rmdir /home/agent/lost+found 2>/dev/null; true; }"""
+         + ("" if rt == "container" else " && find /home/agent -mindepth 1 -delete")])
 
 
 def launcher(rt, token):
