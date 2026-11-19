@@ -59,6 +59,12 @@ tokio-rustls = { version = "0.26.4", default-features = false, features = ["tls1
 rcgen = { version = "0.14.10", default-features = false, features = ["crypto", "pem", "aws_lc_rs"] }
 webpki-roots = "1"
 
+[features]
+# TEST ONLY: the protected-secrets probe image is built with it so the key
+# proxy also trusts the probe fixture's own CA upstream (see
+# `keyproxy::probe_roots`). No release is built with it.
+probe-roots = []
+
 [dev-dependencies]
 # The contract test opens the viewer's WebSocket the way the page does.
 tokio-tungstenite = "0.28"

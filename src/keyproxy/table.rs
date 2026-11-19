@@ -54,6 +54,7 @@ pub(super) struct Table {
     issued: HashMap<String, Issued>,
 }
 
+#[derive(PartialEq, Eq)]
 struct Bound {
     value: String,
     origins: Vec<String>,
@@ -98,11 +99,21 @@ impl Table {
             }
         }
         self.generation = Some(generation);
-        self.bound = bound;
+        // A stand-in lives on only while its variable is bound exactly as
+        // when it was made: one revoked, or redelivered with another value
+        // or use, takes its stand-ins with it.
+        let old = std::mem::replace(&mut self.bound, bound);
         let bound = &self.bound;
-        self.issued
-            .retain(|_, issued| bound.contains_key(&issued.name));
+        self.issued.retain(|_, issued| {
+            bound
+                .get(&issued.name)
+                .is_some_and(|new| old.get(&issued.name) == Some(new))
+        });
         Ok(())
+    }
+
+    pub fn generation(&self) -> Option<u64> {
+        self.generation
     }
 
     pub fn begin(&mut self, job: &str) -> Vec<(String, String)> {

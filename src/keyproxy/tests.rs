@@ -29,31 +29,31 @@ use tokio::net::TcpStream;
 
 use super::{Binding, KeyProxy, StandIn, Use};
 
-const REAL: &str = "ghp_REALcanaryW2proxy0000000000000000000";
-const API: &str = "api.example.test";
+pub(crate) const REAL: &str = "ghp_REALcanaryW2proxy0000000000000000000";
+pub(crate) const API: &str = "api.example.test";
 const GIT: &str = "git.example.test";
 const EVIL: &str = "evil.example.test";
 const GITHUB: &str = "api.github.com";
 
 #[derive(Clone, Debug)]
-struct Seen {
-    host: String,
-    path: String,
-    auth: String,
+pub(crate) struct Seen {
+    pub host: String,
+    pub path: String,
+    pub auth: String,
     other: String,
     api_key: String,
-    body: String,
+    pub body: String,
 }
 
-struct Upstream {
-    addr: SocketAddr,
-    ca_der: CertificateDer<'static>,
-    ca_pem: String,
+pub(crate) struct Upstream {
+    pub addr: SocketAddr,
+    pub ca_der: CertificateDer<'static>,
+    pub ca_pem: String,
     seen: Arc<Mutex<Vec<Seen>>>,
 }
 
 impl Upstream {
-    fn seen(&self) -> Vec<Seen> {
+    pub fn seen(&self) -> Vec<Seen> {
         self.seen.lock().unwrap().clone()
     }
 }
@@ -63,7 +63,7 @@ impl Upstream {
 /// `/leak` returns the real value in a header and, in small chunks, the
 /// body; `/redirect` is a 302; `/gzip` answers encoded; `info/refs` asks
 /// for Basic the way a git host does.
-async fn upstream() -> Upstream {
+pub(crate) async fn upstream() -> Upstream {
     let ca_key = KeyPair::generate().unwrap();
     let mut ca_params = CertificateParams::new(Vec::<String>::new()).unwrap();
     ca_params.is_ca = IsCa::Ca(BasicConstraints::Unconstrained);
@@ -188,7 +188,7 @@ async fn answer(
     Ok(response)
 }
 
-fn github_token(origins: &[&str]) -> Binding {
+pub(crate) fn github_token(origins: &[&str]) -> Binding {
     Binding {
         name: "GH_TOKEN".to_owned(),
         value: REAL.to_owned(),
@@ -458,7 +458,7 @@ async fn revoking_stops_a_running_curl_loop() {
     }
 }
 
-async fn wait_for(mut done: impl FnMut() -> bool) -> bool {
+pub(crate) async fn wait_for(mut done: impl FnMut() -> bool) -> bool {
     for _ in 0..200 {
         if done() {
             return true;
@@ -468,7 +468,7 @@ async fn wait_for(mut done: impl FnMut() -> bool) -> bool {
     false
 }
 
-fn which(program: &str) -> Option<PathBuf> {
+pub(crate) fn which(program: &str) -> Option<PathBuf> {
     std::env::var_os("PATH").and_then(|path| {
         std::env::split_paths(&path)
             .map(|dir| dir.join(program))
@@ -929,4 +929,26 @@ fn the_desk_shape_parses() {
     }))
     .unwrap();
     assert!(bare.schemes.is_empty() && bare.refuse.is_none());
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn a_redelivery_keeps_an_unchanged_keys_stand_ins_and_kills_a_changed_ones() {
+    let rig = rig().await;
+    // Another variable arrives at a newer generation; GH_TOKEN is as it was.
+    let mut other = github_token(&[EVIL]);
+    other.name = "OTHER_TOKEN".into();
+    rig.proxy
+        .deliver(2, vec![github_token(&[API, GIT]), other])
+        .unwrap();
+    let mut c = connect(&rig, API).await;
+    send(&mut c, API, "GET", "/kept", &[bearer(&rig.stand_in)]).await;
+    // The same name with a new value: the old stand-in goes with the old key.
+    let mut rotated = github_token(&[API, GIT]);
+    rotated.value = "ghp_ROTATEDcanaryW2proxy00000000000000000".into();
+    rig.proxy.deliver(3, vec![rotated]).unwrap();
+    send(&mut c, API, "GET", "/rotated", &[bearer(&rig.stand_in)]).await;
+    assert_eq!(rig.proxy.generation(), Some(3));
+    let seen = rig.up.seen();
+    assert_eq!(seen[0].auth, format!("Bearer {REAL}"));
+    assert_eq!(seen[1].auth, format!("Bearer {}", rig.stand_in));
 }

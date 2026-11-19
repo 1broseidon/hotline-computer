@@ -10,7 +10,11 @@
 //! the environment of each job the agent starts through `shell` or `files
 //! run`, under the name the person gave it, so a command uses `$NAME` and a
 //! tool that reads that variable finds it; a preparation job is left out,
-//! because what it captures is written into the workspace. A **login** — a
+//! because what it captures is written into the workspace. A variable the
+//! desk binds to a service (a v2 delivery's `use`, see `Delivery`) is a
+//! **protected key**: only the split computer takes one, its value goes to
+//! the key proxy alone, and each job gets a stand-in under its name
+//! (`crate::split::keys`). A **login** — a
 //! site, a username, a password, perhaps a TOTP seed — never enters a job:
 //! `browser fill` types one of its fields by name into a form, and only on a
 //! page whose origin is one of the login's sites, because a page a password
@@ -336,18 +340,49 @@ pub struct Secrets {
     /// In the split computer's runner, which holds the variables alone: the
     /// whole set as `state info` lists it, from the broker.
     listing: Arc<RwLock<Option<Vec<Value>>>>,
+    /// In the split computer's broker: the protected keys, whose values the
+    /// key proxy uses. Listed and redacted here, never in `environment`, so
+    /// never handed to the runner or a job.
+    protected: Arc<RwLock<BTreeMap<String, Protected>>>,
 }
+
+/// A protected key as the broker keeps it beside the proxy.
+#[derive(Clone)]
+pub struct Protected {
+    pub value: String,
+    pub origins: Vec<String>,
+}
+
+/// A set that passed every check, waiting to be taken.
+pub struct Checked(BTreeMap<String, Secret>);
 
 impl Secrets {
     /// Takes the whole set, or none of it: one entry the computer would not
     /// keep refuses the delivery and keeps the last set.
     pub fn replace(&self, set: BTreeMap<String, Delivered>) -> Result<(), String> {
+        let checked = Secrets::check(set)?;
+        self.commit(checked, BTreeMap::new());
+        Ok(())
+    }
+
+    /// Every entry checked, nothing taken yet.
+    pub fn check(set: BTreeMap<String, Delivered>) -> Result<Checked, String> {
         let mut checked = BTreeMap::new();
         for (name, delivered) in set {
             check_name(&name)?;
             let secret = Secret::from(delivered).checked(&name)?;
             checked.insert(name, secret);
         }
+        Ok(Checked(checked))
+    }
+
+    /// Takes a checked set, and the protected keys delivered with it.
+    pub fn commit(&self, checked: Checked, protected: BTreeMap<String, Protected>) {
+        let Checked(checked) = checked;
+        *self
+            .protected
+            .write()
+            .unwrap_or_else(|poisoned| poisoned.into_inner()) = protected;
         let mut set = self
             .set
             .write()
@@ -387,7 +422,12 @@ impl Secrets {
                 }
             }
         }
-        Ok(())
+    }
+
+    fn protected(&self) -> RwLockReadGuard<'_, BTreeMap<String, Protected>> {
+        self.protected
+            .read()
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
     }
 
     /// The logins and passkeys that arrived lately, oldest first.
@@ -408,9 +448,12 @@ impl Secrets {
         self.read().get(name).and_then(Secret::use_)
     }
 
-    /// The names alone.
+    /// The names alone, protected keys' included.
     pub fn names(&self) -> Vec<String> {
-        self.read().keys().cloned().collect()
+        let mut names: Vec<String> = self.read().keys().cloned().collect();
+        names.extend(self.protected().keys().cloned());
+        names.sort();
+        names
     }
 
     /// What `state info` lists: name, kind, and for a login its sites and
@@ -424,10 +467,19 @@ impl Secrets {
         {
             return listing;
         }
-        self.read()
+        let mut listed: Vec<(String, Value)> = self
+            .read()
             .iter()
-            .map(|(name, secret)| secret.describe(name))
-            .collect()
+            .map(|(name, secret)| (name.clone(), secret.describe(name)))
+            .collect();
+        listed.extend(self.protected().iter().map(|(name, key)| {
+            (
+                name.clone(),
+                json!({"name": name, "kind": "variable", "protected": true, "origins": key.origins}),
+            )
+        }));
+        listed.sort_by(|a, b| a.0.cmp(&b.0));
+        listed.into_iter().map(|(_, described)| described).collect()
     }
 
     /// What `catalog` answers from now on, in place of this set's own.
@@ -496,6 +548,11 @@ impl Secrets {
             Some((name, field)) => (name, Some(field)),
             None => (reference, None),
         };
+        if self.protected().contains_key(name) {
+            return Err(format!(
+                "{name} is a protected key: every shell job has a stand-in for it as ${name}, which the computer swaps for the key only on the way to its service, and the browser never types one"
+            ));
+        }
         let set = self.read();
         let Some(secret) = set.get(name) else {
             return Err(format!(
@@ -570,11 +627,22 @@ impl Secrets {
 
     fn redact_at<'a>(&self, text: &'a str, now: u64) -> Cow<'a, str> {
         let set = self.read();
-        if set.is_empty() {
+        let protected = self.protected();
+        if set.is_empty() && protected.is_empty() {
             return Cow::Borrowed(text);
         }
         let mut needles = Vec::with_capacity(set.len() * 2);
         let mut codes = Vec::new();
+        for (name, key) in protected.iter() {
+            let mark = format!("[redacted {name}]");
+            if let Ok(quoted) = serde_json::to_string(&key.value)
+                && let Some(escaped) = quoted.get(1..quoted.len() - 1)
+                && escaped != key.value
+            {
+                needles.push((escaped.to_owned(), mark.clone()));
+            }
+            needles.push((key.value.clone(), mark));
+        }
         for (name, secret) in set.iter() {
             let values: Vec<(&str, String)> = match secret {
                 Secret::Variable(Variable { value }) => vec![(value, format!("[redacted {name}]"))],
@@ -866,15 +934,156 @@ fn unix_now() -> u64 {
         .unwrap_or_default()
 }
 
-/// `PUT /secrets`: the whole set, as a JSON object of name to entry. It
+/// The media type of a v2 delivery.
+pub const V2: &str = "application/vnd.hotline.secrets.v2+json";
+
+/// A delivery as the door read it: the entries every computer keeps as
+/// before, and the protected keys only the split computer's proxy takes.
+pub struct Delivery {
+    /// v2 only; a v1 body has none.
+    pub generation: Option<u64>,
+    pub kept: BTreeMap<String, Delivered>,
+    pub protected: Vec<crate::keyproxy::Binding>,
+}
+
+impl Delivery {
+    /// A v1 body is an object of name to entry, as a desk before 0.50 sends
+    /// it. A v2 body (`Content-Type` `V2`) is `{v: 2, generation, secrets}`,
+    /// where a variable is `readable: true` (today's variable) or carries a
+    /// `use` (a protected key); logins and passkeys are as in v1.
+    pub fn read(content_type: Option<&str>, body: Value) -> Result<Delivery, String> {
+        let essence = content_type
+            .and_then(|value| value.split(';').next())
+            .map(str::trim)
+            .unwrap_or_default();
+        if essence.eq_ignore_ascii_case(V2) {
+            return Delivery::v2(body);
+        }
+        let Value::Object(entries) = body else {
+            return Err("a delivery is an object of name to secret".to_owned());
+        };
+        for (name, entry) in &entries {
+            if entry["kind"] == "variable" && entry.get("use").is_some() {
+                return Err(format!(
+                    "{name} is bound to a service, which only a v2 delivery ({V2}) can say"
+                ));
+            }
+        }
+        let kept = serde_json::from_value(Value::Object(entries)).map_err(|e| e.to_string())?;
+        Ok(Delivery {
+            generation: None,
+            kept,
+            protected: Vec::new(),
+        })
+    }
+
+    fn v2(body: Value) -> Result<Delivery, String> {
+        if body["v"] != 2 {
+            return Err(format!("a {V2} body says v: 2"));
+        }
+        let generation = body["generation"]
+            .as_u64()
+            .ok_or("a v2 delivery carries its generation, a whole number")?;
+        let Some(entries) = body["secrets"].as_object() else {
+            return Err("a v2 delivery carries secrets, an object of name to secret".to_owned());
+        };
+        let mut kept = BTreeMap::new();
+        let mut protected = Vec::new();
+        for (name, entry) in entries {
+            if entry["kind"] != "variable" {
+                let delivered: Delivered =
+                    serde_json::from_value(entry.clone()).map_err(|e| format!("{name}: {e}"))?;
+                kept.insert(name.clone(), delivered);
+                continue;
+            }
+            let Some(value) = entry["value"].as_str() else {
+                return Err(format!("{name} is a variable with no value"));
+            };
+            let readable = entry["readable"].as_bool() == Some(true);
+            match (entry.get("use"), readable) {
+                (None, true) => {
+                    kept.insert(name.clone(), Delivered::Value(value.to_owned()));
+                }
+                (Some(use_), false) => {
+                    check_name(name)?;
+                    if crate::split::keys::JOB_VARIABLES.contains(&name.as_str()) {
+                        return Err(format!(
+                            "{name} is set by the computer for a job that uses a protected key, so a protected key cannot take that name"
+                        ));
+                    }
+                    let use_ = serde_json::from_value(use_.clone())
+                        .map_err(|e| format!("{name}.use: {e}"))?;
+                    protected.push(crate::keyproxy::Binding {
+                        name: name.clone(),
+                        value: value.to_owned(),
+                        use_,
+                    });
+                }
+                (Some(_), true) => {
+                    return Err(format!(
+                        "{name} is both readable and bound to a service; it is one or the other"
+                    ));
+                }
+                (None, false) => {
+                    return Err(format!(
+                        "{name} is neither readable nor bound to a service (use)"
+                    ));
+                }
+            }
+        }
+        Ok(Delivery {
+            generation: Some(generation),
+            kept,
+            protected,
+        })
+    }
+
+    /// Takes the delivery whole or not at all. A protected key goes to the
+    /// key proxy alone; a computer without one (legacy mode) refuses it.
+    pub fn apply(self, app: &App) -> Result<(), String> {
+        let checked = Secrets::check(self.kept)?;
+        let listed: BTreeMap<String, Protected> = self
+            .protected
+            .iter()
+            .map(|binding| {
+                (
+                    binding.name.clone(),
+                    Protected {
+                        value: binding.value.clone(),
+                        origins: binding.use_.origins.clone(),
+                    },
+                )
+            })
+            .collect();
+        match &app.keys {
+            Some(keys) => keys.deliver(self.generation, self.protected)?,
+            None => {
+                if let Some(binding) = self.protected.first() {
+                    return Err(format!(
+                        "{} is bound to a service, and this computer keeps no protected key: it runs as one user (legacy mode), so every program in it could read one. Send it as a readable variable, or update the computer.",
+                        binding.name
+                    ));
+                }
+            }
+        }
+        app.secrets.commit(checked, listed);
+        Ok(())
+    }
+}
+
+/// `PUT /secrets`: the whole set, as a v1 or v2 body (`Delivery`). It
 /// answers 204 with nothing, 400 naming the entry it refused, and never a
 /// value. A running browser learns of the passkeys at once, so a revoked
 /// one is gone from its authenticators before the answer.
 pub async fn replace(
     State(app): State<App>,
-    Json(set): Json<BTreeMap<String, Delivered>>,
+    headers: axum::http::HeaderMap,
+    Json(body): Json<Value>,
 ) -> Response {
-    match app.secrets.replace(set) {
+    let content_type = headers
+        .get(axum::http::header::CONTENT_TYPE)
+        .and_then(|value| value.to_str().ok());
+    match Delivery::read(content_type, body).and_then(|delivery| delivery.apply(&app)) {
         Ok(()) => {
             crate::split::delivered(&app).await;
             StatusCode::NO_CONTENT.into_response()

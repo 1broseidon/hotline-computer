@@ -35,7 +35,7 @@ mod policy;
 mod scrub;
 mod table;
 #[cfg(test)]
-mod tests;
+pub(crate) mod tests;
 
 use std::net::SocketAddr;
 use std::sync::{Arc, Mutex};
@@ -121,9 +121,12 @@ impl KeyProxy {
     /// A proxy with a fresh CA, trusting only the compiled-in web roots
     /// upstream.
     pub fn new() -> Result<Self, String> {
-        let roots = RootCertStore {
+        #[allow(unused_mut)]
+        let mut roots = RootCertStore {
             roots: webpki_roots::TLS_SERVER_ROOTS.to_vec(),
         };
+        #[cfg(feature = "probe-roots")]
+        probe_roots(&mut roots)?;
         Self::with_roots(roots)
     }
 
@@ -149,7 +152,7 @@ impl KeyProxy {
     }
 
     #[cfg(test)]
-    fn for_test(roots: RootCertStore, route: SocketAddr) -> Self {
+    pub(crate) fn for_test(roots: RootCertStore, route: SocketAddr) -> Self {
         let mut proxy = Self::with_roots(roots).expect("proxy");
         Arc::get_mut(&mut proxy.inner)
             .expect("unshared")
@@ -168,6 +171,11 @@ impl KeyProxy {
     /// Stand-ins of a name that is no longer bound die here.
     pub fn deliver(&self, generation: u64, bindings: Vec<Binding>) -> Result<(), String> {
         self.table().deliver(generation, bindings)
+    }
+
+    /// The generation of the last delivery taken, if any.
+    pub fn generation(&self) -> Option<u64> {
+        self.table().generation()
     }
 
     /// Makes `job`'s stand-ins, one per bound variable: `(NAME, stand-in)`
@@ -194,4 +202,38 @@ impl KeyProxy {
             .lock()
             .unwrap_or_else(|poisoned| poisoned.into_inner())
     }
+}
+
+/// TEST ONLY, and only in a binary built with `--features probe-roots`,
+/// which no release is: the probe suite's fixture upstream has a
+/// certificate from a CA of its own, given here as PEM in
+/// `HOTLINE_KEYPROXY_PROBE_ROOT`, so a protected key can be followed through
+/// the proxy to a host on the test network. A release binary has no such
+/// code and trusts the compiled-in web roots alone.
+#[cfg(feature = "probe-roots")]
+fn probe_roots(roots: &mut RootCertStore) -> Result<(), String> {
+    use base64::Engine;
+    let Ok(pem) = std::env::var("HOTLINE_KEYPROXY_PROBE_ROOT") else {
+        return Ok(());
+    };
+    let mut added = 0;
+    for block in pem.split("-----BEGIN CERTIFICATE-----").skip(1) {
+        let body: String = block
+            .split("-----END CERTIFICATE-----")
+            .next()
+            .unwrap_or_default()
+            .split_whitespace()
+            .collect();
+        let der = base64::engine::general_purpose::STANDARD
+            .decode(body)
+            .map_err(|error| format!("HOTLINE_KEYPROXY_PROBE_ROOT: {error}"))?;
+        roots
+            .add(rustls::pki_types::CertificateDer::from(der))
+            .map_err(|error| format!("HOTLINE_KEYPROXY_PROBE_ROOT: {error}"))?;
+        added += 1;
+    }
+    eprintln!(
+        "hotline-computer: key proxy: TEST BUILD: trusting {added} probe root(s) upstream besides the web roots"
+    );
+    Ok(())
 }

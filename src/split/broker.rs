@@ -107,11 +107,33 @@ pub fn run(config: Config) -> Result<(), String> {
         .build()
         .map_err(|error| error.to_string())?;
     runtime.block_on(async move {
+        // The key proxy, on the socket PID 1 holds for it, and its CA in the
+        // bundle every user reads. Without it the computer still runs, and
+        // says legacy at /capabilities so no protected key is sent.
+        let keys = match take_proxy_listener() {
+            Some(listener) => {
+                match super::keys::Keys::start(listener, std::path::Path::new(super::CA_BUNDLE)) {
+                    Ok(keys) => Some(keys),
+                    Err(error) => {
+                        eprintln!("hotline-computer: the key proxy did not start: {error}");
+                        None
+                    }
+                }
+            }
+            None => None,
+        };
         let (ready, readiness) = tokio::sync::watch::channel(false);
         let ready = Arc::new(ready);
-        let handler: wire::Handler = Arc::new(move |op, _args| {
+        let job_keys = keys.clone();
+        let handler: wire::Handler = Arc::new(move |op, args| {
             let ready = Arc::clone(&ready);
+            // A job's keys are answered as the frame arrives, so a job's end
+            // is taken before a later job's start on the same line.
+            let keys = super::keys::answer(job_keys.as_ref(), &op, &args);
             Box::pin(async move {
+                if let Some(answer) = keys {
+                    return answer;
+                }
                 match op.as_str() {
                     "runner.ready" => {
                         let _ = ready.send(true);
@@ -123,6 +145,7 @@ pub fn run(config: Config) -> Result<(), String> {
         });
         let (peer, done) = wire::Peer::start(line, handler)?;
         let mut app = App::new(config);
+        app.keys = keys;
         app.runner = Some(Runner {
             line: peer,
             handoff: Arc::new(Mutex::new(handoff)),

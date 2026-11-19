@@ -52,6 +52,8 @@ pub async fn serve(app: App) -> Result<(), String> {
     let line = wire::inherited(fd::LINE)?;
     let handed = wire::inherited(fd::HANDED)?;
     let (peer, done) = wire::Peer::start(line, handler(app.clone()))?;
+    // Each job asks the broker for its stand-ins, and says when it ends.
+    app.jobs.use_keys(peer.clone());
     let router = crate::serve::runner_router(app.clone());
     let accepting = accept(handed, router);
     peer.tell("runner.ready", Value::Null);
@@ -128,7 +130,7 @@ fn text_of<'a>(args: &'a Value, key: &str) -> &'a str {
 /// The broker's requests. None of them carries a value a job could not
 /// already read: a login's fields are typed by the broker's signed-in
 /// browser, and a `tool.call` that brings one is refused.
-async fn answer(app: &App, op: &str, args: Value) -> Result<Value, String> {
+pub(crate) async fn answer(app: &App, op: &str, args: Value) -> Result<Value, String> {
     match op {
         "tool.call" => {
             if !matches!(args.get("filled"), None | Some(Value::Null)) {

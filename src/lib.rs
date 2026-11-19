@@ -116,6 +116,10 @@ pub struct App {
     /// The browser for signed-in sites, which only this process drives;
     /// `None` keeps today's one browser (see `signin`).
     pub signin: Option<signin::Signin>,
+    /// In the split computer's broker: the key proxy, which alone holds a
+    /// protected key's value. `None` in the runner, in legacy mode, and if
+    /// the proxy could not start; then no protected key is taken.
+    pub keys: Option<split::keys::Keys>,
 }
 
 impl App {
@@ -146,6 +150,7 @@ impl App {
             display: None,
             runner: None,
             signin,
+            keys: None,
         }
     }
 

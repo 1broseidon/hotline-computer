@@ -26,6 +26,7 @@
 pub mod broker;
 #[cfg(target_os = "linux")]
 pub mod init;
+pub mod keys;
 pub mod migration;
 pub mod runner;
 pub mod wire;
@@ -143,12 +144,22 @@ pub async fn capabilities(State(app): State<App>, Query(nonce): Query<Nonce>) ->
             .into_response();
     }
     Json(capabilities_for(
-        mode(),
+        protection(mode(), app.keys.is_some()),
         boot_id(),
         app.config.token.as_deref(),
         &nonce.nonce,
     ))
     .into_response()
+}
+
+/// The mode `/capabilities` names: split only while the key proxy serves,
+/// since a split computer without it keeps no protected key, and a desk
+/// told `legacy` sends it only what a single-user computer may hold.
+pub fn protection(mode: Mode, proxy_serving: bool) -> Mode {
+    match mode {
+        Mode::Split if proxy_serving => Mode::Split,
+        _ => Mode::Legacy,
+    }
 }
 
 pub fn capabilities_for(mode: Mode, boot: &str, bearer: Option<&str>, nonce: &str) -> Value {
@@ -273,8 +284,9 @@ pub async fn sync_passkeys(app: &App, launch: bool) -> Result<(), String> {
 
 /// After a delivery: the bar's count of sealed secrets, and the passkeys
 /// the browser knows of. Split, the runner is given what its jobs may read
-/// and nothing else: each variable, which is readable until a key may be
-/// bound to a service, and the names, kinds and sites `state info` lists.
+/// and nothing else: each readable variable, and the names, kinds and sites
+/// `state info` lists. A protected key's value stays here, with the proxy;
+/// a job gets its stand-in when it starts (`keys`).
 pub async fn delivered(app: &App) {
     match &app.runner {
         None => {
@@ -379,6 +391,13 @@ mod tests {
         let expected =
             base64::engine::general_purpose::STANDARD.encode(mac.finalize().into_bytes());
         assert_eq!(answer["attest"], expected);
+        assert_eq!(protection(Mode::Split, true), Mode::Split);
+        assert_eq!(
+            protection(Mode::Split, false),
+            Mode::Legacy,
+            "no proxy, no protected key: the desk is told legacy"
+        );
+        assert_eq!(protection(Mode::Legacy, true), Mode::Legacy);
         let legacy = capabilities_for(Mode::Legacy, "b00t", Some("bearer"), "n2");
         assert_eq!(legacy["protected"]["mode"], "legacy");
         assert_ne!(legacy["attest"], answer["attest"], "the nonce is in it");

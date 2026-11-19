@@ -208,6 +208,23 @@ pub struct Jobs {
     jobs: Arc<Mutex<BTreeMap<String, Arc<Job>>>>,
     initialized: Arc<OnceCell<()>>,
     admission: Arc<tokio::sync::Mutex<()>>,
+    /// In the split computer's runner: the line to the broker, which makes
+    /// each job's stand-ins for the protected keys and kills them when the
+    /// job ends. Unset in the single-user computer, which holds none.
+    keys: Arc<std::sync::OnceLock<crate::split::wire::Peer>>,
+}
+
+/// A job's stand-ins: when this goes, with the job, the broker kills them.
+struct StandIns {
+    line: crate::split::wire::Peer,
+    job: String,
+}
+
+impl Drop for StandIns {
+    fn drop(&mut self) {
+        self.line
+            .tell("keys.end", serde_json::json!({"job": self.job}));
+    }
 }
 
 #[derive(Serialize)]
@@ -241,7 +258,14 @@ impl Jobs {
             jobs: Arc::new(Mutex::new(BTreeMap::new())),
             initialized: Arc::new(OnceCell::new()),
             admission: Arc::new(tokio::sync::Mutex::new(())),
+            keys: Arc::new(std::sync::OnceLock::new()),
         }
+    }
+
+    /// From now on, a job offered the person's secrets asks the broker on
+    /// `line` for its stand-ins.
+    pub fn use_keys(&self, line: crate::split::wire::Peer) {
+        let _ = self.keys.set(line);
     }
 
     pub async fn initialize(&self) -> Result<(), String> {
@@ -393,15 +417,34 @@ impl Jobs {
                 .unwrap_or_else(|| cwd.clone());
             environment.append(&mut crate::workspace::environment(&self.home, &place)?);
         }
+        let id = format!("{:016x}-{:08x}", now(), rand_id()?);
+        let mut stand_ins = None;
         if start.secrets {
             // After the workspace, so the person's stored value beats a
             // repository's placeholder; before the agent's own entries, so
             // an explicit one still wins.
             environment.append(&mut self.secrets.environment());
+            // A protected key is never here: the broker gives this job a
+            // stand-in for it, and the proxy and CA variables that let its
+            // programs use one.
+            if let Some(line) = self.keys.get() {
+                let answer = line
+                    .call("keys.begin", serde_json::json!({"job": id}))
+                    .await
+                    .map_err(|error| format!("the computer's key proxy did not answer: {error}"))?;
+                let mut keys: BTreeMap<String, String> =
+                    serde_json::from_value(answer["env"].clone()).map_err(|e| e.to_string())?;
+                if !keys.is_empty() {
+                    stand_ins = Some(StandIns {
+                        line: line.clone(),
+                        job: id.clone(),
+                    });
+                }
+                environment.append(&mut keys);
+            }
         }
         environment.append(&mut start.env);
         start.env = environment;
-        let id = format!("{:016x}-{:08x}", now(), rand_id()?);
         let directory = self.root.join(&id);
         std::fs::create_dir(&directory).map_err(|e| e.to_string())?;
         let artifact_staging = start
@@ -485,7 +528,7 @@ impl Jobs {
                 let running = Arc::clone(&job);
                 let manager = self.clone();
                 tokio::spawn(async move {
-                    supervise(running, child, readers, receiver, start.timeout).await;
+                    supervise(running, child, readers, receiver, start.timeout, stand_ins).await;
                     manager.publish();
                 });
             }
@@ -995,6 +1038,7 @@ async fn supervise(
     readers: Vec<(&'static str, Reader)>,
     mut cancel: mpsc::Receiver<()>,
     timeout: Option<u64>,
+    stand_ins: Option<StandIns>,
 ) {
     let (failed_output, mut output_failures) = mpsc::channel(2);
     let readers: Vec<_> = readers
@@ -1029,6 +1073,8 @@ async fn supervise(
     unsafe {
         libc::kill(-(pid as i32), libc::SIGKILL);
     }
+    // Its stand-ins die with it, before anyone is told it has finished.
+    drop(stand_ins);
     *job.input.lock().await = None;
     let mut output_error = None;
     for mut reader in readers {
