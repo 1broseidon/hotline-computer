@@ -50,4 +50,4 @@ acceptance:
 protected-probes:
 	@test -n "$(RUNTIME)" -a -n "$(IMAGE)" -a -n "$(EXPECT)" || { echo "usage: make protected-probes RUNTIME=docker|podman|container IMAGE=<ref> EXPECT=leak|blocked [ONLY=id,id] [EXCEPT=id,id]"; exit 2; }
 	python3 tests/protected/run.py --runtime $(RUNTIME) --image $(IMAGE) --expect $(EXPECT) \
-	  $(if $(ONLY),--only $(ONLY)) $(if $(EXCEPT),--except $(EXCEPT))
+	  $(if $(ONLY),--only $(ONLY)) $(if $(EXCEPT),--except $(EXCEPT)) $(if $(SPLIT),--split)

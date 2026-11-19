@@ -130,6 +130,7 @@ def main():
     ap.add_argument("--only", default="")
     ap.add_argument("--except", dest="skip", default="")
     ap.add_argument("--keep", action="store_true", help="leave the container for inspection")
+    ap.add_argument("--split", action="store_true", help="start it as the 0.50 desk does: --user 0 with SETUID and SETGID")
     a = ap.parse_args()
     rt = a.runtime
 
@@ -141,6 +142,11 @@ def main():
     ws = pathlib.Path(tempfile.mkdtemp(prefix="hl-secrets-w5-ws-"))
     os.chmod(ws, 0o777)
     args = [rt, "run", "-d", "--name", name, "--cap-drop=ALL"]
+    if a.split:
+        # The desk's 0.50 create flags: boot as root, keep only what the
+        # split needs (section 2 of the plan).
+        cap = "CAP_" if rt == "container" else ""
+        args += ["--user", "0", "--cap-add", f"{cap}SETUID", "--cap-add", f"{cap}SETGID"]
     if rt != "container":
         args += ["--security-opt", "no-new-privileges", "--pids-limit", "1024"]
     args += ["--memory", "4g", "--shm-size", "1g", "-p", f"127.0.0.1:{port}:8787",

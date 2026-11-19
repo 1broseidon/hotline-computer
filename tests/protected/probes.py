@@ -249,20 +249,67 @@ def x_files(ctx):
 
 
 def p9222(ctx):
+    """The general browser's DevTools port is the agent's by design; what must
+    not be there is a tab of a signed-in site (the login's localhost:8000)."""
     ctx.page()
     out = ctx.c.sh("curl -s -m4 http://127.0.0.1:9222/json/list")[0]
-    return "webSocketDebuggerUrl" in out, "curl 127.0.0.1:9222/json/list: " + ("lists the tab(s)" if "webSocketDebuggerUrl" in out else "nothing")
+    signed_in = "localhost:8000" in out or "example.test" in out
+    return signed_in, "curl 127.0.0.1:9222/json/list: " + ("lists the signed-in site's tab" if signed_in else "no signed-in site's tab" if "webSocketDebuggerUrl" in out else "nothing")
+
+
+def person_types(ctx, text):
+    """The person types into the signed-in site the way the desk lets them:
+    the site screen (/sites/ws) where the computer has one, else the
+    desktop viewer (/ws). The viewer's own protocol, over a bare websocket."""
+    import os
+    import socket
+    import threading
+    host, port = ctx.c.base.split("//")[1].split(":")
+    status, _, body = ctx.c.http("GET", "/capabilities?nonce=probe")
+    split = status == 200 and json.loads(body).get("protected", {}).get("mode") == "split"
+    path = ("/sites/ws?site=http%3A%2F%2Flocalhost%3A8000&token=" if split else "/ws?token=") + ctx.token
+    s = socket.create_connection((host, int(port)), timeout=20)
+    key = base64.b64encode(os.urandom(16)).decode()
+    s.sendall((f"GET {path} HTTP/1.1\r\nHost: {host}:{port}\r\nUpgrade: websocket\r\nConnection: Upgrade\r\n"
+               f"Sec-WebSocket-Key: {key}\r\nSec-WebSocket-Version: 13\r\n\r\n").encode())
+    head = b""
+    while b"\r\n\r\n" not in head:
+        head += s.recv(1)
+    if b" 101 " not in head.split(b"\r\n")[0]:
+        return head.split(b"\r\n")[0].decode()
+    def drain():  # the screen's frames, read and dropped so it never stalls
+        try:
+            while s.recv(1 << 20):
+                pass
+        except OSError:
+            pass
+    threading.Thread(target=drain, daemon=True).start()
+
+    def send(message):
+        data = json.dumps(message).encode()
+        mask = os.urandom(4)
+        header = bytes([0x81]) + (bytes([0x80 | len(data)]) if len(data) < 126 else bytes([0x80 | 126]) + len(data).to_bytes(2, "big"))
+        s.sendall(header + mask + bytes(b ^ mask[i % 4] for i, b in enumerate(data)))
+    send({"t": "control", "take": True})
+    for ch in text:
+        send({"t": "key", "key": ch, "down": True})
+        send({"t": "key", "key": ch, "down": False})
+        time.sleep(0.05)
+    time.sleep(1)
+    s.close()
+    return "typed through " + path.split("?")[0]
 
 
 def xinput(ctx):
+    ctx.page()
     ctx.c.tool("shell", action="start", command=f"python3 ~/{JOB} xi2 12 > ~/probe/xi2.out 2>&1", wait_ms=500)
     time.sleep(2.5)
-    ctx.c.tool("input", action="type", text="hello42")
-    time.sleep(11)
+    how = person_types(ctx, "hello42")
+    time.sleep(9)
     out = ctx.c.sh("cat ~/probe/xi2.out")[0]
     m = re.search(r"rawkeys (\d+)", out)
     n = int(m.group(1)) if m else 0
-    return n >= 4, f"raw key presses seen by a job on the display: {n} of 7 typed" if m else "listener: " + out.strip()[:60]
+    return n >= 4, (f"raw key presses seen by a job on the display: {n} of 7 the person typed ({how})" if m else "listener: " + out.strip()[:60])
 
 
 # --- J: key stand-ins (a protected key's job env holds a stand-in, not the key) ---------
@@ -295,13 +342,19 @@ J_GIT = ("git -c credential.helper='!f(){{ echo username=x-access-token; echo pa
 # --- N: cookies, saved logins, snapshots ----------------------------------------------
 
 def share_cookie(ctx):
+    """The person shares a signed-in site the way the desk does: PUT /sessions
+    where the computer has one (0.13), else today's saved-login upload."""
     if ctx.shared:
         return
-    doc = {"name": "w5probe", "browser": "chromium", "created_at": "2026-11-19T00:00:00Z",
-           "cookies": [{"name": "sid", "value": K.COOKIE, "domain": "example.test", "path": "/",
-                        "secure": True, "httpOnly": True, "expires": time.time() + 86400 * 30}], "storage": {}}
-    ctx.c.http("POST", "/files?path=.hotline/logins/w5probe.json", raw=json.dumps(doc).encode())
-    ctx.c.tool("state", action="login_load", name="w5probe")
+    cookie = {"name": "sid", "value": K.COOKIE, "domain": "example.test", "path": "/",
+              "secure": True, "httpOnly": True, "expires": time.time() + 86400 * 30}
+    status, _, _ = ctx.c.http("PUT", "/sessions/w5probe", {"sites": ["example.test"], "cookies": [cookie], "storage": {}})
+    ctx.sessions = status == 200
+    if not ctx.sessions:
+        doc = {"name": "w5probe", "browser": "chromium", "created_at": "2026-11-19T00:00:00Z",
+               "cookies": [cookie], "storage": {}}
+        ctx.c.http("POST", "/files?path=.hotline/logins/w5probe.json", raw=json.dumps(doc).encode())
+        ctx.c.tool("state", action="login_load", name="w5probe")
     ctx.shared = True
 
 
@@ -327,7 +380,8 @@ def n1b(ctx):
 def n2(ctx):
     share_cookie(ctx)
     ctx.c.tool("state", action="snapshot_save", name="w5snap")
-    ctx.c.http("DELETE", "/logins/w5probe")  # the person revokes the share
+    # The person revokes the share.
+    ctx.c.http("DELETE", "/sessions/w5probe" if getattr(ctx, "sessions", False) else "/logins/w5probe")
     out = ctx.c.sh("mkdir -p /tmp/n2 && tar xzf ~/.hotline/snapshots/w5snap.tar.gz -C /tmp/n2 ./.hotline/logins 2>&1; cat /tmp/n2/.hotline/logins/*.json 2>&1 | head -c 3000", wait_ms=120000)[0]
     return K.COOKIE in out, "snapshot taken before the revoke still holds the share (restore would sign the site back in)"
 
@@ -337,7 +391,12 @@ def n3(ctx):
 
 
 def n6b(ctx):
+    """In the general browser, on a localhost page that is not a signed-in
+    site (port 8001), ask for the localhost passkey with a challenge the agent chose."""
     ctx.page()
+    ctx.c.tool("shell", action="start", command="cd ~/site && exec python3 -m http.server 8001 --bind 127.0.0.1", wait_ms=500)
+    time.sleep(1.5)
+    ctx.c.tool("browser", action="navigate", url="http://localhost:8001/")
     js = ("(async()=>{try{const a=await navigator.credentials.get({publicKey:{challenge:new Uint8Array(32),"
           "rpId:'localhost',userVerification:'required',timeout:10000}});return 'OK '+a.id}"
           "catch(e){return 'ERR '+e.name+': '+e.message}})()")
