@@ -91,6 +91,9 @@ COPY assets/portals.conf /etc/xdg/xdg-desktop-portal/portals.conf
 # The browser extension that answers passkey requests, and its line to the
 # service; see src/bridge.rs.
 COPY assets/extension /usr/share/hotline-computer/extension
+# On the split computer the visible browser loads this instead: it refuses
+# every passkey request at once (passkeys sign in in the signed-in browser).
+COPY assets/no-passkeys /usr/share/hotline-computer/no-passkeys
 COPY assets/native-host.json /etc/chromium/native-messaging-hosts/dev.hotline.computer.json
 COPY --from=build /usr/local/bin/hotline-computer /usr/bin/hotline-computer
 USER agent

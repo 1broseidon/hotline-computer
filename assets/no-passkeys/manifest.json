@@ -1,0 +1,13 @@
+{
+  "manifest_version": 3,
+  "name": "Hotline: no passkeys here",
+  "version": "0.13.0",
+  "description": "On this computer passkeys sign in only in the signed-in browser. In this one, every passkey request is refused at once.",
+  "minimum_chrome_version": "120",
+  "permissions": [
+    "webAuthenticationProxy"
+  ],
+  "background": {
+    "service_worker": "service-worker.js"
+  }
+}

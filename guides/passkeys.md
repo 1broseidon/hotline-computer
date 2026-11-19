@@ -22,7 +22,8 @@ On the split computer the extension is loaded only in the signed-in browser,
 and a passkey answers only for the origin of a signed-in tab: one of a login's
 sites, a granted passkey's own site (its `rpId`), a shared site, or the site
 armed for registration. The visible browser
-has no extension and no passkey. You see the signed-in browser through Open
+has no passkey: a request there is refused at once ("passkeys sign in only in
+the signed-in browser"). You see the signed-in browser through Open
 Browser in the desk.
 
 ## Registration

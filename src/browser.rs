@@ -848,12 +848,25 @@ async fn reap(mut session: BrowserSession) {
 /// service (see `crate::bridge`), when the image carries it.
 fn extensions() -> Vec<String> {
     // With a signed-in browser the extension is loaded there and only there.
-    if crate::bridge::extension_answers() && !crate::signin::enabled() {
+    // This one holds no passkey, and refuses a request at once rather than
+    // leave it to Chromium's own dialog, which waits out the page's time
+    // for a security key nobody can touch.
+    if crate::signin::enabled() {
+        if std::path::Path::new(NO_PASSKEYS_DIR).is_dir() {
+            vec![NO_PASSKEYS_DIR.to_owned()]
+        } else {
+            Vec::new()
+        }
+    } else if crate::bridge::extension_answers() {
         vec![crate::bridge::EXTENSION_DIR.to_owned()]
     } else {
         Vec::new()
     }
 }
+
+/// A WebAuthn proxy that refuses every request, with no page script and no
+/// line to the service: the visible browser's beside a signed-in browser.
+const NO_PASSKEYS_DIR: &str = "/usr/share/hotline-computer/no-passkeys";
 
 /// The tabs a person sees. Chromium's own new-tab page hosts internal
 /// documents (`chrome://newtab-footer/` since 141) that DevTools lists as
