@@ -6,7 +6,8 @@ memscan.py) and hl-secret-design/job_probes.sh (X1-X7).
 usage: job.py bridge <fill|logins|get|askme> [timeout]   print the raw reply, base64'd
        job.py plain <op>                                  print the raw reply (the tool answer redacts it)
        job.py post <url> [fill|askme]                     ask the bridge and POST the reply to <url>
-       job.py memscan <needle>...                        scan hotline* processes' memory
+       job.py memscan <needle>... [--rev <reversed needle>...]  scan hotline* processes' memory
+       job.py scan <reversed needle>...                  count job logs and readable /proc/*/environ holding one
        job.py proc                                       the X1-X7 and B6 checks, as key=value lines
        job.py cookies                                    read signed-in cookie rows from the browser profile
        job.py xi2 <seconds>                              count raw key presses seen on the display
@@ -83,8 +84,36 @@ def post(url, op):
     print("DONE")
 
 
+def unreversed(args):
+    """Needles after --rev come reversed, so the command line that carried
+    them (kept by the runner that started this job) never holds them."""
+    if "--rev" not in args:
+        return args
+    at = args.index("--rev")
+    return args[:at] + [n[::-1] for n in args[at + 1:]]
+
+
+def scan(needles):
+    needles = [n[::-1].encode() for n in needles]
+    logs = 0
+    for path in glob.glob(os.path.expanduser("~/.hotline/jobs/*/*.log")):
+        try:
+            data = open(path, "rb").read()
+        except Exception:
+            continue
+        logs += any(n in data for n in needles)
+    environ = 0
+    for pid in [p for p in os.listdir("/proc") if p.isdigit()]:
+        try:
+            data = open(f"/proc/{pid}/environ", "rb").read()
+        except Exception:
+            continue
+        environ += any(n in data for n in needles)
+    print(f"SCAN logs={logs} environ={environ}")
+
+
 def memscan(needles):
-    needles = [n.encode() for n in needles]
+    needles = [n.encode() for n in unreversed(needles)]
     for pid in [p for p in os.listdir("/proc") if p.isdigit()]:
         try:
             comm = open(f"/proc/{pid}/comm").read().strip()
@@ -278,6 +307,8 @@ if __name__ == "__main__":
         post(sys.argv[2], sys.argv[3] if len(sys.argv) > 3 else "askme")
     elif cmd == "memscan":
         memscan(sys.argv[2:])
+    elif cmd == "scan":
+        scan(sys.argv[2:])
     elif cmd == "proc":
         proc()
     elif cmd == "cookies":

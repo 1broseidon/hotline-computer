@@ -2,7 +2,17 @@
 """Protected-secrets probes: does a granted secret still leave, or get read back?
 
 usage: run.py --runtime docker|podman|container --image REF --expect leak|blocked
-              [--only ID,ID] [--except ID,ID] [--keep]
+              [--split] [--delivery v1|readable|protected]
+              [--only ID,ID] [--except ID,ID] [--keep] [--prefix hl-secrets-w5]
+
+--split creates the container with 0.50's flags (--user 0 --cap-add SETUID
+--cap-add SETGID); without it, as 0.49 does (legacy mode). --delivery v1
+(the default) sends the body a desk before 0.50 sends; readable and protected
+send a v2 body with CANARY_VAR and GH_TOKEN readable:true, or bound to an
+HTTPS fixture on the host bridge (fixture.py; the image must be a probe build
+with --features probe-roots, which trusts the fixture's CA upstream).
+A probe that should work and does not (a protected key never reaching its
+service) is BROKEN and counts as differing from --expect.
 
 Starts one throwaway container (hl-secrets-w5-*) from IMAGE, delivers made-up
 secrets only (canaries.py), runs every probe and prints one line per probe:
@@ -31,6 +41,7 @@ import urllib.request
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import canaries as K  # noqa: E402
 import probes as P  # noqa: E402
+from fixture import FixtureCA  # noqa: E402
 from mcpc import Computer  # noqa: E402
 
 HERE = pathlib.Path(__file__).resolve().parent
@@ -40,7 +51,7 @@ LIST = {"docker": ["docker", "ps", "-a"], "podman": ["podman", "ps", "-a"], "con
 class Listener:
     """The host side of every "leaves the computer" probe: records requests."""
 
-    def __init__(self, addr):
+    def __init__(self, addr, tls=None):
         self.rows = []
         me = self
 
@@ -72,6 +83,11 @@ class Listener:
                 pass
 
         self.server = http.server.ThreadingHTTPServer((addr, 0), H)
+        if tls:
+            import ssl
+            context = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
+            context.load_cert_chain(*tls)
+            self.server.socket = context.wrap_socket(self.server.socket, server_side=True)
         self.port = self.server.server_address[1]
         threading.Thread(target=self.server.serve_forever, daemon=True).start()
 
@@ -80,9 +96,12 @@ class Listener:
 
 
 class Ctx:
-    def __init__(self, c, listener, host, ws, token, runtime, name):
+    def __init__(self, c, listener, host, ws, token, runtime, name, delivery="v1", bound=None, free=None):
         self.c, self.L, self.host, self.port, self.ws, self.token = c, listener, host, listener.port, ws, token
         self.runtime, self.name = runtime, name
+        # v2 protected runs: the HTTPS fixture the variables are bound to, and
+        # one on another port they are not (an unbound host).
+        self.delivery, self.bound, self.free = delivery, bound, free
         self.shared = False
         self.paged = False
         self.refs = {}
@@ -131,15 +150,17 @@ def main():
     ap.add_argument("--except", dest="skip", default="")
     ap.add_argument("--keep", action="store_true", help="leave the container for inspection")
     ap.add_argument("--split", action="store_true", help="start it as the 0.50 desk does: --user 0 with SETUID and SETGID")
+    ap.add_argument("--delivery", default="v1", choices=["v1", "readable", "protected"])
+    ap.add_argument("--prefix", default="hl-secrets-w5")
     a = ap.parse_args()
     rt = a.runtime
 
     print(f"# containers already running ({rt}); none of them is touched:")
     print(run(LIST[rt]).stdout.rstrip() or "(none)")
-    name = "hl-secrets-w5-" + secrets.token_hex(3)
+    name = a.prefix + "-" + secrets.token_hex(3)
     token = secrets.token_hex(24)
     port = free_port()
-    ws = pathlib.Path(tempfile.mkdtemp(prefix="hl-secrets-w5-ws-"))
+    ws = pathlib.Path(tempfile.mkdtemp(prefix=a.prefix + "-ws-"))
     os.chmod(ws, 0o777)
     args = [rt, "run", "-d", "--name", name, "--cap-drop=ALL"]
     if a.split:
@@ -149,14 +170,20 @@ def main():
         args += ["--user", "0", "--cap-add", f"{cap}SETUID", "--cap-add", f"{cap}SETGID"]
     if rt != "container":
         args += ["--security-opt", "no-new-privileges", "--pids-limit", "1024"]
+    env = dict(os.environ, HOTLINE_COMPUTER_TOKEN=token)
+    ca = None
+    if a.delivery == "protected":
+        ca = FixtureCA()
+        env["HOTLINE_KEYPROXY_PROBE_ROOT"] = ca.pem
+        args += ["-e", "HOTLINE_KEYPROXY_PROBE_ROOT"]
     args += ["--memory", "4g", "--shm-size", "1g", "-p", f"127.0.0.1:{port}:8787",
              "-e", "HOTLINE_COMPUTER_TOKEN", "-v", f"{ws}:/home/agent/workspace", a.image]
-    env = dict(os.environ, HOTLINE_COMPUTER_TOKEN=token)
     made = run(args, env=env)
     if made.returncode != 0:
         print("could not start the container:", made.stderr.strip() or made.stdout.strip())
         return 2
     listener = None
+    fixtures = []
     results = []
     try:
         c = Computer(port, token)
@@ -169,10 +196,6 @@ def main():
         else:
             print("the computer did not come up")
             return 2
-        status, _, _ = c.http("PUT", "/secrets", raw=K.body(), headers={"Content-Type": "application/json"})
-        if status != 204:
-            print("secrets delivery refused:", status)
-            return 2
         # The host side as the container sees it: its default gateway is the host bridge.
         route = c.sh("cat /proc/net/route")[0]
         gw = next((l.split() for l in route.splitlines() if len(l.split()) > 2 and l.split()[1] == "00000000"), None)
@@ -181,10 +204,27 @@ def main():
             print("cannot tell the host's bridge address; set HOST_ADDR")
             return 2
         listener = Listener(os.environ.get("LISTEN_ADDR") or host)
-        print(f"# image {a.image} as {name}; listener on {host}:{listener.port}; expecting {a.expect.upper()}")
+        bound = free = None
+        origin = None
+        if a.delivery == "protected":
+            leaf = ca.leaf(host)
+            bound = Listener(os.environ.get("LISTEN_ADDR") or host, tls=leaf)
+            free = Listener(os.environ.get("LISTEN_ADDR") or host, tls=leaf)
+            fixtures = [bound, free]
+            origin = f"https://{host}:{bound.port}"
+        raw, content_type = K.body(a.delivery, origin)
+        status, _, answer = c.http("PUT", "/secrets", raw=raw, headers={"Content-Type": content_type})
+        if status != 204:
+            print("secrets delivery refused:", status, answer.decode(errors="replace")[:300])
+            return 2
+        _, _, caps = c.http("GET", "/capabilities?nonce=probe")
+        print(f"# /capabilities: {caps.decode(errors='replace')[:200]}")
+        print(f"# image {a.image} as {name} ({'split' if a.split else 'legacy'}, delivery {a.delivery}); listener on {host}:{listener.port}"
+              + (f"; HTTPS fixture {origin} (bound), :{free.port} (unbound)" if bound else "")
+              + f"; expecting {a.expect.upper()}")
         c.sh("mkdir -p ~/probe")
         c.tool("files", action="put", path="probe/job.py", content=(HERE / "jobs/job.py").read_text())
-        ctx = Ctx(c, listener, host, ws, token, rt, name)
+        ctx = Ctx(c, listener, host, ws, token, rt, name, a.delivery, bound, free)
         only = {x for x in a.only.split(",") if x}
         skip = {x for x in a.skip.split(",") if x}
         want_leak = a.expect == "leak"
@@ -197,21 +237,27 @@ def main():
                 leaked, detail = fn(ctx)
             except Exception as e:  # a probe that cannot run is reported, never silently BLOCKED
                 leaked, detail = None, f"probe error: {type(e).__name__}: {e}"
-            word = "SKIPPED" if leaked is None else "LEAKED" if leaked else "BLOCKED"
-            ok = leaked is None or pid in skip or leaked == want_leak
+            broken = leaked == "broken"
+            word = "BROKEN" if broken else "SKIPPED" if leaked is None else "LEAKED" if leaked else "BLOCKED"
+            ok = (not broken and (leaked is None or leaked == want_leak)) or pid in skip
             if not ok:
                 bad += 1
             mark = "  " if leaked is None else ("ok" if ok else "!!")
             note = " (excepted)" if pid in skip and leaked is not None and leaked != want_leak else ""
             print(f"{pid:<10} {word:<8} {mark} {what}: {detail}{note}", flush=True)
             results.append((pid, word, ok))
-        counts = {w: sum(1 for r in results if r[1] == w) for w in ("LEAKED", "BLOCKED", "SKIPPED")}
-        print(f"# {counts['LEAKED']} leaked, {counts['BLOCKED']} blocked, {counts['SKIPPED']} skipped; "
+        counts = {w: sum(1 for r in results if r[1] == w) for w in ("LEAKED", "BLOCKED", "SKIPPED", "BROKEN")}
+        print(f"# {counts['LEAKED']} leaked, {counts['BLOCKED']} blocked, {counts['SKIPPED']} skipped, "
+              f"{counts['BROKEN']} broken; "
               f"{bad} differ from EXPECT={a.expect}")
         return 1 if bad else 0
     finally:
         if listener:
             listener.server.shutdown()
+        for fixture in fixtures:
+            fixture.server.shutdown()
+        if ca:
+            ca.remove()
         if not a.keep:
             if rt == "container":
                 run([rt, "stop", name])

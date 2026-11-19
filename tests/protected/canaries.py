@@ -36,5 +36,27 @@ SECRETS = {
 }
 
 
-def body():
-    return json.dumps(SECRETS).encode()
+V2 = "application/vnd.hotline.secrets.v2+json"
+# The variables a v2 run delivers readable (today's behaviour, labelled) or
+# protected (bound to the fixture's origin), and the stand-in shape asked for.
+VARIABLES = {"CANARY_VAR": None, "GH_TOKEN": {"prefix": "ghp_", "length": 40}}
+
+
+def body(delivery="v1", origin=None):
+    """(bytes, content type). v1 is the body a desk before 0.50 sends. v2
+    "readable" marks the variables readable:true; v2 "protected" binds them
+    to `origin`, the fixture, so a job holds only a stand-in."""
+    if delivery == "v1":
+        return json.dumps(SECRETS).encode(), "application/json"
+    secrets = {}
+    for name, entry in SECRETS.items():
+        if name not in VARIABLES:
+            secrets[name] = entry
+        elif delivery == "readable":
+            secrets[name] = {"kind": "variable", "value": entry, "readable": True}
+        else:
+            use = {"origins": [origin], "header": "Authorization", "schemes": ["Bearer", "token", "Basic"]}
+            if VARIABLES[name]:
+                use["standIn"] = VARIABLES[name]
+            secrets[name] = {"kind": "variable", "value": entry, "use": use}
+    return json.dumps({"v": 2, "generation": 1, "secrets": secrets}).encode(), V2
