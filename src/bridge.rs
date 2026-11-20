@@ -300,10 +300,15 @@ async fn answer(app: &App, message: &Value) -> Value {
             if reply.get("error").is_none()
                 && let Some(signin) = &app.signin
             {
+                let typed: Vec<String> = ["password", "code"]
+                    .iter()
+                    .filter_map(|field| reply[*field].as_str().map(str::to_owned))
+                    .collect();
                 signin
                     .withhold_origin(
                         message["origin"].as_str().unwrap_or_default(),
                         message["name"].as_str().unwrap_or_default(),
+                        &typed,
                     )
                     .await;
             }

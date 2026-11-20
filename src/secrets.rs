@@ -114,6 +114,11 @@ pub struct Login {
     /// Whether each use waits for the person; absent is automatic.
     #[serde(default, rename = "use", skip_serializing_if = "Use::is_auto")]
     pub use_: Use,
+    /// Granted knowing a program on this computer may read it: what a v1
+    /// delivery means by every login, and what a v2 one must say before a
+    /// login on a loopback site is typed there (see `Origin::is_loopback`).
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub readable: bool,
 }
 
 /// How a login or a passkey may be used: by itself, or only once the person
@@ -151,6 +156,9 @@ pub struct Passkey {
     /// Whether each sign-in waits for the person; absent is automatic.
     #[serde(default, rename = "use", skip_serializing_if = "Use::is_auto")]
     pub use_: Use,
+    /// As a login's: a passkey for a loopback site signs there only if so.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub readable: bool,
 }
 
 /// One entry of a delivery. A bare string is a variable, which is all a
@@ -230,6 +238,7 @@ impl Secret {
                     password: login.password,
                     totp,
                     use_: login.use_,
+                    readable: login.readable,
                 }))
             }
             Secret::Passkey(passkey) => {
@@ -265,6 +274,20 @@ impl Secret {
                 if login.use_ == Use::Ask {
                     described["use"] = json!("ask");
                 }
+                // A loopback site is one any job can serve: what is typed
+                // there is readable, and is typed only if granted so.
+                if login
+                    .sites
+                    .iter()
+                    .any(|site| Origin::site(site).is_ok_and(|site| site.is_loopback()))
+                {
+                    described["loopback"] = json!(true);
+                    described["readable"] = json!(true);
+                    if !login.readable {
+                        described["typed"] =
+                            json!("not on its loopback site: not granted readable");
+                    }
+                }
                 described
             }
             Secret::Passkey(passkey) => {
@@ -274,6 +297,14 @@ impl Secret {
                 });
                 if passkey.use_ == Use::Ask {
                     described["use"] = json!("ask");
+                }
+                if is_loopback_host(&passkey.rp_id) {
+                    described["loopback"] = json!(true);
+                    described["readable"] = json!(true);
+                    if !passkey.readable {
+                        described["signs"] =
+                            json!("not on its loopback site: not granted readable");
+                    }
                 }
                 described
             }
@@ -328,6 +359,8 @@ pub struct Filled {
     pub value: String,
     /// `None` for a variable, which has no site to check.
     pub sites: Option<Vec<Origin>>,
+    /// A login granted knowing a program here may read it (`Login::readable`).
+    pub readable: bool,
 }
 
 /// The set the desk last delivered, shared between the door that takes it,
@@ -344,7 +377,14 @@ pub struct Secrets {
     /// key proxy uses. Listed and redacted here, never in `environment`, so
     /// never handed to the runner or a job.
     protected: Arc<RwLock<BTreeMap<String, Protected>>>,
+    /// The matchers `redact` uses, made once per set: (the set's version,
+    /// each value's every spelling and its mark, longest value first).
+    spellings: Arc<Mutex<Option<(u64, Spellings)>>>,
+    version: Arc<std::sync::atomic::AtomicU64>,
 }
+
+/// Each value's every spelling, matched, and the mark it is replaced by.
+type Spellings = Arc<Vec<(regex::Regex, String)>>;
 
 /// A protected key as the broker keeps it beside the proxy.
 #[derive(Clone)]
@@ -379,6 +419,8 @@ impl Secrets {
     /// Takes a checked set, and the protected keys delivered with it.
     pub fn commit(&self, checked: Checked, protected: BTreeMap<String, Protected>) {
         let Checked(checked) = checked;
+        self.version
+            .fetch_add(1, std::sync::atomic::Ordering::SeqCst);
         *self
             .protected
             .write()
@@ -599,6 +641,7 @@ impl Secrets {
                     label: format!("{name}.{field}"),
                     value,
                     sites: Some(sites),
+                    readable: login.readable,
                 })
             }
             (Secret::Login(_), None) => Err(format!(
@@ -626,59 +669,28 @@ impl Secrets {
     }
 
     fn redact_at<'a>(&self, text: &'a str, now: u64) -> Cow<'a, str> {
-        let set = self.read();
-        let protected = self.protected();
-        if set.is_empty() && protected.is_empty() {
+        let codes: Vec<(String, String)> = self
+            .read()
+            .iter()
+            .filter_map(|(name, secret)| match secret {
+                Secret::Login(Login {
+                    totp: Some(seed), ..
+                }) => Some((seed.clone(), format!("[redacted {name}.code]"))),
+                _ => None,
+            })
+            .collect();
+        let spellings = self.spellings();
+        if spellings.is_empty() {
             return Cow::Borrowed(text);
         }
-        let mut needles = Vec::with_capacity(set.len() * 2);
-        let mut codes = Vec::new();
-        for (name, key) in protected.iter() {
-            let mark = format!("[redacted {name}]");
-            if let Ok(quoted) = serde_json::to_string(&key.value)
-                && let Some(escaped) = quoted.get(1..quoted.len() - 1)
-                && escaped != key.value
-            {
-                needles.push((escaped.to_owned(), mark.clone()));
-            }
-            needles.push((key.value.clone(), mark));
-        }
-        for (name, secret) in set.iter() {
-            let values: Vec<(&str, String)> = match secret {
-                Secret::Variable(Variable { value }) => vec![(value, format!("[redacted {name}]"))],
-                Secret::Login(login) => {
-                    let mut values = vec![(
-                        login.password.as_str(),
-                        format!("[redacted {name}.password]"),
-                    )];
-                    if let Some(seed) = &login.totp {
-                        values.push((seed, format!("[redacted {name}.totp]")));
-                        codes.push((seed.clone(), format!("[redacted {name}.code]")));
-                    }
-                    values
-                }
-                Secret::Passkey(passkey) => vec![(
-                    passkey.private_key.as_str(),
-                    format!("[redacted {name}.privateKey]"),
-                )],
-            };
-            for (value, mark) in values {
-                let escaped = serde_json::to_string(value)
-                    .ok()
-                    .and_then(|quoted| quoted.get(1..quoted.len() - 1).map(str::to_owned));
-                if let Some(escaped) = escaped
-                    && escaped != value
-                {
-                    needles.push((escaped, mark.clone()));
-                }
-                needles.push((value.to_owned(), mark));
-            }
-        }
-        needles.sort_by_key(|(needle, _)| std::cmp::Reverse(needle.len()));
         let mut text = Cow::Borrowed(text);
-        for (needle, mark) in &needles {
-            if text.contains(needle.as_str()) {
-                text = Cow::Owned(text.replace(needle.as_str(), mark));
+        for (spelled, mark) in spellings.iter() {
+            if spelled.is_match(&text) {
+                text = Cow::Owned(
+                    spelled
+                        .replace_all(&text, regex::NoExpand(mark.as_str()))
+                        .into_owned(),
+                );
             }
         }
         // A login's six digits are a password for a minute: the ones a page
@@ -715,6 +727,168 @@ impl Secrets {
             Err(error) => Err(self.redact(&error).into_owned()),
         }
     }
+}
+
+impl Secrets {
+    /// Each value's matcher and mark, made again only when the set changed.
+    fn spellings(&self) -> Spellings {
+        let version = self.version.load(std::sync::atomic::Ordering::SeqCst);
+        let mut cached = self
+            .spellings
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
+        if let Some((made, spellings)) = cached.as_ref()
+            && *made == version
+        {
+            return Arc::clone(spellings);
+        }
+        let mut values: Vec<(String, String)> = Vec::new();
+        for (name, key) in self.protected().iter() {
+            values.push((key.value.clone(), format!("[redacted {name}]")));
+        }
+        for (name, secret) in self.read().iter() {
+            match secret {
+                Secret::Variable(Variable { value }) => {
+                    values.push((value.clone(), format!("[redacted {name}]")));
+                }
+                Secret::Login(login) => {
+                    values.push((
+                        login.password.clone(),
+                        format!("[redacted {name}.password]"),
+                    ));
+                    if let Some(seed) = &login.totp {
+                        values.push((seed.clone(), format!("[redacted {name}.totp]")));
+                    }
+                }
+                Secret::Passkey(passkey) => values.push((
+                    passkey.private_key.clone(),
+                    format!("[redacted {name}.privateKey]"),
+                )),
+            }
+        }
+        values.sort_by_key(|(value, _)| std::cmp::Reverse(value.len()));
+        let spellings: Spellings = Arc::new(
+            values
+                .into_iter()
+                .filter_map(|(value, mark)| spelling(&value).map(|spelled| (spelled, mark)))
+                .collect(),
+        );
+        *cached = Some((version, Arc::clone(&spellings)));
+        spellings
+    }
+}
+
+/// Longer values are matched in their plain, JSON and base64 spellings
+/// alone: a pattern of every character's every spelling grows past what a
+/// matcher should hold, and such values are keys, not typed words.
+const SPELLED_CHARS: usize = 512;
+
+/// One matcher for `value` as text carries it: plain; percent-encoded
+/// (either case) or form-encoded (`+` for a space); with HTML entities,
+/// named or numeric; with JSON's escapes; any mix of these character by
+/// character; and base64 (standard or URL-safe) at each of the three
+/// alignments a value can have inside a longer base64 text.
+fn spelling(value: &str) -> Option<regex::Regex> {
+    if value.is_empty() {
+        return None;
+    }
+    let mut alternatives = Vec::new();
+    if value.chars().count() <= SPELLED_CHARS {
+        let mut each = String::new();
+        for c in value.chars() {
+            each.push_str("(?:");
+            each.push_str(&char_spellings(c).join("|"));
+            each.push(')');
+        }
+        alternatives.push(each);
+    } else {
+        alternatives.push(regex::escape(value));
+        if let Ok(quoted) = serde_json::to_string(value)
+            && let Some(escaped) = quoted.get(1..quoted.len() - 1)
+        {
+            alternatives.push(regex::escape(escaped));
+        }
+    }
+    for core in base64_cores(value.as_bytes()) {
+        alternatives.push(regex::escape(&core));
+    }
+    regex::RegexBuilder::new(&alternatives.join("|"))
+        .size_limit(64 << 20)
+        .build()
+        .ok()
+}
+
+/// The spellings of one character, longest first: the matcher takes the
+/// first that fits, so an escape is never read as its first character.
+fn char_spellings(c: char) -> Vec<String> {
+    let mut spellings = Vec::new();
+    let mut bytes = [0; 4];
+    let percent: String = c
+        .encode_utf8(&mut bytes)
+        .bytes()
+        .map(|byte| format!("%(?i:{byte:02x})"))
+        .collect();
+    spellings.push(percent);
+    let code = u32::from(c);
+    spellings.push(format!("&#0*{code};?"));
+    spellings.push(format!("&#(?i:x)0*(?i:{code:x});?"));
+    let named = match c {
+        '&' => Some("amp"),
+        '<' => Some("lt"),
+        '>' => Some("gt"),
+        '"' => Some("quot"),
+        '\'' => Some("apos"),
+        ' ' => Some("nbsp"),
+        _ => None,
+    };
+    if let Some(named) = named {
+        spellings.push(format!("&(?i:{named});"));
+    }
+    match c {
+        ' ' => spellings.push(r"\+".to_owned()),
+        '"' => spellings.push(r#"\\""#.to_owned()),
+        '\\' => spellings.push(r"\\\\".to_owned()),
+        '/' => spellings.push(r"\\/".to_owned()),
+        '\n' => spellings.push(r"\\n".to_owned()),
+        '\r' => spellings.push(r"\\r".to_owned()),
+        '\t' => spellings.push(r"\\t".to_owned()),
+        _ => {}
+    }
+    if code <= 0xffff {
+        spellings.push(format!(r"\\(?i:u{code:04x})"));
+    }
+    spellings.push(regex::escape(c.encode_utf8(&mut [0; 4])));
+    spellings
+}
+
+/// The base64 characters that depend on `value` alone, at each alignment
+/// it may start at inside a longer text, in the standard and URL-safe
+/// alphabets.
+fn base64_cores(value: &[u8]) -> Vec<String> {
+    use base64::engine::general_purpose::STANDARD_NO_PAD;
+    let mut cores = Vec::new();
+    for offset in 0..3usize {
+        let mut padded = vec![0u8; offset];
+        padded.extend_from_slice(value);
+        let encoded = STANDARD_NO_PAD.encode(&padded);
+        let start = (8 * offset).div_ceil(6);
+        let end = (8 * (offset + value.len())) / 6;
+        if end <= start || end - start < 8 {
+            continue;
+        }
+        let core = encoded[start..end.min(encoded.len())].to_owned();
+        let safe = core.replace('+', "-").replace('/', "_");
+        if safe != core {
+            cores.push(safe);
+        }
+        cores.push(core);
+    }
+    cores
+}
+
+/// Whether `text` carries `value` in any spelling `redact` takes out.
+pub fn spelled(text: &str, value: &str) -> bool {
+    spelling(value).is_some_and(|spelled| spelled.is_match(text))
 }
 
 /// `text` with each standalone `number` (no digit right before or after it)
@@ -899,6 +1073,18 @@ impl Origin {
         &self.host
     }
 
+    /// Whether the site is this computer itself (`is_loopback_host`).
+    pub fn is_loopback(&self) -> bool {
+        is_loopback_host(&self.host)
+    }
+
+    /// Whether `page` is exactly this origin: scheme, host and port.
+    pub fn is_exactly(&self, page: &Origin) -> bool {
+        self.scheme == page.scheme
+            && self.host == page.host
+            && (self.any_port || self.port == page.port)
+    }
+
     /// Whether a login for this site may be typed on `page`: same scheme and
     /// port, and the page's host is the site's or lies under it.
     pub fn allows(&self, page: &Origin) -> bool {
@@ -909,7 +1095,67 @@ impl Origin {
 }
 
 fn is_local(host: &str) -> bool {
-    host == "localhost" || host.ends_with(".localhost") || host == "127.0.0.1" || host == "[::1]"
+    is_loopback_host(host)
+}
+
+/// Whether `host` names this computer itself, however it is spelled:
+/// `localhost` and any name under it, 127.0.0.0/8 in any of the IPv4
+/// spellings a URL parser accepts (`127.1`, `0x7f.1`, `2130706433`),
+/// `0.0.0.0`, `::1`, `::` and an IPv4-mapped loopback. A page there may be
+/// one a job serves, so nothing typed or signed there is protected.
+pub fn is_loopback_host(host: &str) -> bool {
+    let host = host.trim_end_matches('.').to_ascii_lowercase();
+    if host == "localhost" || host.ends_with(".localhost") {
+        return true;
+    }
+    if let Some(inner) = host.strip_prefix('[').and_then(|h| h.strip_suffix(']')) {
+        return inner.parse::<std::net::Ipv6Addr>().is_ok_and(|ip| {
+            ip.is_loopback()
+                || ip.is_unspecified()
+                || ip
+                    .to_ipv4_mapped()
+                    .is_some_and(|v4| v4.is_loopback() || v4.is_unspecified())
+        });
+    }
+    ipv4_of(&host).is_some_and(|ip| ip >> 24 == 127 || ip == 0)
+}
+
+/// A host as the WHATWG URL parser reads an IPv4 address: one to four
+/// parts, each decimal, `0x` hex or `0` octal, the last filling the rest.
+fn ipv4_of(host: &str) -> Option<u32> {
+    let parts: Vec<&str> = host.split('.').collect();
+    if parts.is_empty() || parts.len() > 4 {
+        return None;
+    }
+    let mut numbers = Vec::with_capacity(parts.len());
+    for part in &parts {
+        let (digits, radix) = if let Some(hex) = part.strip_prefix("0x") {
+            (hex, 16)
+        } else if part.len() > 1 && part.starts_with('0') {
+            (&part[1..], 8)
+        } else {
+            (*part, 10)
+        };
+        let number = if digits.is_empty() {
+            0
+        } else {
+            u64::from_str_radix(digits, radix).ok()?
+        };
+        numbers.push(number);
+    }
+    let last = numbers.pop()?;
+    let mut ip: u64 = 0;
+    for (index, number) in numbers.iter().enumerate() {
+        if *number > 255 {
+            return None;
+        }
+        ip |= number << (8 * (3 - index));
+    }
+    let room = 8 * (4 - numbers.len()) as u32;
+    if last >= 1u64 << room {
+        return None;
+    }
+    u32::try_from(ip | last).ok()
 }
 
 impl fmt::Display for Origin {
@@ -1004,7 +1250,18 @@ impl Delivery {
                 ));
             }
         }
-        let kept = serde_json::from_value(Value::Object(entries)).map_err(|e| e.to_string())?;
+        let mut kept: BTreeMap<String, Delivered> =
+            serde_json::from_value(Value::Object(entries)).map_err(|e| e.to_string())?;
+        // A desk that sends v1 holds nothing back as protected: it labels
+        // this computer unprotected, and every login and passkey it sends
+        // is as readable as 0.12 kept them.
+        for delivered in kept.values_mut() {
+            match delivered {
+                Delivered::Secret(Secret::Login(login)) => login.readable = true,
+                Delivered::Secret(Secret::Passkey(passkey)) => passkey.readable = true,
+                _ => {}
+            }
+        }
         Ok(Delivery {
             generation: None,
             kept,
@@ -1366,7 +1623,10 @@ mod tests {
         assert_eq!(
             catalog,
             vec![
-                json!({"name": "GITHUB", "kind": "login", "sites": ["https://github.com", "http://localhost:8123"], "username": "george", "totp": true}),
+                // A loopback site is labelled readable, and not typed on
+                // unless the login was granted so.
+                json!({"name": "GITHUB", "kind": "login", "sites": ["https://github.com", "http://localhost:8123"], "username": "george", "totp": true,
+                       "loopback": true, "readable": true, "typed": "not on its loopback site: not granted readable"}),
                 json!({"name": "GITHUB_PASSKEY", "kind": "passkey", "rpId": "github.com", "userName": "george"}),
                 json!({"name": "GITHUB_TOKEN", "kind": "variable"}),
             ]
@@ -1599,6 +1859,78 @@ mod tests {
         ] {
             assert!(Origin::site(site).is_err(), "{site}");
         }
+    }
+
+    #[test]
+    fn a_value_is_taken_out_in_every_spelling_a_url_a_form_or_html_gives_it() {
+        let secrets = Secrets::default();
+        let password = "hl canary/enc+5&k=9%<\"x";
+        secrets
+            .replace(typed(json!({
+                "LOCAL": {"kind": "login", "sites": ["http://localhost:8000"], "username": "u", "password": password},
+            })))
+            .unwrap();
+        let mark = "[redacted LOCAL.password]";
+        let pct = |upper: bool| -> String {
+            password
+                .bytes()
+                .map(|b| {
+                    if b.is_ascii_alphanumeric() || b"-._~".contains(&b) {
+                        (b as char).to_string()
+                    } else if upper {
+                        format!("%{b:02X}")
+                    } else {
+                        format!("%{b:02x}")
+                    }
+                })
+                .collect()
+        };
+        let form = pct(true).replace("%20", "+");
+        let entities = password
+            .replace('&', "&amp;")
+            .replace('<', "&lt;")
+            .replace('"', "&quot;");
+        let numeric: String = password
+            .chars()
+            .map(|c| format!("&#{};", c as u32))
+            .collect();
+        let hex: String = password
+            .chars()
+            .map(|c| format!("&#x{:X};", c as u32))
+            .collect();
+        let b64 = base64::engine::general_purpose::STANDARD.encode(password);
+        let url_safe = base64::engine::general_purpose::URL_SAFE_NO_PAD.encode(password);
+        let inside = base64::engine::general_purpose::STANDARD.encode(format!("user:{password}:x"));
+        for spelled in [
+            pct(true),
+            pct(false),
+            form,
+            entities,
+            numeric,
+            hex,
+            b64,
+            url_safe,
+        ] {
+            let text = format!("http://localhost:8000/f1-done?q={spelled}&next=1");
+            let out = secrets.redact(&text);
+            assert!(out.contains(mark), "{spelled} -> {out}");
+            assert!(!spelled_in(&out, password), "{out}");
+        }
+        assert!(
+            secrets.redact(&inside).contains(mark),
+            "inside a longer base64 text too"
+        );
+        assert!(spelled("a%20b", "a b") && !spelled("a-b", "a b"));
+        assert_eq!(
+            secrets.redact("q=hl+canary"),
+            "q=hl+canary",
+            "a part of it is not it"
+        );
+    }
+
+    /// The probes' own check: any decoding of `text` holds `value`.
+    fn spelled_in(text: &str, value: &str) -> bool {
+        text.contains(value) || spelled(text, value)
     }
 
     #[test]

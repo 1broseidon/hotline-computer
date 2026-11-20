@@ -192,6 +192,16 @@ struct Tab {
     secret_name: Option<String>,
     person_doc: Option<String>,
     secret_at: u64,
+    /// What was typed here from a login (passwords and codes, never shown):
+    /// a page holding one in a field or its address stays hidden, whatever
+    /// document it is, so a form brought back by Back or Forward is hidden
+    /// again. Kept while the tab lives, the last few only.
+    typed: Vec<String>,
+    /// The document the tab shows, as DevTools last said (its loader id),
+    /// and the one a look last found holding nothing typed: `tabs` lists a
+    /// tab with something typed in it only while the two agree.
+    doc: String,
+    clean_doc: Option<String>,
     flow: Option<Flow>,
     /// What happened to the tab that the agent hears with its next action.
     notes: Vec<String>,
@@ -203,9 +213,33 @@ struct Flow {
     sites: Vec<Origin>,
 }
 
+/// How many typed values a tab remembers.
+const TYPED_KEPT: usize = 8;
+
 impl Tab {
     fn withheld(&self) -> bool {
         self.secret_doc.is_some() || self.person_doc.is_some()
+    }
+
+    /// Whether this tab may show something typed into it and no look has
+    /// found its current document clean: what `tabs` hides it for.
+    fn may_show_typed(&self) -> bool {
+        !self.typed.is_empty()
+            && (self.clean_doc.as_deref() != Some(self.doc.as_str())
+                || self
+                    .typed
+                    .iter()
+                    .any(|value| crate::secrets::spelled(&self.url, value)))
+    }
+
+    /// A value typed into this tab: kept for the checks above.
+    fn typed_now(&mut self, value: &str) {
+        self.typed.retain(|kept| kept != value);
+        self.typed.push(value.to_owned());
+        if self.typed.len() > TYPED_KEPT {
+            self.typed.remove(0);
+        }
+        self.clean_doc = None;
     }
 }
 
@@ -737,6 +771,7 @@ impl Signin {
                     .find(|tab| Some(tab.session.as_str()) == event.session.as_deref())
                 {
                     tab.url = url.clone();
+                    tab.doc = frame["loaderId"].as_str().unwrap_or_default().to_owned();
                     if tab
                         .flow
                         .as_ref()
@@ -928,7 +963,7 @@ impl Signin {
             .map(|(index, tab)| {
                 let current = focused && tabs.current.as_ref() == Some(&tab.target);
                 let site = crate::bridge::host_of(&tab.url);
-                if tab.withheld() || person {
+                if tab.withheld() || person || tab.may_show_typed() {
                     json!({"index": SIGNED_IN_TABS + index, "signedIn": true, "site": site,
                            "withheld": true, "current": current})
                 } else {
@@ -985,8 +1020,9 @@ impl Signin {
     }
 
     /// The extension is about to fill a login into a page of `origin`:
-    /// those tabs are withheld as if the broker had typed it.
-    pub async fn withhold_origin(&self, origin: &str, name: &str) {
+    /// those tabs are withheld as if the broker had typed it, and what it
+    /// types (`values`) is looked for on them from then on.
+    pub async fn withhold_origin(&self, origin: &str, name: &str, values: &[String]) {
         let running = self.0.running.lock().await.clone();
         let Some(running) = running else { return };
         let tabs: Vec<Tab> = self
@@ -1009,6 +1045,9 @@ impl Signin {
                 entry.secret_doc = Some(doc);
                 entry.secret_at = crate::jobs::now();
                 entry.secret_name = Some(name.to_owned());
+                for value in values {
+                    entry.typed_now(value);
+                }
             }
         }
     }
@@ -1123,7 +1162,11 @@ impl Signin {
             ));
         }
         if !tab.withheld() {
-            return None;
+            if tab.typed.is_empty() {
+                return None;
+            }
+            let now = document(cdp, &tab.session).await;
+            return self.typed_answer(cdp, &tab, now).await;
         }
         // The browser's own word on which document the tab shows. One it
         // cannot give keeps the tab hidden.
@@ -1146,7 +1189,7 @@ impl Signin {
                     entry.person_doc = None;
                 }
             }
-            return None;
+            return self.typed_answer(cdp, &tab, now).await;
         }
         if secret && crate::jobs::now().saturating_sub(tab.secret_at) > FINISH_AFTER_MS {
             return Some(format!(
@@ -1156,6 +1199,91 @@ impl Signin {
         Some(format!(
             "{site} is in the middle of signing in, so its page is hidden from you until it loads a new one. Submit the form (click_ref the sign-in button), then look again."
         ))
+    }
+
+    /// A new document may still hold what was typed: a form Back or
+    /// Forward brought back with its fields filled, or an address that
+    /// carries it. Such a field is emptied; an address cannot be, so that
+    /// page stays hidden until the tab goes elsewhere. A page that cannot be
+    /// looked at is hidden too.
+    async fn typed_answer(&self, cdp: &Cdp, tab: &Tab, doc: Option<String>) -> Option<String> {
+        let tab = self.tab(&tab.target).unwrap_or_else(|| tab.clone());
+        if tab.typed.is_empty() {
+            return None;
+        }
+        let site = crate::bridge::host_of(&tab.url);
+        let hidden = || {
+            Some(format!(
+                "{site} shows a page that still holds what was signed in with (a form brought back by Back or Forward, or an address that carries it), so it is hidden from you. Navigate this tab to another page."
+            ))
+        };
+        let Some(doc) = doc else { return hidden() };
+        let fields = match self
+            .evaluate_once(cdp, &tab.session, TYPED_FIELDS_SCRIPT)
+            .await
+        {
+            Ok(fields) => fields,
+            Err(_) => return hidden(),
+        };
+        let holding: Vec<usize> = fields
+            .as_array()
+            .into_iter()
+            .flatten()
+            .enumerate()
+            .filter(|(_, value)| {
+                value.as_str().is_some_and(|value| {
+                    tab.typed.iter().any(|typed| {
+                        !value.is_empty()
+                            && (value.contains(typed.as_str())
+                                || crate::secrets::spelled(value, typed))
+                    })
+                })
+            })
+            .map(|(index, _)| index)
+            .collect();
+        if !holding.is_empty() {
+            let emptied = self
+                .evaluate_once(
+                    cdp,
+                    &tab.session,
+                    &format!("({TYPED_FIELDS_CLEAR})({})", json!(holding)),
+                )
+                .await;
+            if emptied.ok() != Some(Value::Bool(true)) {
+                return hidden();
+            }
+        }
+        let history = cdp
+            .on(&tab.session, "Page.getNavigationHistory", json!({}))
+            .await
+            .ok()?;
+        let entry = history["entries"]
+            .as_array()
+            .and_then(|entries| entries.get(history["currentIndex"].as_u64()? as usize))
+            .cloned()
+            .unwrap_or_default();
+        let shown = format!(
+            "{} {}",
+            entry["url"].as_str().unwrap_or_default(),
+            entry["title"].as_str().unwrap_or_default()
+        );
+        if tab
+            .typed
+            .iter()
+            .any(|typed| shown.contains(typed.as_str()) || crate::secrets::spelled(&shown, typed))
+        {
+            return hidden();
+        }
+        if let Some(entry) = self
+            .lock_tabs()
+            .list
+            .iter_mut()
+            .find(|t| t.target == tab.target)
+            && entry.typed == tab.typed
+        {
+            entry.clean_doc = Some(doc);
+        }
+        None
     }
 
     /// An observation's answer, unless the tab may not be seen now.
@@ -1666,7 +1794,7 @@ impl Signin {
         let page = Origin::of_page(&url);
         if !page
             .as_ref()
-            .is_ok_and(|page| sites.iter().any(|s| s.allows(page)))
+            .is_ok_and(|page| sites.iter().any(|s| s.is_exactly(page)))
         {
             crate::bridge::record(app, &site, "was refused a login", false, None).await;
             return Err(match page {
@@ -1678,6 +1806,31 @@ impl Signin {
                 ),
             });
         }
+        let kind = match field {
+            "username" | "password" | "code" => field,
+            other => return Err(format!("{label}: a login has no {other} field")),
+        };
+        let selector = ref_selector(reference)?;
+        let origins: Vec<String> = sites.iter().map(ToString::to_string).collect();
+        // The field, its frame and where its form sends, as the page has
+        // them now: checked here, again right before typing, and after.
+        let checked = self
+            .evaluate(
+                cdp,
+                &tab.session,
+                &policy_script(&selector, kind, &origins, "return r;"),
+            )
+            .await?;
+        if checked["ok"] != true {
+            crate::bridge::record(app, &site, "was refused a login", false, None).await;
+            return Err(format!(
+                "{reference} is not a field {label} may be typed into: {}. Nothing was typed. Take a fresh browser text snapshot and pick the right field; if this site signs in some other way, ask the person to finish signing in (Open Browser on this computer shows them the site).",
+                checked["why"]
+                    .as_str()
+                    .unwrap_or("the page did not say what it is")
+            ));
+        }
+        let print = checked["print"].as_str().unwrap_or_default().to_owned();
         let origin = page.map(|page| page.to_string()).unwrap_or_default();
         let flow = {
             let mut tabs = self.lock_tabs();
@@ -1737,10 +1890,9 @@ impl Signin {
                 }
             }
         }
-        let selector = ref_selector(reference)?;
         let secret_field = field != "username";
         // Withheld before the first character goes in, bound to the
-        // document it goes into.
+        // document it goes into, and the value looked for from then on.
         if secret_field {
             let doc = document(cdp, &tab.session)
                 .await
@@ -1754,22 +1906,37 @@ impl Signin {
                 entry.secret_doc = Some(doc);
                 entry.secret_at = crate::jobs::now();
                 entry.secret_name = Some(name.to_owned());
+                entry.typed_now(&filled.value);
             }
         }
-        let focused = self
+        let expected = json!(print);
+        let ready = self
             .evaluate(
                 cdp,
                 &tab.session,
-                &format!(
-                    "(() => {{ const e = document.querySelector({}); if (!e || !['input','textarea'].includes(e.tagName.toLowerCase())) return false; e.focus(); e.select && e.select(); if ({}) e.setAttribute('data-hotline-secret', ''); return document.activeElement === e; }})()",
-                    json!(selector),
-                    secret_field
+                &policy_script(
+                    &selector,
+                    kind,
+                    &origins,
+                    &format!(
+                        "if (!r.ok || r.print !== {expected}) return {{ok: false, why: r.ok ? 'the field or its form changed before typing' : r.why}};
+                         e.focus();
+                         const again = hotlineFillPolicy(e, {kind}, {origins});
+                         if (!again.ok || again.print !== {expected} || document.activeElement !== e) return {{ok: false, why: 'the field or its form changed as it took focus'}};
+                         e.select && e.select();
+                         if ({secret_field}) e.setAttribute('data-hotline-secret', '');
+                         e.setAttribute('data-hotline-typing', '');
+                         return {{ok: true}};",
+                        kind = json!(kind),
+                        origins = json!(origins),
+                    ),
                 ),
             )
             .await?;
-        if focused != true {
+        if ready["ok"] != true {
             return Err(format!(
-                "{reference} is not a field {label} can be typed into; take a fresh browser text snapshot"
+                "{reference} did not take {label}: {}. Nothing was typed; take a fresh browser text snapshot and try again.",
+                ready["why"].as_str().unwrap_or("the page changed")
             ));
         }
         cdp.on(
@@ -1778,19 +1945,39 @@ impl Signin {
             json!({"text": filled.value}),
         )
         .await?;
-        // Whether the field kept something, never what.
-        let kept = self
+        // The same field, of the same type, in the same form, still had the
+        // focus: else what went in is taken back out, wherever it went.
+        let after = self
             .evaluate(
                 cdp,
                 &tab.session,
-                &format!("(() => {{ const e = document.querySelector({}); return !!e && e.value.length > 0; }})()", json!(selector)),
+                &policy_script(
+                    &selector,
+                    kind,
+                    &origins,
+                    &format!(
+                        "const ok = r.ok && r.print === {expected} && document.activeElement === e && e.hasAttribute('data-hotline-typing');
+                         if (e) e.removeAttribute('data-hotline-typing');
+                         if (!ok) {{
+                             if (e && 'value' in e) e.value = '';
+                             const a = document.activeElement;
+                             if (a && a !== document.body && 'value' in a) a.value = '';
+                         }}
+                         return {{ok, kept: !!e && ok && e.value.length > 0}};"
+                    ),
+                ),
             )
             .await
-            .unwrap_or(Value::Bool(false));
+            .unwrap_or_else(|_| json!({"ok": false, "kept": false}));
+        if after["ok"] != true {
+            return Err(format!(
+                "{reference} changed while {label} was typed (its type, its form or the focus moved), so it was cleared again. This tab is hidden from you until it loads its next page."
+            ));
+        }
         if field != "username" {
             crate::bridge::record(app, &site, "filled a login", true, how).await;
         }
-        if kept != true {
+        if after["kept"] != true {
             return Err(format!(
                 "{reference} did not keep {label}; the page may want the person to finish signing in"
             ));
@@ -1863,6 +2050,18 @@ impl Signin {
         }
         Ok((gone.len(), doomed.len()))
     }
+}
+
+/// The fill rule (`assets/fill-policy.js`), run on a ref's element, then
+/// `then` with the element as `e` and the rule's answer as `r`.
+fn policy_script(selector: &str, kind: &str, origins: &[String], then: &str) -> String {
+    format!(
+        "(() => {{ {}\nconst e = document.querySelector({}); const r = hotlineFillPolicy(e, {}, {}); {then} }})()",
+        include_str!("../../assets/fill-policy.js"),
+        json!(selector),
+        json!(kind),
+        json!(origins),
+    )
 }
 
 /// The document a tab shows now: its main frame's loader id.
@@ -2014,6 +2213,30 @@ const TEXT_SCRIPT: &str = r#"(() => {
     const body = document.body ? document.body.innerText.trim() : '';
     return [`page: ${document.title}`, `signed-in browser: ${location.host}`, body, ...lines].filter(Boolean).join('\n');
 })()"#;
+
+/// Every text field's value in the page and its same-origin frames, in
+/// document order: only for the broker to look for what it typed.
+const TYPED_FIELDS_SCRIPT: &str = r#"(() => {
+    const out = [];
+    const walk = (doc) => {
+        for (const e of doc.querySelectorAll('input,textarea')) out.push(typeof e.value === 'string' ? e.value : '');
+        for (const f of doc.querySelectorAll('iframe,frame')) { try { if (f.contentDocument) walk(f.contentDocument); } catch (_) {} }
+    };
+    walk(document);
+    return out;
+})()"#;
+
+/// Empties the fields at the given positions of `TYPED_FIELDS_SCRIPT`'s list.
+const TYPED_FIELDS_CLEAR: &str = r#"(positions) => {
+    const all = [];
+    const walk = (doc) => {
+        for (const e of doc.querySelectorAll('input,textarea')) all.push(e);
+        for (const f of doc.querySelectorAll('iframe,frame')) { try { if (f.contentDocument) walk(f.contentDocument); } catch (_) {} }
+    };
+    walk(document);
+    for (const i of positions) if (all[i]) all[i].value = '';
+    return positions.every(i => all[i] && all[i].value === '');
+}"#;
 
 const LINKS_SCRIPT: &str = "[...document.querySelectorAll('a[href]')].map(a => ({text:(a.innerText||'').trim(),href:a.href}))";
 

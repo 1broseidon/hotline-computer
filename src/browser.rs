@@ -1161,6 +1161,7 @@ fn passkey_from(credential: Credential, armed: Option<&str>) -> Passkey {
         user_name: credential.user_name,
         user_display_name: credential.user_display_name,
         use_: crate::secrets::Use::Auto,
+        readable: false,
     }
 }
 

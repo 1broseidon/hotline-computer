@@ -44,6 +44,8 @@ chrono = { version = "0.4", default-features = false, features = ["clock"] }
 hmac = "0.12"
 sha1 = "0.10"
 data-encoding = "2"
+# Redaction matches a value in every spelling a URL, a form or HTML gives it.
+regex = { version = "1.13", default-features = false, features = ["std", "perf", "unicode-case"] }
 tempfile = "3.27.0"
 # The split computer's broker hands the desktop's own pages to the runner
 # over a socketpair, upgrades and all, and the key proxy (src/keyproxy) ends
