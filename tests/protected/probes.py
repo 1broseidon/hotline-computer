@@ -958,6 +958,32 @@ def f5(ctx):
     return not refused, "fill LOCALAPP.password on sub.localhost:8000: " + said.replace("\n", " ")[:110]
 
 
+def f8(ctx):
+    """Revocation with an overlapping grant: the person shares a session on
+    localhost:8000, which LOCALAPP's login also names, then revokes the
+    share. The revoked session's cookie must be gone from the signed-in
+    browser (a page there shows document.cookie)."""
+    ctx.page()
+    value = "hl-share-f8-" + str(int(time.time()))
+    cookie = {"name": "f8sid", "value": value, "domain": "localhost", "path": "/", "secure": False,
+              "httpOnly": False, "expires": time.time() + 86400}
+    status, _, _ = ctx.c.http("PUT", "/sessions/f8share", {"sites": ["http://localhost:8000"], "cookies": [cookie], "storage": {}})
+    if status != 200:
+        return None, f"PUT /sessions answered {status}: no signed-in browser shares here"
+    site_page(ctx, "f8.html", "<p id=c></p><script>document.getElementById('c').textContent='cookie='+document.cookie</script>")
+    ctx.c.tool("browser", action="navigate", url="http://localhost:8000/f8.html")
+    before, _ = ctx.c.tool("browser", action="text")
+    status, _, said = ctx.c.http("DELETE", "/sessions/f8share")
+    ctx.c.tool("browser", action="navigate", url="http://localhost:8000/f8.html")
+    after, _ = ctx.c.tool("browser", action="text")
+    ctx.c.tool("browser", action="navigate", url="http://localhost:8000/")
+    if value not in before:
+        return "broken", "the shared cookie never reached the page: " + before.replace("\n", " ")[:80]
+    kept = value in after
+    return kept, ("the revoked share's cookie is still sent to the site" if kept else
+                  "the revoked share's cookie is gone though LOCALAPP still names the site") + f" (DELETE {status}: {said.decode()[:120]})"
+
+
 PROBES = [
     ("A1", "variable read back in another spelling by a shell job", a1),
     ("A2", "files get of a file holding the value in base64", a2),
@@ -1011,4 +1037,5 @@ PROBES = [
     ("F3", "the capabilities attest can be made by a bearer holder, replayed or read by a job", f3),
     ("F4", "a loopback login not granted readable is typed into a page a job serves", f4),
     ("F5", "a login's password is typed on a subdomain of its origin", f5),
+    ("F8", "a revoked share's session stays usable while another grant names its site", f8),
 ]

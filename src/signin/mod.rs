@@ -149,6 +149,9 @@ struct Inner {
     arming: Mutex<Option<crate::passkeys::Passkeys>>,
     /// The sessions held across an idle stop, as DevTools reported them.
     kept: Mutex<Vec<Value>>,
+    /// Sites signed out while the browser was stopped: their cookies and
+    /// data in its profile go when it next starts, before anything loads.
+    revoked: Mutex<Vec<Origin>>,
     /// Whether the agent's browser calls go here.
     focused: AtomicBool,
     last_used: AtomicU64,
@@ -259,6 +262,7 @@ impl Signin {
             sessions: Mutex::default(),
             logins: Mutex::default(),
             kept: Mutex::default(),
+            revoked: Mutex::default(),
             arming: Mutex::default(),
             focused: AtomicBool::new(false),
             last_used: AtomicU64::new(0),
@@ -525,9 +529,24 @@ impl Signin {
             cookies.extend(stored["cookies"].as_array().cloned().unwrap_or_default());
         }
         cdp.call("Storage.clearCookies", json!({})).await?;
+        let revoked = std::mem::take(
+            &mut *self
+                .0
+                .revoked
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner),
+        );
+        for site in &revoked {
+            let _ = cdp
+                .call(
+                    "Storage.clearDataForOrigin",
+                    json!({"origin": site.to_string(), "storageTypes": "all"}),
+                )
+                .await;
+        }
         let kept: Vec<Value> = cookies
             .iter()
-            .filter(|cookie| cookie_within(cookie, &sites))
+            .filter(|cookie| cookie_within(cookie, &sites) && !cookie_within(cookie, &revoked))
             .map(cookie_param)
             .collect();
         if !kept.is_empty() {
@@ -593,39 +612,42 @@ impl Signin {
     /// While the browser runs: stops it when idle, and signs a revoked
     /// login's or passkey's sites out.
     async fn watch(self, running: Running) {
-        *self
-            .0
-            .logins
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner) = self.granted_sites();
         loop {
             tokio::time::sleep(Duration::from_secs(1)).await;
             if running.cdp.is_closed() {
                 return;
             }
-            let now = self.granted_sites();
-            let before = std::mem::replace(
-                &mut *self
-                    .0
-                    .logins
-                    .lock()
-                    .unwrap_or_else(std::sync::PoisonError::into_inner),
-                now.clone(),
-            );
-            let still = self.sites();
-            let gone: Vec<Origin> = before
-                .into_iter()
-                .filter(|site| !still.contains(site))
-                .collect();
-            if !gone.is_empty() {
-                let _ = self.forget(&gone).await;
-            }
+            self.notice_revocations().await;
             let idle = crate::jobs::now().saturating_sub(self.0.last_used.load(Ordering::Relaxed))
                 > IDLE.as_millis() as u64;
             if idle && self.0.viewers.load(Ordering::Relaxed) == 0 {
                 self.stop().await;
                 return;
             }
+        }
+    }
+
+    /// Signs out every site a login or passkey no longer grants, even one a
+    /// share or another login still names: the revoked account's session
+    /// must not outlive it, and what still grants the site signs in again.
+    /// Called after each delivery and each second while the browser runs;
+    /// with the browser stopped the sites are cleared when it next starts.
+    pub async fn notice_revocations(&self) {
+        let now = self.granted_sites();
+        let before = std::mem::replace(
+            &mut *self
+                .0
+                .logins
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner),
+            now.clone(),
+        );
+        let gone: Vec<Origin> = before
+            .into_iter()
+            .filter(|site| !now.contains(site))
+            .collect();
+        if !gone.is_empty() {
+            let _ = self.forget(&gone).await;
         }
     }
 
@@ -2012,6 +2034,11 @@ impl Signin {
             running.clone()
         };
         let Some(running) = running.filter(|running| !running.cdp.is_closed()) else {
+            self.0
+                .revoked
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner)
+                .extend(sites.iter().cloned());
             return Ok((0, 0));
         };
         let cdp = &running.cdp;

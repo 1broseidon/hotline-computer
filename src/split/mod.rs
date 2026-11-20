@@ -312,6 +312,11 @@ pub async fn delivered(app: &App) {
     if let Err(error) = sync_passkeys(app, false).await {
         eprintln!("secrets: the browser did not take the passkeys: {error}");
     }
+    // A login or passkey taken away signs its sites out now, the browser
+    // running or not.
+    if let Some(signin) = &app.signin {
+        signin.notice_revocations().await;
+    }
 }
 
 /// A tool call through the split computer's door: the runner does the work

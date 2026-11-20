@@ -127,18 +127,38 @@ pub async fn delete(State(app): State<App>, Path(name): Path<String>, body: Stri
     };
     match signin.unshare(&name, &domains).await {
         Ok(None) => refuse(StatusCode::NOT_FOUND, format!("no shared sign-in {name:?}")),
-        Ok(Some((gone, cookies, tabs))) => Json(json!({
-            "name": name,
-            "domains": gone.iter().map(ToString::to_string).collect::<Vec<_>>(),
-            "forgotten": cookies,
-            "closed": tabs,
-        }))
-        .into_response(),
+        Ok(Some((gone, cookies, tabs))) => {
+            // What still grants a signed-out site: it must sign in again
+            // (a share is shared again by the desk, a login is typed again).
+            let again: Vec<String> = signin.granting(&gone);
+            Json(json!({
+                "name": name,
+                "domains": gone.iter().map(ToString::to_string).collect::<Vec<_>>(),
+                "forgotten": cookies,
+                "closed": tabs,
+                "signInAgain": again,
+            }))
+            .into_response()
+        }
         Err(error) => refuse(StatusCode::SERVICE_UNAVAILABLE, error),
     }
 }
 
 impl Signin {
+    /// The logins and shares that still name one of `sites`.
+    pub fn granting(&self, sites: &[Origin]) -> Vec<String> {
+        let mut names: Vec<String> = Vec::new();
+        for site in sites {
+            let url = format!("{site}/");
+            for name in self.names_for(&url).split(", ").filter(|n| !n.is_empty()) {
+                if !names.iter().any(|known| known == name) {
+                    names.push(name.to_owned());
+                }
+            }
+        }
+        names
+    }
+
     /// Takes a share in: its sites open here from now on, and its cookies
     /// and storage are loaded. Cookies for any other site are left out.
     /// Answers how many cookies and storage entries went in.
@@ -205,9 +225,9 @@ impl Signin {
         Ok((cookies.len(), stored))
     }
 
-    /// Takes a share out, whole or for `domains`: those sites are signed out
-    /// unless a login or another share still covers them. `None` when there
-    /// is no such share. Answers the sites that went, and how many cookies
+    /// Takes a share out, whole or for `domains`: those sites are signed out,
+    /// even where a login or another share still covers them. `None` when
+    /// there is no such share. Answers the sites that went, and how many cookies
     /// and tabs went with them.
     pub async fn unshare(
         &self,
@@ -239,13 +259,10 @@ impl Signin {
             }
             gone
         };
-        let still = self.sites();
-        let signed_out: Vec<Origin> = gone
-            .iter()
-            .filter(|site| !still.contains(site))
-            .cloned()
-            .collect();
-        let (cookies, tabs) = self.forget(&signed_out).await?;
+        // Signed out whatever else still names them: the revoked share's
+        // session must not stay usable. A login or another share on the
+        // same site signs in again (`again`, for the desk to share anew).
+        let (cookies, tabs) = self.forget(&gone).await?;
         Ok(Some((gone, cookies, tabs)))
     }
 }
