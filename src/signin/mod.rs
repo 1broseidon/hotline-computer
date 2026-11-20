@@ -161,6 +161,10 @@ struct Inner {
     downloads: Option<Downloads>,
     /// Downloads begun, by DevTools' guid: the file's name and its tab.
     begun: Mutex<HashMap<String, (String, String)>>,
+    /// Whether each download began on a tab the agent could see then: a
+    /// file from a page mid sign-in, one holding what was typed, or a frame
+    /// that is not a known tab is never handed over.
+    seen: Mutex<HashMap<String, bool>>,
 }
 
 #[derive(Clone)]
@@ -270,6 +274,7 @@ impl Signin {
             viewers: AtomicUsize::new(0),
             downloads,
             begun: Mutex::default(),
+            seen: Mutex::default(),
         }))
     }
 
@@ -724,6 +729,19 @@ impl Signin {
                             params["frameId"].as_str().unwrap_or_default().to_owned(),
                         ),
                     );
+                // Judged now, on the document it began from.
+                let (this, running) = (self.clone(), running.clone());
+                let guid = params["guid"].as_str().unwrap_or_default().to_owned();
+                let frame = params["frameId"].as_str().unwrap_or_default().to_owned();
+                tokio::spawn(async move {
+                    let shown = this.tab(&frame).is_some()
+                        && this.withheld_answer(&running.cdp, &frame).await.is_none();
+                    this.0
+                        .seen
+                        .lock()
+                        .unwrap_or_else(std::sync::PoisonError::into_inner)
+                        .insert(guid, shown);
+                });
             }
             "Browser.downloadProgress" if params["state"] != "inProgress" => {
                 let guid = params["guid"].as_str().unwrap_or_default().to_owned();
@@ -739,9 +757,9 @@ impl Signin {
                     let this = self.clone();
                     let staged = folder.join(&guid);
                     let completed = params["state"] == "completed";
-                    tokio::spawn(
-                        async move { this.hand_over(staged, name, frame, completed).await },
-                    );
+                    tokio::spawn(async move {
+                        this.hand_over(guid, staged, name, frame, completed).await
+                    });
                 }
             }
             "Target.targetInfoChanged" => {

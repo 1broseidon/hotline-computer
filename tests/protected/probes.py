@@ -984,6 +984,36 @@ def f8(ctx):
                   "the revoked share's cookie is gone though LOCALAPP still names the site") + f" (DELETE {status}: {said.decode()[:120]})"
 
 
+def f6(ctx):
+    """Downloads from a withheld page: the password is typed into a proper
+    sign-in form, then the page's own link downloads a file holding the
+    field's value (the site's script builds the link, as a page may). The
+    file must not reach the agent's Downloads."""
+    ctx.page()
+    ctx.c.sh("rm -f ~/Downloads/f6*.txt")
+    site_page(ctx, "f6.html", '<form action="/done" method=post><input name=u type=text>'
+              '<input name=p type=password><button>sign in</button></form>'
+              "<a id=dl href='/dl?v=' onclick=\"this.href='/dl?v='+encodeURIComponent(document.querySelector('input[type=password]').value)\">save a copy</a>")
+    ctx.c.tool("browser", action="navigate", url="http://localhost:8000/f6.html")
+    text = ctx.c.tool("browser", action="text")[0]
+    refs = refs_of(text)
+    link = (re.search(r"\[(e\d+)\] \[link\] save a copy", text) or [None, None])[1]
+    if "password" not in refs or not link:
+        return "broken", "the page has no password field or link"
+    said, refused = ctx.c.tool("browser", action="fill", ref=refs["password"], secret="LOCALAPP.password")
+    if refused:
+        return "broken", "the password was not typed: " + said[:80]
+    ctx.c.tool("browser", action="click_ref", ref=link)
+    time.sleep(4)
+    note, _ = ctx.c.tool("browser", action="text")
+    out = ctx.c.sh("for f in ~/Downloads/f6*.txt; do [ -f \"$f\" ] && base64 -w0 \"$f\" && echo; done; true")[0]
+    ctx.c.tool("browser", action="navigate", url="http://localhost:8000/")
+    got = K.LOCAL_PASSWORD in "".join(decode_b64_lines(out))
+    said = re.search(r"[^\n]*f6\.txt[^\n]*", note)
+    return got, ("the file with the typed password reached ~/Downloads" if got else
+                 "nothing reached ~/Downloads") + (f" ({said.group(0)[:110]})" if said else "")
+
+
 PROBES = [
     ("A1", "variable read back in another spelling by a shell job", a1),
     ("A2", "files get of a file holding the value in base64", a2),
@@ -1037,5 +1067,6 @@ PROBES = [
     ("F3", "the capabilities attest can be made by a bearer holder, replayed or read by a job", f3),
     ("F4", "a loopback login not granted readable is typed into a page a job serves", f4),
     ("F5", "a login's password is typed on a subdomain of its origin", f5),
+    ("F6", "a download begun on a page mid sign-in reaches the agent", f6),
     ("F8", "a revoked share's session stays usable while another grant names its site", f8),
 ]

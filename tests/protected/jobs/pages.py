@@ -4,7 +4,7 @@ inside the computer: ~/site's files for GET, and the few POST routes the
 sign-in probes need. It plays a site, so it may echo what a form sent:
 /echo answers the posted `p` in the spellings a real page or URL can carry
 it (percent, form, base64, HTML entities), /redirect sends it on in a URL,
-and anything else answers a plain "done" page.
+GET /dl?v= answers v as a downloaded file, and anything else answers a plain "done" page.
 
 usage: python3 pages.py PORT"""
 import base64
@@ -32,6 +32,18 @@ class Handler(http.server.SimpleHTTPRequestHandler):
         self.send_header("Content-Length", str(len(data)))
         self.end_headers()
         self.wfile.write(data)
+
+    def do_GET(self):
+        if self.path.startswith("/dl?"):
+            v = (urllib.parse.parse_qs(self.path.split("?", 1)[1]).get("v") or [""])[0].encode()
+            self.send_response(200)
+            self.send_header("Content-Type", "text/plain")
+            self.send_header("Content-Disposition", 'attachment; filename="f6.txt"')
+            self.send_header("Content-Length", str(len(v)))
+            self.end_headers()
+            self.wfile.write(v)
+            return
+        return super().do_GET()
 
     def do_POST(self):
         n = int(self.headers.get("Content-Length") or 0)
