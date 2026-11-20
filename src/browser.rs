@@ -468,7 +468,7 @@ impl BrowserManager {
                             filled.label
                         )
                     })?;
-                    if !sites.iter().any(|site| site.allows(&origin)) {
+                    if !sites.iter().any(|site| site.is_exactly(&origin)) {
                         return Err(format!(
                             "{} is typed only on {allowed}; this page is {origin}",
                             filled.label

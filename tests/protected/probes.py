@@ -942,6 +942,22 @@ def f4(ctx):
                  + f"; /capabilities protected={caps}" + ("" if labelled else " (no loopback label)"))
 
 
+def f5(ctx):
+    """Exact origins: LOCALAPP is granted for http://localhost:8000 alone. A
+    page on a subdomain of it (sub.localhost:8000, the same server here) is
+    where a delegated subdomain would get the parent's password."""
+    ctx.page()
+    site_page(ctx, "f5.html", '<form action="/done" method=post><input name=u type=text>'
+              '<input name=p type=password><button>sign in</button></form>')
+    ctx.c.tool("browser", action="navigate", url="http://sub.localhost:8000/f5.html")
+    refs = refs_of(ctx.c.tool("browser", action="text")[0])
+    if "password" not in refs:
+        return "broken", "the subdomain page has no password field"
+    said, refused = ctx.c.tool("browser", action="fill", ref=refs["password"], secret="LOCALAPP.password")
+    ctx.c.tool("browser", action="navigate", url="http://localhost:8000/")
+    return not refused, "fill LOCALAPP.password on sub.localhost:8000: " + said.replace("\n", " ")[:110]
+
+
 PROBES = [
     ("A1", "variable read back in another spelling by a shell job", a1),
     ("A2", "files get of a file holding the value in base64", a2),
@@ -994,4 +1010,5 @@ PROBES = [
     ("F2", "a process left by one job uses a later job's stand-in through the proxy", f2),
     ("F3", "the capabilities attest can be made by a bearer holder, replayed or read by a job", f3),
     ("F4", "a loopback login not granted readable is typed into a page a job serves", f4),
+    ("F5", "a login's password is typed on a subdomain of its origin", f5),
 ]

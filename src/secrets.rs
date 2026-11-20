@@ -572,7 +572,7 @@ impl Secrets {
                         .sites
                         .iter()
                         .filter_map(|site| Origin::site(site).ok())
-                        .any(|site| site.allows(&page)) =>
+                        .any(|site| site.is_exactly(&page)) =>
                 {
                     Some((name.clone(), login.username.clone(), login.totp.is_some()))
                 }
@@ -1078,15 +1078,18 @@ impl Origin {
         is_loopback_host(&self.host)
     }
 
-    /// Whether `page` is exactly this origin: scheme, host and port.
+    /// Whether `page` is exactly this origin: scheme, host and port. A
+    /// login's field is typed only there: a subdomain may be delegated to
+    /// someone else, so it gets the password only if the grant names it.
     pub fn is_exactly(&self, page: &Origin) -> bool {
         self.scheme == page.scheme
             && self.host == page.host
             && (self.any_port || self.port == page.port)
     }
 
-    /// Whether a login for this site may be typed on `page`: same scheme and
-    /// port, and the page's host is the site's or lies under it.
+    /// Whether a page of `page` belongs to this site: same scheme and port,
+    /// and the page's host is the site's or lies under it. What opens in
+    /// the signed-in browser; a login is typed only on `is_exactly`.
     pub fn allows(&self, page: &Origin) -> bool {
         self.scheme == page.scheme
             && (self.any_port || self.port == page.port)
@@ -1808,6 +1811,35 @@ mod tests {
             "https://github.com"
         );
         assert!(Origin::relying_party("not a host").is_empty());
+    }
+
+    #[test]
+    fn a_login_is_typed_on_exactly_its_origins() {
+        let site = Origin::site("https://github.com").unwrap();
+        for (page, exact) in [
+            ("https://github.com/login", true),
+            ("https://GITHUB.com:443/settings", true),
+            ("https://login.github.com/sso", false),
+            ("https://github.com:8443/", false),
+            ("http://github.com/", false),
+        ] {
+            assert_eq!(
+                site.is_exactly(&Origin::of_page(page).unwrap()),
+                exact,
+                "{page}"
+            );
+        }
+        let secrets = Secrets::default();
+        secrets
+            .replace(typed(json!({
+                "GH": {"kind": "login", "sites": ["https://github.com"], "username": "u", "password": "p4ssw0rd-long"},
+            })))
+            .unwrap();
+        assert_eq!(secrets.logins_for("https://github.com").len(), 1);
+        assert!(
+            secrets.logins_for("https://gist.github.com").is_empty(),
+            "a subdomain is not offered it"
+        );
     }
 
     #[test]

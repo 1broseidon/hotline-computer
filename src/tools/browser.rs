@@ -249,7 +249,7 @@ async fn clear_secret(app: &App, reference: &str) -> Result<Cleared, String> {
         let page = Origin::of_page(&url);
         let on_site = page
             .as_ref()
-            .is_ok_and(|page| sites.iter().any(|site| site.allows(page)));
+            .is_ok_and(|page| sites.iter().any(|site| site.is_exactly(page)));
         // Refused here, not left to the typing's own check a
         // moment later: a page that is off the site now and back
         // on it by then would otherwise pass an ask-me key
