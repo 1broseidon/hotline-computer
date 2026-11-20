@@ -1,0 +1,11 @@
+F1a        BLOCKED  ok a login's password typed into a GET form's text field, read back from tabs, Back or screenshot: fill: filled e1 with LOCALENC.password. This tab is hidden from you until it loads its next page: submit the form no (typed); tabs, text and the screenshot after Back show nothing of it
+F1b        BLOCKED  ok Back restores a typed password field and the tab is shown again: Back did not bring the typed value back (pageshow lengths []); nothing to hide
+F1c        LEAKED   !! a page or address carries the password percent-, form-, base64- or entity-encoded: f1c.html: text carries a spelling
+F2         LEAKED   !! a process left by one job uses its ended job's or a later job's stand-in through the proxy: the bound service received the real key from the leftover process (a later job's) (OWN status=200 curl=0; USED victim=554 status=200 curl=0)
+F3         LEAKED   !! the capabilities attest can be made by a bearer holder, replayed or read by a job: protected v1, attested with the bearer: whoever read the bearer can prove it
+F4         LEAKED   !! a loopback login not granted readable is typed into a page a job serves: the job's page read LOOPAPP's password; /capabilities protected={'mode': 'split', 'v': 1} (no loopback label)
+F5         LEAKED   !! a login's password is typed on a subdomain of its origin: fill LOCALAPP.password on sub.localhost:8000: filled e2 with LOCALAPP.password. This tab is hidden from you until it loads its next page: submit the form no
+F6         LEAKED   !! a download begun on a page mid sign-in reaches the agent: the file with the typed password reached ~/Downloads
+F8         LEAKED   !! a revoked share's session stays usable while another grant names its site: the revoked share's cookie is still sent to the site (DELETE 200: {"closed":0,"domains":["http://localhost:8000"],"forgotten":0,"name":"f8share"})
+# 7 leaked, 2 blocked, 0 skipped, 0 broken; 7 differ from EXPECT=blocked
+# removed hl-rc3-repro-4d320e
