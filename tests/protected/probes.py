@@ -752,10 +752,12 @@ def f1a(ctx):
     restored field (against the same page before anything was typed)."""
     import pixels
     ctx.page()
-    site_page(ctx, "f1.html", '<form action="/f1-done" method=get>'
-              '<input name=q type=text style="caret-color:transparent;width:700px;font:20px monospace">'
-              '<button>go</button></form>')
-    site_page(ctx, "f1-done", "<h1>searched</h1>")
+    # The field sits alone in a fixed white box; only that box is compared.
+    site_page(ctx, "f1.html", '<form action="/f1-done.html" method=get style="margin:0;padding:40px">'
+              '<input name=q type=text style="display:block;margin:0;padding:0;width:700px;height:40px;box-sizing:border-box;'
+              'background:#fff;color:#000;border:0;outline:none;caret-color:transparent;font:20px monospace">'
+              '<button style="margin-top:80px">go</button></form>')
+    site_page(ctx, "f1-done.html", "<h1>searched</h1>")
     ctx.c.tool("browser", action="navigate", url="http://localhost:8000/f1.html")
     refs = refs_of(ctx.c.tool("browser", action="text")[0])
     if "text" not in refs:
@@ -764,6 +766,9 @@ def f1a(ctx):
     said, refused = ctx.c.tool("browser", action="fill", ref=refs["text"], secret="LOCALENC.password")
     ctx.c.tool("browser", action="click_ref", ref=refs["button"])
     time.sleep(1.5)
+    # A look at the page it went to (which shows it again once it is a new
+    # document), then the tab list with its address.
+    landed, _ = ctx.c.tool("browser", action="text")
     tabs, _ = ctx.c.tool("browser", action="tabs")
     ctx.c.tool("browser", action="back")
     time.sleep(1.5)
@@ -773,13 +778,19 @@ def f1a(ctx):
     hits = []
     if spelled_in(tabs, K.LOCAL_ENC):
         hits.append("tabs shows the password in the address")
-    if spelled_in(text, K.LOCAL_ENC):
+    if spelled_in(text, K.LOCAL_ENC) or spelled_in(landed, K.LOCAL_ENC):
         hits.append("text shows it")
-    if back and empty and pixels.decode(back) != pixels.decode(empty):
+    def field(png):
+        width, _, rows = pixels.decode(png)
+        bpp = len(rows[0]) // width
+        return [r[44 * bpp:736 * bpp] for r in rows[44:76]]
+    if back and empty and field(back) != field(empty):
         hits.append("the screenshot after Back shows the restored field")
     return bool(hits), ("; ".join(hits) if hits else
                         "fill: " + said.replace("\n", " ")[:110] + ("" if refused else " (typed)") +
-                        "; tabs, text and the screenshot after Back show nothing of it")
+                        "; tabs, text and the screenshot after Back show nothing of it (signed-in tabs: "
+                        + "; ".join(str(t.get("url") or t.get("site")) for t in (json.loads(tabs) if tabs.startswith("[") else []) if t.get("signedIn"))[:160]
+                        + "; after sending: " + landed.replace("\n", " ")[:160] + ")")
 
 
 def f1b(ctx):
