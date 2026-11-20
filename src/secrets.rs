@@ -490,6 +490,25 @@ impl Secrets {
         self.read().get(name).and_then(Secret::use_)
     }
 
+    /// Each entry's version: a digest of what it is now, protected keys'
+    /// included. Two sets differ for a name when it was changed or revoked.
+    pub fn versions(&self) -> BTreeMap<String, Vec<u8>> {
+        use sha2::Digest;
+        let mut versions: BTreeMap<String, Vec<u8>> = self
+            .read()
+            .iter()
+            .map(|(name, secret)| {
+                let text = serde_json::to_vec(secret).unwrap_or_default();
+                (name.clone(), sha2::Sha256::digest(text).to_vec())
+            })
+            .collect();
+        for (name, key) in self.protected().iter() {
+            let text = format!("{}\0{}", key.value, key.origins.join(","));
+            versions.insert(name.clone(), sha2::Sha256::digest(text).to_vec());
+        }
+        versions
+    }
+
     /// The names alone, protected keys' included.
     pub fn names(&self) -> Vec<String> {
         let mut names: Vec<String> = self.read().keys().cloned().collect();
@@ -1378,8 +1397,18 @@ pub async fn replace(
     let content_type = headers
         .get(axum::http::header::CONTENT_TYPE)
         .and_then(|value| value.to_str().ok());
+    let before = app.secrets.versions();
     match Delivery::read(content_type, body).and_then(|delivery| delivery.apply(&app)) {
         Ok(()) => {
+            // An approval or allowance is for the key as it was: one that
+            // changed or went takes its answers with it.
+            let after = app.secrets.versions();
+            let changed: Vec<String> = before
+                .iter()
+                .filter(|(name, version)| after.get(*name) != Some(*version))
+                .map(|(name, _)| name.clone())
+                .collect();
+            app.holds.forget(&changed);
             crate::split::delivered(&app).await;
             StatusCode::NO_CONTENT.into_response()
         }

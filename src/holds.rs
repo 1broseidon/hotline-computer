@@ -214,6 +214,20 @@ impl Holds {
             .unwrap_or_else(|poisoned| poisoned.into_inner())
     }
 
+    /// The keys in `names` were revoked or changed: every allowance, every
+    /// approval waiting for a retry and every held use of them goes, so an
+    /// answer given for one version of a key never lets another through.
+    pub fn forget(&self, names: &[String]) {
+        if names.is_empty() {
+            return;
+        }
+        let mut inner = self.lock();
+        let gone = |secret: &String| names.iter().any(|name| name == secret);
+        inner.allowed.retain(|(secret, _, _), _| !gone(secret));
+        inner.tickets.retain(|(secret, _, _), _| !gone(secret));
+        inner.held.retain(|held| !gone(&held.secret));
+    }
+
     /// A use that waits for its answer where it is: a passkey sign-in, or a
     /// fill the card on the page asked for. Through at once inside an
     /// allowance; otherwise held for `wait_ms` (capped) under a new id.
@@ -613,6 +627,34 @@ mod tests {
         holds.withdraw(&long, T + 1);
         assert_eq!(holds.status(&long, T + 2), Some(Outcome::Expired));
         assert!(holds.answer(&long, Answer::Approve, T + 3).is_err());
+    }
+
+    #[test]
+    fn a_changed_or_revoked_key_takes_its_answers_with_it() {
+        let holds = Holds::default();
+        let id = held_id(holds.ask("GH", Kind::Passkey, "github.com", "/", "Rex", 60_000, T));
+        holds.answer(&id, Answer::Allow, T + 1).unwrap();
+        assert_eq!(
+            holds.ask("GH", Kind::Passkey, "github.com", "/", "Rex", 60_000, T + 2),
+            Pass::Within
+        );
+        let fill = held_id(holds.fill("LOGIN", "github.com", "/", "Rex", T + 3));
+        holds.answer(&fill, Answer::Approve, T + 4).unwrap();
+        holds.forget(&["GH".to_owned(), "LOGIN".to_owned()]);
+        assert!(
+            matches!(
+                holds.ask("GH", Kind::Passkey, "github.com", "/", "Rex", 60_000, T + 5),
+                Pass::Held { .. }
+            ),
+            "the allowance went with the old key"
+        );
+        assert!(
+            matches!(
+                holds.fill("LOGIN", "github.com", "/", "Rex", T + 6),
+                Pass::Held { .. }
+            ),
+            "the approval went with it"
+        );
     }
 
     #[test]

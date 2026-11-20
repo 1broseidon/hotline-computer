@@ -218,6 +218,10 @@ struct Tab {
 struct Flow {
     id: String,
     sites: Vec<Origin>,
+    /// The document an extension request began this flow on: a request
+    /// from another document of the tab starts a flow of its own, so an
+    /// approval given for one page is never another page's.
+    doc: Option<String>,
 }
 
 /// How many typed values a tab remembers.
@@ -1099,7 +1103,6 @@ impl Signin {
     pub fn flow_on(&self, origin: &str) -> Option<String> {
         let sites = self.sites();
         let mut tabs = self.lock_tabs();
-        let current = tabs.current.clone();
         let mut on_origin: Vec<&mut Tab> = tabs
             .list
             .iter_mut()
@@ -1108,9 +1111,22 @@ impl Signin {
                     && lock::signed_in(&tab.url, &sites)
             })
             .collect();
-        on_origin.sort_by_key(|tab| Some(&tab.target) != current.as_ref());
-        let tab = on_origin.into_iter().next()?;
+        // The request names its origin, not its tab: with two tabs on that
+        // origin it could be either, and one tab's approval must never pass
+        // the other's request. Refused until only one is open there.
+        if on_origin.len() != 1 {
+            return None;
+        }
+        let tab = on_origin.pop()?;
         let url = tab.url.clone();
+        let doc = Some(tab.doc.clone()).filter(|doc| !doc.is_empty());
+        if tab
+            .flow
+            .as_ref()
+            .is_some_and(|flow| flow.doc.is_some() && flow.doc != doc)
+        {
+            tab.flow = None;
+        }
         let flow = tab.flow.get_or_insert_with(|| Flow {
             id: flow_id(),
             sites: sites
@@ -1118,6 +1134,7 @@ impl Signin {
                 .filter(|site| lock::signed_in(&url, std::slice::from_ref(site)))
                 .cloned()
                 .collect(),
+            doc,
         });
         Some(flow.id.clone())
     }
@@ -1881,6 +1898,7 @@ impl Signin {
                     .get_or_insert_with(|| Flow {
                         id: flow_id(),
                         sites: sites.clone(),
+                        doc: None,
                     })
                     .id
                     .clone(),

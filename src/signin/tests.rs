@@ -576,9 +576,24 @@ async fn a_passkey_signs_only_for_a_signed_in_tabs_own_origin() {
         .await
         .unwrap();
     let flow = rig.signin.flow_on(&rig.url("")).unwrap();
-    assert_eq!(rig.signin.flow_on(&rig.url("")), Some(flow));
+    assert_eq!(rig.signin.flow_on(&rig.url("")), Some(flow.clone()));
     assert!(rig.signin.flow_on("https://evil.example").is_none());
     assert!(rig.signin.flow_on("http://127.0.0.1:1").is_none());
+    // A second tab on the same origin: a request naming the origin could be
+    // either tab's, so it is refused rather than given the first's flow.
+    rig.browser(json!({"action": "tab_new", "url": rig.url("/home")}))
+        .await
+        .unwrap();
+    assert!(rig.signin.flow_on(&rig.url("")).is_none());
+    rig.browser(json!({"action": "tab_close"})).await.unwrap();
+    tokio::time::sleep(std::time::Duration::from_millis(300)).await;
+    // And a new document of the one tab starts a flow of its own.
+    rig.browser(json!({"action": "navigate", "url": rig.url("/login")}))
+        .await
+        .unwrap();
+    tokio::time::sleep(std::time::Duration::from_millis(300)).await;
+    let later = rig.signin.flow_on(&rig.url("")).unwrap();
+    assert_ne!(later, flow, "an approval on one page is not another page's");
     rig.signin.stop().await;
 }
 
