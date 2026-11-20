@@ -52,6 +52,10 @@ pub(super) struct Table {
     bound: BTreeMap<String, Bound>,
     /// Stand-in to the job it was made for and the name it stands in for.
     issued: HashMap<String, Issued>,
+    /// Each job's proxy credential (its `HTTPS_PROXY` password) to the job:
+    /// a stand-in is swapped only on a connection that gave the credential
+    /// of the job it was made for. Made with the job, gone when it ends.
+    credentials: HashMap<String, String>,
 }
 
 #[derive(PartialEq, Eq)]
@@ -147,6 +151,26 @@ impl Table {
 
     pub fn end(&mut self, job: &str) {
         self.issued.retain(|_, issued| issued.job != job);
+        self.credentials.retain(|_, owner| owner != job);
+    }
+
+    /// `job`'s proxy credential, made if it has none.
+    pub fn credential(&mut self, job: &str) -> String {
+        if let Some((credential, _)) = self.credentials.iter().find(|(_, owner)| *owner == job) {
+            return credential.clone();
+        }
+        loop {
+            let candidate = mint("", 40);
+            if !self.credentials.contains_key(&candidate) {
+                self.credentials.insert(candidate.clone(), job.to_owned());
+                return candidate;
+            }
+        }
+    }
+
+    /// The live job a proxy credential was made for.
+    pub fn job_of(&self, credential: &str) -> Option<String> {
+        self.credentials.get(credential).cloned()
     }
 
     pub fn is_bound(&self, origin: &str) -> bool {
@@ -183,8 +207,8 @@ impl Table {
     }
 
     /// `value` of request header `header` (lowercase) on `origin`, with each
-    /// live stand-in bound there replaced by its value, if any was.
-    pub fn swap(&self, origin: &str, header: &str, value: &str) -> Option<Swapped> {
+    /// live stand-in of `job`'s bound there replaced by its value, if any was.
+    pub fn swap(&self, origin: &str, header: &str, value: &str, job: &str) -> Option<Swapped> {
         let mut current = value.to_owned();
         let mut scrub = Vec::new();
         let mut names = Vec::new();
@@ -196,7 +220,7 @@ impl Table {
                 std::str::from_utf8(candidate)
                     .ok()
                     .and_then(|candidate| self.issued.get(candidate))
-                    .is_some_and(|issued| &issued.name == name)
+                    .is_some_and(|issued| &issued.name == name && issued.job == job)
             };
             if let Some((next, stand_in)) = swap_one(&current, bound, live) {
                 scrub.push((bound.value.as_bytes().to_vec(), stand_in));

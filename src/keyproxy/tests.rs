@@ -248,7 +248,7 @@ async fn rig() -> Rig {
 
 /// A program run the way a job runs it, or `None` if it is not installed.
 async fn run(rig: &Rig, program: &str, args: &[&str]) -> Option<String> {
-    let proxy = format!("http://{}", rig.addr);
+    let proxy = format!("http://job:{}@{}", rig.proxy.credential("job-1"), rig.addr);
     let bundle = rig.bundle.to_str().unwrap();
     let mut command = tokio::process::Command::new(program);
     command
@@ -478,17 +478,43 @@ pub(crate) fn which(program: &str) -> Option<PathBuf> {
 
 /// A connection through the proxy to `host`, the way a client opens one.
 async fn connect(rig: &Rig, host: &str) -> hyper::client::conn::http1::SendRequest<Full<Bytes>> {
+    connect_as(rig, host, "job-1").await
+}
+
+/// The CONNECT's answer head, with `job`'s credential (or none).
+async fn connect_head(rig: &Rig, host: &str, credential: Option<&str>) -> (TcpStream, String) {
+    use base64::Engine;
     let mut tcp = TcpStream::connect(rig.addr).await.unwrap();
-    tcp.write_all(format!("CONNECT {host}:443 HTTP/1.1\r\nHost: {host}:443\r\n\r\n").as_bytes())
-        .await
-        .unwrap();
+    let auth = credential.map_or_else(String::new, |credential| {
+        format!(
+            "Proxy-Authorization: Basic {}\r\n",
+            base64::engine::general_purpose::STANDARD.encode(format!("job:{credential}"))
+        )
+    });
+    tcp.write_all(
+        format!("CONNECT {host}:443 HTTP/1.1\r\nHost: {host}:443\r\n{auth}\r\n").as_bytes(),
+    )
+    .await
+    .unwrap();
     let mut head = Vec::new();
     while !head.ends_with(b"\r\n\r\n") {
         let mut byte = [0u8];
-        tcp.read_exact(&mut byte).await.unwrap();
+        if tcp.read_exact(&mut byte).await.is_err() {
+            break;
+        }
         head.push(byte[0]);
     }
-    assert!(head.starts_with(b"HTTP/1.1 200"), "{head:?}");
+    (tcp, String::from_utf8_lossy(&head).into_owned())
+}
+
+async fn connect_as(
+    rig: &Rig,
+    host: &str,
+    job: &str,
+) -> hyper::client::conn::http1::SendRequest<Full<Bytes>> {
+    let credential = rig.proxy.credential(job);
+    let (tcp, head) = connect_head(rig, host, Some(&credential)).await;
+    assert!(head.starts_with("HTTP/1.1 200"), "{head:?}");
     let mut roots = RootCertStore::empty();
     for cert in rustls_pemfile(&std::fs::read_to_string(&rig.bundle).unwrap()) {
         roots.add(cert).unwrap();
@@ -572,13 +598,45 @@ async fn revoking_stops_injection_on_an_open_connection() {
 async fn a_stand_in_from_a_finished_job_is_dead() {
     let rig = rig().await;
     let other = rig.proxy.begin("job-2").remove(0).1;
+    let ended = rig.proxy.credential("job-1");
     rig.proxy.end("job-1");
-    let mut c = connect(&rig, API).await;
+    let (_, head) = connect_head(&rig, API, Some(&ended)).await;
+    assert!(
+        head.starts_with("HTTP/1.1 407"),
+        "an ended job's credential is gone: {head}"
+    );
+    let mut c = connect_as(&rig, API, "job-2").await;
     send(&mut c, API, "GET", "/dead", &[bearer(&rig.stand_in)]).await;
     send(&mut c, API, "GET", "/alive", &[bearer(&other)]).await;
     let seen = rig.up.seen();
     assert_eq!(seen[0].auth, format!("Bearer {}", rig.stand_in));
     assert_eq!(seen[1].auth, format!("Bearer {REAL}"));
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn a_stand_in_works_only_on_its_own_jobs_connection() {
+    let rig = rig().await;
+    // No credential, or one no job holds: refused before anything is sent.
+    let (_, head) = connect_head(&rig, API, None).await;
+    assert!(head.starts_with("HTTP/1.1 407"), "{head}");
+    let (_, head) = connect_head(&rig, API, Some("not-a-credential")).await;
+    assert!(head.starts_with("HTTP/1.1 407"), "{head}");
+    // Job 2's connection carrying job 1's stand-in: not swapped.
+    rig.proxy.begin("job-2");
+    let mut c = connect_as(&rig, API, "job-2").await;
+    send(&mut c, API, "GET", "/borrowed", &[bearer(&rig.stand_in)]).await;
+    let mut own = connect_as(&rig, API, "job-1").await;
+    send(&mut own, API, "GET", "/own", &[bearer(&rig.stand_in)]).await;
+    let seen = rig.up.seen();
+    assert_eq!(seen[0].auth, format!("Bearer {}", rig.stand_in));
+    assert_eq!(seen[1].auth, format!("Bearer {REAL}"));
+    // A connection the peer check does not place in the job: refused.
+    rig.proxy
+        .check_peers(Arc::new(|_, job| Box::pin(async move { job == "job-2" })));
+    let credential = rig.proxy.credential("job-1");
+    let (_, head) = connect_head(&rig, API, Some(&credential)).await;
+    assert!(head.starts_with("HTTP/1.1 403"), "{head}");
+    connect_as(&rig, API, "job-2").await;
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
@@ -673,6 +731,7 @@ async fn the_desks_refuse_list_adds_to_the_built_in_one() {
     binding.use_.refuse = Some(Vec::new());
     rig.proxy.deliver(2, vec![binding]).unwrap();
     let fresh = rig.proxy.begin("job-9").remove(0).1;
+    let mut c = connect_as(&rig, GITHUB, "job-9").await;
     let (status, _, _) = send(&mut c, GITHUB, "POST", "/authorizations", &[bearer(&fresh)]).await;
     assert_eq!(status, StatusCode::FORBIDDEN);
     let (status, _, _) = send(&mut c, GITHUB, "GET", "/user", &[bearer(&fresh)]).await;

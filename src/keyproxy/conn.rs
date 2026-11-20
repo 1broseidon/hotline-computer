@@ -74,6 +74,10 @@ pub(super) async fn serve(inner: Arc<Inner>, listener: TcpListener) -> io::Resul
 
 async fn handle(inner: Arc<Inner>, stream: TcpStream) -> io::Result<()> {
     let _ = stream.set_nodelay(true);
+    let peer_port = stream
+        .peer_addr()
+        .map(|address| address.port())
+        .unwrap_or(0);
     let mut client = BufReader::new(stream);
     let Ok(Ok(head)) = timeout(HEAD_TIMEOUT, read_head(&mut client)).await else {
         return Ok(());
@@ -95,7 +99,40 @@ async fn handle(inner: Arc<Inner>, stream: TcpStream) -> io::Result<()> {
         .unwrap_or_else(|poisoned| poisoned.into_inner())
         .is_bound(&origin);
     if bound {
-        terminate(inner, client, host, port, origin).await
+        // Whose connection this is: the job whose credential it gave, and
+        // (in the split computer) a process of that job.
+        let job = proxy_credential(&head).and_then(|credential| {
+            inner
+                .table
+                .lock()
+                .unwrap_or_else(|poisoned| poisoned.into_inner())
+                .job_of(&credential)
+        });
+        let Some(job) = job else {
+            let text = "this connection gave no live job's proxy credential: the job it was made for has ended, or it is not a job's\n";
+            let reply = format!(
+                "HTTP/1.1 407 Proxy Authentication Required\r\nProxy-Authenticate: Basic realm=\"hotline job\"\r\nContent-Type: text/plain\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{text}",
+                text.len()
+            );
+            return client.write_all(reply.as_bytes()).await;
+        };
+        let check = inner
+            .peer
+            .read()
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
+            .clone();
+        if let Some(check) = check
+            && !check(peer_port, job.clone()).await
+        {
+            let text =
+                "this connection does not come from the job its proxy credential was made for\n";
+            let reply = format!(
+                "HTTP/1.1 403 Forbidden\r\nContent-Type: text/plain\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{text}",
+                text.len()
+            );
+            return client.write_all(reply.as_bytes()).await;
+        }
+        terminate(inner, client, host, port, origin, job).await
     } else {
         tunnel(inner, client, &host, port).await
     }
@@ -113,6 +150,27 @@ async fn read_head(client: &mut BufReader<TcpStream>) -> io::Result<String> {
             return String::from_utf8(head).map_err(|_| io::ErrorKind::InvalidData.into());
         }
     }
+}
+
+/// The password of a CONNECT's `Proxy-Authorization: Basic`, if any.
+fn proxy_credential(head: &str) -> Option<String> {
+    use base64::Engine;
+    let value = head.lines().skip(1).find_map(|line| {
+        let (name, value) = line.split_once(':')?;
+        name.trim()
+            .eq_ignore_ascii_case("proxy-authorization")
+            .then(|| value.trim().to_owned())
+    })?;
+    let (scheme, encoded) = value.split_once(' ')?;
+    if !scheme.eq_ignore_ascii_case("basic") {
+        return None;
+    }
+    let decoded = base64::engine::general_purpose::STANDARD
+        .decode(encoded.trim())
+        .ok()?;
+    let decoded = String::from_utf8(decoded).ok()?;
+    let (_, password) = decoded.split_once(':')?;
+    Some(password.to_owned())
 }
 
 fn connect_target(head: &str) -> Result<(String, u16), (&'static str, &'static str)> {
@@ -178,6 +236,7 @@ async fn terminate(
     host: String,
     port: u16,
     origin: String,
+    job: String,
 ) -> io::Result<()> {
     let config = inner.ca.server_config(&host).map_err(io::Error::other)?;
     client.write_all(ESTABLISHED).await?;
@@ -187,6 +246,7 @@ async fn terminate(
         host,
         port,
         origin,
+        job,
         upstream: AsyncMutex::new(None),
     });
     let service = service_fn(move |request| {
@@ -204,6 +264,9 @@ struct Session {
     host: String,
     port: u16,
     origin: String,
+    /// The job whose credential opened this connection: only its stand-ins
+    /// are swapped here.
+    job: String,
     /// One upstream connection, reused while it stays open.
     upstream: AsyncMutex<Option<SendRequest<Incoming>>>,
 }
@@ -333,7 +396,7 @@ impl Session {
                 let swap = value
                     .to_str()
                     .ok()
-                    .and_then(|text| table.swap(&self.origin, name.as_str(), text));
+                    .and_then(|text| table.swap(&self.origin, name.as_str(), text, &self.job));
                 let Some(swap) = swap else {
                     headers.append(name.clone(), value);
                     continue;

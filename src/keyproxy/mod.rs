@@ -22,7 +22,11 @@
 //!   a short list of key-minting endpoints (`policy`).
 //!
 //! The stand-in table is keyed by job: `begin` makes a job's stand-ins and
-//! `end` kills them. A delivery carries the desk's generation; an older one
+//! `end` kills them. Each job also gets a proxy credential (the password in
+//! its `HTTPS_PROXY`): a CONNECT to a bound origin must give a live one, the
+//! connection may then swap only that job's stand-ins, and in the split
+//! computer the runner is asked whether the connecting process belongs to
+//! that job (`check_peers`). A delivery carries the desk's generation; an older one
 //! is refused, and every stand-in of a variable that is no longer bound dies
 //! with the delivery that unbinds it, so revoking stops a running job too.
 //!
@@ -89,7 +93,18 @@ struct Inner {
     ca: ca::Ca,
     table: Mutex<table::Table>,
     upstream: Upstream,
+    /// Whether a connection from this local port comes from a process of
+    /// the job whose credential it gave (the runner's word, in the split
+    /// computer). Unset, no such check is made.
+    peer: std::sync::RwLock<Option<PeerCheck>>,
 }
+
+/// `(the client's local port, the job)`: whether that connection is the job's.
+pub type PeerCheck = Arc<
+    dyn Fn(u16, String) -> std::pin::Pin<Box<dyn std::future::Future<Output = bool> + Send>>
+        + Send
+        + Sync,
+>;
 
 /// Where the proxy goes on a job's behalf, and what it trusts there.
 struct Upstream {
@@ -142,6 +157,7 @@ impl KeyProxy {
             inner: Arc::new(Inner {
                 ca: ca::Ca::new(provider)?,
                 table: Mutex::new(table::Table::default()),
+                peer: std::sync::RwLock::new(None),
                 upstream: Upstream {
                     tls: Arc::new(tls),
                     #[cfg(test)]
@@ -184,9 +200,25 @@ impl KeyProxy {
         self.table().begin(job)
     }
 
-    /// Kills `job`'s stand-ins.
+    /// Kills `job`'s stand-ins and its proxy credential.
     pub fn end(&self, job: &str) {
         self.table().end(job);
+    }
+
+    /// `job`'s proxy credential: what its `HTTPS_PROXY` carries as the
+    /// password. A connection to a bound origin must give it, and a
+    /// stand-in is swapped only on a connection of the job it was made for.
+    pub fn credential(&self, job: &str) -> String {
+        self.table().credential(job)
+    }
+
+    /// From now on, a connection to a bound origin is also asked of `check`.
+    pub fn check_peers(&self, check: PeerCheck) {
+        *self
+            .inner
+            .peer
+            .write()
+            .unwrap_or_else(|poisoned| poisoned.into_inner()) = Some(check);
     }
 
     /// Serves jobs on `listener` until the process ends.

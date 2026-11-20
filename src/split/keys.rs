@@ -94,9 +94,17 @@ impl Keys {
             return environment;
         }
         let bundle = self.bundle.to_string_lossy().into_owned();
+        // The job's own credential rides in the proxy address, so every
+        // program that reads HTTPS_PROXY sends it; a stand-in works only on
+        // a connection that gave it.
+        let url = self.url.replacen(
+            "http://",
+            &format!("http://job:{}@", self.proxy.credential(job)),
+            1,
+        );
         for (name, value) in [
-            ("HTTPS_PROXY", self.url.as_str()),
-            ("https_proxy", self.url.as_str()),
+            ("HTTPS_PROXY", url.as_str()),
+            ("https_proxy", url.as_str()),
             ("NO_PROXY", "localhost,127.0.0.1,::1"),
             ("no_proxy", "localhost,127.0.0.1,::1"),
             ("NODE_USE_ENV_PROXY", "1"),
@@ -118,6 +126,12 @@ impl Keys {
 
     pub fn end(&self, job: &str) {
         self.proxy.end(job);
+    }
+
+    /// Asks `check` whether each connection to a bound origin comes from a
+    /// process of the job whose credential it gave.
+    pub fn check_peers(&self, check: crate::keyproxy::PeerCheck) {
+        self.proxy.check_peers(check);
     }
 }
 

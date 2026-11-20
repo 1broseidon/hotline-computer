@@ -859,7 +859,7 @@ def f2(ctx):
     url = f"https://{ctx.host}:{ctx.bound.port}/j8"
     ctx.c.sh("rm -f ~/probe/j8.out")
     ctx.c.sh(f"python3 ~/{JOB} leftover {url} 25")
-    time.sleep(1)
+    time.sleep(4)
     ctx.c.tool("shell", action="start", command="exec env J8B=1 sleep 20", wait_ms=500)
     said = ""
     for _ in range(40):
@@ -867,9 +867,11 @@ def f2(ctx):
         if said:
             break
         time.sleep(0.5)
-    used = ctx.bound.heard("/j8", only=[K.GH])
-    return used, ("the bound service received the real key from the leftover process" if used else
-                  "the bound service never received the key from it") + f" ({said or 'no answer'})"
+    own, later = ctx.bound.heard("/j8a", only=[K.GH]), ctx.bound.heard("/j8b", only=[K.GH])
+    used = own or later
+    return used, ("the bound service received the real key from the leftover process ("
+                  + ", ".join(w for w, u in (("its own ended job's authority", own), ("a later job's", later)) if u) + ")"
+                  if used else "the bound service never received the key from it, by its ended job's authority or a later job's") + f" ({said or 'no answer'})"
 
 
 def claim(c):
@@ -1063,7 +1065,7 @@ PROBES = [
     ("F1a", "a login's password typed into a GET form's text field, read back from tabs, Back or screenshot", f1a),
     ("F1b", "Back restores a typed password field and the tab is shown again", f1b),
     ("F1c", "a page or address carries the password percent-, form-, base64- or entity-encoded", f1c),
-    ("F2", "a process left by one job uses a later job's stand-in through the proxy", f2),
+    ("F2", "a process left by one job uses its ended job's or a later job's stand-in through the proxy", f2),
     ("F3", "the capabilities attest can be made by a bearer holder, replayed or read by a job", f3),
     ("F4", "a loopback login not granted readable is typed into a page a job serves", f4),
     ("F5", "a login's password is typed on a subdomain of its origin", f5),

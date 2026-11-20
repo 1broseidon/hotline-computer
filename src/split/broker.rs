@@ -151,6 +151,28 @@ pub fn run(config: Config) -> Result<(), String> {
             handoff: Arc::new(Mutex::new(handoff)),
             ready: readiness,
         });
+        // A connection to a bound origin must come from a process of the job
+        // whose credential it gave: the runner, as the agent, can tell.
+        if let (Some(keys), Some(runner)) = (&app.keys, app.runner.clone()) {
+            let proxy = super::PROXY_ADDR
+                .rsplit_once(':')
+                .and_then(|(_, port)| port.parse::<u16>().ok())
+                .unwrap_or(3128);
+            keys.check_peers(Arc::new(move |port, job| {
+                let runner = runner.clone();
+                Box::pin(async move {
+                    runner
+                        .call(
+                            "keys.peer",
+                            serde_json::json!({"port": port, "job": job, "proxy": proxy}),
+                        )
+                        .await
+                        .ok()
+                        .and_then(|answer| answer.as_bool())
+                        .unwrap_or(false)
+                })
+            }));
+        }
         // The signed-in browser, which PID 1 starts as `signin`; its bridge
         // is the only one, and answers `signin` alone.
         app.signin = Some(crate::signin::split::for_broker(&app));

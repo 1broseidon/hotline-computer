@@ -231,6 +231,22 @@ pub(crate) async fn answer(app: &App, op: &str, args: Value) -> Result<Value, St
                 .map_err(|error| error.to_string())?;
             Ok(json!({"path": path}))
         }
+        // The key proxy asks whether a connection it took is the job's
+        // whose credential it gave: only the agent's own user can tell.
+        "keys.peer" => {
+            let port = u16::try_from(args["port"].as_u64().unwrap_or(0)).unwrap_or(0);
+            let proxy = u16::try_from(args["proxy"].as_u64().unwrap_or(0)).unwrap_or(0);
+            let Some(leader) = app.jobs.leader(text_of(&args, "job")) else {
+                return Ok(Value::Bool(false));
+            };
+            Ok(Value::Bool(
+                tokio::task::spawn_blocking(move || {
+                    crate::jobs::connection_belongs(port, proxy, leader)
+                })
+                .await
+                .unwrap_or(false),
+            ))
+        }
         "migration.status" => Ok(super::migration::status(app).await),
         "migration.answer" => super::migration::answer(app, text_of(&args, "snapshots")).await,
         other => Err(format!("the runner does not know {other:?}")),

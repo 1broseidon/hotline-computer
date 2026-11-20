@@ -537,6 +537,13 @@ impl Jobs {
         Ok(job.record())
     }
 
+    /// The process a running job was started as (its session's leader).
+    pub fn leader(&self, id: &str) -> Option<u32> {
+        let jobs = self.jobs.lock().unwrap();
+        let record = jobs.get(id)?.record();
+        (!record.finished()).then_some(record.pid).flatten()
+    }
+
     fn publish(&self) {
         // Keep snapshots ordered through publication; a finishing job must not
         // overwrite a newer start with an older count on another X11 connection.
@@ -959,8 +966,18 @@ fn spawn(start: &Start, cwd: &Path, display: &str) -> Result<Spawned, String> {
             vec![("stdout", Reader::Pty(fd))],
         ))
     } else {
+        // A session of its own, not only a group: a process left over from
+        // another job cannot join a group across sessions, so the key proxy
+        // can tell this job's processes by their session (`belongs`).
+        unsafe {
+            command.pre_exec(|| {
+                if libc::setsid() < 0 {
+                    return Err(std::io::Error::last_os_error());
+                }
+                Ok(())
+            });
+        }
         command
-            .process_group(0)
             .stdin(Stdio::piped())
             .stdout(Stdio::piped())
             .stderr(Stdio::piped());
@@ -979,6 +996,93 @@ fn spawn(start: &Start, cwd: &Path, display: &str) -> Result<Spawned, String> {
             ],
         ))
     }
+}
+
+/// Whether the connection from local port `port` to the key proxy on
+/// `proxy_port` is held only by processes of the job that `leader` leads:
+/// in its session, or below it. Read from /proc as the agent's own user,
+/// which may read its processes' descriptors; a connection it cannot
+/// place belongs to no job.
+pub fn connection_belongs(port: u16, proxy_port: u16, leader: u32) -> bool {
+    let Some(inode) = connection_inode(port, proxy_port) else {
+        return false;
+    };
+    let target = format!("socket:[{inode}]");
+    let mut holders = Vec::new();
+    let Ok(processes) = std::fs::read_dir("/proc") else {
+        return false;
+    };
+    for process in processes.flatten() {
+        let Some(pid) = process
+            .file_name()
+            .to_str()
+            .and_then(|p| p.parse::<u32>().ok())
+        else {
+            continue;
+        };
+        let Ok(fds) = std::fs::read_dir(process.path().join("fd")) else {
+            continue;
+        };
+        if fds.flatten().any(|fd| {
+            std::fs::read_link(fd.path()).is_ok_and(|link| link.to_string_lossy() == target)
+        }) {
+            holders.push(pid);
+        }
+    }
+    !holders.is_empty() && holders.iter().all(|pid| in_job(*pid, leader))
+}
+
+/// The socket inode of the TCP connection from `port` to `proxy_port`.
+fn connection_inode(port: u16, proxy_port: u16) -> Option<String> {
+    for table in ["/proc/net/tcp", "/proc/net/tcp6"] {
+        let Ok(text) = std::fs::read_to_string(table) else {
+            continue;
+        };
+        for row in text.lines().skip(1) {
+            let fields: Vec<&str> = row.split_whitespace().collect();
+            let port_of = |address: &str| {
+                address
+                    .rsplit_once(':')
+                    .and_then(|(_, port)| u16::from_str_radix(port, 16).ok())
+            };
+            if fields.len() > 9
+                && port_of(fields[1]) == Some(port)
+                && port_of(fields[2]) == Some(proxy_port)
+            {
+                return Some(fields[9].to_owned());
+            }
+        }
+    }
+    None
+}
+
+/// `(parent, session)` of a process, from /proc/<pid>/stat.
+fn parent_and_session(pid: u32) -> Option<(u32, u32)> {
+    let stat = std::fs::read_to_string(format!("/proc/{pid}/stat")).ok()?;
+    let rest = stat.rsplit_once(')')?.1;
+    let fields: Vec<&str> = rest.split_whitespace().collect();
+    Some((fields.get(1)?.parse().ok()?, fields.get(3)?.parse().ok()?))
+}
+
+/// Whether `pid` is in the session `leader` leads, or descends from it.
+fn in_job(pid: u32, leader: u32) -> bool {
+    let mut at = pid;
+    for _ in 0..64 {
+        if at == leader {
+            return true;
+        }
+        let Some((parent, session)) = parent_and_session(at) else {
+            return false;
+        };
+        if session == leader {
+            return true;
+        }
+        if parent <= 1 {
+            return false;
+        }
+        at = parent;
+    }
+    false
 }
 
 async fn pty_write(fd: &AsyncFd<OwnedFd>, mut bytes: &[u8]) -> std::io::Result<()> {
