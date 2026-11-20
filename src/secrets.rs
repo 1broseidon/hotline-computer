@@ -509,6 +509,18 @@ impl Secrets {
         versions
     }
 
+    /// The names of what this computer cannot keep from its jobs, though it
+    /// holds it as protected: a login or passkey for a loopback site (a page
+    /// a job may serve), and a protected key for an "Other" service. What
+    /// `/capabilities` reports so the desk can label them readable.
+    pub fn readable_equivalent(&self) -> Vec<String> {
+        self.catalog()
+            .into_iter()
+            .filter(|entry| entry["readable"] == true)
+            .filter_map(|entry| entry["name"].as_str().map(str::to_owned))
+            .collect()
+    }
+
     /// The names alone, protected keys' included.
     pub fn names(&self) -> Vec<String> {
         let mut names: Vec<String> = self.read().keys().cloned().collect();
@@ -534,10 +546,15 @@ impl Secrets {
             .map(|(name, secret)| (name.clone(), secret.describe(name)))
             .collect();
         listed.extend(self.protected().iter().map(|(name, key)| {
-            (
-                name.clone(),
-                json!({"name": name, "kind": "variable", "protected": true, "origins": key.origins}),
-            )
+            let mut described =
+                json!({"name": name, "kind": "variable", "protected": true, "origins": key.origins});
+            // An "Other" service: replies the proxy cannot know may carry the
+            // key, or a new one, back in a shape no scrubbing finds.
+            if is_other(&key.origins) {
+                described["other"] = json!(true);
+                described["readable"] = json!(true);
+            }
+            (name.clone(), described)
         }));
         listed.sort_by(|a, b| a.0.cmp(&b.0));
         listed.into_iter().map(|(_, described)| described).collect()
@@ -1118,6 +1135,30 @@ impl Origin {
 
 fn is_local(host: &str) -> bool {
     is_loopback_host(host)
+}
+
+/// The services Hotline names, by the origins a key for each is used on
+/// (the desk's `services.json`). A key bound anywhere else is "Other".
+const SERVICES: [&[&str]; 3] = [
+    &[
+        "https://api.github.com",
+        "https://github.com",
+        "https://uploads.github.com",
+    ],
+    &["https://api.openai.com"],
+    &["https://api.anthropic.com"],
+];
+
+/// Whether a protected key's origins are not all one named service's: the
+/// proxy can neither know its replies nor which routes mint a new key, so
+/// it is reported readable-equivalent (still used through the proxy).
+pub fn is_other(origins: &[String]) -> bool {
+    origins.is_empty()
+        || !SERVICES.iter().any(|service| {
+            origins
+                .iter()
+                .all(|origin| service.contains(&origin.as_str()))
+        })
 }
 
 /// Whether `host` names this computer itself, however it is spelled:
@@ -1840,6 +1881,64 @@ mod tests {
             "https://github.com"
         );
         assert!(Origin::relying_party("not a host").is_empty());
+    }
+
+    #[test]
+    fn loopback_in_any_spelling_and_other_keys_are_readable() {
+        for host in [
+            "localhost",
+            "app.localhost",
+            "127.0.0.1",
+            "127.1",
+            "0x7f.1",
+            "2130706433",
+            "0177.0.0.1",
+            "127.255.1.2",
+            "0.0.0.0",
+            "[::1]",
+            "[::ffff:127.0.0.1]",
+            "[::]",
+        ] {
+            assert!(is_loopback_host(host), "{host}");
+        }
+        for host in [
+            "example.com",
+            "128.0.0.1",
+            "10.0.0.1",
+            "localhost.example",
+            "[2001:db8::1]",
+            "1.2.3.4.5",
+        ] {
+            assert!(!is_loopback_host(host), "{host}");
+        }
+        assert!(
+            Origin::site("http://0x7f000001:8000")
+                .unwrap()
+                .is_loopback()
+        );
+        assert!(!is_other(&[
+            "https://api.github.com".to_owned(),
+            "https://github.com".to_owned()
+        ]));
+        assert!(!is_other(&["https://api.anthropic.com".to_owned()]));
+        assert!(is_other(&[
+            "https://api.github.com".to_owned(),
+            "https://api.openai.com".to_owned()
+        ]));
+        assert!(is_other(&["https://example.com".to_owned()]));
+        let secrets = Secrets::default();
+        secrets
+            .replace(typed(json!({
+                "LOOP": {"kind": "login", "sites": ["http://127.1:9000"], "username": "u", "password": "p4ssw0rd-long"},
+                "PK": {"kind": "passkey", "rpId": "localhost", "credentialId": "AQID",
+                       "privateKey": "MIGHAgEAMBMGByqGSM49AgEGCCqGSM49AwEHBG0wawIBAQQgB9aEvdD1k7n55Wu+sDtf5cUbUumdw/XyKmgddnpO1eihRANCAASw/VbAXHGTIuqCMysLtvnlfwqu+ZFr7EQiwzWmLuynjO5Z/X+o4fuRzcMX916P1LxoWt4Ywc5KEVBuTzUzjBVI"},
+                "GH": {"kind": "login", "sites": ["https://github.com"], "username": "u", "password": "p4ssw0rd-long"},
+            })))
+            .unwrap();
+        assert_eq!(
+            secrets.readable_equivalent(),
+            vec!["LOOP".to_owned(), "PK".to_owned()]
+        );
     }
 
     #[test]

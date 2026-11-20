@@ -347,8 +347,11 @@ def main():
         private, x, y = passkey(tmp)
         cred = base64.b64encode(secrets.token_bytes(16)).decode()
         body = json.loads(K.body("protected", origin)[0])
-        body["secrets"]["SITE"] = {"kind": "login", "sites": [SITE], "username": "rc-user", "password": password, "totp": seed}
-        body["secrets"]["SITEKEY"] = {"kind": "passkey", "rpId": "localhost", "credentialId": cred,
+        # The fixture site is on loopback (no public test site exists), which
+        # the computer reports readable: granted so, as a person would have to.
+        body["secrets"]["SITE"] = {"kind": "login", "sites": [SITE], "username": "rc-user", "password": password, "totp": seed,
+                                   "readable": True}
+        body["secrets"]["SITEKEY"] = {"kind": "passkey", "rpId": "localhost", "credentialId": cred, "readable": True,
                                       "userHandle": base64.b64encode(b"rc-user-1").decode(), "privateKey": private, "userName": "rc-user"}
         canaries = K.ALL + [K.TOTP_SEED, password, seed, private]
         status, _, said = c.http("PUT", "/secrets", raw=json.dumps(body).encode(), headers={"Content-Type": K.V2})

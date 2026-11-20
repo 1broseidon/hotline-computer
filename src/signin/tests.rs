@@ -164,6 +164,11 @@ async fn rig(logins: Value) -> Rig {
     for (name, login) in logins.as_object().unwrap() {
         let mut login = login.clone();
         login["sites"] = json!([format!("http://localhost:{port}")]);
+        // The test site is on loopback: granted readable, as a person would
+        // have to for a site the computer itself serves.
+        if login.get("readable").is_none() {
+            login["readable"] = json!(true);
+        }
         set.insert(name.clone(), serde_json::from_value(login).unwrap());
     }
     app.secrets.replace(set).unwrap();

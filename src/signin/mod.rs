@@ -1867,6 +1867,14 @@ impl Signin {
             "username" | "password" | "code" => field,
             other => return Err(format!("{label}: a login has no {other} field")),
         };
+        // A loopback page may be one a job serves, whose script reads what
+        // is typed: only a login granted readable is typed there.
+        if field != "username" && !filled.readable && page.as_ref().is_ok_and(Origin::is_loopback) {
+            crate::bridge::record(app, &site, "was refused a login", false, None).await;
+            return Err(format!(
+                "{label} is not typed on {site}: that site is on this computer itself (loopback), where any program may serve the page and read what is typed, and the person did not grant {name} as readable. Ask them to grant it as readable, or to sign in themselves (Open Browser on this computer)."
+            ));
+        }
         let selector = ref_selector(reference)?;
         let origins: Vec<String> = sites.iter().map(ToString::to_string).collect();
         // The field, its frame and where its form sends, as the page has

@@ -937,7 +937,7 @@ def f4(ctx):
     _, _, body = ctx.c.http("GET", "/capabilities?nonce=f4")
     caps = json.loads(body).get("protected", {})
     info, _ = ctx.c.tool("state", action="info")
-    labelled = "loopbackLogins" in caps
+    labelled = caps.get("loopback") == "readable" and "LOOPAPP" in caps.get("readable", [])
     return got or not labelled, (("the job's page read LOOPAPP's password" if got else "fill: " + said.replace("\n", " ")[:100])
                  + f"; /capabilities protected={caps}" + ("" if labelled else " (no loopback label)"))
 

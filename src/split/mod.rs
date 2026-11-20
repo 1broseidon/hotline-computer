@@ -143,13 +143,19 @@ pub async fn capabilities(State(app): State<App>, Query(nonce): Query<Nonce>) ->
         )
             .into_response();
     }
-    Json(capabilities_for(
+    let mut answer = capabilities_for(
         protection(mode(), app.keys.is_some()),
         boot_id(),
         app.config.token.as_deref(),
         &nonce.nonce,
-    ))
-    .into_response()
+    );
+    // What this computer holds but cannot keep from its jobs, for the desk
+    // to label readable: loopback sites' logins and passkeys, and keys for
+    // an "Other" service. The rule, and the names in the set it holds now.
+    answer["protected"]["loopback"] = json!("readable");
+    answer["protected"]["other"] = json!("readable");
+    answer["protected"]["readable"] = json!(app.secrets.readable_equivalent());
+    Json(answer).into_response()
 }
 
 /// The mode `/capabilities` names: split only while the key proxy serves,

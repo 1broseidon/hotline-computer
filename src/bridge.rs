@@ -188,6 +188,17 @@ fn keys(app: &App) -> Vec<Passkey> {
     keys
 }
 
+/// The passkeys that may sign for a request from `origin` in the signed-in
+/// browser: on a loopback page (one a job may serve, where a script could
+/// ask for any challenge) only those granted readable.
+fn keys_for(app: &App, origin: &str) -> Vec<Passkey> {
+    let loopback = crate::secrets::Origin::of_page(origin).is_ok_and(|page| page.is_loopback());
+    keys(app)
+        .into_iter()
+        .filter(|key| !loopback || app.signin.is_none() || key.readable)
+        .collect()
+}
+
 async fn answer(app: &App, message: &Value) -> Value {
     let details = &message["details"];
     match message["kind"].as_str() {
@@ -214,7 +225,21 @@ async fn answer(app: &App, message: &Value) -> Value {
                 }
                 None => None,
             };
-            let granted = keys(app);
+            let origin = details["extensions"]["remoteDesktopClientOverride"]["origin"]
+                .as_str()
+                .unwrap_or_default()
+                .to_owned();
+            let granted = keys_for(app, &origin);
+            if granted.len() < keys(app).len()
+                && authenticator::chosen(details, &granted).is_err()
+                && authenticator::chosen(details, &keys(app)).is_ok()
+            {
+                record(app, &site, "was refused a passkey", false, None).await;
+                return refused(authenticator_refusal(
+                    "NotAllowedError",
+                    "Hotline: this site is on the computer itself (loopback), where any program may serve the page; its passkey signs there only if the person granted it as readable",
+                ));
+            }
             let how = match authenticator::chosen(details, &granted) {
                 Ok(key) => match passkey_gate(app, details, key, &site, flow).await {
                     Gate::Through(how) => how,
@@ -226,7 +251,7 @@ async fn answer(app: &App, message: &Value) -> Value {
             };
             // Signed with the set as it is now: a key revoked while the
             // person was deciding no longer signs.
-            match authenticator::assert(details, &keys(app)) {
+            match authenticator::assert(details, &keys_for(app, &origin)) {
                 Ok(response) => {
                     record(app, &site, "signed in with the passkey", true, how).await;
                     json!({"response": response})
