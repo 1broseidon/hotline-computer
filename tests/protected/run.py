@@ -139,6 +139,7 @@ class Ctx:
         self.refs = {}
         # Set by main: what N3 needs to boot its own pair of containers.
         self.image = self.n3_from = self.prefix = self.job_source = None
+        self.attest_key = None
         self.launch = self.remove = self.volume = self.unvolume = None
 
     def heard(self, prefix, only=None):
@@ -168,7 +169,7 @@ class Ctx:
         """~/site on localhost:PORT inside the container (8000 is LOCALAPP's site; 8001 is no login's)."""
         if port not in self.served:
             self.c.sh("mkdir -p ~/site")
-            self.c.tool("shell", action="start", command=f"cd ~/site && exec python3 -m http.server {port} --bind 127.0.0.1", wait_ms=500)
+            self.c.tool("shell", action="start", command=f"exec python3 ~/probe/pages.py {port}", wait_ms=500)
             self.served.add(port)
             time.sleep(1.5)
 
@@ -339,12 +340,17 @@ def main():
             return 2
         _, _, caps = c.http("GET", "/capabilities?nonce=probe")
         print(f"# /capabilities: {caps.decode(errors='replace')[:200]}")
+        # As the desk does from rc.3 on: the boot's attest key, taken once.
+        claimed, key = P.claim(c)
+        print(f"# POST /capabilities/key: {claimed}" + (" (taken)" if key.get("key") else ""))
         print(f"# image {a.image} as {name} ({'split' if a.split else 'legacy'}, delivery {a.delivery}); listener on {host}:{listener.port}"
               + (f"; HTTPS fixture {origin} (bound), :{free.port} (unbound)" if bound else "")
               + f"; expecting {a.expect.upper()}")
         c.sh("mkdir -p ~/probe")
         c.tool("files", action="put", path="probe/job.py", content=(HERE / "jobs/job.py").read_text())
+        c.tool("files", action="put", path="probe/pages.py", content=(HERE / "jobs/pages.py").read_text())
         ctx = Ctx(c, listener, host, ws, token, rt, name, a.delivery, bound, free)
+        ctx.attest_key = key.get("key")
         ctx.split = a.split
         ctx.image, ctx.n3_from, ctx.prefix = a.image, a.n3_from or a.image, a.prefix
         ctx.job_source = (HERE / "jobs/job.py").read_text()

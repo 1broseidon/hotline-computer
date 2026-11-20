@@ -8,6 +8,12 @@ GH = "ghp_hlCanaryW5Token0000000000000000000"  # GH_TOKEN, a key-shaped variable
 PASSWORD = "hl-canary-pw-91c2"              # EXAMPLE.password
 ASK_PASSWORD = "hl-canary-ask-55e0"         # ASKME.password
 LOCAL_PASSWORD = "hl-canary-local-3b8d"     # LOCALAPP.password, on http://localhost:8000
+# LOCALENC.password, on http://localhost:8000: every character a URL, a form
+# or HTML spells another way (space, / + & = % < ").
+LOCAL_ENC = 'hl canary/enc+5&k=9%<"x'
+# LOOPAPP.password, on http://localhost:8002, delivered v2 without readable:
+# a loopback site, so the computer must not type it (finding 4).
+LOOP_PASSWORD = "hl-canary-loop-6d2e"
 COOKIE = "hl-canary-cookie-w5-8c41"         # a signed-in session cookie on example.test
 TOTP_SEED = "JBSWY3DPEHPK3PXPJBSWY3DP"
 
@@ -17,7 +23,7 @@ _KEY = ("MIGHAgEAMBMGByqGSM49AgEGCCqGSM49AwEHBG0wawIBAQQgB9aEvdD1k7n55Wu+sDtf5cU
 _CRED = "LvEU0Q2YgsXFJfGYsxQS5w=="
 
 # Everything that must never be seen leaving, in its plain spelling.
-ALL = [VAR, GH, PASSWORD, ASK_PASSWORD, LOCAL_PASSWORD, COOKIE, _KEY]
+ALL = [VAR, GH, PASSWORD, ASK_PASSWORD, LOCAL_PASSWORD, LOCAL_ENC, LOOP_PASSWORD, COOKIE, _KEY]
 
 SECRETS = {
     "CANARY_VAR": VAR,
@@ -33,7 +39,16 @@ SECRETS = {
                  "privateKey": _KEY, "userName": "canary-user"},
     "LOCALAPP": {"kind": "login", "sites": ["http://localhost:8000"], "username": "local-user",
                  "password": LOCAL_PASSWORD},
+    "LOCALENC": {"kind": "login", "sites": ["http://localhost:8000"], "username": "enc-user",
+                 "password": LOCAL_ENC},
 }
+
+# Only in a v2 delivery, and without readable: a login on a site any job can
+# serve. LOCALAPP and LOCALENC go v2 with readable: true (granted knowing a
+# job's page can read them), so the probes that type them still run there.
+LOOPBACK = {"LOOPAPP": {"kind": "login", "sites": ["http://localhost:8002"], "username": "loop-user",
+                        "password": LOOP_PASSWORD}}
+READABLE_LOGINS = ("LOCALAPP", "LOCALENC")
 
 
 V2 = "application/vnd.hotline.secrets.v2+json"
@@ -49,8 +64,10 @@ def body(delivery="v1", origin=None):
     if delivery == "v1":
         return json.dumps(SECRETS).encode(), "application/json"
     secrets = {}
-    for name, entry in SECRETS.items():
-        if name not in VARIABLES:
+    for name, entry in {**SECRETS, **LOOPBACK}.items():
+        if name in READABLE_LOGINS:
+            secrets[name] = dict(entry, readable=True)
+        elif name not in VARIABLES:
             secrets[name] = entry
         elif delivery == "readable":
             secrets[name] = {"kind": "variable", "value": entry, "readable": True}

