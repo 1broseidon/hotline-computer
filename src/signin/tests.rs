@@ -89,7 +89,7 @@ async fn site(off_site: u16) -> u16 {
                     "/totp" => {
                         let body = text.split("\r\n\r\n").nth(1).unwrap_or("");
                         if body.contains(&format!("p={PASSWORD}")) {
-                            ("200 OK", String::new(), r#"<title>Code</title><form action="/home" method="get">
+                            ("200 OK", String::new(), r#"<title>Code</title><form action="/home" method="post">
                                 <label>Code <input name="otp" autocomplete="one-time-code"></label><button>Verify</button></form>"#.to_owned())
                         } else {
                             ("200 OK", String::new(), "<title>Wrong</title>wrong password".to_owned())
@@ -99,7 +99,7 @@ async fn site(off_site: u16) -> u16 {
                         r#"<title>Home</title><p>Welcome back</p><a href="/oauth">Connect app</a>
                         <a href="http://127.0.0.1:{off_site}/plain">Docs</a>"#)),
                     "/oauth" => ("302 Found", format!("http://127.0.0.1:{off_site}/cb?code=sekrit-code&state=s1"), String::new()),
-                    "/stuck" => ("200 OK", String::new(), r#"<title>Stuck</title><form onsubmit="return false">
+                    "/stuck" => ("200 OK", String::new(), r#"<title>Stuck</title><form action="/stuck" method="post" onsubmit="return false">
                         <label>Password <input name="p" type="password"></label><button>Sign in</button></form>"#.to_owned()),
                     "/type" => ("200 OK", String::new(), r#"<title>Type</title><input id="t" autofocus>"#.to_owned()),
                     "/pk" => ("200 OK", String::new(), r#"<title>PK</title><p id="r">pending</p><script>
@@ -928,19 +928,17 @@ async fn a_password_sent_off_the_site_never_leaves() {
         .unwrap();
     let password = rig.find("Password").await;
     let button = rig.find("[button] Sign in").await;
-    rig.browser(json!({"action": "fill", "ref": password, "secret": "SITE.password"}))
+    // The fill rule refuses the field at once: its form sends by GET, and
+    // elsewhere. Nothing is typed.
+    let refused = rig
+        .browser(json!({"action": "fill", "ref": password, "secret": "SITE.password"}))
         .await
-        .unwrap();
-    let clicked = rig
-        .browser(json!({"action": "click_ref", "ref": button}))
+        .unwrap_err();
+    assert!(refused.contains("sends by GET"), "{refused}");
+    rig.browser(json!({"action": "click_ref", "ref": button}))
         .await
         .unwrap();
     tokio::time::sleep(std::time::Duration::from_millis(500)).await;
-    let later = rig.browser(json!({"action": "text"})).await.unwrap();
-    assert!(
-        format!("{clicked}{later}").contains("was stopped"),
-        "{clicked} {later}"
-    );
     assert!(
         rig.general.0.lock().unwrap().is_empty(),
         "nothing went to the general browser"
