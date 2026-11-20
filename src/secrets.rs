@@ -1664,7 +1664,10 @@ mod tests {
             secrets.logins_for("https://github.com"),
             [("GITHUB".to_owned(), "george".to_owned(), true)]
         );
-        assert_eq!(named("https://gist.github.com"), ["GITHUB"]);
+        assert!(
+            named("https://gist.github.com").is_empty(),
+            "a subdomain is not the login's origin"
+        );
         assert!(named("https://github.com.evil.test").is_empty());
         assert!(named("http://github.com").is_empty());
         assert!(named("https://github.com:8443").is_empty());

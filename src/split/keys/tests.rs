@@ -305,8 +305,8 @@ async fn a_protected_value_reaches_no_job_env_log_or_runner_frame() {
     assert!(out.contains("token=ghp_"), "{out}");
     assert!(out.contains(&format!("PLAIN={READABLE}")), "{out}");
     for variable in [
-        "HTTPS_PROXY=http://127.0.0.1:",
-        "https_proxy=http://127.0.0.1:",
+        "HTTPS_PROXY=http://job:",
+        "https_proxy=http://job:",
         "NODE_USE_ENV_PROXY=1",
         "NO_PROXY=localhost",
         "SSL_CERT_FILE=",
@@ -443,7 +443,14 @@ fn a_v2_delivery_reads_every_kind_and_the_use_shapes() {
     );
     let env = app.keys.as_ref().unwrap().begin("job-1");
     assert!(env["GH_TOKEN"].starts_with("ghp_") && env["GH_TOKEN"] != REAL);
-    assert_eq!(env["HTTPS_PROXY"], "http://127.0.0.1:3128");
+    // The job's own proxy credential rides in the address.
+    let proxy = &env["HTTPS_PROXY"];
+    assert!(
+        proxy.starts_with("http://job:") && proxy.ends_with("@127.0.0.1:3128"),
+        "{proxy}"
+    );
+    let other = app.keys.as_ref().unwrap().begin("job-2");
+    assert_ne!(other["HTTPS_PROXY"], *proxy, "each job its own");
 }
 
 #[test]
