@@ -215,15 +215,18 @@ impl Table {
         })
     }
 
-    /// Whether any of `names`' values may not go to `path` on `origin`.
+    /// Whether any of `names`' values may not go to `path` on `origin`: the
+    /// built-in list always, and the desk's routes on top of it. A desk's
+    /// list adds to the minimum and never replaces it.
     pub fn refused(&self, names: &[String], origin: &str, path: &str) -> bool {
-        names.iter().any(|name| match self.bound.get(name) {
-            Some(Bound {
-                refuse: Some(routes),
-                ..
-            }) => policy::listed(routes, path),
-            _ => policy::refused(origin, path),
-        })
+        policy::refused(origin, path)
+            || names.iter().any(|name| match self.bound.get(name) {
+                Some(Bound {
+                    refuse: Some(routes),
+                    ..
+                }) => policy::listed(routes, path),
+                _ => false,
+            })
     }
 }
 

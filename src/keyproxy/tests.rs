@@ -640,7 +640,7 @@ async fn a_key_minting_request_is_refused() {
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-async fn the_desks_refuse_list_replaces_the_built_in_one() {
+async fn the_desks_refuse_list_adds_to_the_built_in_one() {
     let mut binding = github_token(&[GITHUB]);
     binding.use_.refuse = Some(vec!["/custom/*/mint".to_owned()]);
     let rig = rig_with(None, binding).await;
@@ -663,15 +663,21 @@ async fn the_desks_refuse_list_replaces_the_built_in_one() {
         &[bearer(&rig.stand_in)],
     )
     .await;
-    assert_eq!(status, StatusCode::OK, "the desk's list is the whole list");
-    // An empty list refuses nothing, for an "Other" host.
+    assert_eq!(
+        status,
+        StatusCode::FORBIDDEN,
+        "the built-in list stands whatever the desk sends"
+    );
+    // An empty list refuses only the built-in routes.
     let mut binding = github_token(&[GITHUB]);
     binding.use_.refuse = Some(Vec::new());
     rig.proxy.deliver(2, vec![binding]).unwrap();
     let fresh = rig.proxy.begin("job-9").remove(0).1;
     let (status, _, _) = send(&mut c, GITHUB, "POST", "/authorizations", &[bearer(&fresh)]).await;
+    assert_eq!(status, StatusCode::FORBIDDEN);
+    let (status, _, _) = send(&mut c, GITHUB, "GET", "/user", &[bearer(&fresh)]).await;
     assert_eq!(status, StatusCode::OK);
-    assert_eq!(rig.up.seen().len(), 2);
+    assert_eq!(rig.up.seen().len(), 1);
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
