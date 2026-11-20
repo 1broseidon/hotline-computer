@@ -133,8 +133,34 @@ pub struct Nonce {
     nonce: String,
 }
 
+/// The key this boot's attest is made with: 32 random bytes made when the
+/// door first needs them, in the door's own memory (the broker, uid
+/// `hotline`, non-dumpable, in the split computer), never in an
+/// environment, a file or a log. Independent of the bearer, which a job may
+/// have read while this computer ran legacy.
+fn attest_secret() -> &'static [u8; 32] {
+    static KEY: OnceLock<[u8; 32]> = OnceLock::new();
+    KEY.get_or_init(|| {
+        use ring::rand::SecureRandom;
+        let mut bytes = [0u8; 32];
+        ring::rand::SystemRandom::new()
+            .fill(&mut bytes)
+            .expect("the system has randomness");
+        bytes
+    })
+}
+
+/// Whether this boot's key was handed out.
+static CLAIMED: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+
+/// What the attest is the HMAC of: every field a desk relies on, so a proof
+/// made for one mode, boot, release or nonce is no proof of another.
+pub const ATTEST_CONTEXT: &str = "hotline-broker-v2";
+
 /// `GET /capabilities?nonce=N`: what this computer keeps, and proof that
-/// the holder of the bearer is answering, not something that took the port.
+/// this boot's door answers, not something that took the port. The proof
+/// is `attest`, base64 HMAC-SHA256 under this boot's key (`POST
+/// /capabilities/key`) of `hotline-broker-v2|<boot>|<mode>|<version>|<N>`.
 pub async fn capabilities(State(app): State<App>, Query(nonce): Query<Nonce>) -> Response {
     if nonce.nonce.is_empty() || nonce.nonce.len() > 256 {
         return (
@@ -146,7 +172,7 @@ pub async fn capabilities(State(app): State<App>, Query(nonce): Query<Nonce>) ->
     let mut answer = capabilities_for(
         protection(mode(), app.keys.is_some()),
         boot_id(),
-        app.config.token.as_deref(),
+        attest_secret(),
         &nonce.nonce,
     );
     // What this computer holds but cannot keep from its jobs, for the desk
@@ -156,6 +182,27 @@ pub async fn capabilities(State(app): State<App>, Query(nonce): Query<Nonce>) ->
     answer["protected"]["other"] = json!("readable");
     answer["protected"]["readable"] = json!(app.secrets.readable_equivalent());
     Json(answer).into_response()
+}
+
+/// `POST /capabilities/key`: this boot's attest key, to the first caller
+/// with the bearer, once; `409` after. The desk takes it right after it
+/// starts the computer (or sees a new `boot`) and keeps it with the bearer.
+/// A desk that finds it already taken did not take it itself, so it trusts
+/// nothing this boot attests.
+pub async fn attest_key() -> Response {
+    if CLAIMED.swap(true, std::sync::atomic::Ordering::SeqCst) {
+        return (
+            StatusCode::CONFLICT,
+            Json(json!({"error": "this boot's attest key was already taken; restart the computer to make a new one"})),
+        )
+            .into_response();
+    }
+    Json(json!({
+        "v": 2,
+        "boot": boot_id(),
+        "key": base64::engine::general_purpose::STANDARD.encode(attest_secret()),
+    }))
+    .into_response()
 }
 
 /// The mode `/capabilities` names: split only while the key proxy serves,
@@ -168,19 +215,20 @@ pub fn protection(mode: Mode, proxy_serving: bool) -> Mode {
     }
 }
 
-pub fn capabilities_for(mode: Mode, boot: &str, bearer: Option<&str>, nonce: &str) -> Value {
+/// `protected.v` is 2: a desk that knew only v1 (attest under the bearer)
+/// reads this as a computer it cannot verify, so it hands it what a
+/// legacy computer gets and says `needsUpdate` where a protected key waits.
+pub fn capabilities_for(mode: Mode, boot: &str, key: &[u8], nonce: &str) -> Value {
     use hmac::{Hmac, Mac};
-    let attest = bearer.map(|bearer| {
-        let mut mac = Hmac::<sha2::Sha256>::new_from_slice(bearer.as_bytes())
-            .expect("HMAC takes a key of any length");
-        mac.update(format!("hotline-broker-v1|{boot}|{nonce}").as_bytes());
-        base64::engine::general_purpose::STANDARD.encode(mac.finalize().into_bytes())
-    });
+    let version = env!("CARGO_PKG_VERSION");
+    let mut mac =
+        Hmac::<sha2::Sha256>::new_from_slice(key).expect("HMAC takes a key of any length");
+    mac.update(format!("{ATTEST_CONTEXT}|{boot}|{}|{version}|{nonce}", mode.name()).as_bytes());
     json!({
-        "version": env!("CARGO_PKG_VERSION"),
+        "version": version,
         "boot": boot,
-        "protected": {"v": 1, "mode": mode.name()},
-        "attest": attest,
+        "protected": {"v": 2, "mode": mode.name()},
+        "attest": base64::engine::general_purpose::STANDARD.encode(mac.finalize().into_bytes()),
     })
 }
 
@@ -393,17 +441,41 @@ mod tests {
     use super::*;
 
     #[test]
-    fn capabilities_attest_the_bearer_holder_and_name_the_mode() {
-        let answer = capabilities_for(Mode::Split, "b00t", Some("bearer"), "n1");
-        assert_eq!(answer["protected"], json!({"v": 1, "mode": "split"}));
+    fn capabilities_attest_with_the_boots_key_and_cover_the_mode() {
+        use hmac::{Hmac, Mac};
+        let key = [7u8; 32];
+        let answer = capabilities_for(Mode::Split, "b00t", &key, "n1");
+        assert_eq!(answer["protected"], json!({"v": 2, "mode": "split"}));
         assert_eq!(answer["boot"], "b00t");
         assert_eq!(answer["version"], env!("CARGO_PKG_VERSION"));
-        use hmac::{Hmac, Mac};
-        let mut mac = Hmac::<sha2::Sha256>::new_from_slice(b"bearer").unwrap();
-        mac.update(b"hotline-broker-v1|b00t|n1");
-        let expected =
-            base64::engine::general_purpose::STANDARD.encode(mac.finalize().into_bytes());
-        assert_eq!(answer["attest"], expected);
+        let mac = |key: &[u8], text: String| {
+            let mut mac = Hmac::<sha2::Sha256>::new_from_slice(key).unwrap();
+            mac.update(text.as_bytes());
+            base64::engine::general_purpose::STANDARD.encode(mac.finalize().into_bytes())
+        };
+        let version = env!("CARGO_PKG_VERSION");
+        assert_eq!(
+            answer["attest"],
+            mac(&key, format!("hotline-broker-v2|b00t|split|{version}|n1"))
+        );
+        assert_ne!(
+            answer["attest"],
+            mac(&key, format!("hotline-broker-v2|b00t|legacy|{version}|n1")),
+            "a proof of one mode is not one of another"
+        );
+        assert_ne!(
+            answer["attest"],
+            mac(b"bearer", "hotline-broker-v1|b00t|n1".to_owned()),
+            "the bearer makes no proof"
+        );
+        let legacy = capabilities_for(Mode::Legacy, "b00t", &key, "n1");
+        assert_eq!(legacy["protected"]["mode"], "legacy");
+        assert_ne!(legacy["attest"], answer["attest"], "the mode is in it");
+        assert_ne!(
+            capabilities_for(Mode::Split, "b00u", &key, "n1")["attest"],
+            answer["attest"],
+            "so is the boot"
+        );
         assert_eq!(protection(Mode::Split, true), Mode::Split);
         assert_eq!(
             protection(Mode::Split, false),
@@ -411,8 +483,5 @@ mod tests {
             "no proxy, no protected key: the desk is told legacy"
         );
         assert_eq!(protection(Mode::Legacy, true), Mode::Legacy);
-        let legacy = capabilities_for(Mode::Legacy, "b00t", Some("bearer"), "n2");
-        assert_eq!(legacy["protected"]["mode"], "legacy");
-        assert_ne!(legacy["attest"], answer["attest"], "the nonce is in it");
     }
 }

@@ -274,6 +274,9 @@ fn secret_routes() -> Router<App> {
     Router::new()
         // What this computer keeps, and proof the bearer's holder answers.
         .route("/capabilities", get(crate::split::capabilities))
+        // The key the attest is made with, handed once per boot to the
+        // first bearer holder who asks: the desk, right after it starts it.
+        .route("/capabilities/key", post(crate::split::attest_key))
         // The desk's door for the person's stored secrets: the whole set
         // goes in, and no method answers one. It is not among the open
         // routes below, so the bearer rides in the header as on `/mcp`.

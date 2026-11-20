@@ -98,11 +98,37 @@ impl Computer {
             .expect("capabilities JSON")
     }
 
-    fn attest(&self, boot: &str, nonce: &str) -> String {
+    /// This boot's attest key, as the desk takes it: once per boot, so it
+    /// is kept for the rest of this run.
+    async fn attest_key(&self) -> Vec<u8> {
+        use base64::Engine;
+        static KEY: tokio::sync::OnceCell<Vec<u8>> = tokio::sync::OnceCell::const_new();
+        KEY.get_or_init(|| async {
+            let answer: Value = reqwest::Client::new()
+                .post(format!("{}/capabilities/key", self.base))
+                .bearer_auth(&self.token)
+                .send()
+                .await
+                .expect("the attest key")
+                .json()
+                .await
+                .expect("the attest key JSON");
+            base64::engine::general_purpose::STANDARD
+                .decode(answer["key"].as_str().unwrap_or_else(|| panic!("{answer}")))
+                .unwrap()
+        })
+        .await
+        .clone()
+    }
+
+    /// The attest the desk expects: under this boot's key, of the mode,
+    /// the boot, the release and the nonce.
+    async fn attest(&self, boot: &str, mode: &str, version: &str, nonce: &str) -> String {
         use base64::Engine;
         use hmac::{Hmac, Mac};
-        let mut mac = Hmac::<sha2::Sha256>::new_from_slice(self.token.as_bytes()).unwrap();
-        mac.update(format!("hotline-broker-v1|{boot}|{nonce}").as_bytes());
+        let key = self.attest_key().await;
+        let mut mac = Hmac::<sha2::Sha256>::new_from_slice(&key).unwrap();
+        mac.update(format!("hotline-broker-v2|{boot}|{mode}|{version}|{nonce}").as_bytes());
         base64::engine::general_purpose::STANDARD.encode(mac.finalize().into_bytes())
     }
 }
@@ -202,17 +228,22 @@ async fn boot_splits_and_keeps_no_caps() {
         );
     }
     let answer = computer.capabilities("split-n1").await;
-    assert_eq!(
-        answer["protected"],
-        json!({"v": 1, "mode": "split"}),
-        "{answer}"
-    );
+    assert_eq!(answer["protected"]["v"], 2, "{answer}");
+    assert_eq!(answer["protected"]["mode"], "split", "{answer}");
     let boot = answer["boot"].as_str().unwrap();
+    let version = answer["version"].as_str().unwrap();
     assert_eq!(
         answer["attest"],
-        computer.attest(boot, "split-n1"),
+        computer.attest(boot, "split", version, "split-n1").await,
         "{answer}"
     );
+    let again = reqwest::Client::new()
+        .post(format!("{}/capabilities/key", computer.base))
+        .bearer_auth(&computer.token)
+        .send()
+        .await
+        .expect("a second claim");
+    assert_eq!(again.status(), 409, "the key is handed out once a boot");
 }
 
 const BIND: &str = r#"
@@ -331,15 +362,20 @@ async fn legacy_boot_is_todays_single_user() {
         "PID 1 is the single-user computer's boot: {init}"
     );
     let answer = computer.capabilities("legacy-n1").await;
-    assert_eq!(
-        answer["protected"],
-        json!({"v": 1, "mode": "legacy"}),
-        "{answer}"
-    );
+    assert_eq!(answer["protected"]["v"], 2, "{answer}");
+    assert_eq!(answer["protected"]["mode"], "legacy", "{answer}");
     let boot = answer["boot"].as_str().unwrap();
+    let version = answer["version"].as_str().unwrap();
     assert_eq!(
         answer["attest"],
-        computer.attest(boot, "legacy-n1"),
+        computer.attest(boot, "legacy", version, "legacy-n1").await,
         "{answer}"
     );
+    let again = reqwest::Client::new()
+        .post(format!("{}/capabilities/key", computer.base))
+        .bearer_auth(&computer.token)
+        .send()
+        .await
+        .expect("a second claim");
+    assert_eq!(again.status(), 409, "the key is handed out once a boot");
 }

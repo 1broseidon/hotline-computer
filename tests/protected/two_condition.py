@@ -328,6 +328,9 @@ def main():
             print("the computer did not come up:", made.stderr.strip()[:200])
             return 2
         c = R.Computer(port, token)
+        # As the desk does from rc.3 on: this boot's attest key, taken once.
+        claimed, attest = P.claim(c)
+        print(f"# POST /capabilities/key: {claimed}")
         c.record = []
         host = R.host_address(c)
         listener = R.Listener(os.environ.get("LISTEN_ADDR") or host)
@@ -378,6 +381,7 @@ def main():
         c.tool("files", action="put", path="probe/site.py", content=(HERE / "jobs/site.py").read_text())
         c.tool("files", action="put", path="probe/site.json", content=json.dumps(conf))
         c.tool("files", action="put", path="probe/job.py", content=(HERE / "jobs/job.py").read_text())
+        c.tool("files", action="put", path="probe/pages.py", content=(HERE / "jobs/pages.py").read_text())
         c.tool("files", action="put", path="probe/scan_home.py", content=(HERE / "jobs/scan_home.py").read_text())
 
         print("## condition 1: the agent's work")
@@ -392,6 +396,7 @@ def main():
         print("## condition 2: every probe, on this same computer")
         ctx = R.Ctx(c, listener, host, ws, token, rt, name, "protected", bound, free)
         ctx.split = True
+        ctx.attest_key = attest.get("key")
         ctx.image, ctx.n3_from, ctx.prefix = a.image, a.n3_from or a.image, a.prefix
         ctx.job_source = (HERE / "jobs/job.py").read_text()
         launch = R.launcher(rt, token)
