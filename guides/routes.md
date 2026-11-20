@@ -20,6 +20,7 @@ and the viewer page are open; everything else needs the token.
 | `/ws` | query | The viewer's socket. See [Viewer](/guides/viewer/) |
 | `/files`, `/files/download` | query | The viewer's file panel |
 | `GET /capabilities?nonce=` | header | Which computer this is. See below |
+| `POST /capabilities/key` | header | This boot's attest key, once. See below |
 | `PUT /secrets` | header | The secret set, v1 or v2. See [Secrets](/guides/secrets/) |
 | `GET /secrets/uses`, `POST /secrets/uses/answer` | header | Uses of an ask-me key waiting for you, and your answer |
 | `/passkeys/registration`, `/answer` | header | Passkey registration. See [Passkeys](/guides/passkeys/) |
@@ -61,15 +62,34 @@ than 0.11.0-rc.8 return 404.
 `GET /capabilities?nonce=N` takes a nonce of 1 to 256 characters and answers:
 
 ```json
-{"version":"0.13.0","boot":"…","protected":{"v":1,"mode":"split"},"attest":"…"}
+{"version":"0.13.0-rc.3","boot":"…","attest":"…",
+ "protected":{"v":2,"mode":"split","loopback":"readable","other":"readable","readable":["LOCALAPP"]}}
 ```
 
 `mode` is `split` when the computer keeps protected keys, and `legacy` for the
 single-user computer or a split computer whose key proxy did not start.
 `boot` changes with every start, so a new one means everything must be
-delivered again. `attest` is the base64 HMAC-SHA256 of
-`hotline-broker-v1|<boot>|<nonce>` keyed with the token, so a client can tell
-the computer holding its token answered, not something else on the port.
+delivered again. `readable` names what the computer holds but cannot keep
+from its jobs: a login or passkey for a loopback site (`localhost`,
+`*.localhost`, 127.0.0.0/8, `::1`; a job may serve that page) and a protected
+key for an "Other" service (one not wholly on GitHub's, OpenAI's or
+Anthropic's origins). Label those readable.
+
+`attest` proves this boot's door answered. Each boot makes a 32-byte key in
+the door's own memory (the broker's, in the split computer), independent of
+the token. `POST /capabilities/key` hands it to the first caller with the
+token, once: `{"v":2,"boot":"…","key":"<base64 of 32 bytes>"}`, then `409`.
+Take it right after starting the computer, and again on a new `boot`; if it
+was already taken, trust nothing that boot attests. Then
+
+```
+attest = base64(HMAC-SHA256(key, "hotline-broker-v2|<boot>|<mode>|<version>|<nonce>"))
+```
+
+with `boot`, `mode` and `version` as in the same answer, so a proof of one
+mode, boot or release is none for another. A client that knew only v1 (an
+HMAC under the token of `hotline-broker-v1|<boot>|<nonce>`) cannot read
+`v: 2` as split, and treats the computer as one it cannot verify.
 Versions before 0.13.0 return 404.
 
 ## Uses
