@@ -80,6 +80,15 @@ for a key-minting route. A stand-in dies when its job ends, and with the
 delivery that unbinds or changes its key, so revoking a key stops a running
 job too.
 
+Every job runs as the same user, `agent`. On the split computer each job
+starts in a Landlock domain of its own, so a job cannot trace another job,
+read or write its memory or environment, or take a connection it holds,
+and so cannot use another job's proxy credential, or go on using one after
+its own job ended. Without Landlock in the kernel the broker logs a line
+at start and jobs are not kept apart: one job can act as another. Either
+way the jobs share that user's files, so a job can change a script, a
+shell startup file or a dependency that a later job runs.
+
 ## Redaction
 
 There is no `GET`. `state info` lists each secret's name and kind, and for a

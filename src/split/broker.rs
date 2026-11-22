@@ -172,6 +172,11 @@ pub fn run(config: Config) -> Result<(), String> {
         }
         // The signed-in browser, which PID 1 starts as `signin`; its bridge
         // is the only one, and answers `signin` alone.
+        if !crate::jobs::landlock() {
+            eprintln!(
+                "hotline-computer: this kernel has no Landlock: jobs run as one user and are not kept apart, so one job can act as another"
+            );
+        }
         app.signin = Some(crate::signin::split::for_broker(&app));
         tokio::spawn(crate::bridge::serve(app.clone()));
         let listener = std::net::TcpListener::from(door);

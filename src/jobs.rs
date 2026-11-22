@@ -893,6 +893,19 @@ fn rand_id() -> Result<u32, String> {
     Ok(u32::from_ne_bytes(bytes))
 }
 
+/// Whether this kernel has Landlock, which keeps each job of the split
+/// computer out of the others (`a_domain_of_its_own`).
+#[cfg(target_os = "linux")]
+pub fn landlock() -> bool {
+    // SAFETY: Landlock's version query: no pointers, no fd.
+    unsafe { libc::syscall(libc::SYS_landlock_create_ruleset, 0usize, 0usize, 1u32) >= 1 }
+}
+
+#[cfg(not(target_os = "linux"))]
+pub fn landlock() -> bool {
+    false
+}
+
 /// A Landlock domain for the job about to start, that restricts nothing
 /// of its own (every file may be run, the only access it names). Landlock
 /// lets a process trace only processes in its own domain or one nested in
@@ -900,14 +913,23 @@ fn rand_id() -> Result<u32, String> {
 /// `environ`, and `pidfd_getfd`: jobs all run as the agent, and without it
 /// one job could run inside another, or take a connection it holds, and
 /// use that job's proxy authority. The runner, outside every domain, still
-/// sees its jobs. A kernel without Landlock leaves the job as it was.
+/// sees its jobs. A kernel without Landlock leaves the job as it was (the
+/// broker says so as it starts); on one with it, a step that fails stops
+/// the job from starting.
 ///
 /// Called between fork and exec: raw system calls only.
-#[cfg(not(target_os = "linux"))]
-fn a_domain_of_its_own() {}
+fn a_domain_of_its_own() -> std::io::Result<()> {
+    a_domain_beneath(c"/")
+}
 
+#[cfg(not(target_os = "linux"))]
+fn a_domain_beneath(_: &std::ffi::CStr) -> std::io::Result<()> {
+    Ok(())
+}
+
+/// `a_domain_of_its_own` with every file beneath `root` allowed to run.
 #[cfg(target_os = "linux")]
-fn a_domain_of_its_own() {
+fn a_domain_beneath(root: &std::ffi::CStr) -> std::io::Result<()> {
     #[repr(C)]
     struct Ruleset {
         handled_access_fs: u64,
@@ -919,6 +941,10 @@ fn a_domain_of_its_own() {
     }
     const EXECUTE: u64 = 1;
     const PATH_BENEATH: libc::c_long = 1;
+    if !landlock() {
+        return Ok(());
+    }
+    let failed = std::io::Error::last_os_error;
     let ruleset = Ruleset {
         handled_access_fs: EXECUTE,
     };
@@ -927,7 +953,7 @@ fn a_domain_of_its_own() {
     // wants no_new_privs, which a job of the split computer has already.
     unsafe {
         if libc::prctl(libc::PR_SET_NO_NEW_PRIVS, 1, 0, 0, 0) != 0 {
-            return;
+            return Err(failed());
         }
         let fd = libc::syscall(
             libc::SYS_landlock_create_ruleset,
@@ -936,27 +962,34 @@ fn a_domain_of_its_own() {
             0,
         );
         if fd < 0 {
-            return;
+            return Err(failed());
         }
-        let root = libc::open(c"/".as_ptr(), libc::O_PATH | libc::O_CLOEXEC);
-        if root >= 0 {
-            let everywhere = Beneath {
-                allowed_access: EXECUTE,
-                parent_fd: root,
-            };
-            if libc::syscall(
-                libc::SYS_landlock_add_rule,
-                fd,
-                PATH_BENEATH,
-                &everywhere as *const Beneath,
-                0,
-            ) == 0
-            {
-                libc::syscall(libc::SYS_landlock_restrict_self, fd, 0);
-            }
-            libc::close(root);
+        let fd = fd as i32;
+        let beneath = libc::open(root.as_ptr(), libc::O_PATH | libc::O_CLOEXEC);
+        if beneath < 0 {
+            let error = failed();
+            libc::close(fd);
+            return Err(error);
         }
-        libc::close(fd as i32);
+        let everywhere = Beneath {
+            allowed_access: EXECUTE,
+            parent_fd: beneath,
+        };
+        let added = libc::syscall(
+            libc::SYS_landlock_add_rule,
+            fd,
+            PATH_BENEATH,
+            &everywhere as *const Beneath,
+            0,
+        );
+        let result = if added != 0 || libc::syscall(libc::SYS_landlock_restrict_self, fd, 0) != 0 {
+            Err(failed())
+        } else {
+            Ok(())
+        };
+        libc::close(beneath);
+        libc::close(fd);
+        result
     }
 }
 
@@ -1022,7 +1055,7 @@ fn spawn(start: &Start, cwd: &Path, display: &str) -> Result<Spawned, String> {
                     return Err(std::io::Error::last_os_error());
                 }
                 if confined {
-                    a_domain_of_its_own();
+                    a_domain_of_its_own()?;
                 }
                 Ok(())
             });
@@ -1046,7 +1079,7 @@ fn spawn(start: &Start, cwd: &Path, display: &str) -> Result<Spawned, String> {
                     return Err(std::io::Error::last_os_error());
                 }
                 if confined {
-                    a_domain_of_its_own();
+                    a_domain_of_its_own()?;
                 }
                 Ok(())
             });
@@ -1353,10 +1386,7 @@ mod tests {
             if confined {
                 // SAFETY: the same call a job's start makes before exec.
                 unsafe {
-                    command.pre_exec(|| {
-                        super::a_domain_of_its_own();
-                        Ok(())
-                    });
+                    command.pre_exec(super::a_domain_of_its_own);
                 }
             }
             let out = command.output().unwrap();
@@ -1366,6 +1396,34 @@ mod tests {
         assert!(!look(true), "a confined job read another's environment");
         let _ = other.kill();
         let _ = other.wait();
+    }
+
+    /// On a kernel with Landlock, a domain that cannot be made stops the
+    /// job from starting instead of letting it run unconfined.
+    #[cfg(target_os = "linux")]
+    #[test]
+    fn a_job_whose_domain_fails_does_not_start() {
+        use std::os::unix::process::CommandExt;
+        if !super::landlock() {
+            return eprintln!("skipped: this kernel has no Landlock");
+        }
+        let mut command = std::process::Command::new("true");
+        // SAFETY: the job's own call before exec, here with a root that
+        // does not exist, so the open fails.
+        unsafe {
+            command.pre_exec(|| super::a_domain_beneath(c"/no/such/root"));
+        }
+        let started = command.status();
+        assert!(
+            started.is_err(),
+            "the job ran without its domain: {started:?}"
+        );
+        let mut fine = std::process::Command::new("true");
+        // SAFETY: as above, with the real root.
+        unsafe {
+            fine.pre_exec(super::a_domain_of_its_own);
+        }
+        assert!(fine.status().unwrap().success(), "a job in its domain runs");
     }
 
     #[test]
