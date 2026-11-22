@@ -13,7 +13,10 @@ ENV HOTLINE_BUILD_REVISION=$HOTLINE_BUILD_REVISION HOTLINE_BUILD_CHANNEL=$HOTLIN
 RUN --mount=type=cache,target=/usr/local/cargo/registry --mount=type=cache,target=/src/target cargo build --release --locked && cp target/release/hotline-computer /usr/local/bin/hotline-computer
 
 FROM build AS checks
-RUN rustup component add rustfmt clippy && apt-get update && apt-get install -y --no-install-recommends jq && rm -rf /var/lib/apt/lists/*
+# Chromium, so the signed-in browser's tests (src/signin/tests.rs) run here
+# instead of skipping; HOTLINE_TESTS_NEED_CHROMIUM makes a missing one fail.
+RUN rustup component add rustfmt clippy && apt-get update && apt-get install -y --no-install-recommends jq chromium fonts-dejavu-core && rm -rf /var/lib/apt/lists/*
+ENV HOTLINE_TESTS_NEED_CHROMIUM=1
 COPY tests ./tests
 RUN --mount=type=cache,target=/usr/local/cargo/registry --mount=type=cache,target=/src/target cargo fmt --check && CARGO_PROFILE_TEST_DEBUG=0 CARGO_INCREMENTAL=0 cargo test --locked && CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 cargo clippy --all-targets --locked -- -D warnings \
     && CARGO_PROFILE_TEST_DEBUG=0 CARGO_INCREMENTAL=0 cargo test --locked --test contract --no-run --message-format=json > /tmp/contract-build.jsonl \
