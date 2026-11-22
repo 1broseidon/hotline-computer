@@ -1663,7 +1663,7 @@ def f8i(ctx, restart=False):
         return "broken", "the signed-in browser never idled out in 13 min"
     idle = int(time.time() - started)
     status, _, said = ctx.c.http("DELETE", "/sessions/f8i")
-    stopped = not signed_in_running(ctx)
+    started_by_revoke = signed_in_running(ctx)
     if restart:
         ctx.restart()
     after = f8_look(ctx)
@@ -1671,7 +1671,9 @@ def f8i(ctx, restart=False):
     kept = value in after
     return kept, (("the revoked share's cookie came back when the site was opened again" if kept else
                    "the revoked share's cookie stayed gone when the site was opened again")
-                  + f" (stopped {idle} s after its last use, revoked while {'stopped' if stopped else 'RUNNING'}: DELETE {status} {said.decode()[:80]})")
+                  + f" (stopped {idle} s after its last use and revoked while stopped, after which it was "
+                  + ("running again" if started_by_revoke else "still stopped")
+                  + (", then the computer restarted" if restart else "") + f": DELETE {status} {said.decode()[:80]})")
 
 
 def f8r(ctx):
