@@ -998,13 +998,19 @@ fn spawn(start: &Start, cwd: &Path, display: &str) -> Result<Spawned, String> {
     }
 }
 
-/// Whether the connection from local port `port` to the key proxy on
-/// `proxy_port` is held only by processes of the job that `leader` leads:
-/// in its session, or below it. Read from /proc as the agent's own user,
-/// which may read its processes' descriptors; a connection it cannot
-/// place belongs to no job.
-pub fn connection_belongs(port: u16, proxy_port: u16, leader: u32) -> bool {
-    let Some(inode) = connection_inode(port, proxy_port) else {
+/// Whether the connection from `peer` to the key proxy at `proxy` is held
+/// only by processes of the job that `leader` leads: in its session, or
+/// below it. Read from /proc as the agent's own user, which may read its
+/// processes' descriptors; a connection it cannot place belongs to no job.
+/// The connection is found by both of its ends: a local port alone is
+/// shared by every loopback address (127.0.0.2 may take the port another
+/// job's connection holds on 127.0.0.1).
+pub fn connection_belongs(
+    peer: std::net::SocketAddr,
+    proxy: std::net::SocketAddr,
+    leader: u32,
+) -> bool {
+    let Some(inode) = connection_inode(peer, proxy) else {
         return false;
     };
     let target = format!("socket:[{inode}]");
@@ -1032,28 +1038,51 @@ pub fn connection_belongs(port: u16, proxy_port: u16, leader: u32) -> bool {
     !holders.is_empty() && holders.iter().all(|pid| in_job(*pid, leader))
 }
 
-/// The socket inode of the TCP connection from `port` to `proxy_port`.
-fn connection_inode(port: u16, proxy_port: u16) -> Option<String> {
-    for table in ["/proc/net/tcp", "/proc/net/tcp6"] {
-        let Ok(text) = std::fs::read_to_string(table) else {
-            continue;
-        };
-        for row in text.lines().skip(1) {
-            let fields: Vec<&str> = row.split_whitespace().collect();
-            let port_of = |address: &str| {
-                address
-                    .rsplit_once(':')
-                    .and_then(|(_, port)| u16::from_str_radix(port, 16).ok())
-            };
-            if fields.len() > 9
-                && port_of(fields[1]) == Some(port)
-                && port_of(fields[2]) == Some(proxy_port)
-            {
-                return Some(fields[9].to_owned());
+/// The socket inode of the TCP connection from `peer` to `proxy`.
+fn connection_inode(peer: std::net::SocketAddr, proxy: std::net::SocketAddr) -> Option<String> {
+    ["/proc/net/tcp", "/proc/net/tcp6"]
+        .iter()
+        .find_map(|table| {
+            let text = std::fs::read_to_string(table).ok()?;
+            inode_in(&text, peer, proxy)
+        })
+}
+
+/// In a /proc/net/tcp(6) table, the inode of the row whose local end is
+/// `peer` and whose remote end is `proxy`.
+fn inode_in(
+    table: &str,
+    peer: std::net::SocketAddr,
+    proxy: std::net::SocketAddr,
+) -> Option<String> {
+    table.lines().skip(1).find_map(|row| {
+        let fields: Vec<&str> = row.split_whitespace().collect();
+        (fields.len() > 9
+            && table_address(fields[1]) == Some(peer)
+            && table_address(fields[2]) == Some(proxy))
+        .then(|| fields[9].to_owned())
+    })
+}
+
+/// An address as /proc/net/tcp(6) prints it: the address's words in the
+/// kernel's own byte order, in hex, then the port.
+fn table_address(text: &str) -> Option<std::net::SocketAddr> {
+    let (address, port) = text.split_once(':')?;
+    let port = u16::from_str_radix(port, 16).ok()?;
+    let word = |hex: &str| u32::from_str_radix(hex, 16).ok().map(u32::to_ne_bytes);
+    let ip: std::net::IpAddr = match address.len() {
+        8 => std::net::Ipv4Addr::from(word(address)?).into(),
+        32 => {
+            let mut bytes = [0u8; 16];
+            for (i, chunk) in bytes.chunks_mut(4).enumerate() {
+                chunk.copy_from_slice(&word(address.get(i * 8..i * 8 + 8)?)?);
             }
+            let v6 = std::net::Ipv6Addr::from(bytes);
+            v6.to_ipv4_mapped().map_or(v6.into(), Into::into)
         }
-    }
-    None
+        _ => return None,
+    };
+    Some(std::net::SocketAddr::new(ip, port))
 }
 
 /// `(parent, session)` of a process, from /proc/<pid>/stat.
@@ -1226,6 +1255,52 @@ async fn supervise(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_connection_to_the_proxy_is_found_by_both_its_ends() {
+        // Two connections from local port 54298 to 127.0.0.1:3128: one
+        // from 127.0.0.1 (a job's), one from 127.0.0.4 (another job's,
+        // aliasing it). Each is only itself.
+        let row = |local: &str, inode: &str| {
+            let proxy = u32::from_ne_bytes([127, 0, 0, 1]);
+            format!(
+                "   0: {local}:D41A {proxy:08X}:0C38 01 00000000:00000000 00:00000000 00000000  1000        0 {inode} 1 0000000000000000 20 4 30 10 -1"
+            )
+        };
+        let ours = u32::from_ne_bytes([127, 0, 0, 1]);
+        let alias = u32::from_ne_bytes([127, 0, 0, 4]);
+        let table = format!(
+            "  sl  local_address rem_address   st tx_queue rx_queue tr tm->when retrnsmt   uid  timeout inode\n{}\n{}\n",
+            row(&format!("{ours:08X}"), "1111"),
+            row(&format!("{alias:08X}"), "2222")
+        );
+        let proxy: std::net::SocketAddr = "127.0.0.1:3128".parse().unwrap();
+        let at = |peer: &str| super::inode_in(&table, peer.parse().unwrap(), proxy);
+        assert_eq!(at("127.0.0.1:54298").as_deref(), Some("1111"));
+        assert_eq!(at("127.0.0.4:54298").as_deref(), Some("2222"));
+        assert_eq!(at("127.0.0.2:54298"), None);
+        assert_eq!(
+            super::inode_in(
+                &table,
+                "127.0.0.1:54298".parse().unwrap(),
+                "127.0.0.1:3129".parse().unwrap()
+            ),
+            None
+        );
+        let mapped = [
+            0u32,
+            0,
+            u32::from_ne_bytes([0, 0, 0xff, 0xff]),
+            u32::from_ne_bytes([127, 0, 0, 1]),
+        ]
+        .map(|word| format!("{word:08X}"))
+        .concat();
+        assert_eq!(
+            super::table_address(&format!("{mapped}:0C38")),
+            Some("127.0.0.1:3128".parse().unwrap()),
+            "a v4-mapped address in tcp6 is the v4 one"
+        );
+    }
 
     #[test]
     fn a_script_that_starts_with_cd_takes_that_folders_environment() {

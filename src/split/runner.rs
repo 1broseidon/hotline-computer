@@ -234,14 +234,16 @@ pub(crate) async fn answer(app: &App, op: &str, args: Value) -> Result<Value, St
         // The key proxy asks whether a connection it took is the job's
         // whose credential it gave: only the agent's own user can tell.
         "keys.peer" => {
-            let port = u16::try_from(args["port"].as_u64().unwrap_or(0)).unwrap_or(0);
-            let proxy = u16::try_from(args["proxy"].as_u64().unwrap_or(0)).unwrap_or(0);
+            let address = |field: &str| text_of(&args, field).parse::<std::net::SocketAddr>().ok();
+            let (Some(peer), Some(proxy)) = (address("peer"), address("proxy")) else {
+                return Ok(Value::Bool(false));
+            };
             let Some(leader) = app.jobs.leader(text_of(&args, "job")) else {
                 return Ok(Value::Bool(false));
             };
             Ok(Value::Bool(
                 tokio::task::spawn_blocking(move || {
-                    crate::jobs::connection_belongs(port, proxy, leader)
+                    crate::jobs::connection_belongs(peer, proxy, leader)
                 })
                 .await
                 .unwrap_or(false),

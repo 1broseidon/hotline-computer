@@ -93,15 +93,17 @@ struct Inner {
     ca: ca::Ca,
     table: Mutex<table::Table>,
     upstream: Upstream,
-    /// Whether a connection from this local port comes from a process of
+    /// Whether a connection from this address comes from a process of
     /// the job whose credential it gave (the runner's word, in the split
     /// computer). Unset, no such check is made.
     peer: std::sync::RwLock<Option<PeerCheck>>,
 }
 
-/// `(the client's local port, the job)`: whether that connection is the job's.
+/// `(the client's address, the job)`: whether that connection is the job's.
+/// The whole address, not its port: one port is free on every loopback
+/// address at once.
 pub type PeerCheck = Arc<
-    dyn Fn(u16, String) -> std::pin::Pin<Box<dyn std::future::Future<Output = bool> + Send>>
+    dyn Fn(SocketAddr, String) -> std::pin::Pin<Box<dyn std::future::Future<Output = bool> + Send>>
         + Send
         + Sync,
 >;

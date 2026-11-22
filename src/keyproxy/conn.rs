@@ -74,10 +74,9 @@ pub(super) async fn serve(inner: Arc<Inner>, listener: TcpListener) -> io::Resul
 
 async fn handle(inner: Arc<Inner>, stream: TcpStream) -> io::Result<()> {
     let _ = stream.set_nodelay(true);
-    let peer_port = stream
+    let peer = stream
         .peer_addr()
-        .map(|address| address.port())
-        .unwrap_or(0);
+        .unwrap_or_else(|_| std::net::SocketAddr::from(([0, 0, 0, 0], 0)));
     let mut client = BufReader::new(stream);
     let Ok(Ok(head)) = timeout(HEAD_TIMEOUT, read_head(&mut client)).await else {
         return Ok(());
@@ -122,7 +121,7 @@ async fn handle(inner: Arc<Inner>, stream: TcpStream) -> io::Result<()> {
             .unwrap_or_else(|poisoned| poisoned.into_inner())
             .clone();
         if let Some(check) = check
-            && !check(peer_port, job.clone()).await
+            && !check(peer, job.clone()).await
         {
             let text =
                 "this connection does not come from the job its proxy credential was made for\n";
