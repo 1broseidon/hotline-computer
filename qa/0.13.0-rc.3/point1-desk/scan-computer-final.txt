@@ -1,0 +1,8 @@
+HIT /home/agent/workspace/control.txt canary#20 plain
+HIT /home/agent/.hotline/jobs/000001a20238d1ff-d199d2e3/output.log canary#21 plain
+HIT /home/agent/.hotline/jobs/000001a20238d1ff-d199d2e3/record.json canary#21 plain
+HIT /home/agent/.hotline/jobs/000001a20238d1ff-d199d2e3/stdout.log canary#21 plain
+HIT /home/agent/.hotline/snapshots/w5snap.tar.gz (unpacked) canary#20 plain
+HIT /home/agent/fixture/control.txt canary#20 plain
+HIT /proc/251/environ canary#22 plain
+SCANNED files=5563 skipped=0 proc_entries=27 needles=150 hits=7
