@@ -38,9 +38,15 @@ impl General for Recorder {
     }
 }
 
+/// Every request line any rig site was sent: what reached a server.
+static HEARD: Mutex<Vec<String>> = Mutex::new(Vec::new());
+
 /// A sign-in site: `/login` (username and password), `/totp` (the code),
 /// `/home`, with links out; `/stuck`, whose form never leaves; `/type`, a
-/// field with the focus; `/whoami`, its cookies.
+/// field with the focus; `/whoami`, its cookies; `/script`, fields a script
+/// builds with no form; `/noform-get`, a form with no method and no script
+/// (sent by GET); `/grows`, a form that adds its Next button as the name
+/// is typed.
 async fn site(off_site: u16) -> u16 {
     let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
     let port = listener.local_addr().unwrap().port();
@@ -74,6 +80,10 @@ async fn site(off_site: u16) -> u16 {
                 }
                 let text = String::from_utf8_lossy(&request).to_string();
                 let path = text.split_whitespace().nth(1).unwrap_or("/").to_owned();
+                HEARD
+                    .lock()
+                    .unwrap()
+                    .push(text.lines().next().unwrap_or_default().to_owned());
                 let cookie = text
                     .lines()
                     .find_map(|line| {
@@ -102,6 +112,13 @@ async fn site(off_site: u16) -> u16 {
                     "/stuck" => ("200 OK", String::new(), r#"<title>Stuck</title><form action="/stuck" method="post" onsubmit="return false">
                         <label>Password <input name="p" type="password"></label><button>Sign in</button></form>"#.to_owned()),
                     "/type" => ("200 OK", String::new(), r#"<title>Type</title><input id="t" autofocus>"#.to_owned()),
+                    "/script" => ("200 OK", String::new(), r#"<title>Script</title><div id="app"></div><script>
+                        app.innerHTML = '<label>Username <input id="u"></label><label>Password <input id="p" type="password"></label><button id="go">Sign in</button>';
+                        go.onclick = () => fetch('/totp', {method: 'POST', body: 'p=' + encodeURIComponent(p.value)});</script>"#.to_owned()),
+                    "/noform-get" => ("200 OK", String::new(), r#"<title>No method</title><form action="/home">
+                        <label>Username <input name="u"></label><label>Password <input name="p" type="password"></label><button>Sign in</button></form>"#.to_owned()),
+                    "/grows" => ("200 OK", String::new(), r#"<title>Grows</title><form action="/totp" method="post">
+                        <label>Username <input name="u" oninput="if (!this.form.querySelector('button')) this.form.insertAdjacentHTML('beforeend', '<button>Next</button>')"></label></form>"#.to_owned()),
                     "/pk" => ("200 OK", String::new(), r#"<title>PK</title><p id="r">pending</p><script>
                         navigator.credentials.get({publicKey:{challenge:new Uint8Array(32),rpId:'localhost',userVerification:'preferred',timeout:20000}})
                         .then(c => document.getElementById('r').textContent = 'signed ' + c.type)
@@ -1102,5 +1119,110 @@ async fn a_wait_during_sign_in_resolves_only_after_the_next_document() {
         }
     );
     assert!(waited.unwrap().contains("found"));
+    rig.signin.stop().await;
+}
+
+/// A sign-in page a script builds, with no form (Google's): the password
+/// goes in, as into a POST form, and the page is withheld until it moves on.
+#[tokio::test]
+async fn a_password_field_a_script_built_with_no_form_is_typed() {
+    if !have_chromium() {
+        return eprintln!("skipped: no chromium");
+    }
+    let _serial = SERIAL.lock().await;
+    let rig = rig(login()).await;
+    rig.browser(json!({"action": "navigate", "url": rig.url("/script")}))
+        .await
+        .unwrap();
+    let password = rig.find("Password").await;
+    let filled = rig
+        .browser(json!({"action": "fill", "ref": password, "secret": "SITE.password"}))
+        .await
+        .unwrap();
+    assert!(filled.contains("hidden from you"), "{filled}");
+    let hidden = rig.browser(json!({"action": "text"})).await.unwrap();
+    assert!(hidden.contains("middle of signing in"), "{hidden}");
+    rig.signin.stop().await;
+}
+
+/// A form with no method sends by GET. A script-built one is sent by its
+/// script, so the password is typed; and if the browser sends it itself
+/// (here: no script at all), the load carrying it is stopped before it
+/// leaves: no server hears it, no address or history shows it, and the
+/// sign-in page stays.
+#[tokio::test]
+async fn a_password_in_a_get_form_is_typed_but_never_sent_in_an_address() {
+    if !have_chromium() {
+        return eprintln!("skipped: no chromium");
+    }
+    let _serial = SERIAL.lock().await;
+    let rig = rig(login()).await;
+    rig.browser(json!({"action": "navigate", "url": rig.url("/noform-get")}))
+        .await
+        .unwrap();
+    let password = rig.find("Password").await;
+    let button = rig.find("[button] Sign in").await;
+    let filled = rig
+        .browser(json!({"action": "fill", "ref": password, "secret": "SITE.password"}))
+        .await
+        .unwrap();
+    assert!(filled.contains("hidden from you"), "{filled}");
+    rig.browser(json!({"action": "click_ref", "ref": button}))
+        .await
+        .unwrap();
+    tokio::time::sleep(std::time::Duration::from_millis(800)).await;
+    let heard = HEARD.lock().unwrap().clone();
+    assert!(
+        heard.iter().all(|line| !line.contains(PASSWORD)),
+        "a server heard the password: {heard:?}"
+    );
+    let running = rig.signin.browser().await.unwrap();
+    let session = rig.signin.lock_tabs().list[0].session.clone();
+    let history = running
+        .cdp
+        .on(&session, "Page.getNavigationHistory", json!({}))
+        .await
+        .unwrap();
+    assert!(
+        !history.to_string().contains(PASSWORD),
+        "an address carries the password: {history}"
+    );
+    let index = history["currentIndex"].as_u64().unwrap() as usize;
+    assert!(
+        history["entries"][index]["url"]
+            .as_str()
+            .unwrap()
+            .ends_with("/noform-get"),
+        "the sign-in page stays: {history}"
+    );
+    let tabs = rig.browser(json!({"action": "tabs"})).await.unwrap();
+    assert!(!tabs.contains(PASSWORD), "{tabs}");
+    assert!(rig.general.0.lock().unwrap().is_empty());
+    rig.signin.stop().await;
+}
+
+/// A page that adds its Next button as the name is typed (X's) changes
+/// nothing about where the form sends: the username stays typed.
+#[tokio::test]
+async fn a_button_the_page_adds_while_typing_keeps_the_fill() {
+    if !have_chromium() {
+        return eprintln!("skipped: no chromium");
+    }
+    let _serial = SERIAL.lock().await;
+    let rig = rig(login()).await;
+    rig.browser(json!({"action": "navigate", "url": rig.url("/grows")}))
+        .await
+        .unwrap();
+    let username = rig.find("Username").await;
+    let filled = rig
+        .browser(json!({"action": "fill", "ref": username, "secret": "SITE.username"}))
+        .await
+        .unwrap();
+    assert_eq!(filled, format!("filled {username} with SITE.username"));
+    let shown = rig.browser(json!({"action": "text"})).await.unwrap();
+    assert!(
+        shown.contains("value=\"george\"") && shown.contains("Next"),
+        "{shown}"
+    );
     rig.signin.stop().await;
 }

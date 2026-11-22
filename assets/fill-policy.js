@@ -2,21 +2,28 @@
 // `browser fill` (src/signin/mod.rs evaluates this file in an isolated world)
 // and the extension's autofill (assets/extension/autofill.js loads it first).
 //
-// hotlineFillPolicy(element, kind, origins) answers {ok, why, print}:
+// hotlineFillPolicy(element, kind, origins, stopsGet) answers {ok, why, print}:
 // - kind "username": an <input> of type text or email.
 // - kind "password": an <input type=password>, as the DOM reports it now,
-//   inside a form whose every submission is POST to one of `origins`.
-// - kind "code": a one-time-code field inside such a form: an <input> with
-//   autocomplete=one-time-code of type text, tel, number or password, or one
-//   of type text, tel or number (or inputmode=numeric) with a maxlength of 6
-//   to 8. The form rule is what keeps the code out of an address and the
-//   history; the shape is what keeps it out of a search box or a comment.
+//   either in no form at all (a page built by script that sends it itself:
+//   nothing the browser does on its own sends it anywhere), or inside a form
+//   whose every submission is POST to one of `origins`. With `stopsGet`, the
+//   caller stops any page load whose address carries what was typed (the
+//   signed-in browser does), so a form sending by GET to one of `origins`
+//   is taken too: a script-built form with no method, sent by its script.
+// - kind "code": a one-time-code field under the same form rule: an <input>
+//   with autocomplete=one-time-code of type text, tel, number or password,
+//   or one of type text, tel or number (or inputmode=numeric) with a
+//   maxlength of 6 to 8. The form rule is what keeps the code out of an
+//   address and the history; the shape is what keeps it out of a search box
+//   or a comment.
 // - always: the field's frame is the top frame or a frame of the same
 //   origin, and that origin is exactly one of `origins` (no subdomain).
 // `print` is what must still hold right before and right after typing: a
-// type, method or destination changed in between refuses the fill.
+// type, form, method or destination changed in between refuses the fill. A
+// plain submit button the page adds as the field fills changes none of them.
 // eslint-disable-next-line no-unused-vars
-function hotlineFillPolicy(el, kind, origins) {
+function hotlineFillPolicy(el, kind, origins, stopsGet) {
   const refuse = (why) => ({ ok: false, why });
   if (!el || !(el instanceof HTMLInputElement)) return refuse('it is not a text field (an <input>)');
   if (!el.isConnected) return refuse('it is no longer on the page');
@@ -31,9 +38,11 @@ function hotlineFillPolicy(el, kind, origins) {
   const type = el.type;
   const destination = (url) => { try { return new URL(url, location.href).origin; } catch { return ''; } };
   const form = el.form;
+  // Only a button that sends elsewhere or otherwise than its form matters.
   const submitters = form
-    ? [...form.elements].filter((s) => (s instanceof HTMLButtonElement && s.type === 'submit') ||
-        (s instanceof HTMLInputElement && (s.type === 'submit' || s.type === 'image')))
+    ? [...form.elements].filter((s) => ((s instanceof HTMLButtonElement && s.type === 'submit') ||
+        (s instanceof HTMLInputElement && (s.type === 'submit' || s.type === 'image'))) &&
+        (s.getAttribute('formmethod') !== null || s.getAttribute('formaction') !== null))
     : [];
   const print = JSON.stringify([kind, type, el.name, form ? form.method : null, form ? form.action : null,
     submitters.map((s) => [s.getAttribute('formmethod') === null ? null : s.formMethod,
@@ -56,12 +65,15 @@ function hotlineFillPolicy(el, kind, origins) {
     }
   }
   if (kind !== 'password' && kind !== 'code') return refuse(`there is no ${kind} field rule`);
-  if (!form) return refuse('it is not inside a form, so where it would be sent is not known');
-  if (form.method !== 'post') return refuse(`its form sends by ${form.method.toUpperCase()}, which would put it in the address`);
-  if (!origins.includes(destination(form.action))) return refuse(`its form sends to ${destination(form.action) || 'nowhere known'}, not the login's own origin`);
+  if (!form) return { ok: true, print };
+  const own = origins.includes(destination(form.action));
+  const sent = (method, home) => method === 'post' || (stopsGet === true && method === 'get' && home);
+  if (!sent(form.method, own)) return refuse(`its form sends by ${form.method.toUpperCase()}, which would put it in the address`);
+  if (!own) return refuse(`its form sends to ${destination(form.action) || 'nowhere known'}, not the login's own origin`);
   for (const s of submitters) {
-    if (s.getAttribute('formmethod') !== null && s.formMethod !== 'post') return refuse('a button of its form sends by GET');
-    if (s.getAttribute('formaction') !== null && !origins.includes(destination(s.formAction))) return refuse('a button of its form sends elsewhere');
+    const home = s.getAttribute('formaction') === null || origins.includes(destination(s.formAction));
+    if (s.getAttribute('formmethod') !== null && !sent(s.formMethod, home)) return refuse('a button of its form sends by GET');
+    if (!home) return refuse('a button of its form sends elsewhere');
   }
   return { ok: true, print };
 }

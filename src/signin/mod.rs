@@ -910,7 +910,38 @@ impl Signin {
             }
             hop => hop,
         };
+        // What was typed never goes into an address, not even the login's own
+        // site's: a form sent by GET (or a page sent on with it) is stopped
+        // before it leaves, and nothing new shows, so no address, history
+        // entry or error page carries it.
+        let carried = self.lock_tabs().list.iter().any(|tab| {
+            tab.secret_doc.is_some()
+                && tab.typed.iter().any(|typed| {
+                    url.contains(typed.as_str()) || crate::secrets::spelled(&url, typed)
+                })
+        });
         let cdp = &running.cdp;
+        if carried {
+            let _ = cdp
+                .on(
+                    session,
+                    "Fetch.failRequest",
+                    json!({"requestId": request, "errorReason": "Aborted"}),
+                )
+                .await;
+            if let Some(tab) = self
+                .lock_tabs()
+                .list
+                .iter_mut()
+                .find(|tab| tab.session == session)
+            {
+                tab.notes.push(format!(
+                    "a page in the middle of signing in tried to load an address on {} that carries what was typed; it was stopped and the page stayed",
+                    crate::bridge::host_of(&url)
+                ));
+            }
+            return;
+        }
         let note = match hop {
             Hop::Stay => {
                 let _ = cdp
@@ -1987,7 +2018,7 @@ impl Signin {
                     &format!(
                         "if (!r.ok || r.print !== {expected}) return {{ok: false, why: r.ok ? 'the field or its form changed before typing' : r.why}};
                          e.focus();
-                         const again = hotlineFillPolicy(e, {kind}, {origins});
+                         const again = hotlineFillPolicy(e, {kind}, {origins}, true);
                          if (!again.ok || again.print !== {expected} || document.activeElement !== e) return {{ok: false, why: 'the field or its form changed as it took focus'}};
                          e.select && e.select();
                          if ({secret_field}) e.setAttribute('data-hotline-secret', '');
@@ -2124,10 +2155,12 @@ impl Signin {
 }
 
 /// The fill rule (`assets/fill-policy.js`), run on a ref's element, then
-/// `then` with the element as `e` and the rule's answer as `r`.
+/// `then` with the element as `e` and the rule's answer as `r`. A form that
+/// sends by GET to the login's own origin is taken here: `judge` stops any
+/// page load whose address carries what was typed.
 fn policy_script(selector: &str, kind: &str, origins: &[String], then: &str) -> String {
     format!(
-        "(() => {{ {}\nconst e = document.querySelector({}); const r = hotlineFillPolicy(e, {}, {}); {then} }})()",
+        "(() => {{ {}\nconst e = document.querySelector({}); const r = hotlineFillPolicy(e, {}, {}, true); {then} }})()",
         include_str!("../../assets/fill-policy.js"),
         json!(selector),
         json!(kind),

@@ -103,8 +103,12 @@ The agent drives it with site actions only: `eval` is refused. From the first
 secret typed into a tab until the tab shows another page, nothing of it
 reaches the agent. A sign-in still on that page 30 seconds on is listed by
 `GET /signin/pending`, and the agent is told to ask you to finish it. Open
-Browser in the desk shows this browser through `/sites/ws`. A form that would
-carry what was typed to another site is stopped. Revoking a login, a passkey
+Browser in the desk shows this browser through `/sites/ws`. A password or code
+goes only into a password (or one-time-code) field on the login's own origin,
+either in no form (a page whose script sends it) or in a form that sends to
+that origin. A form that would carry what was typed to another site is
+stopped, and so is any page load whose address would carry it, on any site.
+Revoking a login, a passkey
 or a share clears its site's cookies and data and closes its tabs.
 
 A passkey comes with its `rpId` alone, so its site is that host and those
