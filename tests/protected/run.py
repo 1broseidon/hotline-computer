@@ -26,6 +26,7 @@ listed first and never touched.
 import argparse
 import base64
 import http.server
+import json
 import os
 import pathlib
 import re
@@ -138,9 +139,41 @@ class Ctx:
         self.served = set()
         self.refs = {}
         # Set by main: what N3 needs to boot its own pair of containers.
-        self.image = self.n3_from = self.prefix = self.job_source = None
+        self.image = self.n3_from = self.prefix = self.job_source = self.pages_source = None
         self.attest_key = None
         self.launch = self.remove = self.volume = self.unvolume = None
+        # Set by main: the bound origin's address, the last generation sent,
+        # and how to stop and start this same container (its home and
+        # writable layer kept).
+        self.origin = None
+        self.generation = 1
+        self.restarter = None
+
+    def deliver(self, without=()):
+        """PUT /secrets again as the desk does, the whole set less `without`
+        (a revocation, or the grant again when empty). Answers the status."""
+        self.generation += 1
+        raw, content_type = K.body(self.delivery, self.origin, self.generation, without)
+        status, _, _ = self.c.http("PUT", "/secrets", raw=raw, headers={"Content-Type": content_type})
+        return status
+
+    def restart(self):
+        """Stops and starts this container, as a Mac that slept or a desk
+        that restarted does: the home and the image's writable layer stay,
+        every process and the service's memory go. Then the desk's part
+        again: the secrets, the boot's attest key, and the probe's files
+        and page servers."""
+        self.restarter()
+        self.c = Computer(int(self.c.base.rsplit(":", 1)[1]), self.token)
+        if not up(int(self.c.base.rsplit(":", 1)[1]), 120):
+            raise RuntimeError("the computer did not come back after a restart")
+        self.generation = 0
+        if self.deliver() != 204:
+            raise RuntimeError("the secrets were refused after a restart")
+        claimed, key = P.claim(self.c)
+        self.attest_key = key.get("key") or self.attest_key
+        self.served = set()
+        self.paged = False
 
     def heard(self, prefix, only=None):
         return self.L.heard(prefix, only)
@@ -172,6 +205,15 @@ class Ctx:
             self.c.tool("shell", action="start", command=f"exec python3 ~/probe/pages.py {port}", wait_ms=500)
             self.served.add(port)
             time.sleep(1.5)
+
+
+def minting(method, path, headers, body):
+    """The fixture's key-minting route: with the real key it hands out a
+    fresh token, as GitHub's installation-token route does. The token is
+    made here and never shown; a probe looks for its prefix."""
+    if K.GH in headers.get("Authorization", ""):
+        return 201, {"Content-Type": "application/json"}, json.dumps({"token": "ghs_minted" + secrets.token_hex(12)}).encode()
+    return 401, {"Content-Type": "application/json"}, b'{"message":"Bad credentials"}'
 
 
 def run(cmd, **kw):
@@ -219,6 +261,14 @@ def host_address(c):
     route = c.sh("cat /proc/net/route")[0]
     gw = next((l.split() for l in route.splitlines() if len(l.split()) > 2 and l.split()[1] == "00000000"), None)
     return os.environ.get("HOST_ADDR") or (socket.inet_ntoa(bytes.fromhex(gw[2])[::-1]) if gw else None)
+
+
+def restart(rt, name):
+    """The same container stopped and started again."""
+    if rt == "container":
+        run([rt, "stop", name])
+        return run([rt, "start", name])
+    return run([rt, "restart", name])
 
 
 def remove(rt, name):
@@ -333,6 +383,7 @@ def main():
             free = Listener(os.environ.get("LISTEN_ADDR") or host, tls=leaf)
             fixtures = [bound, free]
             origin = f"https://{host}:{bound.port}"
+            bound.routes["/app/installations/"] = bound.routes["/authorizations"] = minting
         raw, content_type = K.body(a.delivery, origin)
         status, _, answer = c.http("PUT", "/secrets", raw=raw, headers={"Content-Type": content_type})
         if status != 204:
@@ -351,9 +402,12 @@ def main():
         c.tool("files", action="put", path="probe/pages.py", content=(HERE / "jobs/pages.py").read_text())
         ctx = Ctx(c, listener, host, ws, token, rt, name, a.delivery, bound, free)
         ctx.attest_key = key.get("key")
+        ctx.origin = origin
+        ctx.restarter = lambda: restart(rt, name)
         ctx.split = a.split
         ctx.image, ctx.n3_from, ctx.prefix = a.image, a.n3_from or a.image, a.prefix
         ctx.job_source = (HERE / "jobs/job.py").read_text()
+        ctx.pages_source = (HERE / "jobs/pages.py").read_text()
         ctx.launch = launcher(rt, token)
         ctx.remove = lambda n: remove(rt, n)
         ctx.volume = lambda v: home_volume(rt, v, ctx.n3_from)

@@ -14,6 +14,8 @@ LOCAL_ENC = 'hl canary/enc+5&k=9%<"x'
 # LOOPAPP.password, on http://localhost:8002, delivered v2 without readable:
 # a loopback site, so the computer must not type it (finding 4).
 LOOP_PASSWORD = "hl-canary-loop-6d2e"
+# LOCALASK.password, on http://localhost:8000, held until the person answers.
+LOCAL_ASK_PASSWORD = "hl-canary-lask-0e7b"
 COOKIE = "hl-canary-cookie-w5-8c41"         # a signed-in session cookie on example.test
 TOTP_SEED = "JBSWY3DPEHPK3PXPJBSWY3DP"
 
@@ -23,7 +25,7 @@ _KEY = ("MIGHAgEAMBMGByqGSM49AgEGCCqGSM49AwEHBG0wawIBAQQgB9aEvdD1k7n55Wu+sDtf5cU
 _CRED = "LvEU0Q2YgsXFJfGYsxQS5w=="
 
 # Everything that must never be seen leaving, in its plain spelling.
-ALL = [VAR, GH, PASSWORD, ASK_PASSWORD, LOCAL_PASSWORD, LOCAL_ENC, LOOP_PASSWORD, COOKIE, _KEY]
+ALL = [VAR, GH, PASSWORD, ASK_PASSWORD, LOCAL_PASSWORD, LOCAL_ENC, LOCAL_ASK_PASSWORD, LOOP_PASSWORD, COOKIE, _KEY]
 
 SECRETS = {
     "CANARY_VAR": VAR,
@@ -41,6 +43,8 @@ SECRETS = {
                  "password": LOCAL_PASSWORD},
     "LOCALENC": {"kind": "login", "sites": ["http://localhost:8000"], "username": "enc-user",
                  "password": LOCAL_ENC},
+    "LOCALASK": {"kind": "login", "sites": ["http://localhost:8000"], "username": "lask-user",
+                 "password": LOCAL_ASK_PASSWORD, "use": "ask"},
 }
 
 # Only in a v2 delivery, and without readable: a login on a site any job can
@@ -48,7 +52,10 @@ SECRETS = {
 # job's page can read them), so the probes that type them still run there.
 LOOPBACK = {"LOOPAPP": {"kind": "login", "sites": ["http://localhost:8002"], "username": "loop-user",
                         "password": LOOP_PASSWORD}}
-READABLE_LOGINS = ("LOCALAPP", "LOCALENC")
+READABLE_LOGINS = ("LOCALAPP", "LOCALENC", "LOCALASK")
+# The key-minting routes the protected key's binding refuses on the fixture
+# (the desk's `use.refuse`); the fixture answers them with a fresh token.
+REFUSE = ["/app/installations/*/access_tokens", "/authorizations"]
 
 
 V2 = "application/vnd.hotline.secrets.v2+json"
@@ -57,14 +64,17 @@ V2 = "application/vnd.hotline.secrets.v2+json"
 VARIABLES = {"CANARY_VAR": None, "GH_TOKEN": {"prefix": "ghp_", "length": 40}}
 
 
-def body(delivery="v1", origin=None):
+def body(delivery="v1", origin=None, generation=1, without=()):
     """(bytes, content type). v1 is the body a desk before 0.50 sends. v2
     "readable" marks the variables readable:true; v2 "protected" binds them
-    to `origin`, the fixture, so a job holds only a stand-in."""
+    to `origin`, the fixture, so a job holds only a stand-in. `without`
+    leaves those names out (a revocation); `generation` is v2's."""
     if delivery == "v1":
-        return json.dumps(SECRETS).encode(), "application/json"
+        return json.dumps({k: v for k, v in SECRETS.items() if k not in without}).encode(), "application/json"
     secrets = {}
     for name, entry in {**SECRETS, **LOOPBACK}.items():
+        if name in without:
+            continue
         if name in READABLE_LOGINS:
             secrets[name] = dict(entry, readable=True)
         elif name not in VARIABLES:
@@ -72,8 +82,8 @@ def body(delivery="v1", origin=None):
         elif delivery == "readable":
             secrets[name] = {"kind": "variable", "value": entry, "readable": True}
         else:
-            use = {"origins": [origin], "header": "Authorization", "schemes": ["Bearer", "token", "Basic"]}
+            use = {"origins": [origin], "header": "Authorization", "schemes": ["Bearer", "token", "Basic"], "refuse": REFUSE}
             if VARIABLES[name]:
                 use["standIn"] = VARIABLES[name]
             secrets[name] = {"kind": "variable", "value": entry, "use": use}
-    return json.dumps({"v": 2, "generation": 1, "secrets": secrets}).encode(), V2
+    return json.dumps({"v": 2, "generation": generation, "secrets": secrets}).encode(), V2

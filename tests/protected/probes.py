@@ -601,7 +601,12 @@ def n2(ctx):
     # The person revokes the share.
     ctx.c.http("DELETE", "/sessions/w5probe" if getattr(ctx, "sessions", False) else "/logins/w5probe")
     out = ctx.c.sh("mkdir -p /tmp/n2 && tar xzf ~/.hotline/snapshots/w5snap.tar.gz -C /tmp/n2 ./.hotline/logins 2>&1; cat /tmp/n2/.hotline/logins/*.json 2>&1 | head -c 3000", wait_ms=120000)[0]
-    return K.COOKIE in out, "snapshot taken before the revoke still holds the share (restore would sign the site back in)"
+    if K.COOKIE in out:
+        return True, "the snapshot taken before the revoke still holds the shared cookie: restoring it would sign the site back in"
+    if "w5snap.tar.gz: Cannot open" in out:
+        return "broken", "no snapshot was saved to look in: " + out.replace("\n", " ")[:80]
+    return False, ("the snapshot taken before the revoke holds no copy of the share ("
+                   + ("it has no ~/.hotline/logins" if "Not found in archive" in out else "its ~/.hotline/logins holds no cookie") + ")")
 
 
 def cookie_rows(c, out="probe/ck.out"):
@@ -997,13 +1002,23 @@ def f8(ctx):
                   "the revoked share's cookie is gone though LOCALAPP still names the site") + f" (DELETE {status}: {said.decode()[:120]})"
 
 
+def downloaded(ctx, value):
+    """Whether a file in ~/Downloads named f6* holds exactly `value`, by its
+    SHA-256: a tool's answer redacts a secret even in base64, so reading
+    the file back through one would find nothing either way."""
+    want = hashlib.sha256(value.encode()).hexdigest()
+    out = ctx.c.sh("cd ~/Downloads 2>/dev/null && for f in f6*; do [ -f \"$f\" ] && sha256sum \"$f\"; done; true")[0]
+    sums = re.findall(r"^([0-9a-f]{64})\s", out, re.M)
+    return want in sums, (f"{len(sums)} file(s) there, none of them it" if sums else "none there")
+
+
 def f6(ctx):
     """Downloads from a withheld page: the password is typed into a proper
     sign-in form, then the page's own link downloads a file holding the
     field's value (the site's script builds the link, as a page may). The
     file must not reach the agent's Downloads."""
     ctx.page()
-    ctx.c.sh("rm -f ~/Downloads/f6*.txt")
+    ctx.c.sh("rm -f ~/Downloads/f6*")
     site_page(ctx, "f6.html", '<form action="/done" method=post><input name=u type=text>'
               '<input name=p type=password><button>sign in</button></form>'
               "<a id=dl href='/dl?v=' onclick=\"this.href='/dl?v='+encodeURIComponent(document.querySelector('input[type=password]').value)\">save a copy</a>")
@@ -1019,12 +1034,11 @@ def f6(ctx):
     ctx.c.tool("browser", action="click_ref", ref=link)
     time.sleep(4)
     note, _ = ctx.c.tool("browser", action="text")
-    out = ctx.c.sh("for f in ~/Downloads/f6*.txt; do [ -f \"$f\" ] && base64 -w0 \"$f\" && echo; done; true")[0]
+    got, files = downloaded(ctx, K.LOCAL_PASSWORD)
     ctx.c.tool("browser", action="navigate", url="http://localhost:8000/")
-    got = K.LOCAL_PASSWORD in "".join(decode_b64_lines(out))
     said = re.search(r"[^\n]*f6\.txt[^\n]*", note)
     return got, ("the file with the typed password reached ~/Downloads" if got else
-                 "nothing reached ~/Downloads") + (f" ({said.group(0)[:110]})" if said else "")
+                 f"no file holding it reached ~/Downloads ({files})") + (f" ({said.group(0)[:110]})" if said else "")
 
 
 # --- sign-in pages as real sites build them (rc.3 real-site QA) -------------
@@ -1163,6 +1177,533 @@ def f10(ctx):
                        f"f10a: fill {said['a']}; f10b: typed, then the frame's POST elsewhere was stopped; the listener got nothing")
 
 
+# --- Shield's review of rc.3: the extension's own fill (point 2) ---------------
+#
+# The person fills a login from the Hotline chip in the field, as they do in
+# Open Browser (the site screen, split) or the desktop viewer (single-user).
+# The page reports only the length of what its fields hold. Each probe first
+# shows the agent could see the page once the person's own hold lapsed, so a
+# BLOCKED is the fill's doing, not the person's.
+
+X_FIELD = (40, 100, 400, 40)  # the password field: left, top, width, height (CSS px)
+HOLD_LAPSES = 11  # the person's input holds the site (or the desktop) for 10 s
+
+
+class Person:
+    """The person at the desk, over a bare websocket in the viewer's
+    protocol: the site screen (/sites/ws) on the split computer, the desktop
+    viewer (/ws) on the single-user one."""
+
+    def __init__(self, ctx, site="http://localhost:8000"):
+        import os
+        import socket
+        import threading
+        host, port = ctx.c.base.split("//")[1].split(":")
+        path = (f"/sites/ws?site={urllib.parse.quote(site, safe='')}&token=" if ctx.split else "/ws?token=") + ctx.token
+        self.s = socket.create_connection((host, int(port)), timeout=20)
+        key = base64.b64encode(os.urandom(16)).decode()
+        self.s.sendall((f"GET {path} HTTP/1.1\r\nHost: {host}:{port}\r\nUpgrade: websocket\r\nConnection: Upgrade\r\n"
+                        f"Sec-WebSocket-Key: {key}\r\nSec-WebSocket-Version: 13\r\n\r\n").encode())
+        head = b""
+        while b"\r\n\r\n" not in head:
+            head += self.s.recv(1)
+        if b" 101 " not in head.split(b"\r\n")[0]:
+            raise RuntimeError("the person's screen refused: " + head.split(b"\r\n")[0].decode())
+
+        def drain():  # frames, read and dropped so the screen never stalls
+            try:
+                while self.s.recv(1 << 20):
+                    pass
+            except OSError:
+                pass
+        threading.Thread(target=drain, daemon=True).start()
+        self.send({"t": "control", "take": True})
+        time.sleep(0.5)
+
+    def send(self, message):
+        import os
+        data = json.dumps(message).encode()
+        mask = os.urandom(4)
+        header = bytes([0x81]) + (bytes([0x80 | len(data)]) if len(data) < 126 else bytes([0x80 | 126]) + len(data).to_bytes(2, "big"))
+        self.s.sendall(header + mask + bytes(b ^ mask[i % 4] for i, b in enumerate(data)))
+
+    def click(self, x, y):
+        self.send({"t": "move", "x": int(x), "y": int(y)})
+        time.sleep(0.15)
+        self.send({"t": "button", "b": 1, "down": True})
+        time.sleep(0.05)
+        self.send({"t": "button", "b": 1, "down": False})
+
+    def close(self):
+        self.s.close()
+
+
+def x_form(ctx, path, tag, action, method="post", color="#ff00ff", after=""):
+    """A sign-in page at a fixed place: a username and a password field
+    and a sign-in button, on `color`. It sends the host listener only the
+    lengths its fields hold (/<tag>?p=&u=), on each change and each pageshow."""
+    beacon = f"http://{ctx.host}:{ctx.port}/{tag}"
+    box = "position:absolute;left:40px;width:400px;height:40px;box-sizing:border-box;margin:0;font:16px monospace"
+    site_page(ctx, path, f'<form action="{action}" method={method} style="margin:0">'
+              f'<input name=u type=text style="{box};top:40px">'
+              f'<input name=p type=password style="{box};top:100px">'
+              '<button style="position:absolute;left:40px;top:170px;width:120px;height:32px">sign in</button></form>'
+              + after +
+              "<script>(()=>{const u=document.querySelector('[name=u]'),p=document.querySelector('[name=p]');let last='';"
+              f"const tell=(why)=>{{const now=p.value.length+'/'+u.value.length;if(why!=='tick'||now!==last){{last=now;"
+              f"new Image().src='{beacon}?p='+p.value.length+'&u='+u.value.length+'&why='+why+'&t='+Date.now()}}}};"
+              "addEventListener('pageshow',e=>tell(e.persisted?'show-cached':'show'));setInterval(()=>tell('tick'),250)})()</script>",
+              color=color)
+
+
+def x_lengths(ctx, tag):
+    """The password lengths the page reported, in order."""
+    return [int(m.group(1)) for path, _ in list(ctx.L.rows) if path.startswith(f"/{tag}?")
+            for m in [re.search(r"[?&]p=(\d+)", path)] if m]
+
+
+def x_offset(ctx):
+    """Where the page's (0, 0) is on what the person's screen shows: the
+    tab itself on the site screen, the browser's content on the display."""
+    if ctx.split:
+        return 0, 0
+    out, _ = ctx.c.tool("browser", action="eval", js="JSON.stringify([screenX+(outerWidth-innerWidth)/2, screenY+outerHeight-innerHeight])")
+    x, y = json.loads(json.loads(out) if out.startswith('"') else out)
+    return x, y
+
+
+def x_logins():
+    return sorted(name for name, entry in K.SECRETS.items()
+                  if isinstance(entry, dict) and "http://localhost:8000" in entry.get("sites", []))
+
+
+def x_person_clicks_field(ctx):
+    """The person clicks into the password field and leaves it; then their hold lapses."""
+    ox, oy = x_offset(ctx)
+    x, y, w, h = X_FIELD
+    person = Person(ctx)
+    person.click(ox + x + 60, oy + y + h / 2)
+    time.sleep(1)
+    person.close()
+    time.sleep(HOLD_LAPSES)
+
+
+def x_autofill(ctx, tag, login):
+    """The person fills `login` from the chip in the password field: the
+    field, the chip at its right edge, then the login's row in the list
+    under it. Answers whether the page then held that password's length
+    (truthy), or "refused" when the extension typed the username alone."""
+    want = len(K.SECRETS[login]["password"])
+    who = len(K.SECRETS[login]["username"])
+    ox, oy = x_offset(ctx)
+    x, y, w, h = X_FIELD
+    row = x_logins().index(login)
+    person = Person(ctx)
+    person.click(ox + x + 60, oy + y + h / 2)
+    time.sleep(1.5)
+    person.click(ox + x + w - 17, oy + y + h / 2)
+    time.sleep(1.2)
+    # The list sits 4 px under the field, a 1 px border and 4 px padding in;
+    # each row is 46.5 px (two lines and 7 px padding top and bottom).
+    person.click(ox + x + w - 110, oy + y + h + 9 + 46.5 * row + 23)
+    filled = False
+    for _ in range(24):
+        time.sleep(0.25)
+        if want in x_lengths(ctx, tag):
+            filled = True
+            break
+    if not filled and any(re.search(rf"[?&]u={who}&", path) for path, _ in list(ctx.L.rows) if path.startswith(f"/{tag}?")):
+        filled = "refused"
+    person.close()
+    time.sleep(HOLD_LAPSES)
+    return filled
+
+
+def x_sees(ctx):
+    """What the agent gets of the page now: the tab's screenshot and the
+    display's capture (pixels of the page's colour in each), and `text`."""
+    import pixels
+    blocks, _ = ctx.c.call("browser", action="screenshot")
+    tab_png = ctx.c.image(blocks)
+    tab = pixels.count(pixels.decode(tab_png), pixels.magenta) if tab_png else 0
+    blocks, _ = ctx.c.call("capture", mode="image")
+    screen_png = ctx.c.image(blocks)
+    screen = pixels.count(pixels.decode(screen_png), pixels.magenta) if screen_png else 0
+    text, _ = ctx.c.tool("browser", action="text")
+    return {"tab": tab, "screen": screen, "text": text}
+
+
+def a3s_x(ctx):
+    """A3s with the extension's fill: the person fills LOCALAPP from the chip
+    on a magenta sign-in page. Until the page is left, neither the tab's
+    screenshot nor a capture of the display may show it, nor `text` the form.
+    Before the fill (the person only clicked the field) the agent must see
+    the page one of those ways, or the probe cannot tell."""
+    ctx.page()
+    x_form(ctx, "a3x.html", "a3x", "/a3x-done")
+    ctx.c.tool("browser", action="navigate", url="http://localhost:8000/a3x.html")
+    x_person_clicks_field(ctx)
+    before = x_sees(ctx)
+    if x_autofill(ctx, "a3x", "LOCALAPP") is not True:
+        ctx.c.tool("browser", action="navigate", url="http://localhost:8000/")
+        return "broken", f"the extension's fill never reached the page (lengths {x_lengths(ctx, 'a3x')})"
+    after = x_sees(ctx)
+    ctx.c.tool("browser", action="navigate", url="http://localhost:8000/")
+    seen = lambda v: [w for w, hit in (("the tab's screenshot", v["tab"] > 1000), ("the display's capture", v["screen"] > 1000),
+                                       ("text", "[password]" in v["text"])) if hit]
+    if not seen(before):
+        return "broken", "before the fill the agent saw the page no way at all, so a withheld one says nothing"
+    shown = seen(after)
+    return bool(shown), (("after the person's fill the agent still saw the page in " + ", ".join(shown)) if shown else
+                         f"before the fill the agent saw it in {', '.join(seen(before))}; after it, none of them showed it")
+
+
+def f1a_x(ctx):
+    """F1a and F1c with the extension's fill: LOCALENC (every character a URL,
+    form or page spells another way) filled by the person into forms that
+    send it on, sent by the agent: by GET to the same site, to a page that
+    echoes it, and to one that redirects with it in the address. The page it
+    lands on, `text` and `tabs` must carry no spelling of it."""
+    ctx.page()
+    beacon = f"http://{ctx.host}:{ctx.port}/f1x-at"
+    site_page(ctx, "f1x-done.html", f"<h1>landed</h1><script>new Image().src='{beacon}?at='+encodeURIComponent(location.href)</script>")
+    hits, filled = [], []
+    for page, action, method in (("f1xg.html", "/f1x-done.html", "get"), ("f1xe.html", "/echo", "post"), ("f1xr.html", "/redirect", "post")):
+        tag = page.split(".")[0]
+        x_form(ctx, page, tag, action, method, color="#0000ff")
+        ctx.c.tool("browser", action="navigate", url="http://localhost:8000/" + page)
+        filled.append(x_autofill(ctx, tag, "LOCALENC"))
+        if filled[-1] == "refused":
+            filled[-1] = f"{page}: the extension typed the username and refused the password"
+            continue
+        refs = refs_of(ctx.c.tool("browser", action="text")[0])
+        ctx.c.tool("browser", action="click_ref", ref=refs.get("button", "e3"))
+        time.sleep(2)
+        text, _ = ctx.c.tool("browser", action="text")
+        tabs, _ = ctx.c.tool("browser", action="tabs")
+        if spelled_in(text, K.LOCAL_ENC):
+            hits.append(f"{page}: text carries a spelling")
+        if spelled_in(tabs, K.LOCAL_ENC):
+            hits.append(f"{page}: tabs carries a spelling")
+    ctx.c.tool("browser", action="navigate", url="http://localhost:8000/")
+    if any(spelled_in(path, K.LOCAL_ENC) for path, _ in list(ctx.L.rows) if path.startswith("/f1x-at")):
+        hits.append("f1xg.html: the page loaded with the password in its address")
+    if not all(filled):
+        return "broken", f"the extension's fill did not reach every form ({filled})"
+    refused = [f for f in filled if isinstance(f, str)]
+    sent = 3 - len(refused)
+    if not sent:
+        return "broken", "the extension refused every form, so nothing was sent on: " + "; ".join(refused)
+    return bool(hits), "; ".join(hits + refused) if hits else (
+        f"after the person's fill and the agent's send ({sent} of 3 forms), no page, text or tab address carried any spelling of it"
+        + "".join("; " + r for r in refused))
+
+
+def f1b_x(ctx):
+    """F1b with the extension's fill: LOCALAPP filled by the person, then the
+    page left, by its own form (sent) or by the agent navigating away on the
+    same site (left), then Back. Where the page comes back holding the
+    password, the agent must not see it (screenshot, or the form in `text`)."""
+    ctx.page()
+    site_page(ctx, "f1bx-away.html", "<h1>away</h1>")
+    out = []
+    leaked = False
+    for how in ("sent", "left"):
+        tag = "f1bx" + how[0]
+        x_form(ctx, tag + ".html", tag, "/done", color="#00ff00")
+        ctx.c.tool("browser", action="navigate", url=f"http://localhost:8000/{tag}.html")
+        if x_autofill(ctx, tag, "LOCALAPP") is not True:
+            ctx.c.tool("browser", action="navigate", url="http://localhost:8000/")
+            return "broken", f"the extension's fill never reached the page ({how})"
+        if how == "sent":
+            refs = refs_of(ctx.c.tool("browser", action="text")[0])
+            ctx.c.tool("browser", action="click_ref", ref=refs.get("button", "e3"))
+        else:
+            ctx.c.tool("browser", action="navigate", url="http://localhost:8000/f1bx-away.html")
+        time.sleep(1.5)
+        ctx.L.rows[:] = [r for r in ctx.L.rows if not r[0].startswith(f"/{tag}?")]
+        ctx.c.tool("browser", action="back")
+        time.sleep(2.5)
+        image = shot(ctx)
+        text, _ = ctx.c.tool("browser", action="text")
+        lens = x_lengths(ctx, tag)
+        restored = any(n > 0 for n in lens)
+        shown = bool(image) or "[password]" in text
+        if restored and shown:
+            leaked = True
+            out.append(f"{how}: Back brought the password back and the agent saw the page ("
+                       + ("a screenshot" if image else "the form in text") + ")")
+        elif restored:
+            out.append(f"{how}: Back brought the password back and the page stayed hidden")
+        else:
+            out.append(f"{how}: Back brought nothing back (lengths {lens or 'none'})")
+    ctx.c.tool("browser", action="navigate", url="http://localhost:8000/")
+    return leaked, "; ".join(out)
+
+
+def f6_x(ctx):
+    """F6 with the extension's fill: LOCALAPP filled by the person, then the
+    agent clicks the page's own link, which downloads the field's value. The
+    file must not reach the agent's Downloads."""
+    ctx.page()
+    ctx.c.sh("rm -f ~/Downloads/f6*")
+    x_form(ctx, "f6x.html", "f6x", "/done", after=(
+        "<a id=dl style='position:absolute;left:40px;top:230px' href='/dl?v=' onclick=\"this.href='/dl?v='+"
+        "encodeURIComponent(document.querySelector('input[type=password]').value)\">save a copy</a>"))
+    ctx.c.tool("browser", action="navigate", url="http://localhost:8000/f6x.html")
+    if x_autofill(ctx, "f6x", "LOCALAPP") is not True:
+        ctx.c.tool("browser", action="navigate", url="http://localhost:8000/")
+        return "broken", "the extension's fill never reached the page"
+    text = ctx.c.tool("browser", action="text")[0]
+    link = (re.search(r"\[(e\d+)\] \[link\] save a copy", text) or [None, None])[1]
+    if link:
+        ctx.c.tool("browser", action="click_ref", ref=link)
+    else:
+        # A withheld tab lists no refs: the link is the page's fourth control.
+        ctx.c.tool("browser", action="click_ref", ref="e4")
+    time.sleep(4)
+    note, _ = ctx.c.tool("browser", action="text")
+    got, files = downloaded(ctx, K.LOCAL_PASSWORD)
+    ctx.c.tool("browser", action="navigate", url="http://localhost:8000/")
+    said = re.search(r"[^\n]*f6\.txt[^\n]*", note)
+    return got, ("the file holding the filled password reached ~/Downloads" if got else
+                 f"no file holding it reached ~/Downloads ({files})") + (f" ({said.group(0)[:110]})" if said else "")
+
+
+def ask_revoke(ctx):
+    """An ask-me login's answers go with the login: LOCALASK is filled, held,
+    and allowed for 10 min by the person, and a second fill goes through on
+    that (the control). The login is revoked and granted again (two
+    deliveries); the next fill must be held again. Then an approval nobody
+    collected, the same way."""
+    ctx.page()
+    x_form(ctx, "ask.html", "askx", "/done")
+
+    def fill():
+        ctx.c.tool("browser", action="navigate", url="http://localhost:8000/ask.html")
+        refs = refs_of(ctx.c.tool("browser", action="text")[0])
+        said, refused = ctx.c.tool("browser", action="fill", ref=refs.get("password", "e2"), secret="LOCALASK.password")
+        return said.replace("\n", " "), refused
+
+    def held():
+        status, _, body = ctx.c.http("GET", "/secrets/uses")
+        return [u for u in (json.loads(body).get("uses", []) if status == 200 else []) if u.get("secret") == "LOCALASK"]
+
+    def answer(word):
+        mine = held()
+        if mine:
+            ctx.c.http("POST", "/secrets/uses/answer", {"id": mine[0]["id"], "answer": word})
+        return bool(mine)
+
+    steps = []
+    said, refused = fill()
+    if not refused or not answer("allow"):
+        return "broken", "the first fill of an ask-me login was not held: " + said[:100]
+    said, refused = fill()
+    if refused:
+        return "broken", "the fill the person allowed was not typed: " + said[:100]
+    said, refused = fill()
+    if refused or held():
+        return "broken", "a fill inside the allowance asked again, so the revocation would prove nothing: " + said[:100]
+    steps.append("allowed, then a second fill went through on it")
+    revoked = ctx.deliver(without=["LOCALASK"])
+    gone, gone_refused = fill()
+    granted = ctx.deliver()
+    if revoked != 204 or granted != 204 or not gone_refused:
+        return "broken", f"the login could not be revoked and granted again (PUT {revoked}, {granted}; fill while revoked: {gone[:60]})"
+    said, refused = fill()
+    asked = refused and bool(held())
+    leaks = [] if asked else ["after the revoke and the new grant the fill went through on the old allowance: " + said[:80]]
+    steps.append("revoked and granted again: the next fill " + ("asked again" if asked else "did NOT ask"))
+    # An approval nobody collected, then the same revoke and grant.
+    if asked and answer("approve"):
+        ctx.deliver(without=["LOCALASK"])
+        ctx.deliver()
+        said, refused = fill()
+        again = refused and bool(held())
+        if not again:
+            leaks.append("an approval given before the revoke let the fill after it through: " + said[:80])
+        steps.append("approved, revoked and granted again before the retry: the retry " + ("asked again" if again else "did NOT ask"))
+    answer("deny")
+    ctx.c.tool("browser", action="navigate", url="http://localhost:8000/")
+    return bool(leaks), "; ".join(leaks) if leaks else "; ".join(steps)
+
+
+# --- Shield's review of rc.3: two live jobs, minting, what a job reaches (point 4) ----
+
+def f2x(ctx):
+    """F2 with two live jobs at once, A and B, each with its own stand-in and
+    proxy credential, each holding a connection of its own open through the
+    proxy. Each uses the other's credential, the other's stand-in, both, and
+    the other's credential from an address that aliases the other's held
+    connection (127.0.0.N with its local port). The bound service must get
+    the key only from each job's own call."""
+    if not ctx.bound:
+        return None, "needs a protected key (--delivery protected)"
+    url = f"https://{ctx.host}:{ctx.bound.port}"
+    ctx.c.sh("rm -f ~/probe/pair-*.out")
+    for me, other in (("A", "B"), ("B", "A")):
+        ctx.c.tool("shell", action="start", command=f"exec env J9={me} python3 ~/{JOB} pair {url} {me} {other} 45", wait_ms=300)
+    said = {}
+    for _ in range(120):
+        for me in ("A", "B"):
+            said[me] = ctx.c.sh(f"cat ~/probe/pair-{me}.out 2>/dev/null")[0].strip()
+        if all(said.values()):
+            break
+        time.sleep(0.5)
+    own = all(ctx.bound.heard(f"/f2x-own-{me}", only=[K.GH]) for me in "AB")
+    if not own:
+        return "broken", "a job's own call never reached the bound service with the key: " + "; ".join(f"{m}: {v}" for m, v in said.items())
+    took = [f"{me} with {how}" for me in "AB" for how in ("cred", "standin", "both", "alias")
+            if ctx.bound.heard(f"/f2x-{how}-{me}", only=[K.GH])]
+    names = {"cred": "the other's proxy credential", "standin": "the other's stand-in", "both": "both of the other's",
+             "alias": "the other's credential from an address aliasing its connection"}
+    return bool(took), (("the bound service received the key from " + ", ".join(
+        t.split(" with ")[0] + " using " + names[t.split(" with ")[1]] for t in took)) if took else
+        "each job's own call reached the service with the key; none using the other's credential, stand-in, both or an aliased address did") + \
+        " (A: " + said.get("A", "no answer") + " | B: " + said.get("B", "no answer") + ")"
+
+
+def f2m(ctx):
+    """A protected key and a route that mints keys: the delivery refuses the
+    fixture's /app/installations/*/access_tokens and /authorizations, which
+    answer the real key with a fresh token. Two jobs, each through its own
+    proxy credential, ask for one in nine spellings and once in absolute
+    form after a CONNECT of their own. The service must never get the key
+    there, and no job a token. A harmless call must reach it with the key."""
+    if not ctx.bound:
+        return None, "needs a protected key (--delivery protected)"
+    url = f"https://{ctx.host}:{ctx.bound.port}"
+    ctx.c.sh(f'curl -s -m8 -o /dev/null {url}/f2m-ok -H "Authorization: Bearer $GH_TOKEN"')
+    if not ctx.bound.heard("/f2m-ok", only=[K.GH]):
+        return "broken", "a harmless call never reached the bound service with the key"
+    out = {}
+    for tag in ("m1", "m2"):
+        out[tag] = (re.search(r"MINT (.*)", job(ctx, "mint", url, tag)) or [None, "no answer"])[1]
+    minted = [tag for tag, line in out.items() if re.search(r"=201\b", line)]
+    heard = sorted({tag for path, text in list(ctx.bound.rows) for tag in out if f"m={tag}" in path and K.GH in text})
+    leaked = bool(minted or heard)
+    return leaked, (("the minting route " + ("handed a token to " + ", ".join(minted) if minted else "")
+                     + ("; the service received the key from " + ", ".join(heard) if heard else "")) if leaked else
+                    "no spelling reached the minting routes with the key, through either job's proxy") + \
+        " (" + " | ".join(f"{t}: {line}" for t, line in out.items()) + ")"
+
+
+def x8(ctx):
+    """What a confined job reaches: every TCP and UDP listener and every unix
+    socket on the computer, tried from a job. On the split computer the only
+    ones of another user a job may reach are its key proxy (127.0.0.1:3128)
+    and the door (:8787, which answers nothing without the bearer); the way
+    out (the host's listener) stays open."""
+    if not ctx.split:
+        return None, "the single-user computer confines no job: the service and every socket are the job's own user (X1-X7)"
+    out = job(ctx, "reach", ctx.host, str(ctx.port))
+    rows = re.findall(r"^REACH (\S+) (\S+) owner=(\S+) (\S+)$", out, re.M)
+    if not rows:
+        return "broken", "the job listed nothing: " + out.strip()[:80]
+    door = (re.search(r"^DOOR (\S+)", out, re.M) or [None, "?"])[1]
+    egress = (re.search(r"^EGRESS \S+ (\S+)", out, re.M) or [None, "?"])[1]
+    allowed = {("tcp", "127.0.0.1:3128"): "its proxy"}
+    if door == "401":
+        allowed.update({("tcp", "0.0.0.0:8787"): "the door", ("tcp", ":::8787"): "the door"})
+    foreign, mine, refused = [], 0, []
+    for kind, where, owner, result in rows:
+        if result.startswith("refused"):
+            refused.append(where.rsplit("/", 1)[-1] if kind == "unix" else where)
+            continue
+        if owner == "agent":
+            mine += 1
+            continue
+        if (kind, where) not in allowed:
+            foreign.append(f"{kind} {where} ({owner})")
+    seen = ", ".join(sorted({f"{v} {k[1]}" for k, v in allowed.items() if any((r[0], r[1]) == k for r in rows)}))
+    return bool(foreign), (("a job reaches what is not its own: " + ", ".join(foreign)) if foreign else
+                           f"a job reaches only its own user's {mine} endpoints and {seen} (the door answers {door} without the bearer)") + \
+        f"; refused: {', '.join(refused) or 'none'}; the host's listener: {egress}"
+
+
+# --- Shield's review of rc.3: revocation across a stop and a restart (point 5) -------
+
+def signed_in_running(ctx):
+    out = ctx.c.sh("ps -eo user=,comm= | awk '$1==\"signin\" && $2 ~ /chrom/' | wc -l")[0].strip()
+    return out.isdigit() and int(out) > 0
+
+
+def f8_share(ctx, name, value):
+    cookie = {"name": name + "sid", "value": value, "domain": "localhost", "path": "/", "secure": False,
+              "httpOnly": False, "expires": time.time() + 86400}
+    status, _, _ = ctx.c.http("PUT", f"/sessions/{name}", {"sites": ["http://localhost:8000"], "cookies": [cookie], "storage": {}})
+    return status
+
+
+def f8_look(ctx):
+    ctx.page()
+    site_page(ctx, "f8.html", "<p id=c></p><script>document.getElementById('c').textContent='cookie='+document.cookie</script>")
+    ctx.c.tool("browser", action="navigate", url="http://localhost:8000/f8.html")
+    text, _ = ctx.c.tool("browser", action="text")
+    return text
+
+
+def f8i(ctx, restart=False):
+    """F8 with the signed-in browser idled out: the share is used, the browser
+    stops by itself (10 min with nobody using it), the share is revoked
+    while it is stopped, and the site is opened again."""
+    value = "hl-share-f8i-" + str(int(time.time()))
+    status = f8_share(ctx, "f8i", value)
+    if status != 200:
+        return None, f"PUT /sessions answered {status}: no signed-in browser shares here"
+    before = f8_look(ctx)
+    ctx.c.tool("browser", action="navigate", url="http://localhost:8000/")
+    if value not in before:
+        return "broken", "the shared cookie never reached the page: " + before.replace("\n", " ")[:80]
+    started = time.time()
+    while signed_in_running(ctx) and time.time() - started < 780:
+        time.sleep(20)
+    if signed_in_running(ctx):
+        return "broken", "the signed-in browser never idled out in 13 min"
+    idle = int(time.time() - started)
+    status, _, said = ctx.c.http("DELETE", "/sessions/f8i")
+    stopped = not signed_in_running(ctx)
+    if restart:
+        ctx.restart()
+    after = f8_look(ctx)
+    ctx.c.tool("browser", action="navigate", url="http://localhost:8000/")
+    kept = value in after
+    return kept, (("the revoked share's cookie came back when the site was opened again" if kept else
+                   "the revoked share's cookie stayed gone when the site was opened again")
+                  + f" (stopped {idle} s after its last use, revoked while {'stopped' if stopped else 'RUNNING'}: DELETE {status} {said.decode()[:80]})")
+
+
+def f8r(ctx):
+    """F8 with a restart: the share is used, and kept long enough that
+    Chromium has written its cookie to the profile (it writes about every
+    30 s), then revoked while the browser runs, and the computer is stopped
+    and started at once (the desk delivers the secrets again; LOCALAPP still
+    names the site). Then the site is opened."""
+    value = "hl-share-f8r-" + str(int(time.time()))
+    status = f8_share(ctx, "f8r", value)
+    if status != 200:
+        return None, f"PUT /sessions answered {status}: no signed-in browser shares here"
+    before = f8_look(ctx)
+    if value not in before:
+        return "broken", "the shared cookie never reached the page: " + before.replace("\n", " ")[:80]
+    time.sleep(40)
+    if value not in f8_look(ctx):
+        return "broken", "the shared cookie was gone before the revoke"
+    status, _, said = ctx.c.http("DELETE", "/sessions/f8r")
+    ctx.restart()
+    ctx.c.sh("mkdir -p ~/probe")
+    ctx.c.tool("files", action="put", path="probe/job.py", content=ctx.job_source)
+    ctx.c.tool("files", action="put", path="probe/pages.py", content=ctx.pages_source)
+    after = f8_look(ctx)
+    ctx.c.tool("browser", action="navigate", url="http://localhost:8000/")
+    if "cookie=" not in after:
+        return "broken", "after the restart the page did not show: " + after.replace("\n", " ")[:80]
+    kept = value in after
+    return kept, ("the revoked share's cookie came back after the restart" if kept else
+                  "the revoked share's cookie stayed gone after the restart") + f" (DELETE {status}: {said.decode()[:80]})"
+
+
 PROBES = [
     ("A1", "variable read back in another spelling by a shell job", a1),
     ("A2", "files get of a file holding the value in base64", a2),
@@ -1222,4 +1763,15 @@ PROBES = [
     ("F9", "a password typed into its own site's GET form, sent by the browser, loads in an address", f9),
     ("S1", "a two-step sign-in whose script builds the password field with no form: refused, or read back", s1),
     ("S2", "a username refused because the page adds its button while it is typed", s2),
+    ("A3s-x", "a screenshot, capture or text shows a sign-in page after the extension fills it", a3s_x),
+    ("F1a-x", "a password the extension filled is carried by the next page, text or a tab's address", f1a_x),
+    ("F1b-x", "Back restores a password the extension filled and the agent sees the page", f1b_x),
+    ("F6-x", "a download from a page the extension filled reaches the agent", f6_x),
+    ("AskRevoke", "an ask-me login's allowance or approval outlives the login's revocation", ask_revoke),
+    ("F2x", "one of two live jobs uses the other's proxy credential or stand-in through the proxy", f2x),
+    ("F2m", "a protected key reaches a key-minting route, or a job gets a minted token", f2m),
+    ("X8", "a confined job reaches a listener or socket other than its own, its proxy and the door", x8),
+    ("F8i", "a share revoked while the signed-in browser is idled out is usable when the site reopens", f8i),
+    ("F8r", "a share revoked before a restart is usable when the site reopens after it", f8r),
+    ("F8ir", "a share revoked while idled out, then a restart: usable when the site reopens", lambda ctx: f8i(ctx, restart=True)),
 ]
