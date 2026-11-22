@@ -1,0 +1,18 @@
+# containers already running (container); none of them is touched:
+ID                                                     IMAGE                                                OS     ARCH   STATE    IP                 CPUS  MEMORY    STARTED
+hotline-computer-99374fd0-52fd-4def-a6cc-37f25131a3a5  hotline-computer:0.12.0-rc.2                         linux  arm64  running  192.168.65.17/24   4     16384 MB  2026-11-22T01:14:34Z
+buildkit                                               ghcr.io/apple/container-builder-shim/builder:0.13.1  linux  arm64  running  192.168.65.189/24  8     16384 MB  2026-11-20T02:27:25Z
+hotline-computer-claude-ziggy                          ghcr.io/1broseidon/hotline-computer:0.11.0           linux  arm64  stopped                     4     4096 MB   
+hotline-computer-46e16b18-7a5b-468a-9209-4e75d1b16bb4  ghcr.io/1broseidon/hotline-computer:0.11.0           linux  arm64  stopped                     4     16384 MB  2026-11-19T02:33:26Z
+hotline-computer-79d12f56-5211-4030-b864-a47306200461  hotline-computer:0.13.0-rc.2                         linux  arm64  running  192.168.65.18/24   4     8192 MB   2026-11-21T13:18:25Z
+hotline-computer-c9397b69-9084-4b3b-a325-715134487a53  ghcr.io/1broseidon/hotline-computer:0.11.0           linux  arm64  running  192.168.65.86/24   4     16384 MB  2026-11-13T17:41:23Z
+hotline-computer-bef618e7-9144-45f8-ad40-bfb8fc3010a2  ghcr.io/1broseidon/hotline-computer:0.11.0           linux  arm64  running  192.168.65.5/24    4     4096 MB   2026-11-20T20:54:34Z
+# /capabilities: {"attest":"td4J+VPLqWMqyD6dYVdp2YuBT+SnCz6j1Huu5nakhfA=","boot":"0762e2d390c62e15330b14ab612282c0","protected":{"loopback":"readable","mode":"split","other":"readable","readable":["CANARY_VAR","GH_TOK
+# POST /capabilities/key: 200 (taken)
+# image hotline-computer:0.13.0-rc.3-gatefix2-probe as hl-rc3probes-before-39ab54 (split, delivery protected); listener on 192.168.65.1:61497; HTTPS fixture https://192.168.65.1:61498 (bound), :61499 (unbound); expecting BLOCKED
+ID         RESULT      WHAT
+F2x        LEAKED   !! one of two live jobs uses the other's proxy credential or stand-in through the proxy: the bound service received the key from A using the other's credential from an address aliasing its connection, B using the other's credential from an address aliasing its connection (A: HELD HTTP/1.1 200 Connection established; OWN 200/0; CRED 000/56; STANDIN 200/0; BOTH 000/56; ALIAS ports=[51384] tries=1 last=connected via 127.0.0.2, then 200 | B: HELD HTTP/1.1 200 Connection established; OWN 200/0; CRED 000/56; STANDIN 200/0; BOTH 000/56; ALIAS ports=[51386] tries=1 last=connected via 127.0.0.2, then 200)
+F8ir       LEAKED   !! a share revoked while idled out, then a restart: usable when the site reopens: the revoked share's cookie came back when the site was opened again (stopped 600 s after its last use, revoked while stopped: DELETE 200 {"closed":0,"domains":["http://localhost:8000"],"forgotten":0,"name":"f8i","sign)
+# 2 leaked, 0 blocked, 0 skipped, 0 broken; 2 differ from EXPECT=blocked
+# removed hl-rc3probes-before-39ab54
+EXIT 1
