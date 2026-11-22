@@ -1,0 +1,372 @@
+#1 [resolver] fetching image...docker.io/library/rust:1-trixie
+#1 DONE 0.0s
+
+#2 [resolver] fetching image...docker.io/library/debian:trixie-slim@sha256:d7e12182ce18b85b93007c1dedf31f2d29e01ccf3182cc4017c709b6259bc132
+#2 DONE 0.0s
+
+#3 [internal] load build definition from Dockerfile
+#3 transferring dockerfile: 10.67kB 0.1s done
+#3 DONE 0.1s
+
+#4 [internal] load .dockerignore
+#4 transferring context: 30B 0.1s
+#4 transferring context: 138B 0.1s done
+#4 DONE 0.1s
+
+#5 oci-layout://docker.io/library/rust:1-trixie@sha256:223cc32ddca8f3ee90c436dbc94b6b5f052ea7f9653c5201e9612f08ad7d21b8
+#5 resolve docker.io/library/rust:1-trixie@sha256:223cc32ddca8f3ee90c436dbc94b6b5f052ea7f9653c5201e9612f08ad7d21b8 done
+#5 DONE 0.0s
+
+#6 [internal] load build context
+#6 transferring context: 3.22MB 0.2s done
+#6 DONE 0.2s
+
+#7 [linux/arm64 build 7/8] RUN --mount=type=cache,target=/usr/local/cargo/registry --mount=type=cache,target=/src/target cargo build --release --locked && cp target/release/hotline-computer /usr/local/bin/hotline-computer
+#7 CACHED
+
+#8 [linux/arm64 build 4/8] COPY src ./src
+#8 CACHED
+
+#9 [linux/arm64 build 6/8] COPY skills ./skills
+#9 CACHED
+
+#10 [linux/arm64 build 1/8] RUN apt-get update && apt-get install -y --no-install-recommends cmake perl pkg-config && rm -rf /var/lib/apt/lists/*
+#10 CACHED
+
+#11 [linux/arm64 build 5/8] COPY assets ./assets
+#11 CACHED
+
+#12 [linux/arm64 build 2/8] WORKDIR /src
+#12 CACHED
+
+#13 [linux/arm64 build 3/8] COPY Cargo.toml Cargo.lock ./
+#13 CACHED
+
+#14 [linux/arm64 checks 1/3] RUN rustup component add rustfmt clippy && apt-get update && apt-get install -y --no-install-recommends jq chromium fonts-dejavu-core && rm -rf /var/lib/apt/lists/*
+#14 CACHED
+
+#15 [linux/arm64 checks 2/3] COPY tests ./tests
+#15 DONE 0.0s
+
+#16 [linux/arm64 checks 3/3] RUN --mount=type=cache,target=/usr/local/cargo/registry --mount=type=cache,target=/src/target cargo fmt --check && CARGO_PROFILE_TEST_DEBUG=0 CARGO_INCREMENTAL=0 cargo test --locked && CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 cargo clippy --all-targets --locked -- -D warnings     && CARGO_PROFILE_TEST_DEBUG=0 CARGO_INCREMENTAL=0 cargo test --locked --test contract --no-run --message-format=json > /tmp/contract-build.jsonl     && binary="$(jq -ser '[.[] | select(.reason == "compiler-artifact" and .target.name == "contract" and .target.kind == ["test"] and .executable != null) | .executable] | if length == 1 then first else error("expected one contract test executable") end' /tmp/contract-build.jsonl)"     && test -x "$binary" && install -Dm755 "$binary" /acceptance/contract && rm /tmp/contract-build.jsonl     && CARGO_PROFILE_TEST_DEBUG=0 CARGO_INCREMENTAL=0 cargo test --locked --test split --no-run --message-format=json > /tmp/split-build.jsonl     && binary="$(jq -ser '[.[] | select(.reason == "compiler-artifact" and .target.name == "split" and .target.kind == ["test"] and .executable != null) | .executable] | if length == 1 then first else error("expected one split test executable") end' /tmp/split-build.jsonl)"     && test -x "$binary" && install -Dm755 "$binary" /acceptance/split && rm /tmp/split-build.jsonl
+#16 0.334    Compiling hotline-computer v0.13.0-rc.3 (/src)
+#16 1.837     Finished `test` profile [unoptimized] target(s) in 1.56s
+#16 1.849      Running unittests src/lib.rs (target/debug/build/hotline-computer/a2d0542af88b5707/out/hotline_computer-a2d0542af88b5707)
+#16 1.850 
+#16 1.850 running 268 tests
+#16 1.851 test a11y::tests::similar_titles_never_cross_application_boundaries ... ok
+#16 1.851 test activity::tests::activity_omits_payloads_and_url_credentials_queries_fragments ... ok
+#16 1.851 test agent::tests::a_known_harness_lends_its_name_and_mark_and_others_their_own_words ... ok
+#16 1.851 test agent::tests::identity_tracks_the_last_named_holder_but_honors_an_override ... ok
+#16 1.851 test agent::tests::the_harness_names_the_agent_until_a_holder_header_does ... ok
+#16 1.851 test authenticator::tests::a_site_that_excludes_a_known_credential_or_wants_another_algorithm_is_told ... ok
+#16 1.851 test authenticator::tests::a_passkey_is_never_offered_to_another_site_or_an_insecure_page ... ok
+#16 1.851 test badge::tests::a_badge_sits_beside_the_field_and_never_on_the_next_control ... ok
+#16 1.851 test authenticator::tests::a_minted_passkey_signs_for_its_site_and_the_signature_verifies ... ok
+#16 1.851 test authenticator::tests::the_cose_key_and_attestation_are_the_bytes_webauthn_expects ... ok
+#16 1.851 test boot::tests::a_screen_is_width_by_height ... ok
+#16 1.851 test boot::tests::the_display_socket_is_named_by_its_number ... ok
+#16 1.851 test bridge::tests::a_held_use_names_the_page_path_only_on_its_own_site ... ok
+#16 1.851 test bridge::tests::a_passkey_serves_its_site_and_subdomains_only ... ok
+#16 1.852 test authenticator::tests::every_signature_counts_past_what_a_site_has_seen ... ok
+#16 1.852 test bridge::tests::a_request_names_its_relying_party_before_its_page ... ok
+#16 1.852 test bridge::tests::a_repeated_use_is_one_line_in_the_record ... ok
+#16 1.852 test bridge::tests::host_of_reads_web_origins_only ... ok
+#16 1.852 test bridge::tests::the_turn_stays_with_the_person_until_handed_back_or_the_agent_acts ... ok
+#16 1.852 test browser::tests::only_top_level_web_pages_are_listed_newest_first ... ok
+#16 1.852 test desktop::tests::a_recent_action_expires_after_ten_seconds ... ok
+#16 1.852 test boot::tests::only_dead_endpoints_are_removed ... ok
+#16 1.852 test browser::tests::stale_profile_locks_are_cleared_before_launch ... ok
+#16 1.852 test desktop::tests::a_window_beside_the_column_ends_one_gutter_short_of_it ... ok
+#16 1.852 test desktop::tests::compositing_is_a_straight_alpha_blend ... ok
+#16 1.852 test desktop::tests::the_bar_takes_the_smallest_icon_that_is_still_big_enough ... ok
+#16 1.852 test desktop::tests::menu_rows_leave_room_for_the_separator ... ok
+#16 1.852 test desktop::tests::every_harness_mark_decodes_as_a_fourteen_pixel_mask ... ok
+#16 1.853 test draft::tests::a_tauri_workspace_gets_webkit_its_ui_install_and_an_app_run ... ok
+#16 1.855 test draft::tests::a_vite_app_gets_a_web_run_on_the_given_port ... ok
+#16 1.855 test draft::tests::native_toolkits_choose_their_platform ... ok
+#16 1.855 test draft::tests::python_gets_a_virtualenv_and_every_decision_is_explained ... ok
+#16 1.855 test desktop::tests::work_area_and_column_share_gutters_including_the_opt_out ... ok
+#16 1.855 test files_ui::tests::paths_encode_for_uris_and_addresses_name_their_port ... ok
+#16 1.855 test files_ui::tests::an_answer_reaches_the_waiting_request_once ... ok
+#16 1.855 test holds::tests::a_changed_or_revoked_key_takes_its_answers_with_it ... ok
+#16 1.855 test holds::tests::a_fill_answers_waiting_at_once_and_its_retry_collects_the_answer ... ok
+#16 1.855 test holds::tests::a_held_use_expires_at_its_time_and_a_page_that_gives_up_ends_it ... ok
+#16 1.855 test holds::tests::a_held_use_is_listed_until_answered_and_answered_once ... ok
+#16 1.855 test holds::tests::allow_lets_that_key_through_on_that_site_for_ten_minutes ... ok
+#16 1.855 test holds::tests::an_approval_nobody_collects_lapses ... ok
+#16 1.855 test holds::tests::allow_ten_minutes_covers_the_same_flow_only ... ok
+#16 1.859 test holds::tests::an_unattested_allow_lets_one_use_through ... ok
+#16 1.859 test files_ui::tests::a_listing_names_folders_files_and_the_places_around_them ... ok
+#16 1.859 test jobs::tests::a_connection_to_the_proxy_is_found_by_both_its_ends ... ok
+#16 1.860 test jobs::tests::a_job_cannot_look_into_another_job_of_the_same_user ... ok
+#16 1.861 test jobs::tests::a_script_that_starts_with_cd_takes_that_folders_environment ... ok
+#16 1.861 test jobs::tests::an_unlabelled_job_is_named_by_its_command_line_cut_to_a_row ... ok
+#16 1.862 test jobs::tests::a_long_stream_answers_with_its_end_from_a_whole_character ... ok
+#16 1.862 test jobs::tests::only_fresh_failures_nobody_has_retried_need_attention ... ok
+#16 1.864 test desktop::tests::the_mark_decodes_and_blends_onto_ground ... ok
+#16 1.864 test jobs::tests::output_reads_as_plain_text ... ok
+#16 1.866 test jobs::tests::a_job_offered_the_persons_secrets_finds_them_by_name_and_never_the_bearer ... ok
+#16 1.872 test jobs::tests::output_is_bounded_and_history_survives_a_new_service ... ok
+#16 1.872 test activity::tests::activity_redacts_before_truncation_and_never_follows_a_log_symlink ... ok
+#16 1.873 test keyproxy::policy::tests::ordinary_routes_and_other_origins_pass ... ok
+#16 1.873 test keyproxy::policy::tests::the_desks_routes_are_honoured ... ok
+#16 1.873 test keyproxy::policy::tests::the_minting_routes_are_refused_in_every_spelling ... ok
+#16 1.873 test keyproxy::scrub::tests::a_value_split_across_chunks_is_caught ... ok
+#16 1.873 test keyproxy::scrub::tests::byte_by_byte_and_a_partial_tail ... ok
+#16 1.873 test keyproxy::scrub::tests::the_longer_match_wins ... ok
+#16 1.889 test bridge::tests::a_bridge_peer_of_another_user_is_hung_up_on ... ok
+#16 1.889 test jobs::tests::output_storage_failure_stops_and_reaps_the_job ... ok
+#16 1.890 test jobs::tests::retry_ids_are_scoped_and_spawn_failures_are_queryable ... ok
+#16 1.891 test jobs::tests::stdin_works_without_a_visible_terminal_for_pipes_and_ptys ... ok
+#16 1.897 test keyproxy::tests::a_delivery_checks_every_use_and_its_generation ... ok
+#16 1.899 test keyproxy::tests::a_request_naming_another_host_is_refused ... ok
+#16 1.901 test holds::tests::the_door_lists_held_uses_and_takes_one_answer_each ... ok
+#16 1.945 test keyproxy::tests::a_redirect_is_handed_back_not_followed ... ok
+#16 1.945 test keyproxy::tests::a_regrant_does_not_revive_an_old_stand_in ... ok
+#16 1.945 test keyproxy::tests::a_redelivery_keeps_an_unchanged_keys_stand_ins_and_kills_a_changed_ones ... ok
+#16 1.947 test keyproxy::tests::an_upstream_the_roots_do_not_vouch_for_gets_nothing ... ok
+#16 1.947 test keyproxy::tests::a_key_minting_request_is_refused ... ok
+#16 1.948 test keyproxy::tests::a_stand_in_from_a_finished_job_is_dead ... ok
+#16 1.948 test keyproxy::tests::each_job_gets_its_own_stand_in_in_the_service_shape ... ok
+#16 1.988 test keyproxy::tests::a_scheme_free_header_carries_the_whole_key ... ok
+#16 1.995 test keyproxy::tests::an_encoded_reply_to_a_keyed_request_is_refused ... ok
+#16 2.008 test keyproxy::tests::j1_curl_bearer_reaches_the_service_with_the_value ... ok
+#16 2.014 test keyproxy::tests::j6_an_unbound_host_sees_only_the_stand_in ... ok
+#16 2.014 test keyproxy::tests::j7_node_fetch_through_the_env_proxy ... ok
+#16 2.015 test keyproxy::tests::plain_http_is_refused ... ok
+#16 2.020 test keyproxy::tests::j2_python_token_scheme_under_strict_verification ... ok
+#16 2.020 test keyproxy::tests::j3_git_basic_through_a_credential_helper ... ok
+#16 2.020 test keyproxy::tests::the_ca_and_its_leaves_are_strict ... ok
+#16 2.020 test keyproxy::tests::the_desk_shape_parses ... ok
+#16 2.041 test keyproxy::tests::j4_a_reflecting_endpoint_gives_back_the_stand_in ... ok
+#16 2.041 test keyproxy::tests::a_stand_in_works_only_on_its_own_jobs_connection ... ok
+#16 2.044 test keyproxy::tests::j5_a_stand_in_in_a_body_stays_a_stand_in ... ok
+#16 2.065 test keyproxy::tests::revoking_stops_injection_on_an_open_connection ... ok
+#16 2.065 test lease::tests::a_hold_that_lapsed_is_taken_off_the_bar_when_it_ends ... ok
+#16 2.066 test lease::tests::only_another_holder_is_refused ... ok
+#16 2.066 test limits::tests::a_cpu_quota_bounds_both_and_unlimited_memory_follows_cpus ... ok
+#16 2.066 test limits::tests::memory_bounds_jobs_even_when_the_host_reports_many_cpus ... ok
+#16 2.066 test limits::tests::resources_say_the_cgroups_limits_and_the_disk_left ... ok
+#16 2.066 test limits::tests::without_a_cgroup_the_available_cpus_decide ... ok
+#16 2.067 test limits::tests::without_a_memory_limit_the_machines_memory_is_said ... ok
+#16 2.067 test links::tests::only_web_addresses_are_links ... ok
+#16 2.067 test logins::tests::a_cookie_belongs_to_its_site_or_a_host_within_it ... ok
+#16 2.067 test keyproxy::tests::the_desks_refuse_list_adds_to_the_built_in_one ... ok
+#16 2.068 test manifest::tests::a_desktop_run_may_name_the_title_it_is_ready_at ... ok
+#16 2.068 test manifest::tests::a_create_hook_already_done_is_not_looked_for_again ... ok
+#16 2.068 test manifest::tests::a_hook_whose_script_is_not_there_is_said_before_anything_is_built ... ok
+#16 2.068 test manifest::tests::a_run_is_a_job_and_an_unknown_one_names_the_alternatives ... ok
+#16 2.069 test manifest::tests::a_workspace_still_building_says_its_hooks_wait ... ok
+#16 2.069 test manifest::tests::environment_gains_service_addresses_and_extends_paths ... ok
+#16 2.069 test manifest::tests::errors_say_what_is_valid ... ok
+#16 2.070 test manifest::tests::layers_concatenate_lists_merge_maps_and_last_wins_for_scalars ... ok
+#16 2.070 test manifest::tests::nix_strings_expand_only_package_references ... ok
+#16 2.070 test manifest::tests::only_the_workspace_is_looked_in_for_a_hooks_script ... ok
+#16 2.071 test manifest::tests::platforms_pull_in_what_they_require_and_render_their_runtime ... ok
+#16 2.071 test observer::tests::a_job_is_named_first_and_identified_underneath ... ok
+#16 2.071 test observer::tests::an_inline_script_shows_as_one_line ... ok
+#16 2.071 test observer::tests::running_headers_use_the_agent_marker_and_a_white_label ... ok
+#16 2.071 test observer::tests::the_banner_is_the_name_and_nothing_more_unless_narrowed ... ok
+#16 2.071 test observer::tests::the_ending_names_the_job_again_and_says_how_it_went ... ok
+#16 2.072 test observer::tests::the_persons_bash_is_never_the_store_one ... ok
+#16 2.072 test observer::tests::the_rc_file_sets_the_prompt_and_leaves_room_for_the_operators_own ... ok
+#16 2.074 test manifest::tests::a_workspace_whose_hook_failed_is_not_ready_and_says_what_failed ... ok
+#16 2.074 test paint::tests::a_rounded_pill_leaves_its_corners_to_the_background ... ok
+#16 2.074 test paint::tests::icons_downscale_with_their_alpha ... ok
+#16 2.076 test paint::tests::shadows_are_soft_offset_and_bounded ... ok
+#16 2.082 test paint::tests::a_light_glyph_edge_gets_more_coverage_but_dark_ink_does_not ... ok
+#16 2.082 test passkeys::tests::a_denial_is_told_to_the_page_and_the_door_ends_the_arming ... ok
+#16 2.082 test passkeys::tests::a_request_that_left_with_its_page_is_forgotten_and_a_told_one_makes_way ... ok
+#16 2.082 test passkeys::tests::a_request_waits_for_the_person_and_an_approval_lets_one_credential_be_kept ... ok
+#16 2.082 test passkeys::tests::a_site_for_a_passkey_is_a_host_name ... ok
+#16 2.082 test passkeys::tests::an_arming_past_its_time_is_gone ... ok
+#16 2.082 test portal::tests::the_portals_options_become_what_the_picker_asks ... ok
+#16 2.082 test ready::tests::a_run_answers_with_its_window_now_and_waits_for_the_title_asked_for ... ok
+#16 2.082 test ready::tests::a_title_is_plain_text_of_bounded_length ... ok
+#16 2.083 test ready::tests::a_title_matches_as_text_within_the_title_ignoring_case ... ok
+#16 2.083 test ready::tests::an_answer_lists_a_bounded_number_of_windows_with_bounded_titles ... ok
+#16 2.083 test screen::tests::a_frame_leads_with_its_geometry ... ok
+#16 2.083 test screen::tests::a_union_is_the_bounding_box ... ok
+#16 2.083 test secrets::tests::a_fill_resolves_a_field_by_name_and_a_code_from_the_seed ... ok
+#16 2.086 test paint::tests::text_is_antialiased_and_measured ... ok
+#16 2.087 test secrets::tests::a_login_and_a_passkey_are_kept_by_kind_and_a_job_never_sees_them ... ok
+#16 2.087 test secrets::tests::a_login_is_typed_on_exactly_its_origins ... ok
+#16 2.087 test secrets::tests::a_login_or_passkey_new_to_the_set_is_an_arrival_and_a_variable_never ... ok
+#16 2.087 test secrets::tests::a_name_is_an_environment_variable_and_the_computers_own_are_refused ... ok
+#16 2.087 test secrets::tests::a_passkeys_site_is_its_rp_id_on_any_port ... ok
+#16 2.087 test secrets::tests::a_site_allows_its_own_pages_and_no_other ... ok
+#16 2.088 test keyproxy::tests::the_value_goes_only_in_its_header_and_schemes ... ok
+#16 2.090 test secrets::tests::a_job_finds_a_secret_by_name_and_the_tools_answer_the_name_alone ... ok
+#16 2.090 test secrets::tests::a_typed_code_is_carried_only_as_a_number_of_its_own ... ok
+#16 2.091 test secrets::tests::loopback_in_any_spelling_and_other_keys_are_readable ... ok
+#16 2.094 test secrets::tests::the_codes_a_login_could_show_now_are_redacted ... ok
+#16 2.095 test lease::tests::a_call_stuck_behind_another_reports_the_wait ... ok
+#16 2.095 test secrets::tests::the_extension_is_offered_a_login_only_where_it_may_be_typed ... ok
+#16 2.095 test secrets::tests::the_set_is_taken_whole_or_the_last_one_kept ... ok
+#16 2.095 test secrets::tests::the_use_rides_with_the_set_and_a_change_applies_from_the_next_use ... ok
+#16 2.095 test serve::tests::a_client_cannot_name_itself_the_person ... ok
+#16 2.096 test serve::tests::a_computer_with_no_token_does_not_start_by_accident ... ok
+#16 2.096 test serve::tests::a_request_is_taken_by_address_or_listed_name_only ... ok
+#16 2.105 test secrets::tests::a_value_is_taken_out_in_every_spelling_a_url_a_form_or_html_gives_it ... ok
+#16 2.108 test secrets::tests::every_value_is_taken_out_of_a_text_whole_and_in_its_json_spelling ... ok
+#16 2.114 test secrets::tests::the_door_takes_the_set_from_the_bearer_alone_and_answers_no_value ... ok
+#16 2.114 test serve::tests::secret_comparison_needs_equal_bytes ... ok
+#16 2.114 test serve::tests::the_listing_carries_the_cache_hints_a_modern_client_requires ... ok
+#16 2.115 test serve::tests::another_sites_page_and_a_rebound_name_are_turned_away_before_the_token ... ok
+#16 2.115 test signin::lock::tests::a_hop_carrying_a_sign_in_proof_or_a_script_address_is_blocked ... ok
+#16 2.115 test signin::lock::tests::a_signed_in_sites_pages_stay_and_plain_links_go_to_the_general_browser ... ok
+#16 2.115 test signin::cdp::tests::calls_are_answered_by_id_and_events_are_broadcast ... ok
+#16 2.115 test signin::screen::tests::keys_become_devtools_events ... ok
+#16 2.115 test signin::screen::tests::a_frame_is_the_viewers_header_and_the_png ... ok
+#16 2.115 test signin::sessions::tests::a_shared_site_is_a_host_or_an_origin ... ok
+#16 2.124 test serve::tests::only_an_authenticated_mcp_request_updates_the_displayed_name ... ok
+#16 2.126 test serve::tests::public_fonts_are_allowlisted_and_never_resolve_paths ... ok
+#16 2.127 test signin::tests::a_granted_passkeys_site_opens_here_unless_a_login_names_its_host ... ok
+#16 2.127 test signin::tests::a_passkey_alone_opens_its_site_here_and_signs_in ... ok
+#16 2.127 test signin::tests::a_passkey_signs_in_on_its_site_through_the_signed_in_browser ... ok
+#16 2.179 test keyproxy::tests::the_value_is_scrubbed_from_a_reply ... ok
+#16 2.211 test bridge::tests::an_ask_me_login_waits_for_the_desk_even_while_the_person_has_the_screen ... ok
+#16 2.382 test signin::tests::a_button_the_page_adds_while_typing_keeps_the_fill ... ok
+#16 2.547 test keyproxy::tests::revoking_stops_a_running_curl_loop ... ok
+#16 2.737 test signin::tests::a_download_is_handed_to_the_agents_downloads ... ok
+#16 2.866 test jobs::tests::deadlines_retain_partial_output_and_cancellation_reaps_the_child ... ok
+#16 2.918 test signin::tests::a_get_form_on_a_page_of_another_charset_is_refused ... ok
+#16 3.481 test activity::tests::activity_keeps_newest_500_and_removes_terminal_control_codes ... ok
+#16 3.853 test signin::tests::a_passkey_signs_only_for_a_signed_in_tabs_own_origin ... ok
+#16 4.114 test signin::tests::a_password_field_a_script_built_with_no_form_is_typed ... ok
+#16 5.218 test signin::tests::a_password_in_a_get_form_is_typed_but_never_sent_in_an_address ... ok
+#16 6.529 test signin::tests::a_password_sent_off_the_site_never_leaves ... ok
+#16 7.234 test signin::tests::a_revocation_outlives_a_kill_before_chromium_writes_it ... ok
+#16 7.873 test signin::tests::a_share_revoked_while_stopped_is_gone_after_a_restart ... ok
+#16 8.133 test signin::tests::a_sign_in_that_cannot_finish_is_handed_to_the_person ... ok
+#16 8.442 test signin::tests::a_sign_in_waiting_on_the_person_is_listed_for_the_desk ... ok
+#16 9.213 test signin::tests::a_stop_inside_a_revocation_does_not_keep_the_revoked_session ... ok
+#16 9.233 test signin::tests::shares_go_to_the_signed_in_browser_only_where_there_is_one ... ok
+#16 13.00 test signin::tests::a_wait_during_sign_in_resolves_only_after_the_next_document ... ok
+#16 13.34 test signin::tests::allow_covers_this_tabs_sign_in_only ... ok
+#16 13.58 test split::broker::home_tests::the_broker_never_opens_a_path_in_the_agents_home ... ok
+#16 13.58 test split::broker::tests::the_bearer_never_rides_on_to_the_runner ... ok
+#16 13.58 test split::init::tests::a_fresh_home_of_roots_is_given_to_the_agent_and_no_other ... ok
+#16 13.58 test split::keys::tests::a_delivery_that_does_not_say_what_a_variable_is_is_refused ... ok
+#16 13.67 test split::keys::tests::a_protected_value_reaches_no_job_env_log_or_runner_frame ... ok
+#16 13.71 test split::keys::tests::a_readable_variable_behaves_as_today ... ok
+#16 13.83 test split::keys::tests::a_stand_in_from_a_finished_job_is_dead ... ok
+#16 13.83 test split::keys::tests::a_v2_delivery_reads_every_kind_and_the_use_shapes ... ok
+#16 13.83 test split::keys::tests::an_older_generation_changes_nothing_and_v1_unbinds_every_key ... ok
+#16 13.83 test split::keys::tests::legacy_takes_readable_variables_in_v2_and_v1_as_today ... ok
+#16 14.51 test split::keys::tests::revoking_stops_a_running_curl_loop ... ok
+#16 14.51 test split::keys::tests::the_public_bundle_is_the_system_roots_and_this_boots_ca ... ok
+#16 14.56 test split::migration::tests::an_old_snapshot_is_not_restored_until_cleaned ... ok
+#16 14.60 test split::migration::tests::deleting_answers_for_the_old_snapshots_and_a_new_home_has_nothing_to_do ... ok
+#16 14.60 test split::tests::capabilities_attest_with_the_boots_key_and_cover_the_mode ... ok
+#16 14.60 test split::wire::tests::a_frame_is_a_length_and_json ... ok
+#16 14.70 test split::wire::tests::both_sides_ask_and_answer_over_one_line ... ok
+#16 14.70 test split::wire::tests::descriptors_cross_a_line ... ok
+#16 14.70 test tools::activity_tests::cursor_intent_uses_only_static_action_words ... ok
+#16 14.70 test tools::activity_tests::reads_do_not_make_the_agent_look_busy ... ok
+#16 14.70 test tools::browser::tests::a_real_text_and_a_real_secret_together_is_an_error ... ok
+#16 14.70 test tools::browser::tests::an_empty_text_alone_clears_the_field ... ok
+#16 14.70 test tools::browser::tests::an_unused_empty_secret_alongside_text_still_fills_with_text ... ok
+#16 14.70 test tools::browser::tests::an_unused_empty_text_alongside_a_secret_still_fills_with_the_secret ... ok
+#16 14.70 test tools::browser::tests::neither_argument_is_an_error ... ok
+#16 14.70 test tools::browser::tests::secret_only_fills_with_secret ... ok
+#16 14.70 test tools::browser::tests::text_only_fills_with_text ... ok
+#16 14.70 test tools::files::tests::refuses_a_symlink_that_leaves_home ... ok
+#16 14.70 test tools::files::tests::refuses_an_existing_file_symlink_that_leaves_home ... ok
+#16 14.70 test tools::files::tests::refuses_before_creating_a_parent_outside_home ... ok
+#16 14.70 test tools::files::tests::the_computers_own_records_are_not_fetched_or_written ... ok
+#16 14.70 test tools::input::tests::the_wheel_scrolls_the_way_it_is_told ... ok
+#16 14.70 test tools::shell::tests::a_line_goes_to_the_shell_and_a_name_does_not ... ok
+#16 15.12 test signin::tests::an_image_button_never_posts_a_password_elsewhere ... ok
+#16 15.15 test tools::shell::tests::exec_answers_with_the_end_of_a_long_log_and_where_the_rest_is ... ok
+#16 15.16 test tools::state::tests::a_snapshot_over_the_limit_stops_there_and_keeps_the_one_before ... ok
+#16 15.17 test tools::state::tests::lost_and_found_is_in_no_snapshot_and_no_user_file ... ok
+#16 15.17 test tools::state::tests::names_cannot_escape_the_state_directories ... ok
+#16 15.17 test tools::windows::tests::a_large_application_gets_its_minimum_width_above_the_bar ... ok
+#16 15.17 test tools::windows::tests::activity_splits_the_observer_space_above_the_persons_shell ... ok
+#16 15.17 test tools::windows::tests::every_app_shares_the_left_pane_and_takes_the_area_without_a_column ... ok
+#16 15.17 test tools::windows::tests::impossible_layouts_fail_before_moving_any_windows ... ok
+#16 15.17 test tools::windows::tests::opting_out_removes_both_outer_and_inner_gaps ... ok
+#16 15.17 test tools::windows::tests::the_persons_shell_takes_the_bottom_third_of_the_column_under_a_line ... ok
+#16 15.17 test viewer::tests::a_caller_that_can_set_headers_may_present_the_bearer_there_instead ... ok
+#16 15.17 test viewer::tests::a_file_from_the_persons_computer_lands_whole_under_the_home ... ok
+#16 15.18 test viewer::tests::an_upload_over_the_limit_is_refused_and_leaves_nothing_behind ... ok
+#16 15.18 test viewer::tests::cancelling_or_failing_an_upload_removes_its_private_spool ... ok
+#16 15.18 test viewer::tests::create_only_uploads_publish_once_and_keep_the_competing_file ... ok
+#16 15.21 test viewer::tests::http_files_advertises_and_enforces_create_only_with_header_auth ... ok
+#16 15.22 test viewer::tests::ping_answers_without_taking_or_renewing_the_lease ... ok
+#16 15.22 test viewer::tests::the_control_bar_is_told_whose_screen_it_is ... ok
+#16 15.22 test viewer::tests::the_files_panel_sees_the_home_and_nothing_above_it ... ok
+#16 15.23 test viewer::tests::the_files_panel_wants_the_token ... ok
+#16 15.23 test viewer::tests::the_page_is_told_where_the_hands_are ... ok
+#16 15.23 test viewer::tests::the_screen_is_the_teammate_s_until_a_person_takes_it ... ok
+#16 15.23 test workspace::tests::a_cached_definition_attaches_and_shell_jobs_inherit_it ... ok
+#16 15.23 test workspace::tests::a_manifest_workspace_keeps_its_base_until_it_asks_for_the_new_one ... ok
+#16 15.23 test workspace::tests::flakes_use_the_requested_local_shell_and_cannot_escape_home ... ok
+#16 15.23 test workspace::tests::image_versions_do_not_invalidate_existing_environment_but_missing_store_paths_do ... ok
+#16 15.23 test workspace::tests::preparation_obeys_the_lease_and_home_boundary_through_the_state_tool ... ok
+#16 15.23 test workspace::tests::the_catalog_names_are_attribute_paths_and_read_well ... ok
+#16 15.23 test workspace::tests::the_operator_spelling_takes_names_flags_and_a_workspace ... ok
+#16 15.23 test workspace::tests::workspace_pins_survive_dependency_changes_and_unsafe_attributes_are_rejected ... ok
+#16 15.23 test x11::tests::a_region_is_clipped_to_the_screen ... ok
+#16 15.23 test x11::tests::a_window_under_another_is_covered_and_a_peeking_one_is_not ... ok
+#16 15.23 test xtest::tests::characters_are_their_own_keysyms ... ok
+#16 15.23 test xtest::tests::named_keys_are_looked_up ... ok
+#16 15.23 test xtest::tests::x_names_and_browser_names_both_resolve ... ok
+#16 15.71 test tools::shell::tests::a_waiting_command_does_not_lock_out_desktop_takeover ... ok
+#16 16.03 test signin::tests::an_oauth_callback_never_reaches_the_general_browser ... ok
+#16 16.22 test signin::tests::eval_is_refused_on_a_signed_in_site ... ok
+#16 16.87 test signin::tests::no_observation_during_sign_in_including_screenshots ... ok
+#16 17.10 test signin::tests::removing_a_share_signs_the_site_out ... ok
+#16 17.41 test signin::tests::revoking_a_login_signs_its_site_out ... ok
+#16 17.65 test signin::tests::site_input_never_reaches_display_0 ... ok
+#16 17.94 test signin::tests::the_site_screen_streams_frames_in_the_viewer_protocol ... ok
+#16 17.94 
+#16 17.94 test result: ok. 268 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 16.09s
+#16 17.94 
+#16 17.94      Running unittests src/main.rs (target/debug/build/hotline-computer/997eaa9322c1fdc2/out/hotline_computer-997eaa9322c1fdc2)
+#16 17.94 
+#16 17.94 running 0 tests
+#16 17.94 
+#16 17.94 test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+#16 17.94 
+#16 17.94      Running tests/contract.rs (target/debug/build/hotline-computer/7395e1dfc640a899/out/contract-7395e1dfc640a899)
+#16 17.94 
+#16 17.94 running 1 test
+#16 17.94 test image_honors_the_computer_contract ... ok
+#16 17.94 
+#16 17.94 test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+#16 17.94 
+#16 17.94      Running tests/split.rs (target/debug/build/hotline-computer/54ab9d989e3dd520/out/split-54ab9d989e3dd520)
+#16 17.94 
+#16 17.94 running 4 tests
+#16 17.94 test legacy_boot_is_todays_single_user ... ok
+#16 17.94 test boot_splits_and_keeps_no_caps ... ok
+#16 17.94 test a_job_reaches_nothing_of_the_brokers ... ok
+#16 17.94 test a_job_cannot_bind_the_door_or_proxy_port ... ok
+#16 17.94 
+#16 17.94 test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+#16 17.94 
+#16 17.94    Doc-tests hotline_computer
+#16 18.18 
+#16 18.18 running 0 tests
+#16 18.18 
+#16 18.18 test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+#16 18.18 
+#16 18.27     Checking hotline-computer v0.13.0-rc.3 (/src)
+#16 18.68     Finished `dev` profile [unoptimized] target(s) in 0.49s
+#16 18.76     Finished `test` profile [unoptimized] target(s) in 0.06s
+#16 18.84     Finished `test` profile [unoptimized] target(s) in 0.05s
+#16 DONE 18.9s
+
+#17 exporting to oci image format
+#17 exporting layers
+#17 exporting layers 0.7s done
+#17 exporting manifest sha256:806eba1944fda078255739b8a0117cca2e4b23c94a72f05fd24935d869c1419c done
+#17 exporting config sha256:372f3b484039c4d62ad20e53ad08ed5c08e754111d14a5142b1910da781058ad done
+#17 exporting manifest list sha256:80f0726b3a89eaf92f75b7e1885b57f4dc2f2202a420aae92178fcc4dfc39ea1 done
+#17 sending tarball
+#17 sending tarball 2.9s done
+#17 DONE 3.6s
+hotline-computer:0.13.0-rc.3-rc3probes-final-checks

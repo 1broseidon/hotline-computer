@@ -1,0 +1,28 @@
+diff --git a/src-final/src/signin/mod.rs b/src-nopersist/src/signin/mod.rs
+index ced7a0b..664370e 100644
+--- a/src-final/src/signin/mod.rs
++++ b/src-nopersist/src/signin/mod.rs
+@@ -2234,6 +2234,11 @@ impl Signin {
+ /// The sites revoked since the browser last closed in order, as written by
+ /// `persist_revoked`; what does not read is skipped.
+ fn read_revoked(path: &std::path::Path) -> Vec<Origin> {
++    // SABOTAGE (rc3-probes broken build, never a release): nor read back.
++    if std::env::var_os("HOTLINE_SABOTAGE_OFF").is_none() {
++        let _ = path;
++        return Vec::new();
++    }
+     std::fs::read(path)
+         .ok()
+         .and_then(|bytes| serde_json::from_slice::<Vec<String>>(&bytes).ok())
+@@ -2246,6 +2251,11 @@ fn read_revoked(path: &std::path::Path) -> Vec<Origin> {
+ /// Adds `sites` to the list on disk, replaced whole so a crash leaves the
+ /// old list or the new one.
+ fn persist_revoked(path: &std::path::Path, sites: &[Origin]) {
++    // SABOTAGE (rc3-probes broken build, never a release): revocations are not written down.
++    if std::env::var_os("HOTLINE_SABOTAGE_OFF").is_none() {
++        let _ = (path, sites);
++        return;
++    }
+     let mut all: Vec<String> = read_revoked(path).iter().map(ToString::to_string).collect();
+     for site in sites.iter().map(ToString::to_string) {
+         if !all.contains(&site) {
