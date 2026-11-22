@@ -324,10 +324,10 @@ pub async fn current_url(app: &App) -> Result<String, String> {
 
 pub async fn sync_passkeys(app: &App, launch: bool) -> Result<(), String> {
     // A passkey is made in the signed-in browser, where the extension is:
-    // the person is shown the armed site there.
+    // the person is shown the armed site there (`Signin::open_armed`).
     if let Some(signin) = &app.signin {
         if launch && let Some((rp_id, _)) = app.passkeys.armed() {
-            signin.open_site(&format!("https://{rp_id}/")).await?;
+            signin.open_armed(&rp_id).await?;
         }
         return Ok(());
     }

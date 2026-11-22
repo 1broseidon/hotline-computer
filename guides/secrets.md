@@ -127,6 +127,19 @@ under it, over https on any port (and http on localhost), as WebAuthn scopes
 it. Where a login or a share names a site on the same host, the passkey is
 used on the sites they name.
 
+A site armed for a new passkey opens as `https://{rpId}`, and arming shows
+it to you there. A site on the computer itself (`localhost`, or a name
+under it) has no port in its `rpId`, so arming starts the signed-in browser
+and loads nothing. While armed, that host opens here on any port, over http
+or https, as its passkey would once granted (only the sites a login or a
+share names, if one names that host), and the agent opens the site's own
+page. A job can serve a page on that host too, so check the port in the
+request's `origin` before you approve. As any loopback passkey, the one made
+there signs on its site only if you grant it as readable. An address
+is refused when you arm it, with "A passkey can't be added for 127.0.0.1: a
+passkey is made for a host name, not an address". WebAuthn makes passkeys
+for domains only, so use `localhost`.
+
 On the single-user computer none of this applies. A shared sign-in is a saved
 login in `~/.hotline/logins`, loaded into the visible browser, and
 `PUT /sessions/{name}` answers 404.

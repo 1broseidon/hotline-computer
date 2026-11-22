@@ -385,12 +385,27 @@ impl Signin {
             .unwrap_or_else(std::sync::PoisonError::into_inner)
             .as_ref()
             .and_then(crate::passkeys::Passkeys::armed);
-        if let Some(site) =
-            armed.and_then(|(rp_id, _)| Origin::site(&format!("https://{rp_id}")).ok())
-        {
-            sites.push(site);
+        if let Some((rp_id, _)) = armed {
+            sites.extend(armed_sites(&rp_id, &sites));
         }
         sites
+    }
+
+    /// Readies the signed-in browser for the passkey the person armed for
+    /// `rp_id`, starting it if it is not up, and shows them the site. A
+    /// site on the computer itself is not loaded: its RP id has no port, so
+    /// `https://localhost/` is a guess that is always wrong (nothing listens
+    /// on 443 there), and a page on loopback is one any job may serve. The
+    /// agent opens the site's own page, which opens here while armed
+    /// (`armed_sites`).
+    pub async fn open_armed(&self, rp_id: &str) -> Result<(), String> {
+        let running = self.browser().await?;
+        if crate::secrets::is_loopback_host(rp_id) {
+            return Ok(());
+        }
+        let tab = self.new_tab(&running).await?;
+        self.navigate(&running.cdp, &tab.session, &format!("https://{rp_id}/"))
+            .await
     }
 
     /// Where the person arms the making of a passkey.
@@ -400,13 +415,6 @@ impl Signin {
             .arming
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner) = Some(passkeys);
-    }
-
-    /// Opens `url` in a new signed-in tab, for the person: the armed site.
-    pub async fn open_site(&self, url: &str) -> Result<(), String> {
-        let running = self.browser().await?;
-        let tab = self.new_tab(&running).await?;
-        self.navigate(&running.cdp, &tab.session, url).await
     }
 
     /// Whether `url` opens in the signed-in browser.
@@ -2229,6 +2237,24 @@ impl Signin {
         }
         Ok((gone.len(), doomed.len()))
     }
+}
+
+/// What an arming for `rp_id` opens here, besides `sites` (what opens
+/// already). A site on the web is `https://{rp_id}`. A site on the computer
+/// itself comes with no port, and may be on any, so it is the host as a
+/// passkey made for it would be used (`Origin::relying_party`): no more
+/// than the passkey opens once it is granted, and like it, nothing more
+/// where a login or a share already names a site on that host.
+fn armed_sites(rp_id: &str, sites: &[Origin]) -> Vec<Origin> {
+    if !crate::secrets::is_loopback_host(rp_id) {
+        return Origin::site(&format!("https://{rp_id}"))
+            .into_iter()
+            .collect();
+    }
+    if sites.iter().any(|site| site.host() == rp_id) {
+        return Vec::new();
+    }
+    Origin::relying_party(rp_id)
 }
 
 /// The sites revoked since the browser last closed in order, as written by

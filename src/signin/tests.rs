@@ -137,6 +137,11 @@ async fn site(off_site: u16) -> u16 {
                         navigator.credentials.get({publicKey:{challenge:new Uint8Array(32),rpId:'localhost',userVerification:'preferred',timeout:20000}})
                         .then(c => document.getElementById('r').textContent = 'signed ' + c.type)
                         .catch(e => document.getElementById('r').textContent = 'refused ' + e.name + ' ' + e.message);</script>"#.to_owned()),
+                    "/mk" => ("200 OK", String::new(), r#"<title>MK</title><p id="r">pending</p><script>
+                        navigator.credentials.create({publicKey:{rp:{id:'localhost',name:'Test'},user:{id:new Uint8Array([1,2,3]),name:'george',displayName:'George'},
+                        challenge:new Uint8Array(32),pubKeyCredParams:[{type:'public-key',alg:-7}],timeout:20000}})
+                        .then(c => document.getElementById('r').textContent = 'made ' + c.type)
+                        .catch(e => document.getElementById('r').textContent = 'refused ' + e.name + ' ' + e.message);</script>"#.to_owned()),
                     "/leaky" => ("200 OK", String::new(), format!(r#"<title>Leaky</title>
                         <form action="http://127.0.0.1:{off_site}/form" method="get"><label>Password <input name="p" type="password"></label><button>Sign in</button></form>"#)),
                     "/latin" => ("200 OK", String::new(), r#"<meta charset="windows-1252"><title>Latin</title><form action="/home">
@@ -839,6 +844,112 @@ fn a_granted_passkeys_site_opens_here_unless_a_login_names_its_host() {
     );
     deliver(json!({}));
     assert!(!signin.routes("http://localhost:8600/passkey"));
+}
+
+/// An arming for a site on the computer itself opens that host on the
+/// port its page is on, as the passkey it makes will once granted, and no
+/// other host; a site on the web is opened as before, on https alone.
+#[test]
+fn an_armed_loopback_site_opens_here_on_its_own_port() {
+    let root = tempfile::tempdir().unwrap();
+    let secrets = crate::secrets::Secrets::default();
+    let signin = Signin::new(
+        Box::new(spawn::Direct::new(root.path().join("signin"))),
+        Box::new(Recorder::default()),
+        secrets.clone(),
+        None,
+    );
+    let passkeys = crate::passkeys::Passkeys::default();
+    signin.arming_from(passkeys.clone());
+    let page = "http://localhost:8600/settings/passkeys";
+    assert!(!signin.routes(page));
+    passkeys.arm("localhost").unwrap();
+    assert!(signin.routes(page));
+    assert!(signin.routes("https://localhost:8443/"));
+    assert!(!signin.routes("http://127.0.0.1:8600/"));
+    assert!(!signin.routes("http://example.com/"));
+    // A login that names where the host signs in is where the arming is.
+    let mut login = login()["SITE"].clone();
+    login["sites"] = json!(["http://localhost:8000"]);
+    secrets
+        .replace(serde_json::from_value(json!({"SITE": login})).unwrap())
+        .unwrap();
+    assert!(signin.routes("http://localhost:8000/settings/passkeys"));
+    assert!(!signin.routes(page));
+    secrets.replace(BTreeMap::new()).unwrap();
+    passkeys.disarm();
+    assert!(!signin.routes(page));
+    passkeys.arm("github.com").unwrap();
+    assert!(signin.routes("https://github.com/settings/security"));
+    assert!(!signin.routes("https://github.com:8443/"));
+    assert!(!signin.routes(page));
+}
+
+/// What point 1 of the rc.3 QA could not do: arm a site the computer itself
+/// serves, on a port of its own. The arming readies the signed-in browser
+/// and loads nothing (no `https://localhost/`, where nothing listens); the
+/// site's own page opens there, and its `create()` waits for the person
+/// with the page's real origin on the card.
+#[tokio::test]
+async fn a_loopback_site_is_armed_and_its_page_asks_the_person() {
+    let manifest =
+        std::path::Path::new("/etc/chromium/native-messaging-hosts/dev.hotline.computer.json");
+    let host = std::fs::read_to_string(manifest)
+        .ok()
+        .and_then(|text| serde_json::from_str::<Value>(&text).ok())
+        .and_then(|manifest| manifest["path"].as_str().map(std::path::PathBuf::from));
+    if !have_chromium()
+        || !crate::bridge::extension_answers()
+        || !host.is_some_and(|host| host.exists())
+    {
+        return eprintln!("skipped: no chromium, extension or native host");
+    }
+    let _serial = SERIAL.lock().await;
+    let rig = rig(json!({})).await;
+    rig.signin.arming_from(rig.app.passkeys.clone());
+    let bridge = tokio::spawn(crate::bridge::serve(rig.app.clone()));
+    rig.app.passkeys.arm("localhost").unwrap();
+    crate::split::sync_passkeys(&rig.app, true)
+        .await
+        .expect("a loopback site is armed");
+    let loaded: Vec<String> = rig
+        .signin
+        .lock_tabs()
+        .list
+        .iter()
+        .map(|tab| tab.url.clone())
+        .filter(|url| url.starts_with("http"))
+        .collect();
+    assert!(loaded.is_empty(), "the arming loaded {loaded:?}");
+    rig.browser(json!({"action": "navigate", "url": rig.url("/mk")}))
+        .await
+        .unwrap();
+    let mut asked = None;
+    for _ in 0..200 {
+        asked = rig.app.passkeys.asked();
+        if asked.is_some() {
+            break;
+        }
+        tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+    }
+    let (ask, answer) = asked.expect("the page's create() reached the person");
+    assert_eq!(ask.rp_id, "localhost");
+    assert_eq!(ask.origin, rig.url(""));
+    assert_eq!(answer, None, "nobody answered for the person");
+    assert!(rig.app.passkeys.minted().is_none());
+    rig.app.passkeys.approve(&ask.id).unwrap();
+    let made = rig.settle("made public-key").await;
+    assert!(!made.contains("refused"), "{made}");
+    assert_eq!(
+        rig.app.passkeys.minted().map(|key| key.rp_id).as_deref(),
+        Some("localhost")
+    );
+    assert!(
+        rig.general.0.lock().unwrap().is_empty(),
+        "nothing went to the general browser"
+    );
+    bridge.abort();
+    rig.signin.stop().await;
 }
 
 /// With nothing granted but a passkey, its site opens here, not in the

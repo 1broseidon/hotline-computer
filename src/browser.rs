@@ -326,9 +326,12 @@ impl BrowserManager {
             }
             // A courtesy on a fresh browser: the person is about to sign in
             // there. A site that does not answer is the site's business, not
-            // a reason to refuse the arming.
+            // a reason to refuse the arming. A site on the computer itself
+            // has no port in its RP id, so there is nothing to guess at: the
+            // agent opens its page (`Signin::open_armed`).
             if fresh
                 && let Some((rp_id, _)) = session.passkeys.armed()
+                && !crate::secrets::is_loopback_host(&rp_id)
                 && let Some(page) = pages.first()
             {
                 page.bring_to_front().await.map_err(browser_error)?;

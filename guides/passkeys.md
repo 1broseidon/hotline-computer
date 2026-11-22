@@ -32,7 +32,11 @@ Browser in the desk.
    `PUT /passkeys/registration {"rpId":"github.com"}`. Arming lasts ten
    minutes, covers one site, answers `{"state":"armed","rpId":…,"expiresAt":…}`,
    and starts the browser on that site if none is open. On the split computer
-   that is the signed-in browser.
+   that is the signed-in browser. A site on the computer itself
+   (`"rpId":"localhost"`) is not loaded, since its port is not in the
+   `rpId`: the agent opens the site's page, on any port, and it opens in the
+   signed-in browser while armed. An IP address is refused with a 400 that
+   says to use `localhost`.
 2. While armed, a `navigator.credentials.create()` for that site waits. The
    service records what the site asked for: the site, the origin, and the
    account's name and display name.
