@@ -1,0 +1,37 @@
+QA 0.13.0-rc.3: the release image of fix/rc3-review-fixes, and its probe build
+
+Commit ea45bfa (this folder's top level). Earlier rounds, each from its own
+branch head: round1-acc6bc3/, round2-a626fc4/.
+
+How the images were built (build.sh): the commit exported with git archive,
+then, as .github/workflows/image.yml does on a tag:
+  container build --target checks  -> hotline-computer:0.13.0-rc.3-relcheck-checks
+  container build (default target) -> hotline-computer:0.13.0-rc.3-relcheck
+  both with HOTLINE_BUILD_REVISION=<full sha> HOTLINE_BUILD_CHANNEL=release.
+The probe build of the same tree: qa/0.13.0-rc.3/Dockerfile.probe with
+BASE=hotline-computer:0.13.0-rc.3-relcheck -> ...-relcheck-probe (the one binary
+rebuilt with --features probe-roots). Not run here: tests/run-image-acceptance.sh,
+which drives docker (no docker on this Mac).
+
+Files
+  builds.txt, build-*.log         the builds and their exits
+  images.txt                      the image ids
+  image-release.txt               the release image looked at as root: binary
+                                  sha256, the revision and the probe-roots strings
+                                  in the binary, every Chromium policy file and its
+                                  keys, CA policies, the system trust store, NSS
+                                  databases; hotline.json against the commit's
+                                  assets/chromium-policy.json (proofs.sh)
+  image-probe.txt                 the same for the probe build (the control)
+  probe-root-env-release.log      HOTLINE_KEYPROXY_PROBE_ROOT set to the fixture CA
+  probe-root-env-probe.log        (tests/protected/run.py, protected delivery,
+                                  J1-J4 and J7), then the computer's own log
+  libtest-on-release-runtime.log  TEST ONLY image (Dockerfile.libtest): the
+                                  release image plus the crate's unit-test binary,
+                                  so the signed-in browser's passkey tests run with
+                                  the extension and the native host
+  passkey-login-host-old-vs-fixed.log
+                                  the login-and-passkey-on-one-host test on the old
+                                  arming and on open_once (Dockerfile.variant)
+  full-probes-split-protected.log every protected-secrets probe on the probe build,
+                                  split, protected delivery, EXPECT=blocked

@@ -1,0 +1,39 @@
+#1 [resolver] fetching image...docker.io/library/hotline-computer:0.13.0-rc.3-relcheck-checks
+#1 DONE 0.0s
+
+#2 [resolver] fetching image...docker.io/library/hotline-computer:0.13.0-rc.3-relcheck
+#2 DONE 0.0s
+
+#3 [internal] load build definition from Dockerfile
+#3 transferring dockerfile: 856B done
+#3 DONE 0.0s
+
+#4 [internal] load .dockerignore
+#4 transferring context: 2B done
+#4 DONE 0.0s
+
+#5 oci-layout://docker.io/library/hotline-computer:0.13.0-rc.3-relcheck@sha256:f32b3c615bc086264fc35c57a6d7d31d8524d476744a3caec2b0ebff37e56005
+#5 resolve docker.io/library/hotline-computer:0.13.0-rc.3-relcheck@sha256:f32b3c615bc086264fc35c57a6d7d31d8524d476744a3caec2b0ebff37e56005 done
+#5 CACHED
+
+#6 oci-layout://docker.io/library/hotline-computer:0.13.0-rc.3-relcheck-checks@sha256:fa8e3cd87200422eb2bc78040f9f183465d88b178a979ab2413188dfa2060907
+#6 resolve docker.io/library/hotline-computer:0.13.0-rc.3-relcheck-checks@sha256:fa8e3cd87200422eb2bc78040f9f183465d88b178a979ab2413188dfa2060907 0.0s done
+#6 DONE 0.0s
+
+#7 [linux/arm64 tests 1/2] RUN --mount=type=cache,target=/usr/local/cargo/registry --mount=type=cache,target=/src/target CARGO_PROFILE_TEST_DEBUG=0 CARGO_INCREMENTAL=0 cargo test --locked --lib --no-run --message-format=json > /tmp/b.jsonl     && bin="$(jq -r 'select(.reason == "compiler-artifact" and .target.kind == ["lib"] and .profile.test == true and .executable != null) | .executable' /tmp/b.jsonl)"     && test -x "$bin" && install -Dm755 "$bin" /libtest
+#7 0.086     Finished `test` profile [unoptimized] target(s) in 0.05s
+#7 DONE 0.1s
+
+#8 [linux/arm64 stage-1 1/2] COPY --from=tests /libtest /usr/local/bin/hotline-libtest
+#8 DONE 0.0s
+
+#9 exporting to oci image format
+#9 exporting layers
+#9 exporting layers 1.3s done
+#9 exporting manifest sha256:7824a1cc5ed10fe1b071320e101c4e495ec62dfe3b2412bcdd3e7ba3ce915814 done
+#9 exporting config sha256:6680fbd4f0090fca898b3e1cf2064a8ceb0214a37a5145ab638d02b25b4ace93 done
+#9 exporting manifest list sha256:ed553eb44353c4bab256213a40b837f743d52ebabcac303684d90c01ee9b1048 done
+#9 sending tarball
+#9 sending tarball 2.7s done
+#9 DONE 4.0s
+hotline-computer:0.13.0-rc.3-relcheck-libtest

@@ -1,0 +1,26 @@
+# 2026-11-22T08:40:22Z hotline-computer:0.13.0-rc.3-relcheck (commit ea45bfa4cc3cc2f3861f4579d8978520c94f8d45): tests/protected/run.py --split --delivery protected --only J1,J2,J3,J4,J7 --keep (HOTLINE_KEYPROXY_PROBE_ROOT is set to the fixture CA by run.py)
+# containers already running (container); none of them is touched:
+ID                                                     IMAGE                                                OS     ARCH   STATE    IP                 CPUS  MEMORY    STARTED
+hotline-computer-99374fd0-52fd-4def-a6cc-37f25131a3a5  hotline-computer:0.12.0-rc.2                         linux  arm64  running  192.168.65.17/24   4     16384 MB  2026-11-22T01:14:34Z
+buildkit                                               ghcr.io/apple/container-builder-shim/builder:0.13.1  linux  arm64  running  192.168.65.134/24  8     16384 MB  2026-11-22T07:56:50Z
+hotline-computer-claude-ziggy                          ghcr.io/1broseidon/hotline-computer:0.11.0           linux  arm64  stopped                     4     4096 MB   
+hotline-computer-46e16b18-7a5b-468a-9209-4e75d1b16bb4  ghcr.io/1broseidon/hotline-computer:0.11.0           linux  arm64  stopped                     4     16384 MB  2026-11-19T02:33:26Z
+hotline-computer-79d12f56-5211-4030-b864-a47306200461  hotline-computer:0.13.0-rc.2                         linux  arm64  stopped                     4     8192 MB   2026-11-21T13:18:25Z
+hotline-computer-c9397b69-9084-4b3b-a325-715134487a53  ghcr.io/1broseidon/hotline-computer:0.11.0           linux  arm64  running  192.168.65.86/24   4     16384 MB  2026-11-13T17:41:23Z
+hotline-computer-bef618e7-9144-45f8-ad40-bfb8fc3010a2  ghcr.io/1broseidon/hotline-computer:0.11.0           linux  arm64  running  192.168.65.5/24    4     4096 MB   2026-11-20T20:54:34Z
+hl-relcheck-full-9a2c42                                hotline-computer:0.13.0-rc.3-relcheck-probe          linux  arm64  running  192.168.65.153/24  4     4096 MB   2026-11-22T08:36:19Z
+# /capabilities: {"attest":"oXiYS4kqlEkVyTH0DwrDMlOrnR83/fJ3HwgqVdx7DpA=","boot":"f2dd1f115f8ac096a9521730ac7c4b85","protected":{"loopback":"readable","mode":"split","other":"readable","readable":["CANARY_VAR","GH_TOK
+# POST /capabilities/key: 200 (taken)
+# image hotline-computer:0.13.0-rc.3-relcheck as hl-relcheck-env-release-c2a29e (split, delivery protected); listener on 192.168.65.1:54169; HTTPS fixture https://192.168.65.1:54170 (bound), :54171 (unbound); expecting BLOCKED
+ID         RESULT      WHAT
+J1         BROKEN   !! curl with GH_TOKEN: listener receives the real key: the bound service never received the key through the proxy
+J2         BROKEN   !! python urllib 'token' scheme: listener receives the real key: the bound service never received the key through the proxy
+J3         BROKEN   !! git Basic credential helper: listener receives the real key: the bound service never received the key through the proxy
+J4         BROKEN   !! reflecting endpoint hands the real key back to the job: the bound service never received the key through the proxy
+J7         BROKEN   !! node fetch with GH_TOKEN: the bound service never received the key through the proxy
+# 0 leaked, 0 blocked, 0 skipped, 5 broken; 5 differ from EXPECT=blocked
+# kept hl-relcheck-env-release-c2a29e (port 54156, token bec1e87cfb1ad60a65801bae933a4f1b06374526ace595bc)
+EXIT 1
+# container logs of hl-relcheck-env-release-c2a29e (kept for this, removed below), lines about the key proxy or roots:
+# (end of matching lines)
+# removed hl-relcheck-env-release-c2a29e

@@ -1,0 +1,2170 @@
+# 2026-11-22T07:56:49Z checks: /usr/local/bin/container build --build-arg HOTLINE_BUILD_REVISION=acc6bc382e884adca142a2f0db4f5196bcf61979 --build-arg HOTLINE_BUILD_CHANNEL=release --target checks -t hotline-computer:0.13.0-rc.3-relcheck-checks .
+#1 [resolver] fetching image...docker.io/library/rust:1-trixie
+#1 DONE 0.0s
+
+#2 [resolver] fetching image...docker.io/library/debian:trixie-slim@sha256:d7e12182ce18b85b93007c1dedf31f2d29e01ccf3182cc4017c709b6259bc132
+#2 DONE 0.0s
+
+#3 [internal] load build definition from Dockerfile
+#3 transferring dockerfile: 27B 0.1s
+#3 transferring dockerfile: 10.67kB 0.1s done
+#3 DONE 0.1s
+
+#4 [internal] load .dockerignore
+#4 transferring context: 138B 0.1s done
+#4 DONE 0.1s
+
+#5 [internal] load build context
+#5 DONE 0.0s
+
+#6 oci-layout://docker.io/library/rust:1-trixie@sha256:223cc32ddca8f3ee90c436dbc94b6b5f052ea7f9653c5201e9612f08ad7d21b8
+#6 resolve docker.io/library/rust:1-trixie@sha256:223cc32ddca8f3ee90c436dbc94b6b5f052ea7f9653c5201e9612f08ad7d21b8 0.1s done
+#6 ...
+
+#5 [internal] load build context
+#5 transferring context: 3.23MB 0.2s done
+#5 DONE 0.2s
+
+#6 oci-layout://docker.io/library/rust:1-trixie@sha256:223cc32ddca8f3ee90c436dbc94b6b5f052ea7f9653c5201e9612f08ad7d21b8
+#6 sha256:3e65e2c5234276be7d945d8054632dc3750c6c3de75b431be0629199b0507d80 3.15MB / 227.22MB 0.2s
+#6 sha256:6439840073969a08a9c305e28768838fcea379036919203ccf9f9fc966cc9658 3.15MB / 67.63MB 0.2s
+#6 sha256:d5fb03ace99fe671d5d1d78389e6aa41ae4178ddf94b90467703a9d4d39a415a 3.15MB / 189.46MB 0.2s
+#6 sha256:6439840073969a08a9c305e28768838fcea379036919203ccf9f9fc966cc9658 7.34MB / 67.63MB 0.3s
+#6 sha256:23b69c48ce5c2a6fb0681d959fa700427ad2a7cf7e6be5d25249170a1853d7ad 7.43MB / 49.78MB 0.3s
+#6 sha256:23b69c48ce5c2a6fb0681d959fa700427ad2a7cf7e6be5d25249170a1853d7ad 12.58MB / 49.78MB 0.5s
+#6 sha256:6439840073969a08a9c305e28768838fcea379036919203ccf9f9fc966cc9658 12.58MB / 67.63MB 0.5s
+#6 sha256:d5fb03ace99fe671d5d1d78389e6aa41ae4178ddf94b90467703a9d4d39a415a 15.73MB / 189.46MB 0.6s
+#6 sha256:23b69c48ce5c2a6fb0681d959fa700427ad2a7cf7e6be5d25249170a1853d7ad 16.78MB / 49.78MB 0.6s
+#6 sha256:3e65e2c5234276be7d945d8054632dc3750c6c3de75b431be0629199b0507d80 19.92MB / 227.22MB 0.8s
+#6 sha256:6439840073969a08a9c305e28768838fcea379036919203ccf9f9fc966cc9658 19.92MB / 67.63MB 0.8s
+#6 sha256:6439840073969a08a9c305e28768838fcea379036919203ccf9f9fc966cc9658 24.12MB / 67.63MB 0.9s
+#6 sha256:23b69c48ce5c2a6fb0681d959fa700427ad2a7cf7e6be5d25249170a1853d7ad 24.12MB / 49.78MB 0.9s
+#6 sha256:23b69c48ce5c2a6fb0681d959fa700427ad2a7cf7e6be5d25249170a1853d7ad 29.36MB / 49.78MB 1.1s
+#6 sha256:6439840073969a08a9c305e28768838fcea379036919203ccf9f9fc966cc9658 33.55MB / 67.63MB 1.2s
+#6 sha256:d5fb03ace99fe671d5d1d78389e6aa41ae4178ddf94b90467703a9d4d39a415a 33.55MB / 189.46MB 1.2s
+#6 sha256:23b69c48ce5c2a6fb0681d959fa700427ad2a7cf7e6be5d25249170a1853d7ad 33.55MB / 49.78MB 1.2s
+#6 sha256:3e65e2c5234276be7d945d8054632dc3750c6c3de75b431be0629199b0507d80 38.80MB / 227.22MB 1.4s
+#6 sha256:23b69c48ce5c2a6fb0681d959fa700427ad2a7cf7e6be5d25249170a1853d7ad 38.80MB / 49.78MB 1.4s
+#6 sha256:6439840073969a08a9c305e28768838fcea379036919203ccf9f9fc966cc9658 38.80MB / 67.63MB 1.4s
+#6 sha256:23b69c48ce5c2a6fb0681d959fa700427ad2a7cf7e6be5d25249170a1853d7ad 42.99MB / 49.78MB 1.5s
+#6 sha256:6439840073969a08a9c305e28768838fcea379036919203ccf9f9fc966cc9658 42.99MB / 67.63MB 1.5s
+#6 sha256:d5fb03ace99fe671d5d1d78389e6aa41ae4178ddf94b90467703a9d4d39a415a 48.23MB / 189.46MB 1.7s
+#6 sha256:23b69c48ce5c2a6fb0681d959fa700427ad2a7cf7e6be5d25249170a1853d7ad 48.23MB / 49.78MB 1.7s
+#6 sha256:6439840073969a08a9c305e28768838fcea379036919203ccf9f9fc966cc9658 48.23MB / 67.63MB 1.7s
+#6 sha256:23b69c48ce5c2a6fb0681d959fa700427ad2a7cf7e6be5d25249170a1853d7ad 49.78MB / 49.78MB 1.7s done
+#6 extracting sha256:23b69c48ce5c2a6fb0681d959fa700427ad2a7cf7e6be5d25249170a1853d7ad
+#6 sha256:3e65e2c5234276be7d945d8054632dc3750c6c3de75b431be0629199b0507d80 52.43MB / 227.22MB 1.8s
+#6 sha256:6439840073969a08a9c305e28768838fcea379036919203ccf9f9fc966cc9658 57.67MB / 67.63MB 2.0s
+#6 sha256:ec7287c5b5ce209cf618681832ded105b3182c871815ac857aeb105737563f59 4.19MB / 25.04MB 0.2s
+#6 sha256:ec7287c5b5ce209cf618681832ded105b3182c871815ac857aeb105737563f59 8.39MB / 25.04MB 0.3s
+#6 sha256:d5fb03ace99fe671d5d1d78389e6aa41ae4178ddf94b90467703a9d4d39a415a 60.82MB / 189.46MB 2.1s
+#6 extracting sha256:23b69c48ce5c2a6fb0681d959fa700427ad2a7cf7e6be5d25249170a1853d7ad 0.5s done
+#6 sha256:ec7287c5b5ce209cf618681832ded105b3182c871815ac857aeb105737563f59 11.53MB / 25.04MB 0.5s
+#6 sha256:3e65e2c5234276be7d945d8054632dc3750c6c3de75b431be0629199b0507d80 63.96MB / 227.22MB 2.3s
+#6 sha256:6439840073969a08a9c305e28768838fcea379036919203ccf9f9fc966cc9658 63.96MB / 67.63MB 2.3s
+#6 sha256:ec7287c5b5ce209cf618681832ded105b3182c871815ac857aeb105737563f59 15.73MB / 25.04MB 0.6s
+#6 sha256:6439840073969a08a9c305e28768838fcea379036919203ccf9f9fc966cc9658 67.63MB / 67.63MB 2.4s done
+#6 sha256:ec7287c5b5ce209cf618681832ded105b3182c871815ac857aeb105737563f59 22.02MB / 25.04MB 0.8s
+#6 sha256:3e65e2c5234276be7d945d8054632dc3750c6c3de75b431be0629199b0507d80 76.55MB / 227.22MB 2.6s
+#6 sha256:d5fb03ace99fe671d5d1d78389e6aa41ae4178ddf94b90467703a9d4d39a415a 88.08MB / 189.46MB 2.7s
+#6 sha256:ec7287c5b5ce209cf618681832ded105b3182c871815ac857aeb105737563f59 25.04MB / 25.04MB 0.8s done
+#6 extracting sha256:ec7287c5b5ce209cf618681832ded105b3182c871815ac857aeb105737563f59
+#6 sha256:3e65e2c5234276be7d945d8054632dc3750c6c3de75b431be0629199b0507d80 88.08MB / 227.22MB 2.7s
+#6 sha256:d5fb03ace99fe671d5d1d78389e6aa41ae4178ddf94b90467703a9d4d39a415a 105.91MB / 189.46MB 2.9s
+#6 extracting sha256:ec7287c5b5ce209cf618681832ded105b3182c871815ac857aeb105737563f59 0.2s done
+#6 extracting sha256:6439840073969a08a9c305e28768838fcea379036919203ccf9f9fc966cc9658
+#6 sha256:3e65e2c5234276be7d945d8054632dc3750c6c3de75b431be0629199b0507d80 105.91MB / 227.22MB 2.9s
+#6 sha256:d5fb03ace99fe671d5d1d78389e6aa41ae4178ddf94b90467703a9d4d39a415a 118.49MB / 189.46MB 3.0s
+#6 sha256:3e65e2c5234276be7d945d8054632dc3750c6c3de75b431be0629199b0507d80 118.49MB / 227.22MB 3.0s
+#6 sha256:d5fb03ace99fe671d5d1d78389e6aa41ae4178ddf94b90467703a9d4d39a415a 137.36MB / 189.46MB 3.3s
+#6 sha256:3e65e2c5234276be7d945d8054632dc3750c6c3de75b431be0629199b0507d80 137.36MB / 227.22MB 3.3s
+#6 extracting sha256:6439840073969a08a9c305e28768838fcea379036919203ccf9f9fc966cc9658 0.6s done
+#6 sha256:3e65e2c5234276be7d945d8054632dc3750c6c3de75b431be0629199b0507d80 167.77MB / 227.22MB 3.6s
+#6 sha256:d5fb03ace99fe671d5d1d78389e6aa41ae4178ddf94b90467703a9d4d39a415a 167.77MB / 189.46MB 3.6s
+#6 sha256:d5fb03ace99fe671d5d1d78389e6aa41ae4178ddf94b90467703a9d4d39a415a 189.46MB / 189.46MB 3.9s done
+#6 sha256:3e65e2c5234276be7d945d8054632dc3750c6c3de75b431be0629199b0507d80 197.13MB / 227.22MB 3.9s
+#6 sha256:3e65e2c5234276be7d945d8054632dc3750c6c3de75b431be0629199b0507d80 218.10MB / 227.22MB 4.1s
+#6 sha256:3e65e2c5234276be7d945d8054632dc3750c6c3de75b431be0629199b0507d80 227.22MB / 227.22MB 4.1s done
+#6 extracting sha256:3e65e2c5234276be7d945d8054632dc3750c6c3de75b431be0629199b0507d80
+#6 extracting sha256:3e65e2c5234276be7d945d8054632dc3750c6c3de75b431be0629199b0507d80 1.8s done
+#6 DONE 6.1s
+
+#6 oci-layout://docker.io/library/rust:1-trixie@sha256:223cc32ddca8f3ee90c436dbc94b6b5f052ea7f9653c5201e9612f08ad7d21b8
+#6 extracting sha256:d5fb03ace99fe671d5d1d78389e6aa41ae4178ddf94b90467703a9d4d39a415a
+#6 extracting sha256:d5fb03ace99fe671d5d1d78389e6aa41ae4178ddf94b90467703a9d4d39a415a 1.3s done
+#6 DONE 7.4s
+
+#7 [linux/arm64 build 1/8] RUN apt-get update && apt-get install -y --no-install-recommends cmake perl pkg-config && rm -rf /var/lib/apt/lists/*
+#7 0.107 Get:1 http://deb.debian.org/debian trixie InRelease [140 kB]
+#7 0.165 Get:2 http://deb.debian.org/debian trixie-updates InRelease [47.3 kB]
+#7 0.175 Get:3 http://deb.debian.org/debian-security trixie-security InRelease [43.4 kB]
+#7 0.186 Get:4 http://deb.debian.org/debian trixie/main arm64 Packages [9615 kB]
+#7 0.431 Get:5 http://deb.debian.org/debian trixie-updates/main arm64 Packages [1108 B]
+#7 0.439 Get:6 http://deb.debian.org/debian-security trixie-security/main arm64 Packages [309 kB]
+#7 0.932 Fetched 10.2 MB in 1s (11.4 MB/s)
+#7 0.932 Reading package lists...
+#7 1.165 Reading package lists...
+#7 1.398 Building dependency tree...
+#7 1.461 Reading state information...
+#7 1.559 perl is already the newest version (5.40.1-6+deb13u1).
+#7 1.559 perl set to manually installed.
+#7 1.559 The following additional packages will be installed:
+#7 1.559   cmake-data libarchive13t64 libjsoncpp26 librhash1 libuv1t64
+#7 1.560 Suggested packages:
+#7 1.560   cmake-doc cmake-format elpa-cmake-mode ninja-build lrzip
+#7 1.585 The following NEW packages will be installed:
+#7 1.585   cmake cmake-data libarchive13t64 libjsoncpp26 librhash1 libuv1t64 pkg-config
+#7 1.626 0 upgraded, 7 newly installed, 0 to remove and 25 not upgraded.
+#7 1.626 Need to get 12.9 MB of archives.
+#7 1.626 After this operation, 50.2 MB of additional disk space will be used.
+#7 1.626 Get:1 http://deb.debian.org/debian trixie/main arm64 cmake-data all 3.31.6-2 [2268 kB]
+#7 1.719 Get:2 http://deb.debian.org/debian trixie/main arm64 libarchive13t64 arm64 3.7.4-4+deb13u1 [324 kB]
+#7 1.722 Get:3 http://deb.debian.org/debian trixie/main arm64 libjsoncpp26 arm64 1.9.6-3 [72.9 kB]
+#7 1.730 Get:4 http://deb.debian.org/debian trixie/main arm64 librhash1 arm64 1.4.5-1 [129 kB]
+#7 1.731 Get:5 http://deb.debian.org/debian trixie/main arm64 libuv1t64 arm64 1.50.0-2 [148 kB]
+#7 1.740 Get:6 http://deb.debian.org/debian trixie/main arm64 cmake arm64 3.31.6-2 [9906 kB]
+#7 1.815 Get:7 http://deb.debian.org/debian trixie/main arm64 pkg-config arm64 1.8.1-4 [14.0 kB]
+#7 1.877 debconf: unable to initialize frontend: Dialog
+#7 1.877 debconf: (TERM is not set, so the dialog frontend is not usable.)
+#7 1.877 debconf: falling back to frontend: Readline
+#7 1.879 debconf: unable to initialize frontend: Readline
+#7 1.879 debconf: (This frontend requires a controlling tty.)
+#7 1.879 debconf: falling back to frontend: Teletype
+#7 1.880 debconf: unable to initialize frontend: Teletype
+#7 1.880 debconf: (This frontend requires a controlling tty.)
+#7 1.880 debconf: falling back to frontend: Noninteractive
+#7 2.101 Fetched 12.9 MB in 0s (57.0 MB/s)
+#7 2.112 Selecting previously unselected package cmake-data.
+#7 2.112 (Reading database ... (Reading database ... 5%(Reading database ... 10%(Reading database ... 15%(Reading database ... 20%(Reading database ... 25%(Reading database ... 30%(Reading database ... 35%(Reading database ... 40%(Reading database ... 45%(Reading database ... 50%(Reading database ... 55%(Reading database ... 60%(Reading database ... 65%(Reading database ... 70%(Reading database ... 75%(Reading database ... 80%(Reading database ... 85%(Reading database ... 90%(Reading database ... 95%(Reading database ... 100%(Reading database ... 26151 files and directories currently installed.)
+#7 2.117 Preparing to unpack .../0-cmake-data_3.31.6-2_all.deb ...
+#7 2.119 Unpacking cmake-data (3.31.6-2) ...
+#7 2.225 Selecting previously unselected package libarchive13t64:arm64.
+#7 2.228 Preparing to unpack .../1-libarchive13t64_3.7.4-4+deb13u1_arm64.deb ...
+#7 2.230 Unpacking libarchive13t64:arm64 (3.7.4-4+deb13u1) ...
+#7 2.249 Selecting previously unselected package libjsoncpp26:arm64.
+#7 2.251 Preparing to unpack .../2-libjsoncpp26_1.9.6-3_arm64.deb ...
+#7 2.252 Unpacking libjsoncpp26:arm64 (1.9.6-3) ...
+#7 2.261 Selecting previously unselected package librhash1:arm64.
+#7 2.262 Preparing to unpack .../3-librhash1_1.4.5-1_arm64.deb ...
+#7 2.263 Unpacking librhash1:arm64 (1.4.5-1) ...
+#7 2.277 Selecting previously unselected package libuv1t64:arm64.
+#7 2.278 Preparing to unpack .../4-libuv1t64_1.50.0-2_arm64.deb ...
+#7 2.279 Unpacking libuv1t64:arm64 (1.50.0-2) ...
+#7 2.290 Selecting previously unselected package cmake.
+#7 2.291 Preparing to unpack .../5-cmake_3.31.6-2_arm64.deb ...
+#7 2.292 Unpacking cmake (3.31.6-2) ...
+#7 2.549 Selecting previously unselected package pkg-config:arm64.
+#7 2.551 Preparing to unpack .../6-pkg-config_1.8.1-4_arm64.deb ...
+#7 2.552 Unpacking pkg-config:arm64 (1.8.1-4) ...
+#7 2.564 Setting up libuv1t64:arm64 (1.50.0-2) ...
+#7 2.566 Setting up libjsoncpp26:arm64 (1.9.6-3) ...
+#7 2.569 Setting up pkg-config:arm64 (1.8.1-4) ...
+#7 2.571 Setting up cmake-data (3.31.6-2) ...
+#7 2.575 Setting up librhash1:arm64 (1.4.5-1) ...
+#7 2.579 Setting up libarchive13t64:arm64 (3.7.4-4+deb13u1) ...
+#7 2.581 Setting up cmake (3.31.6-2) ...
+#7 2.583 Processing triggers for libc-bin (2.41-12+deb13u4) ...
+#7 DONE 3.0s
+
+#8 [linux/arm64 build 2/8] WORKDIR /src
+#8 DONE 0.0s
+
+#9 [linux/arm64 build 3/8] COPY Cargo.toml Cargo.lock ./
+#9 DONE 0.0s
+
+#10 [linux/arm64 build 4/8] COPY src ./src
+#10 DONE 0.0s
+
+#11 [linux/arm64 build 5/8] COPY assets ./assets
+#11 DONE 0.0s
+
+#12 [linux/arm64 build 6/8] COPY skills ./skills
+#12 DONE 0.0s
+
+#13 [linux/arm64 build 7/8] RUN --mount=type=cache,target=/usr/local/cargo/registry --mount=type=cache,target=/src/target cargo build --release --locked && cp target/release/hotline-computer /usr/local/bin/hotline-computer
+#13 0.064     Updating crates.io index
+#13 2.183  Downloading crates ...
+#13 2.271   Downloaded adler2 v2.0.1
+#13 2.286   Downloaded rustls-pki-types v1.15.1
+#13 2.292   Downloaded sync_wrapper v1.0.2
+#13 2.293   Downloaded subtle v2.6.1
+#13 2.296   Downloaded schemars_derive v1.2.2
+#13 2.301   Downloaded stable_deref_trait v1.2.1
+#13 2.302   Downloaded strsim v0.11.1
+#13 2.303   Downloaded simd-adler32 v0.3.10
+#13 2.305   Downloaded serde_derive_internals v0.30.0
+#13 2.306   Downloaded static_assertions v1.1.0
+#13 2.308   Downloaded time-core v0.1.9
+#13 2.312   Downloaded serde_core v1.0.229
+#13 2.314   Downloaded slab v0.4.12
+#13 2.315   Downloaded smallvec v1.16.0
+#13 2.316   Downloaded sse-stream v0.2.5
+#13 2.317   Downloaded tower-layer v0.3.3
+#13 2.318   Downloaded tower-service v0.3.3
+#13 2.318   Downloaded untrusted v0.7.1
+#13 2.319   Downloaded version_check v0.9.5
+#13 2.320   Downloaded zerofrom-derive v0.1.7
+#13 2.320   Downloaded utf-8 v0.7.6
+#13 2.321   Downloaded want v0.3.1
+#13 2.322   Downloaded tinyvec_macros v0.1.1
+#13 2.322   Downloaded serde_urlencoded v0.7.1
+#13 2.323   Downloaded untrusted v0.9.0
+#13 2.324   Downloaded yoke-derive v0.8.2
+#13 2.325   Downloaded zvariant_derive v5.15.0
+#13 2.325   Downloaded try-lock v0.2.5
+#13 2.326   Downloaded zbus-lockstep v0.5.2
+#13 2.326   Downloaded zcheapstr v1.1.0
+#13 2.328   Downloaded utf8_iter v1.0.4
+#13 2.328   Downloaded zbus-lockstep-macros v0.5.2
+#13 2.328   Downloaded sha1 v0.10.7
+#13 2.329   Downloaded ryu v1.0.23
+#13 2.331   Downloaded serde_derive v1.0.229
+#13 2.333   Downloaded thiserror-impl v2.0.20
+#13 2.333   Downloaded cfg_aliases v0.2.2
+#13 2.334   Downloaded rustls-platform-verifier v0.7.0
+#13 2.335   Downloaded tokio-macros v2.7.2
+#13 2.336   Downloaded synstructure v0.13.2
+#13 2.336   Downloaded zerofrom v0.1.8
+#13 2.337   Downloaded serde_path_to_error v0.1.20
+#13 2.338   Downloaded tokio-tungstenite v0.29.0
+#13 2.338   Downloaded zbus_names v4.3.4
+#13 2.339   Downloaded zmij v1.0.23
+#13 2.340   Downloaded sha2 v0.10.9
+#13 2.341   Downloaded signal-hook-registry v1.4.8
+#13 2.342   Downloaded thiserror v2.0.20
+#13 2.344   Downloaded writeable v0.6.4
+#13 2.345   Downloaded zvariant_utils v4.2.0
+#13 2.346   Downloaded serde_repr v0.1.21
+#13 2.347   Downloaded shlex v2.0.1
+#13 2.347   Downloaded zerovec-derive v0.11.6
+#13 2.348   Downloaded which v8.0.6
+#13 2.349   Downloaded zeroize v1.9.0
+#13 2.350   Downloaded time-macros v0.2.32
+#13 2.351   Downloaded darling_macro v0.24.1
+#13 2.351   Downloaded blocking v1.7.0
+#13 2.352   Downloaded equivalent v1.0.2
+#13 2.352   Downloaded tokio-stream v0.1.19
+#13 2.354   Downloaded chromiumoxide_pdl v0.9.1
+#13 2.355   Downloaded tinystr v0.8.4
+#13 2.355   Downloaded tracing-attributes v0.1.31
+#13 2.356   Downloaded tempfile v3.27.0
+#13 2.358   Downloaded zbus_xml v5.2.1
+#13 2.359   Downloaded yoke v0.8.3
+#13 2.359   Downloaded zbus_macros v5.19.0
+#13 2.360   Downloaded toml_datetime v1.1.1+spec-1.1.0
+#13 2.361   Downloaded schemars v1.2.2
+#13 2.365   Downloaded rustls-webpki v0.103.15
+#13 2.366   Downloaded deranged v0.5.9
+#13 2.367   Downloaded toml_parser v1.1.3+spec-1.1.0
+#13 2.368   Downloaded socket2 v0.6.5
+#13 2.369   Downloaded core_maths v0.1.1
+#13 2.369   Downloaded ident_case v1.0.1
+#13 2.369   Downloaded serde v1.0.229
+#13 2.371   Downloaded tokio-rustls v0.26.4
+#13 2.371   Downloaded tinyvec v1.12.0
+#13 2.373   Downloaded concurrent-queue v2.5.0
+#13 2.373   Downloaded either v1.18.0
+#13 2.374   Downloaded tracing-core v0.1.36
+#13 2.375   Downloaded uuid v1.26.0
+#13 2.376   Downloaded yasna v0.6.0
+#13 2.377   Downloaded unicode-ident v1.0.24
+#13 2.378   Downloaded tungstenite v0.29.0
+#13 2.379   Downloaded tungstenite v0.28.0
+#13 2.381   Downloaded toml_edit v0.25.13+spec-1.1.0
+#13 2.382   Downloaded url v2.5.8
+#13 2.383   Downloaded fastrand v2.5.0
+#13 2.384   Downloaded zerotrie v0.2.5
+#13 2.385   Downloaded typenum v1.20.1
+#13 2.387   Downloaded x509-parser v0.18.1
+#13 2.389   Downloaded find-msvc-tools v0.1.11
+#13 2.389   Downloaded fdeflate v0.3.7
+#13 2.390   Downloaded hyper-util v0.1.20
+#13 2.392   Downloaded zvariant v5.15.0
+#13 2.395   Downloaded generic-array v0.14.7
+#13 2.395   Downloaded serde_json v1.0.151
+#13 2.398   Downloaded tower v0.5.3
+#13 2.402   Downloaded zerovec v0.11.8
+#13 2.404   Downloaded icu_provider v2.3.1
+#13 2.405   Downloaded itoa v1.0.18
+#13 2.406   Downloaded gethostname v1.1.0
+#13 2.406   Downloaded idna_adapter v1.2.2
+#13 2.407   Downloaded lazy_static v1.5.1
+#13 2.407   Downloaded futures-sink v0.3.34
+#13 2.408   Downloaded tokio-util v0.7.19
+#13 2.410   Downloaded tower-http v0.6.11
+#13 2.414   Downloaded endi v1.1.1
+#13 2.414   Downloaded dyn-clone v1.0.20
+#13 2.415   Downloaded futures-core v0.3.34
+#13 2.415   Downloaded flate2 v1.1.10
+#13 2.417   Downloaded hyper-rustls v0.27.9
+#13 2.418   Downloaded http-body-util v0.1.5
+#13 2.418   Downloaded fnv v1.0.7
+#13 2.419   Downloaded cmake v0.1.58
+#13 2.419   Downloaded zbus v5.19.0
+#13 2.423   Downloaded ttf-parser v0.25.1
+#13 2.426   Downloaded webpki-roots v1.0.12
+#13 2.427   Downloaded winnow v1.0.4
+#13 2.431   Downloaded futures-channel v0.3.34
+#13 2.432   Downloaded getrandom v0.2.17
+#13 2.433   Downloaded zlib-rs v0.6.7
+#13 2.435   Downloaded darling v0.24.1
+#13 2.437   Downloaded der-parser v10.0.0
+#13 2.438   Downloaded data-encoding v2.11.1
+#13 2.439   Downloaded foldhash v0.1.5
+#13 2.439   Downloaded futures-timer v3.0.4
+#13 2.440   Downloaded x11rb v0.14.0
+#13 2.443   Downloaded event-listener-strategy v0.5.4
+#13 2.443   Downloaded cc v1.4.4
+#13 2.444   Downloaded event-listener v5.4.2
+#13 2.445   Downloaded httparse v1.10.1
+#13 2.446   Downloaded hmac v0.12.1
+#13 2.447   Downloaded http v1.5.0
+#13 2.448   Downloaded lru-slab v0.1.2
+#13 2.448   Downloaded mime v0.3.17
+#13 2.449   Downloaded parking v2.2.1
+#13 2.449   Downloaded potential_utf v0.1.6
+#13 2.449   Downloaded powerfmt v0.2.1
+#13 2.450   Downloaded proc-macro-crate v3.5.0
+#13 2.450   Downloaded rustc-hash v2.1.3
+#13 2.451   Downloaded time v0.3.55
+#13 2.456   Downloaded syn v2.0.119
+#13 2.459   Downloaded asn1-rs-derive v0.6.0
+#13 2.460   Downloaded rand_pcg v0.10.2
+#13 2.460   Downloaded openssl-probe v0.2.1
+#13 2.460   Downloaded ref-cast-impl v1.0.27
+#13 2.461   Downloaded atomic-waker v1.1.2
+#13 2.461   Downloaded percent-encoding v2.3.2
+#13 2.461   Downloaded zerocopy v0.8.56
+#13 2.467   Downloaded asn1-rs-impl v0.2.0
+#13 2.467   Downloaded httpdate v1.0.3
+#13 2.468   Downloaded icu_properties v2.3.0
+#13 2.469   Downloaded darling_core v0.24.1
+#13 2.471   Downloaded syn v3.0.4
+#13 2.475   Downloaded hyper v1.11.1
+#13 2.478   Downloaded futures-util v0.3.34
+#13 2.482   Downloaded hashbrown v0.17.1
+#13 2.484   Downloaded fontdue v0.9.4
+#13 2.486   Downloaded form_urlencoded v1.2.2
+#13 2.486   Downloaded displaydoc v0.2.7
+#13 2.487   Downloaded ref-cast v1.0.27
+#13 2.488   Downloaded futures-io v0.3.34
+#13 2.488   Downloaded crc32fast v1.5.1
+#13 2.489   Downloaded cfg-if v1.0.4
+#13 2.489   Downloaded enumflags2 v0.7.12
+#13 2.490   Downloaded fs_extra v1.3.0
+#13 2.491   Downloaded hex v0.4.3
+#13 2.491   Downloaded chrono v0.4.45
+#13 2.494   Downloaded bytes v1.12.1
+#13 2.496   Downloaded getrandom v0.4.3
+#13 2.497   Downloaded iana-time-zone v0.1.65
+#13 2.498   Downloaded chromiumoxide v0.9.1
+#13 2.500   Downloaded crypto-common v0.1.7
+#13 2.500   Downloaded digest v0.10.7
+#13 2.501   Downloaded futures-macro v0.3.34
+#13 2.501   Downloaded futures-task v0.3.34
+#13 2.501   Downloaded getrandom v0.3.4
+#13 2.502   Downloaded icu_locale_core v2.3.0
+#13 2.505   Downloaded icu_normalizer_data v2.3.0
+#13 2.506   Downloaded tracing v0.1.44
+#13 2.513   Downloaded chacha20 v0.10.2
+#13 2.513   Downloaded chromiumoxide_types v0.9.1
+#13 2.514   Downloaded enumflags2_derive v0.7.12
+#13 2.514   Downloaded errno v0.3.14
+#13 2.515   Downloaded futures-executor v0.3.34
+#13 2.515   Downloaded http-body v1.1.0
+#13 2.515   Downloaded x11rb-protocol v0.14.0
+#13 2.521   Downloaded cpufeatures v0.2.17
+#13 2.522   Downloaded heck v0.5.0
+#13 2.522   Downloaded block-buffer v0.10.4
+#13 2.522   Downloaded crossbeam-utils v0.8.22
+#13 2.523   Downloaded futures v0.3.34
+#13 2.525   Downloaded futures-lite v2.6.1
+#13 2.525   Downloaded icu_normalizer v2.3.0
+#13 2.530   Downloaded icu_collections v2.3.0
+#13 2.532   Downloaded hashbrown v0.15.5
+#13 2.534   Downloaded icu_properties_data v2.3.0
+#13 2.537   Downloaded chromiumoxide_cdp v0.9.1
+#13 2.543   Downloaded tokio v1.53.1
+#13 2.557   Downloaded dunce v1.0.5
+#13 2.557   Downloaded async-recursion v1.1.1
+#13 2.559   Downloaded num-conv v0.2.2
+#13 2.559   Downloaded ipnet v2.12.1
+#13 2.559   Downloaded oid-registry v0.8.1
+#13 2.560   Downloaded ppv-lite86 v0.2.21
+#13 2.560   Downloaded pastey v0.2.3
+#13 2.561   Downloaded jobserver v0.1.35
+#13 2.561   Downloaded autocfg v1.5.1
+#13 2.562   Downloaded piper v0.2.5
+#13 2.563   Downloaded bit-vec v0.9.1
+#13 2.563   Downloaded ordered-stream v0.2.0
+#13 2.564   Downloaded rusticata-macros v4.1.0
+#13 2.564   Downloaded quinn-udp v0.5.15
+#13 2.565   Downloaded async-channel v2.5.0
+#13 2.565   Downloaded axum-core v0.5.6
+#13 2.566   Downloaded rand_core v0.9.5
+#13 2.566   Downloaded pem v4.0.0
+#13 2.567   Downloaded atspi-proxies v0.14.0
+#13 2.567   Downloaded rustls-native-certs v0.8.4
+#13 2.568   Downloaded quote v1.0.47
+#13 2.569   Downloaded pkg-config v0.3.34
+#13 2.569   Downloaded pin-project-lite v0.2.17
+#13 2.571   Downloaded rand_core v0.10.1
+#13 2.572   Downloaded async-signal v0.2.14
+#13 2.572   Downloaded rmcp-macros v3.2.0
+#13 2.573   Downloaded litemap v0.8.3
+#13 2.573   Downloaded matchit v0.8.4
+#13 2.574   Downloaded once_cell v1.21.4
+#13 2.575   Downloaded idna v1.1.0
+#13 2.577   Downloaded aho-corasick v1.1.5
+#13 2.579   Downloaded rand_chacha v0.9.0
+#13 2.579   Downloaded async-lock v3.4.2
+#13 2.580   Downloaded async-broadcast v0.7.2
+#13 2.581   Downloaded async-trait v0.1.92
+#13 2.582   Downloaded async-task v4.7.1
+#13 2.583   Downloaded async-executor v1.14.0
+#13 2.583   Downloaded async-process v2.5.0
+#13 2.584   Downloaded atspi v0.30.0
+#13 2.584   Downloaded num-integer v0.1.47
+#13 2.585   Downloaded async-tungstenite v0.32.1
+#13 2.586   Downloaded proc-macro2 v1.0.107
+#13 2.587   Downloaded polling v3.11.0
+#13 2.588   Downloaded async-io v2.6.0
+#13 2.589   Downloaded rcgen v0.14.10
+#13 2.590   Downloaded num-traits v0.2.19
+#13 2.591   Downloaded allocator-api2 v0.2.21
+#13 2.592   Downloaded log v0.4.34
+#13 2.593   Downloaded miniz_oxide v0.9.1
+#13 2.594   Downloaded miniz_oxide v0.8.9
+#13 2.595   Downloaded bitflags v2.13.1
+#13 2.596   Downloaded base64 v0.22.1
+#13 2.598   Downloaded minimal-lexical v0.2.1
+#13 2.600   Downloaded quinn v0.11.11
+#13 2.601   Downloaded base64 v0.23.1
+#13 2.603   Downloaded indexmap v2.14.1
+#13 2.604   Downloaded num-bigint v0.4.8
+#13 2.606   Downloaded mio v1.2.2
+#13 2.609   Downloaded rand v0.9.5
+#13 2.610   Downloaded asn1-rs v0.7.2
+#13 2.612   Downloaded memchr v2.8.3
+#13 2.615   Downloaded rand v0.10.2
+#13 2.616   Downloaded nom v7.1.3
+#13 2.618   Downloaded atspi-common v0.14.0
+#13 2.620   Downloaded png v0.18.1
+#13 2.622   Downloaded libm v0.2.16
+#13 2.625   Downloaded reqwest v0.13.4
+#13 2.627   Downloaded regex v1.13.1
+#13 2.629   Downloaded axum v0.8.9
+#13 2.632   Downloaded quinn-proto v0.11.17
+#13 2.634   Downloaded aws-lc-rs v1.18.1
+#13 2.639   Downloaded regex-syntax v0.8.11
+#13 2.642   Downloaded rustls v0.23.43
+#13 2.663   Downloaded rustix v1.1.4
+#13 2.694   Downloaded rmcp v3.2.0
+#13 2.702   Downloaded regex-automata v0.4.18
+#13 2.732   Downloaded libc v0.2.189
+#13 2.806   Downloaded ring v0.17.14
+#13 2.902   Downloaded linux-raw-sys v0.12.1
+#13 3.122   Downloaded aws-lc-sys v0.45.0
+#13 3.297    Compiling proc-macro2 v1.0.107
+#13 3.297    Compiling quote v1.0.47
+#13 3.297    Compiling unicode-ident v1.0.24
+#13 3.297    Compiling libc v0.2.189
+#13 3.297    Compiling pin-project-lite v0.2.17
+#13 3.297    Compiling futures-core v0.3.34
+#13 3.297    Compiling cfg-if v1.0.4
+#13 3.297    Compiling serde_core v1.0.229
+#13 3.297    Compiling bytes v1.12.1
+#13 3.321    Compiling futures-io v0.3.34
+#13 3.325    Compiling itoa v1.0.18
+#13 3.345    Compiling serde v1.0.229
+#13 3.382    Compiling memchr v2.8.3
+#13 3.386    Compiling slab v0.4.12
+#13 3.433    Compiling find-msvc-tools v0.1.11
+#13 3.466    Compiling shlex v2.0.1
+#13 3.501    Compiling winnow v1.0.4
+#13 3.515    Compiling equivalent v1.0.2
+#13 3.528    Compiling hashbrown v0.17.1
+#13 3.656    Compiling once_cell v1.21.4
+#13 3.684    Compiling syn v3.0.4
+#13 3.695    Compiling syn v2.0.119
+#13 3.715    Compiling errno v0.3.14
+#13 3.717    Compiling socket2 v0.6.5
+#13 3.727    Compiling jobserver v0.1.35
+#13 3.737    Compiling signal-hook-registry v1.4.8
+#13 3.746    Compiling mio v1.2.2
+#13 3.826    Compiling cc v1.4.4
+#13 3.881    Compiling toml_parser v1.1.3+spec-1.1.0
+#13 3.891    Compiling indexmap v2.14.1
+#13 4.034    Compiling stable_deref_trait v1.2.1
+#13 4.051    Compiling bitflags v2.13.1
+#13 4.068    Compiling toml_datetime v1.1.1+spec-1.1.0
+#13 4.092    Compiling futures-sink v0.3.34
+#13 4.111    Compiling toml_edit v0.25.13+spec-1.1.0
+#13 4.114    Compiling http v1.5.0
+#13 4.122    Compiling subtle v2.6.1
+#13 4.123    Compiling futures-channel v0.3.34
+#13 4.145    Compiling cmake v0.1.58
+#13 4.189    Compiling zmij v1.0.23
+#13 4.191    Compiling autocfg v1.5.1
+#13 4.194    Compiling pkg-config v0.3.34
+#13 4.258    Compiling dunce v1.0.5
+#13 4.263    Compiling version_check v0.9.5
+#13 4.301    Compiling proc-macro-crate v3.5.0
+#13 4.314    Compiling parking v2.2.1
+#13 4.338    Compiling fs_extra v1.3.0
+#13 4.343    Compiling generic-array v0.14.7
+#13 4.379    Compiling atomic-waker v1.1.2
+#13 4.390    Compiling futures-task v0.3.34
+#13 4.409    Compiling aws-lc-sys v0.45.0
+#13 4.413    Compiling zeroize v1.9.0
+#13 4.427    Compiling crossbeam-utils v0.8.22
+#13 4.433    Compiling httparse v1.10.1
+#13 4.456    Compiling rustix v1.1.4
+#13 4.473    Compiling typenum v1.20.1
+#13 4.517    Compiling linux-raw-sys v0.12.1
+#13 4.578    Compiling smallvec v1.16.0
+#13 4.671    Compiling fastrand v2.5.0
+#13 4.726    Compiling synstructure v0.13.2
+#13 4.762    Compiling aws-lc-rs v1.18.1
+#13 4.843    Compiling rustls-pki-types v1.15.1
+#13 4.902    Compiling http-body v1.1.0
+#13 4.935    Compiling tracing-core v0.1.36
+#13 4.938    Compiling litemap v0.8.3
+#13 4.992    Compiling writeable v0.6.4
+#13 4.996    Compiling zerocopy v0.8.56
+#13 5.073    Compiling getrandom v0.3.4
+#13 5.100    Compiling concurrent-queue v2.5.0
+#13 5.121    Compiling block-buffer v0.10.4
+#13 5.130    Compiling serde_derive v1.0.229
+#13 5.130    Compiling tokio-macros v2.7.2
+#13 5.157    Compiling zerovec-derive v0.11.6
+#13 5.159    Compiling displaydoc v0.2.7
+#13 5.159    Compiling futures-macro v0.3.34
+#13 5.219    Compiling zerofrom-derive v0.1.7
+#13 5.320    Compiling yoke-derive v0.8.2
+#13 5.395    Compiling tokio v1.53.1
+#13 5.436    Compiling enumflags2_derive v0.7.12
+#13 5.459    Compiling futures-util v0.3.34
+#13 5.525    Compiling tracing-attributes v0.1.31
+#13 5.614    Compiling zerofrom v0.1.8
+#13 5.639    Compiling crypto-common v0.1.7
+#13 5.640    Compiling event-listener v5.4.2
+#13 5.667    Compiling getrandom v0.4.3
+#13 5.681    Compiling yoke v0.8.3
+#13 5.718    Compiling icu_properties_data v2.3.0
+#13 5.726    Compiling zerovec v0.11.8
+#13 5.732    Compiling zerotrie v0.2.5
+#13 5.767    Compiling serde_json v1.0.151
+#13 5.833    Compiling percent-encoding v2.3.2
+#13 5.850    Compiling icu_normalizer_data v2.3.0
+#13 5.893    Compiling tinystr v0.8.4
+#13 5.903    Compiling potential_utf v0.1.6
+#13 5.906    Compiling endi v1.1.1
+#13 5.932    Compiling icu_locale_core v2.3.0
+#13 5.933    Compiling tracing v0.1.44
+#13 5.937    Compiling utf8_iter v1.0.4
+#13 5.941    Compiling rand_core v0.10.1
+#13 5.977    Compiling icu_collections v2.3.0
+#13 5.988    Compiling event-listener-strategy v0.5.4
+#13 6.027    Compiling digest v0.10.7
+#13 6.195    Compiling futures-lite v2.6.1
+#13 6.237    Compiling zvariant_utils v4.2.0
+#13 6.239    Compiling enumflags2 v0.7.12
+#13 6.278    Compiling zcheapstr v1.1.0
+#13 6.306    Compiling icu_provider v2.3.1
+#13 6.449    Compiling untrusted v0.9.0
+#13 6.480    Compiling tower-service v0.3.3
+#13 6.496    Compiling log v0.4.34
+#13 6.526    Compiling zvariant_derive v5.15.0
+#13 6.555    Compiling thiserror v2.0.20
+#13 6.726    Compiling zvariant v5.15.0
+#13 6.760    Compiling rand_core v0.9.5
+#13 6.955    Compiling thiserror-impl v2.0.20
+#13 6.974    Compiling async-io v2.6.0
+#13 6.975    Compiling cpufeatures v0.2.17
+#13 6.999    Compiling rustls v0.23.43
+#13 7.053    Compiling try-lock v0.2.5
+#13 7.070    Compiling want v0.3.1
+#13 7.072    Compiling icu_normalizer v2.3.0
+#13 7.106    Compiling icu_properties v2.3.0
+#13 7.290    Compiling ppv-lite86 v0.2.21
+#13 7.366    Compiling zbus_names v4.3.4
+#13 7.428    Compiling rand_chacha v0.9.0
+#13 7.498    Compiling polling v3.11.0
+#13 7.522    Compiling form_urlencoded v1.2.2
+#13 7.559    Compiling sync_wrapper v1.0.2
+#13 7.586    Compiling tower-layer v0.3.3
+#13 7.591    Compiling httpdate v1.0.3
+#13 7.645    Compiling async-task v4.7.1
+#13 7.686    Compiling hyper v1.11.1
+#13 7.737    Compiling rand v0.9.5
+#13 7.850    Compiling idna_adapter v1.2.2
+#13 7.881    Compiling sha1 v0.10.7
+#13 7.939    Compiling async-channel v2.5.0
+#13 7.987    Compiling http-body-util v0.1.5
+#13 7.992    Compiling data-encoding v2.11.1
+#13 8.059    Compiling ipnet v2.12.1
+#13 8.203    Compiling base64 v0.22.1
+#13 8.464    Compiling hyper-util v0.1.20
+#13 8.715    Compiling idna v1.1.0
+#13 8.898    Compiling async-signal v0.2.14
+#13 8.975    Compiling tower v0.5.3
+#13 9.081    Compiling zbus_xml v5.2.1
+#13 9.093    Compiling uuid v1.26.0
+#13 9.150    Compiling async-lock v3.4.2
+#13 9.266    Compiling async-trait v0.1.92
+#13 9.329    Compiling piper v0.2.5
+#13 9.357    Compiling num-traits v0.2.19
+#13 9.358    Compiling aho-corasick v1.1.5
+#13 9.379    Compiling strsim v0.11.1
+#13 9.408    Compiling ident_case v1.0.1
+#13 9.414    Compiling libm v0.2.16
+#13 9.433    Compiling simd-adler32 v0.3.10
+#13 9.449    Compiling openssl-probe v0.2.1
+#13 9.462    Compiling regex-syntax v0.8.11
+#13 9.485    Compiling rustls-native-certs v0.8.4
+#13 9.486    Compiling darling_core v0.24.1
+#13 9.544    Compiling blocking v1.7.0
+#13 9.569    Compiling async-process v2.5.0
+#13 9.688    Compiling zbus-lockstep v0.5.2
+#13 9.732    Compiling url v2.5.8
+#13 10.31    Compiling regex-automata v0.4.18
+#13 10.44    Compiling async-executor v1.14.0
+#13 10.65    Compiling zbus_macros v5.19.0
+#13 10.70    Compiling async-broadcast v0.7.2
+#13 10.77    Compiling async-recursion v1.1.1
+#13 10.83    Compiling serde_repr v0.1.21
+#13 10.98    Compiling ordered-stream v0.2.0
+#13 10.99    Compiling ref-cast v1.0.27
+#13 11.00    Compiling adler2 v2.0.1
+#13 11.06    Compiling crc32fast v1.5.1
+#13 11.07    Compiling hex v0.4.3
+#13 11.12    Compiling darling_macro v0.24.1
+#13 11.13    Compiling tower-http v0.6.11
+#13 11.18    Compiling zbus-lockstep-macros v0.5.2
+#13 11.32    Compiling regex v1.13.1
+#13 11.41    Compiling chromiumoxide_types v0.9.1
+#13 11.41    Compiling tokio-util v0.7.19
+#13 11.50    Compiling futures-executor v0.3.34
+#13 11.54    Compiling zbus v5.19.0
+#13 11.65    Compiling ref-cast-impl v1.0.27
+#13 11.76    Compiling serde_derive_internals v0.30.0
+#13 11.79    Compiling static_assertions v1.1.0
+#13 11.81    Compiling either v1.18.0
+#13 11.83    Compiling deranged v0.5.9
+#13 11.87    Compiling heck v0.5.0
+#13 12.01    Compiling num-conv v0.2.2
+#13 12.02    Compiling utf-8 v0.7.6
+#13 12.04    Compiling iana-time-zone v0.1.65
+#13 12.07    Compiling powerfmt v0.2.1
+#13 12.13    Compiling base64 v0.23.1
+#13 12.13    Compiling time-core v0.1.9
+#13 12.18    Compiling time v0.3.55
+#13 12.19    Compiling chrono v0.4.45
+#13 12.22    Compiling tungstenite v0.28.0
+#13 12.34    Compiling schemars_derive v1.2.2
+#13 12.40    Compiling chromiumoxide_pdl v0.9.1
+#13 12.63    Compiling core_maths v0.1.1
+#13 12.66    Compiling futures v0.3.34
+#13 12.67    Compiling darling v0.24.1
+#13 12.76    Compiling miniz_oxide v0.9.1
+#13 12.85    Compiling tungstenite v0.29.0
+#13 13.34    Compiling chacha20 v0.10.2
+#13 13.38    Compiling ring v0.17.14
+#13 13.41    Compiling dyn-clone v1.0.20
+#13 13.45    Compiling rmcp v3.2.0
+#13 13.51    Compiling allocator-api2 v0.2.21
+#13 13.53    Compiling mime v0.3.17
+#13 13.62    Compiling atspi-common v0.14.0
+#13 13.67    Compiling ryu v1.0.23
+#13 13.69    Compiling foldhash v0.1.5
+#13 13.75    Compiling hashbrown v0.15.5
+#13 13.78    Compiling serde_urlencoded v0.7.1
+#13 14.00    Compiling axum-core v0.5.6
+#13 14.13    Compiling schemars v1.2.2
+#13 14.17    Compiling rand v0.10.2
+#13 14.40    Compiling tokio-tungstenite v0.29.0
+#13 14.49    Compiling flate2 v1.1.10
+#13 14.66    Compiling rmcp-macros v3.2.0
+#13 14.72    Compiling chromiumoxide_cdp v0.9.1
+#13 14.74    Compiling ttf-parser v0.25.1
+#13 15.04    Compiling atspi-proxies v0.14.0
+#13 15.73    Compiling async-tungstenite v0.32.1
+#13 15.86    Compiling yasna v0.6.0
+#13 15.88    Compiling pem v4.0.0
+#13 15.97    Compiling miniz_oxide v0.8.9
+#13 15.80    Compiling fdeflate v0.3.7
+#13 15.86    Compiling sse-stream v0.2.5
+#13 15.94    Compiling tokio-stream v0.1.19
+#13 16.10    Compiling gethostname v1.1.0
+#13 16.11    Compiling serde_path_to_error v0.1.20
+#13 16.13    Compiling which v8.0.6
+#13 16.17    Compiling getrandom v0.2.17
+#13 16.23    Compiling pastey v0.2.3
+#13 16.25    Compiling matchit v0.8.4
+#13 16.26    Compiling fnv v1.0.7
+#13 16.27    Compiling x11rb-protocol v0.14.0
+#13 16.32    Compiling futures-timer v3.0.4
+#13 16.36    Compiling axum v0.8.9
+#13 16.44    Compiling png v0.18.1
+#13 16.52    Compiling atspi v0.30.0
+#13 16.54    Compiling fontdue v0.9.4
+#13 16.84    Compiling sha2 v0.10.9
+#13 17.27    Compiling tempfile v3.27.0
+#13 17.37    Compiling hmac v0.12.1
+#13 17.41    Compiling webpki-roots v1.0.12
+#13 18.12    Compiling x11rb v0.14.0
+#13 27.22    Compiling rustls-webpki v0.103.15
+#13 27.22    Compiling rcgen v0.14.10
+#13 28.49    Compiling tokio-rustls v0.26.4
+#13 28.49    Compiling rustls-platform-verifier v0.7.0
+#13 28.61    Compiling hyper-rustls v0.27.9
+#13 28.71    Compiling reqwest v0.13.4
+#13 30.72    Compiling chromiumoxide v0.9.1
+#13 33.75    Compiling hotline-computer v0.13.0-rc.3 (/src)
+#13 57.63     Finished `release` profile [optimized] target(s) in 57.82s
+#13 DONE 57.8s
+
+#14 [linux/arm64 checks 1/3] RUN rustup component add rustfmt clippy && apt-get update && apt-get install -y --no-install-recommends jq chromium fonts-dejavu-core && rm -rf /var/lib/apt/lists/*
+#14 0.060 info: downloading 2 components
+#14 0.721 Get:1 http://deb.debian.org/debian trixie InRelease [140 kB]
+#14 0.774 Get:2 http://deb.debian.org/debian trixie-updates InRelease [47.3 kB]
+#14 0.786 Get:3 http://deb.debian.org/debian-security trixie-security InRelease [43.4 kB]
+#14 0.798 Get:4 http://deb.debian.org/debian trixie/main arm64 Packages [9615 kB]
+#14 0.889 Get:5 http://deb.debian.org/debian trixie-updates/main arm64 Packages [1108 B]
+#14 0.898 Get:6 http://deb.debian.org/debian-security trixie-security/main arm64 Packages [309 kB]
+#14 1.404 Fetched 10.2 MB in 1s (14.2 MB/s)
+#14 1.404 Reading package lists...
+#14 1.638 Reading package lists...
+#14 1.849 Building dependency tree...
+#14 1.904 Reading state information...
+#14 2.001 fonts-dejavu-core is already the newest version (2.37-8).
+#14 2.001 fonts-dejavu-core set to manually installed.
+#14 2.001 The following additional packages will be installed:
+#14 2.001   adwaita-icon-theme at-spi2-common chromium-common dbus dbus-bin dbus-daemon
+#14 2.001   dbus-session-bus-common dbus-system-bus-common dbus-user-session
+#14 2.001   dconf-gsettings-backend dconf-service gtk-update-icon-cache libapparmor1
+#14 2.001   libasound2-data libasound2t64 libasyncns0 libatk-bridge2.0-0t64
+#14 2.001   libatk1.0-0t64 libatspi2.0-0t64 libavahi-client3 libavahi-common-data
+#14 2.001   libavahi-common3 libcloudproviders0 libcolord2 libcups2t64 libdbus-1-3
+#14 2.001   libdconf1 libdouble-conversion3 libdrm-amdgpu1 libdrm-common libdrm2
+#14 2.001   libepoxy0 libflac14 libgbm1 libgl1 libgl1-mesa-dri libglvnd0 libglx-mesa0
+#14 2.001   libglx0 libgtk-3-0t64 libgtk-3-common libjq1 libllvm19 libminizip1t64
+#14 2.001   libmp3lame0 libmpg123-0t64 libnspr4 libnss3 libogg0 libonig5 libopenh264-8
+#14 2.001   libopus0 libpam-systemd libpulse0 libsensors-config libsensors5 libsndfile1
+#14 2.001   libsystemd-shared libvorbis0a libvorbisenc2 libvulkan1 libwayland-client0
+#14 2.001   libwayland-cursor0 libwayland-egl1 libwayland-server0 libx11-xcb1 libxaw7
+#14 2.001   libxcb-dri3-0 libxcb-glx0 libxcb-present0 libxcb-randr0 libxcb-shape0
+#14 2.001   libxcb-sync1 libxcb-xfixes0 libxcomposite1 libxcursor1 libxdamage1
+#14 2.001   libxfixes3 libxi6 libxinerama1 libxkbcommon0 libxkbfile1 libxmu6 libxmuu1
+#14 2.001   libxnvctrl0 libxpm4 libxrandr2 libxshmfence1 libxtst6 libxv1 libxxf86dga1
+#14 2.001   libxxf86vm1 libz3-4 mesa-libgallium systemd systemd-sysv x11-utils xdg-utils
+#14 2.001   xkb-data zlib1g zlib1g-dev
+#14 2.002 Suggested packages:
+#14 2.002   adwaita-icon-theme-legacy chromium-l10n chromium-shell chromium-driver
+#14 2.002   alsa-utils libasound2-plugins colord cups-common gvfs opus-tools
+#14 2.002   libcryptsetup12 libtss2-rc0t64 pulseaudio lm-sensors libbpf1 libdw1t64
+#14 2.002   libip4tc2 libpwquality1 libqrencode4 systemd-container systemd-homed
+#14 2.002   systemd-userdbd systemd-boot systemd-resolved systemd-repart
+#14 2.002   libtss2-tcti-device0 polkitd mesa-utils
+#14 2.002 Recommended packages:
+#14 2.002   upower udev fonts-liberation notification-daemon system-config-printer
+#14 2.002   alsa-ucm-conf alsa-topology-conf at-spi2-core libgtk-3-bin libkmod2
+#14 2.002   mesa-vulkan-drivers | vulkan-icd linux-sysctl-defaults systemd-timesyncd
+#14 2.002   | time-daemon systemd-cryptsetup libnss-systemd luit libfile-mimeinfo-perl
+#14 2.002   libnet-dbus-perl libx11-protocol-perl x11-xserver-utils
+#14 2.253 The following NEW packages will be installed:
+#14 2.253   adwaita-icon-theme at-spi2-common chromium chromium-common dbus dbus-bin
+#14 2.253   dbus-daemon dbus-session-bus-common dbus-system-bus-common dbus-user-session
+#14 2.253   dconf-gsettings-backend dconf-service gtk-update-icon-cache jq libapparmor1
+#14 2.253   libasound2-data libasound2t64 libasyncns0 libatk-bridge2.0-0t64
+#14 2.253   libatk1.0-0t64 libatspi2.0-0t64 libavahi-client3 libavahi-common-data
+#14 2.253   libavahi-common3 libcloudproviders0 libcolord2 libcups2t64 libdbus-1-3
+#14 2.253   libdconf1 libdouble-conversion3 libdrm-amdgpu1 libdrm-common libdrm2
+#14 2.253   libepoxy0 libflac14 libgbm1 libgl1 libgl1-mesa-dri libglvnd0 libglx-mesa0
+#14 2.253   libglx0 libgtk-3-0t64 libgtk-3-common libjq1 libllvm19 libminizip1t64
+#14 2.253   libmp3lame0 libmpg123-0t64 libnspr4 libnss3 libogg0 libonig5 libopenh264-8
+#14 2.253   libopus0 libpam-systemd libpulse0 libsensors-config libsensors5 libsndfile1
+#14 2.253   libsystemd-shared libvorbis0a libvorbisenc2 libvulkan1 libwayland-client0
+#14 2.253   libwayland-cursor0 libwayland-egl1 libwayland-server0 libx11-xcb1 libxaw7
+#14 2.253   libxcb-dri3-0 libxcb-glx0 libxcb-present0 libxcb-randr0 libxcb-shape0
+#14 2.253   libxcb-sync1 libxcb-xfixes0 libxcomposite1 libxcursor1 libxdamage1
+#14 2.253   libxfixes3 libxi6 libxinerama1 libxkbcommon0 libxkbfile1 libxmu6 libxmuu1
+#14 2.253   libxnvctrl0 libxpm4 libxrandr2 libxshmfence1 libxtst6 libxv1 libxxf86dga1
+#14 2.253   libxxf86vm1 libz3-4 mesa-libgallium systemd systemd-sysv x11-utils xdg-utils
+#14 2.253   xkb-data
+#14 2.254 The following packages will be upgraded:
+#14 2.254   zlib1g zlib1g-dev
+#14 2.293 2 upgraded, 101 newly installed, 0 to remove and 23 not upgraded.
+#14 2.293 Need to get 181 MB of archives.
+#14 2.293 After this operation, 706 MB of additional disk space will be used.
+#14 2.293 Get:1 http://deb.debian.org/debian trixie/main arm64 libsystemd-shared arm64 257.13-1~deb13u1 [1922 kB]
+#14 2.445 Get:2 http://deb.debian.org/debian trixie/main arm64 libapparmor1 arm64 4.1.0-1 [42.9 kB]
+#14 2.457 Get:3 http://deb.debian.org/debian trixie/main arm64 systemd arm64 257.13-1~deb13u1 [2921 kB]
+#14 2.601 Get:4 http://deb.debian.org/debian trixie/main arm64 systemd-sysv arm64 257.13-1~deb13u1 [64.9 kB]
+#14 2.602 Get:5 http://deb.debian.org/debian trixie/main arm64 libdbus-1-3 arm64 1.16.2-2 [169 kB]
+#14 2.611 Get:6 http://deb.debian.org/debian trixie/main arm64 dbus-bin arm64 1.16.2-2 [78.8 kB]
+#14 2.614 Get:7 http://deb.debian.org/debian trixie/main arm64 dbus-session-bus-common all 1.16.2-2 [52.3 kB]
+#14 2.627 Get:8 http://deb.debian.org/debian trixie/main arm64 dbus-daemon arm64 1.16.2-2 [152 kB]
+#14 2.631 Get:9 http://deb.debian.org/debian trixie/main arm64 dbus-system-bus-common all 1.16.2-2 [53.5 kB]
+#14 2.636 Get:10 http://deb.debian.org/debian trixie/main arm64 dbus arm64 1.16.2-2 [70.7 kB]
+#14 2.638 Get:11 http://deb.debian.org/debian trixie/main arm64 zlib1g-dev arm64 1:1.3.dfsg+really1.3.1-1+deb13u1 [916 kB]
+#14 2.685 Get:12 http://deb.debian.org/debian trixie/main arm64 zlib1g arm64 1:1.3.dfsg+really1.3.1-1+deb13u1 [85.0 kB]
+#14 2.689 Get:13 http://deb.debian.org/debian trixie/main arm64 libpam-systemd arm64 257.13-1~deb13u1 [276 kB]
+#14 2.703 Get:14 http://deb.debian.org/debian trixie/main arm64 gtk-update-icon-cache arm64 4.18.6+ds-2 [52.3 kB]
+#14 2.724 Get:15 http://deb.debian.org/debian trixie/main arm64 adwaita-icon-theme all 48.1-1 [504 kB]
+#14 2.747 Get:16 http://deb.debian.org/debian trixie/main arm64 at-spi2-common all 2.56.2-1+deb13u2 [171 kB]
+#14 2.756 Get:17 http://deb.debian.org/debian trixie/main arm64 libasound2-data all 1.2.14-1+deb13u1 [21.2 kB]
+#14 2.765 Get:18 http://deb.debian.org/debian trixie/main arm64 libasound2t64 arm64 1.2.14-1+deb13u1 [342 kB]
+#14 2.779 Get:19 http://deb.debian.org/debian trixie/main arm64 libatk1.0-0t64 arm64 2.56.2-1+deb13u2 [50.4 kB]
+#14 2.781 Get:20 http://deb.debian.org/debian trixie/main arm64 libxi6 arm64 2:1.8.2-1 [77.8 kB]
+#14 2.785 Get:21 http://deb.debian.org/debian trixie/main arm64 libatspi2.0-0t64 arm64 2.56.2-1+deb13u2 [76.7 kB]
+#14 2.788 Get:22 http://deb.debian.org/debian trixie/main arm64 libatk-bridge2.0-0t64 arm64 2.56.2-1+deb13u2 [65.0 kB]
+#14 2.790 Get:23 http://deb.debian.org/debian trixie/main arm64 libavahi-common-data arm64 0.8-16 [112 kB]
+#14 2.796 Get:24 http://deb.debian.org/debian trixie/main arm64 libavahi-common3 arm64 0.8-16 [43.3 kB]
+#14 2.797 Get:25 http://deb.debian.org/debian trixie/main arm64 libavahi-client3 arm64 0.8-16 [46.7 kB]
+#14 2.807 Get:26 http://deb.debian.org/debian trixie/main arm64 libcups2t64 arm64 2.4.10-3+deb13u2 [236 kB]
+#14 2.816 Get:27 http://deb.debian.org/debian trixie/main arm64 libdouble-conversion3 arm64 3.3.1-1 [37.3 kB]
+#14 2.817 Get:28 http://deb.debian.org/debian trixie/main arm64 libogg0 arm64 1.3.5-3+b2 [23.6 kB]
+#14 2.829 Get:29 http://deb.debian.org/debian trixie/main arm64 libflac14 arm64 1.5.0+ds-2 [180 kB]
+#14 2.832 Get:30 http://deb.debian.org/debian trixie/main arm64 libdrm-common all 2.4.124-2 [8288 B]
+#14 2.832 Get:31 http://deb.debian.org/debian trixie/main arm64 libdrm2 arm64 2.4.124-2 [38.3 kB]
+#14 2.839 Get:32 http://deb.debian.org/debian trixie/main arm64 libwayland-server0 arm64 1.23.1-3 [33.7 kB]
+#14 2.840 Get:33 http://deb.debian.org/debian trixie/main arm64 libdrm-amdgpu1 arm64 2.4.124-2 [21.8 kB]
+#14 2.841 Get:34 http://deb.debian.org/debian trixie/main arm64 libz3-4 arm64 4.13.3-1 [7507 kB]
+#14 3.222 Get:35 http://deb.debian.org/debian trixie/main arm64 libllvm19 arm64 1:19.1.7-3+b1 [23.3 MB]
+#14 4.187 Get:36 http://deb.debian.org/debian trixie/main arm64 libsensors-config all 1:3.6.2-2 [16.2 kB]
+#14 4.187 Get:37 http://deb.debian.org/debian trixie/main arm64 libsensors5 arm64 1:3.6.2-2 [36.4 kB]
+#14 4.187 Get:38 http://deb.debian.org/debian trixie/main arm64 libx11-xcb1 arm64 2:1.8.12-1 [247 kB]
+#14 4.195 Get:39 http://deb.debian.org/debian trixie/main arm64 libxcb-dri3-0 arm64 1.17.0-2+b1 [107 kB]
+#14 4.198 Get:40 http://deb.debian.org/debian trixie/main arm64 libxcb-present0 arm64 1.17.0-2+b1 [106 kB]
+#14 4.201 Get:41 http://deb.debian.org/debian trixie/main arm64 libxcb-randr0 arm64 1.17.0-2+b1 [117 kB]
+#14 4.207 Get:42 http://deb.debian.org/debian trixie/main arm64 libxcb-sync1 arm64 1.17.0-2+b1 [109 kB]
+#14 4.210 Get:43 http://deb.debian.org/debian trixie/main arm64 libxcb-xfixes0 arm64 1.17.0-2+b1 [110 kB]
+#14 4.213 Get:44 http://deb.debian.org/debian trixie/main arm64 libxshmfence1 arm64 1.3.3-1 [11.1 kB]
+#14 4.214 Get:45 http://deb.debian.org/debian trixie/main arm64 mesa-libgallium arm64 25.0.7-2+deb13u1 [8033 kB]
+#14 4.487 Get:46 http://deb.debian.org/debian trixie/main arm64 libgbm1 arm64 25.0.7-2+deb13u1 [44.1 kB]
+#14 4.489 Get:47 http://deb.debian.org/debian trixie/main arm64 libminizip1t64 arm64 1:1.3.dfsg+really1.3.1-1+deb13u1 [52.6 kB]
+#14 4.490 Get:48 http://deb.debian.org/debian trixie/main arm64 libnspr4 arm64 2:4.36-1 [102 kB]
+#14 4.493 Get:49 http://deb.debian.org/debian trixie/main arm64 libnss3 arm64 2:3.110-1+deb13u5 [1291 kB]
+#14 4.545 Get:50 http://deb.debian.org/debian trixie/main arm64 libopenh264-8 arm64 2.6.0+dfsg-2 [336 kB]
+#14 4.555 Get:51 http://deb.debian.org/debian trixie/main arm64 libopus0 arm64 1.5.2-2 [2813 kB]
+#14 4.643 Get:52 http://deb.debian.org/debian trixie/main arm64 libasyncns0 arm64 0.8-6+b5 [11.7 kB]
+#14 4.643 Get:53 http://deb.debian.org/debian trixie/main arm64 libmp3lame0 arm64 3.100-6+b3 [355 kB]
+#14 4.654 Get:54 http://deb.debian.org/debian trixie/main arm64 libmpg123-0t64 arm64 1.32.10-1+deb13u1 [143 kB]
+#14 4.658 Get:55 http://deb.debian.org/debian trixie/main arm64 libvorbis0a arm64 1.3.7-3 [83.8 kB]
+#14 4.660 Get:56 http://deb.debian.org/debian trixie/main arm64 libvorbisenc2 arm64 1.3.7-3 [75.5 kB]
+#14 4.664 Get:57 http://deb.debian.org/debian trixie/main arm64 libsndfile1 arm64 1.2.2-2+deb13u1 [186 kB]
+#14 4.684 Get:58 http://deb.debian.org/debian trixie/main arm64 libpulse0 arm64 17.0+dfsg1-2+b1 [236 kB]
+#14 4.685 Get:59 http://deb.debian.org/debian trixie/main arm64 libxcomposite1 arm64 1:0.4.6-1 [16.4 kB]
+#14 4.685 Get:60 http://deb.debian.org/debian trixie/main arm64 libxdamage1 arm64 1:1.1.6-1+b2 [15.6 kB]
+#14 4.691 Get:61 http://deb.debian.org/debian trixie/main arm64 libxfixes3 arm64 1:6.0.0-2+b4 [20.5 kB]
+#14 4.692 Get:62 http://deb.debian.org/debian trixie/main arm64 xkb-data all 2.42-1 [790 kB]
+#14 4.714 Get:63 http://deb.debian.org/debian trixie/main arm64 libxkbcommon0 arm64 1.7.0-2 [106 kB]
+#14 4.717 Get:64 http://deb.debian.org/debian trixie/main arm64 libxnvctrl0 arm64 535.171.04-1+b2 [14.0 kB]
+#14 4.717 Get:65 http://deb.debian.org/debian trixie/main arm64 libxrandr2 arm64 2:1.5.4-1+b3 [35.9 kB]
+#14 4.718 Get:66 http://deb.debian.org/debian trixie/main arm64 libcloudproviders0 arm64 0.3.6-2 [27.4 kB]
+#14 4.729 Get:67 http://deb.debian.org/debian trixie/main arm64 libcolord2 arm64 1.4.7-3 [130 kB]
+#14 4.731 Get:68 http://deb.debian.org/debian trixie/main arm64 libepoxy0 arm64 1.5.10-2 [200 kB]
+#14 4.740 Get:69 http://deb.debian.org/debian trixie/main arm64 libwayland-client0 arm64 1.23.1-3 [26.1 kB]
+#14 4.740 Get:70 http://deb.debian.org/debian trixie/main arm64 libwayland-cursor0 arm64 1.23.1-3 [11.7 kB]
+#14 4.742 Get:71 http://deb.debian.org/debian trixie/main arm64 libwayland-egl1 arm64 1.23.1-3 [5952 B]
+#14 4.742 Get:72 http://deb.debian.org/debian trixie/main arm64 libxcursor1 arm64 1:1.2.3-1 [39.3 kB]
+#14 4.742 Get:73 http://deb.debian.org/debian trixie/main arm64 libxinerama1 arm64 2:1.1.4-3+b4 [16.0 kB]
+#14 4.743 Get:74 http://deb.debian.org/debian trixie/main arm64 dbus-user-session arm64 1.16.2-2 [52.1 kB]
+#14 4.743 Get:75 http://deb.debian.org/debian trixie/main arm64 libdconf1 arm64 0.40.0-5 [40.4 kB]
+#14 4.744 Get:76 http://deb.debian.org/debian trixie/main arm64 dconf-service arm64 0.40.0-5 [30.9 kB]
+#14 4.748 Get:77 http://deb.debian.org/debian trixie/main arm64 dconf-gsettings-backend arm64 0.40.0-5 [27.3 kB]
+#14 4.756 Get:78 http://deb.debian.org/debian trixie/main arm64 libgtk-3-common all 3.24.49-3 [4908 kB]
+#14 4.901 Get:79 http://deb.debian.org/debian trixie/main arm64 libgtk-3-0t64 arm64 3.24.49-3 [2565 kB]
+#14 4.976 Get:80 http://deb.debian.org/debian trixie/main arm64 libglvnd0 arm64 1.7.0-1+b2 [41.6 kB]
+#14 4.976 Get:81 http://deb.debian.org/debian trixie/main arm64 libxcb-glx0 arm64 1.17.0-2+b1 [123 kB]
+#14 4.978 Get:82 http://deb.debian.org/debian trixie/main arm64 libxxf86vm1 arm64 1:1.1.4-1+b4 [19.2 kB]
+#14 4.978 Get:83 http://deb.debian.org/debian trixie/main arm64 libvulkan1 arm64 1.4.309.0-1 [127 kB]
+#14 4.984 Get:84 http://deb.debian.org/debian trixie/main arm64 libgl1-mesa-dri arm64 25.0.7-2+deb13u1 [45.9 kB]
+#14 4.995 Get:85 http://deb.debian.org/debian trixie/main arm64 libglx-mesa0 arm64 25.0.7-2+deb13u1 [142 kB]
+#14 4.998 Get:86 http://deb.debian.org/debian trixie/main arm64 libglx0 arm64 1.7.0-1+b2 [31.1 kB]
+#14 4.999 Get:87 http://deb.debian.org/debian trixie/main arm64 libgl1 arm64 1.7.0-1+b2 [90.9 kB]
+#14 5.000 Get:88 http://deb.debian.org/debian trixie/main arm64 libxmu6 arm64 2:1.1.3-3+b4 [55.7 kB]
+#14 5.005 Get:89 http://deb.debian.org/debian trixie/main arm64 libxpm4 arm64 1:3.5.17-1+deb13u1 [52.9 kB]
+#14 5.016 Get:90 http://deb.debian.org/debian trixie/main arm64 libxaw7 arm64 2:1.0.16-1 [195 kB]
+#14 5.029 Get:91 http://deb.debian.org/debian trixie/main arm64 libxcb-shape0 arm64 1.17.0-2+b1 [106 kB]
+#14 5.031 Get:92 http://deb.debian.org/debian trixie/main arm64 libxkbfile1 arm64 1:1.1.0-1+b4 [72.4 kB]
+#14 5.032 Get:93 http://deb.debian.org/debian trixie/main arm64 libxmuu1 arm64 2:1.1.3-3+b4 [22.0 kB]
+#14 5.033 Get:94 http://deb.debian.org/debian trixie/main arm64 libxtst6 arm64 2:1.2.5-1 [25.7 kB]
+#14 5.034 Get:95 http://deb.debian.org/debian trixie/main arm64 libxv1 arm64 2:1.0.11-1.1+b3 [23.3 kB]
+#14 5.034 Get:96 http://deb.debian.org/debian trixie/main arm64 libxxf86dga1 arm64 2:1.1.5-1+b3 [20.5 kB]
+#14 5.044 Get:97 http://deb.debian.org/debian trixie/main arm64 x11-utils arm64 7.7+7 [175 kB]
+#14 5.047 Get:98 http://deb.debian.org/debian trixie/main arm64 xdg-utils all 1.2.1-2 [75.8 kB]
+#14 5.048 Get:99 http://deb.debian.org/debian trixie/main arm64 chromium-common arm64 156.0.8078.79-1~deb13u1 [36.7 MB]
+#14 6.140 Get:100 http://deb.debian.org/debian trixie/main arm64 chromium arm64 156.0.8078.79-1~deb13u1 [79.5 MB]
+#14 7.971 Get:101 http://deb.debian.org/debian trixie/main arm64 libonig5 arm64 6.9.9-1+b1 [181 kB]
+#14 7.981 Get:102 http://deb.debian.org/debian trixie/main arm64 libjq1 arm64 1.7.1-6+deb13u4 [152 kB]
+#14 7.982 Get:103 http://deb.debian.org/debian trixie/main arm64 jq arm64 1.7.1-6+deb13u4 [78.4 kB]
+#14 8.098 debconf: unable to initialize frontend: Dialog
+#14 8.098 debconf: (TERM is not set, so the dialog frontend is not usable.)
+#14 8.098 debconf: falling back to frontend: Readline
+#14 8.100 debconf: unable to initialize frontend: Readline
+#14 8.100 debconf: (This frontend requires a controlling tty.)
+#14 8.100 debconf: falling back to frontend: Teletype
+#14 8.101 debconf: unable to initialize frontend: Teletype
+#14 8.101 debconf: (This frontend requires a controlling tty.)
+#14 8.101 debconf: falling back to frontend: Noninteractive
+#14 8.981 Fetched 181 MB in 6s (31.7 MB/s)
+#14 8.988 Selecting previously unselected package libsystemd-shared:arm64.
+#14 8.988 (Reading database ... (Reading database ... 5%(Reading database ... 10%(Reading database ... 15%(Reading database ... 20%(Reading database ... 25%(Reading database ... 30%(Reading database ... 35%(Reading database ... 40%(Reading database ... 45%(Reading database ... 50%(Reading database ... 55%(Reading database ... 60%(Reading database ... 65%(Reading database ... 70%(Reading database ... 75%(Reading database ... 80%(Reading database ... 85%(Reading database ... 90%(Reading database ... 95%(Reading database ... 100%(Reading database ... 30044 files and directories currently installed.)
+#14 8.994 Preparing to unpack .../libsystemd-shared_257.13-1~deb13u1_arm64.deb ...
+#14 8.995 Unpacking libsystemd-shared:arm64 (257.13-1~deb13u1) ...
+#14 9.074 Selecting previously unselected package libapparmor1:arm64.
+#14 9.075 Preparing to unpack .../libapparmor1_4.1.0-1_arm64.deb ...
+#14 9.077 Unpacking libapparmor1:arm64 (4.1.0-1) ...
+#14 9.090 Setting up libsystemd-shared:arm64 (257.13-1~deb13u1) ...
+#14 9.103 Selecting previously unselected package systemd.
+#14 9.103 (Reading database ... (Reading database ... 5%(Reading database ... 10%(Reading database ... 15%(Reading database ... 20%(Reading database ... 25%(Reading database ... 30%(Reading database ... 35%(Reading database ... 40%(Reading database ... 45%(Reading database ... 50%(Reading database ... 55%(Reading database ... 60%(Reading database ... 65%(Reading database ... 70%(Reading database ... 75%(Reading database ... 80%(Reading database ... 85%(Reading database ... 90%(Reading database ... 95%(Reading database ... 100%(Reading database ... 30057 files and directories currently installed.)
+#14 9.108 Preparing to unpack .../systemd_257.13-1~deb13u1_arm64.deb ...
+#14 9.111 Unpacking systemd (257.13-1~deb13u1) ...
+#14 9.234 Setting up libapparmor1:arm64 (4.1.0-1) ...
+#14 9.241 Setting up systemd (257.13-1~deb13u1) ...
+#14 9.252 Created symlink '/etc/systemd/system/getty.target.wants/getty@tty1.service' → '/usr/lib/systemd/system/getty@.service'.
+#14 9.254 Created symlink '/etc/systemd/system/multi-user.target.wants/remote-fs.target' → '/usr/lib/systemd/system/remote-fs.target'.
+#14 9.255 Created symlink '/etc/systemd/system/sysinit.target.wants/systemd-pstore.service' → '/usr/lib/systemd/system/systemd-pstore.service'.
+#14 9.257 Initializing machine ID from random generator.
+#14 9.263 Creating group 'systemd-journal' with GID 999.
+#14 9.263 Creating group 'systemd-network' with GID 998.
+#14 9.263 Creating user 'systemd-network' (systemd Network Management) with UID 998 and GID 998.
+#14 9.270 /usr/lib/tmpfiles.d/legacy.conf:14: Duplicate line for path "/run/lock", ignoring.
+#14 9.283 Selecting previously unselected package systemd-sysv.
+#14 9.283 (Reading database ... (Reading database ... 5%(Reading database ... 10%(Reading database ... 15%(Reading database ... 20%(Reading database ... 25%(Reading database ... 30%(Reading database ... 35%(Reading database ... 40%(Reading database ... 45%(Reading database ... 50%(Reading database ... 55%(Reading database ... 60%(Reading database ... 65%(Reading database ... 70%(Reading database ... 75%(Reading database ... 80%(Reading database ... 85%(Reading database ... 90%(Reading database ... 95%(Reading database ... 100%(Reading database ... 30983 files and directories currently installed.)
+#14 9.288 Preparing to unpack .../0-systemd-sysv_257.13-1~deb13u1_arm64.deb ...
+#14 9.289 Unpacking systemd-sysv (257.13-1~deb13u1) ...
+#14 9.299 Selecting previously unselected package libdbus-1-3:arm64.
+#14 9.301 Preparing to unpack .../1-libdbus-1-3_1.16.2-2_arm64.deb ...
+#14 9.302 Unpacking libdbus-1-3:arm64 (1.16.2-2) ...
+#14 9.314 Selecting previously unselected package dbus-bin.
+#14 9.315 Preparing to unpack .../2-dbus-bin_1.16.2-2_arm64.deb ...
+#14 9.316 Unpacking dbus-bin (1.16.2-2) ...
+#14 9.327 Selecting previously unselected package dbus-session-bus-common.
+#14 9.328 Preparing to unpack .../3-dbus-session-bus-common_1.16.2-2_all.deb ...
+#14 9.329 Unpacking dbus-session-bus-common (1.16.2-2) ...
+#14 9.338 Selecting previously unselected package dbus-daemon.
+#14 9.339 Preparing to unpack .../4-dbus-daemon_1.16.2-2_arm64.deb ...
+#14 9.340 Unpacking dbus-daemon (1.16.2-2) ...
+#14 9.353 Selecting previously unselected package dbus-system-bus-common.
+#14 9.355 Preparing to unpack .../5-dbus-system-bus-common_1.16.2-2_all.deb ...
+#14 9.355 Unpacking dbus-system-bus-common (1.16.2-2) ...
+#14 9.367 Selecting previously unselected package dbus.
+#14 9.368 Preparing to unpack .../6-dbus_1.16.2-2_arm64.deb ...
+#14 9.369 Unpacking dbus (1.16.2-2) ...
+#14 9.381 Preparing to unpack .../7-zlib1g-dev_1%3a1.3.dfsg+really1.3.1-1+deb13u1_arm64.deb ...
+#14 9.384 Unpacking zlib1g-dev:arm64 (1:1.3.dfsg+really1.3.1-1+deb13u1) over (1:1.3.dfsg+really1.3.1-1+b1) ...
+#14 9.417 Preparing to unpack .../8-zlib1g_1%3a1.3.dfsg+really1.3.1-1+deb13u1_arm64.deb ...
+#14 9.421 Unpacking zlib1g:arm64 (1:1.3.dfsg+really1.3.1-1+deb13u1) over (1:1.3.dfsg+really1.3.1-1+b1) ...
+#14 9.438 Setting up zlib1g:arm64 (1:1.3.dfsg+really1.3.1-1+deb13u1) ...
+#14 9.451 Selecting previously unselected package libpam-systemd:arm64.
+#14 9.451 (Reading database ... (Reading database ... 5%(Reading database ... 10%(Reading database ... 15%(Reading database ... 20%(Reading database ... 25%(Reading database ... 30%(Reading database ... 35%(Reading database ... 40%(Reading database ... 45%(Reading database ... 50%(Reading database ... 55%(Reading database ... 60%(Reading database ... 65%(Reading database ... 70%(Reading database ... 75%(Reading database ... 80%(Reading database ... 85%(Reading database ... 90%(Reading database ... 95%(Reading database ... 100%(Reading database ... 31074 files and directories currently installed.)
+#14 9.456 Preparing to unpack .../00-libpam-systemd_257.13-1~deb13u1_arm64.deb ...
+#14 9.457 Unpacking libpam-systemd:arm64 (257.13-1~deb13u1) ...
+#14 9.474 Selecting previously unselected package gtk-update-icon-cache.
+#14 9.475 Preparing to unpack .../01-gtk-update-icon-cache_4.18.6+ds-2_arm64.deb ...
+#14 9.478 No diversion 'diversion of /usr/sbin/update-icon-caches to /usr/sbin/update-icon-caches.gtk2 by libgtk-3-bin', none removed.
+#14 9.480 No diversion 'diversion of /usr/share/man/man8/update-icon-caches.8.gz to /usr/share/man/man8/update-icon-caches.gtk2.8.gz by libgtk-3-bin', none removed.
+#14 9.480 Unpacking gtk-update-icon-cache (4.18.6+ds-2) ...
+#14 9.491 Selecting previously unselected package adwaita-icon-theme.
+#14 9.492 Preparing to unpack .../02-adwaita-icon-theme_48.1-1_all.deb ...
+#14 9.493 Unpacking adwaita-icon-theme (48.1-1) ...
+#14 9.543 Selecting previously unselected package at-spi2-common.
+#14 9.544 Preparing to unpack .../03-at-spi2-common_2.56.2-1+deb13u2_all.deb ...
+#14 9.545 Unpacking at-spi2-common (2.56.2-1+deb13u2) ...
+#14 9.566 Selecting previously unselected package libasound2-data.
+#14 9.567 Preparing to unpack .../04-libasound2-data_1.2.14-1+deb13u1_all.deb ...
+#14 9.568 Unpacking libasound2-data (1.2.14-1+deb13u1) ...
+#14 9.579 Selecting previously unselected package libasound2t64:arm64.
+#14 9.580 Preparing to unpack .../05-libasound2t64_1.2.14-1+deb13u1_arm64.deb ...
+#14 9.581 Unpacking libasound2t64:arm64 (1.2.14-1+deb13u1) ...
+#14 9.601 Selecting previously unselected package libatk1.0-0t64:arm64.
+#14 9.602 Preparing to unpack .../06-libatk1.0-0t64_2.56.2-1+deb13u2_arm64.deb ...
+#14 9.602 Unpacking libatk1.0-0t64:arm64 (2.56.2-1+deb13u2) ...
+#14 9.612 Selecting previously unselected package libxi6:arm64.
+#14 9.613 Preparing to unpack .../07-libxi6_2%3a1.8.2-1_arm64.deb ...
+#14 9.614 Unpacking libxi6:arm64 (2:1.8.2-1) ...
+#14 9.624 Selecting previously unselected package libatspi2.0-0t64:arm64.
+#14 9.625 Preparing to unpack .../08-libatspi2.0-0t64_2.56.2-1+deb13u2_arm64.deb ...
+#14 9.625 Unpacking libatspi2.0-0t64:arm64 (2.56.2-1+deb13u2) ...
+#14 9.635 Selecting previously unselected package libatk-bridge2.0-0t64:arm64.
+#14 9.636 Preparing to unpack .../09-libatk-bridge2.0-0t64_2.56.2-1+deb13u2_arm64.deb ...
+#14 9.637 Unpacking libatk-bridge2.0-0t64:arm64 (2.56.2-1+deb13u2) ...
+#14 9.647 Selecting previously unselected package libavahi-common-data:arm64.
+#14 9.648 Preparing to unpack .../10-libavahi-common-data_0.8-16_arm64.deb ...
+#14 9.649 Unpacking libavahi-common-data:arm64 (0.8-16) ...
+#14 9.663 Selecting previously unselected package libavahi-common3:arm64.
+#14 9.664 Preparing to unpack .../11-libavahi-common3_0.8-16_arm64.deb ...
+#14 9.664 Unpacking libavahi-common3:arm64 (0.8-16) ...
+#14 9.673 Selecting previously unselected package libavahi-client3:arm64.
+#14 9.674 Preparing to unpack .../12-libavahi-client3_0.8-16_arm64.deb ...
+#14 9.675 Unpacking libavahi-client3:arm64 (0.8-16) ...
+#14 9.685 Selecting previously unselected package libcups2t64:arm64.
+#14 9.686 Preparing to unpack .../13-libcups2t64_2.4.10-3+deb13u2_arm64.deb ...
+#14 9.687 Unpacking libcups2t64:arm64 (2.4.10-3+deb13u2) ...
+#14 9.703 Selecting previously unselected package libdouble-conversion3:arm64.
+#14 9.704 Preparing to unpack .../14-libdouble-conversion3_3.3.1-1_arm64.deb ...
+#14 9.705 Unpacking libdouble-conversion3:arm64 (3.3.1-1) ...
+#14 9.714 Selecting previously unselected package libogg0:arm64.
+#14 9.714 Preparing to unpack .../15-libogg0_1.3.5-3+b2_arm64.deb ...
+#14 9.715 Unpacking libogg0:arm64 (1.3.5-3+b2) ...
+#14 9.724 Selecting previously unselected package libflac14:arm64.
+#14 9.725 Preparing to unpack .../16-libflac14_1.5.0+ds-2_arm64.deb ...
+#14 9.725 Unpacking libflac14:arm64 (1.5.0+ds-2) ...
+#14 9.738 Selecting previously unselected package libdrm-common.
+#14 9.739 Preparing to unpack .../17-libdrm-common_2.4.124-2_all.deb ...
+#14 9.740 Unpacking libdrm-common (2.4.124-2) ...
+#14 9.748 Selecting previously unselected package libdrm2:arm64.
+#14 9.748 Preparing to unpack .../18-libdrm2_2.4.124-2_arm64.deb ...
+#14 9.749 Unpacking libdrm2:arm64 (2.4.124-2) ...
+#14 9.758 Selecting previously unselected package libwayland-server0:arm64.
+#14 9.759 Preparing to unpack .../19-libwayland-server0_1.23.1-3_arm64.deb ...
+#14 9.760 Unpacking libwayland-server0:arm64 (1.23.1-3) ...
+#14 9.768 Selecting previously unselected package libdrm-amdgpu1:arm64.
+#14 9.769 Preparing to unpack .../20-libdrm-amdgpu1_2.4.124-2_arm64.deb ...
+#14 9.770 Unpacking libdrm-amdgpu1:arm64 (2.4.124-2) ...
+#14 9.778 Selecting previously unselected package libz3-4:arm64.
+#14 9.779 Preparing to unpack .../21-libz3-4_4.13.3-1_arm64.deb ...
+#14 9.780 Unpacking libz3-4:arm64 (4.13.3-1) ...
+#14 10.02 Selecting previously unselected package libllvm19:arm64.
+#14 10.02 Preparing to unpack .../22-libllvm19_1%3a19.1.7-3+b1_arm64.deb ...
+#14 10.02 Unpacking libllvm19:arm64 (1:19.1.7-3+b1) ...
+#14 10.40 Selecting previously unselected package libsensors-config.
+#14 10.40 Preparing to unpack .../23-libsensors-config_1%3a3.6.2-2_all.deb ...
+#14 10.40 Unpacking libsensors-config (1:3.6.2-2) ...
+#14 10.41 Selecting previously unselected package libsensors5:arm64.
+#14 10.42 Preparing to unpack .../24-libsensors5_1%3a3.6.2-2_arm64.deb ...
+#14 10.42 Unpacking libsensors5:arm64 (1:3.6.2-2) ...
+#14 10.43 Selecting previously unselected package libx11-xcb1:arm64.
+#14 10.43 Preparing to unpack .../25-libx11-xcb1_2%3a1.8.12-1_arm64.deb ...
+#14 10.43 Unpacking libx11-xcb1:arm64 (2:1.8.12-1) ...
+#14 10.44 Selecting previously unselected package libxcb-dri3-0:arm64.
+#14 10.44 Preparing to unpack .../26-libxcb-dri3-0_1.17.0-2+b1_arm64.deb ...
+#14 10.44 Unpacking libxcb-dri3-0:arm64 (1.17.0-2+b1) ...
+#14 10.45 Selecting previously unselected package libxcb-present0:arm64.
+#14 10.46 Preparing to unpack .../27-libxcb-present0_1.17.0-2+b1_arm64.deb ...
+#14 10.46 Unpacking libxcb-present0:arm64 (1.17.0-2+b1) ...
+#14 10.47 Selecting previously unselected package libxcb-randr0:arm64.
+#14 10.47 Preparing to unpack .../28-libxcb-randr0_1.17.0-2+b1_arm64.deb ...
+#14 10.47 Unpacking libxcb-randr0:arm64 (1.17.0-2+b1) ...
+#14 10.48 Selecting previously unselected package libxcb-sync1:arm64.
+#14 10.48 Preparing to unpack .../29-libxcb-sync1_1.17.0-2+b1_arm64.deb ...
+#14 10.48 Unpacking libxcb-sync1:arm64 (1.17.0-2+b1) ...
+#14 10.50 Selecting previously unselected package libxcb-xfixes0:arm64.
+#14 10.50 Preparing to unpack .../30-libxcb-xfixes0_1.17.0-2+b1_arm64.deb ...
+#14 10.50 Unpacking libxcb-xfixes0:arm64 (1.17.0-2+b1) ...
+#14 10.51 Selecting previously unselected package libxshmfence1:arm64.
+#14 10.51 Preparing to unpack .../31-libxshmfence1_1.3.3-1_arm64.deb ...
+#14 10.51 Unpacking libxshmfence1:arm64 (1.3.3-1) ...
+#14 10.52 Selecting previously unselected package mesa-libgallium:arm64.
+#14 10.52 Preparing to unpack .../32-mesa-libgallium_25.0.7-2+deb13u1_arm64.deb ...
+#14 10.52 Unpacking mesa-libgallium:arm64 (25.0.7-2+deb13u1) ...
+#14 10.80 Selecting previously unselected package libgbm1:arm64.
+#14 10.80 Preparing to unpack .../33-libgbm1_25.0.7-2+deb13u1_arm64.deb ...
+#14 10.80 Unpacking libgbm1:arm64 (25.0.7-2+deb13u1) ...
+#14 10.81 Selecting previously unselected package libminizip1t64:arm64.
+#14 10.82 Preparing to unpack .../34-libminizip1t64_1%3a1.3.dfsg+really1.3.1-1+deb13u1_arm64.deb ...
+#14 10.82 Unpacking libminizip1t64:arm64 (1:1.3.dfsg+really1.3.1-1+deb13u1) ...
+#14 10.83 Selecting previously unselected package libnspr4:arm64.
+#14 10.83 Preparing to unpack .../35-libnspr4_2%3a4.36-1_arm64.deb ...
+#14 10.83 Unpacking libnspr4:arm64 (2:4.36-1) ...
+#14 10.84 Selecting previously unselected package libnss3:arm64.
+#14 10.84 Preparing to unpack .../36-libnss3_2%3a3.110-1+deb13u5_arm64.deb ...
+#14 10.84 Unpacking libnss3:arm64 (2:3.110-1+deb13u5) ...
+#14 10.90 Selecting previously unselected package libopenh264-8:arm64.
+#14 10.90 Preparing to unpack .../37-libopenh264-8_2.6.0+dfsg-2_arm64.deb ...
+#14 10.90 Unpacking libopenh264-8:arm64 (2.6.0+dfsg-2) ...
+#14 10.92 Selecting previously unselected package libopus0:arm64.
+#14 10.92 Preparing to unpack .../38-libopus0_1.5.2-2_arm64.deb ...
+#14 10.92 Unpacking libopus0:arm64 (1.5.2-2) ...
+#14 11.03 Selecting previously unselected package libasyncns0:arm64.
+#14 11.03 Preparing to unpack .../39-libasyncns0_0.8-6+b5_arm64.deb ...
+#14 11.03 Unpacking libasyncns0:arm64 (0.8-6+b5) ...
+#14 11.04 Selecting previously unselected package libmp3lame0:arm64.
+#14 11.04 Preparing to unpack .../40-libmp3lame0_3.100-6+b3_arm64.deb ...
+#14 11.04 Unpacking libmp3lame0:arm64 (3.100-6+b3) ...
+#14 11.06 Selecting previously unselected package libmpg123-0t64:arm64.
+#14 11.06 Preparing to unpack .../41-libmpg123-0t64_1.32.10-1+deb13u1_arm64.deb ...
+#14 11.06 Unpacking libmpg123-0t64:arm64 (1.32.10-1+deb13u1) ...
+#14 11.07 Selecting previously unselected package libvorbis0a:arm64.
+#14 11.07 Preparing to unpack .../42-libvorbis0a_1.3.7-3_arm64.deb ...
+#14 11.08 Unpacking libvorbis0a:arm64 (1.3.7-3) ...
+#14 11.09 Selecting previously unselected package libvorbisenc2:arm64.
+#14 11.09 Preparing to unpack .../43-libvorbisenc2_1.3.7-3_arm64.deb ...
+#14 11.09 Unpacking libvorbisenc2:arm64 (1.3.7-3) ...
+#14 11.10 Selecting previously unselected package libsndfile1:arm64.
+#14 11.10 Preparing to unpack .../44-libsndfile1_1.2.2-2+deb13u1_arm64.deb ...
+#14 11.11 Unpacking libsndfile1:arm64 (1.2.2-2+deb13u1) ...
+#14 11.12 Selecting previously unselected package libpulse0:arm64.
+#14 11.12 Preparing to unpack .../45-libpulse0_17.0+dfsg1-2+b1_arm64.deb ...
+#14 11.12 Unpacking libpulse0:arm64 (17.0+dfsg1-2+b1) ...
+#14 11.14 Selecting previously unselected package libxcomposite1:arm64.
+#14 11.14 Preparing to unpack .../46-libxcomposite1_1%3a0.4.6-1_arm64.deb ...
+#14 11.14 Unpacking libxcomposite1:arm64 (1:0.4.6-1) ...
+#14 11.15 Selecting previously unselected package libxdamage1:arm64.
+#14 11.15 Preparing to unpack .../47-libxdamage1_1%3a1.1.6-1+b2_arm64.deb ...
+#14 11.15 Unpacking libxdamage1:arm64 (1:1.1.6-1+b2) ...
+#14 11.16 Selecting previously unselected package libxfixes3:arm64.
+#14 11.16 Preparing to unpack .../48-libxfixes3_1%3a6.0.0-2+b4_arm64.deb ...
+#14 11.16 Unpacking libxfixes3:arm64 (1:6.0.0-2+b4) ...
+#14 11.17 Selecting previously unselected package xkb-data.
+#14 11.17 Preparing to unpack .../49-xkb-data_2.42-1_all.deb ...
+#14 11.17 Unpacking xkb-data (2.42-1) ...
+#14 11.22 Selecting previously unselected package libxkbcommon0:arm64.
+#14 11.22 Preparing to unpack .../50-libxkbcommon0_1.7.0-2_arm64.deb ...
+#14 11.22 Unpacking libxkbcommon0:arm64 (1.7.0-2) ...
+#14 11.23 Selecting previously unselected package libxnvctrl0:arm64.
+#14 11.24 Preparing to unpack .../51-libxnvctrl0_535.171.04-1+b2_arm64.deb ...
+#14 11.24 Unpacking libxnvctrl0:arm64 (535.171.04-1+b2) ...
+#14 11.24 Selecting previously unselected package libxrandr2:arm64.
+#14 11.25 Preparing to unpack .../52-libxrandr2_2%3a1.5.4-1+b3_arm64.deb ...
+#14 11.25 Unpacking libxrandr2:arm64 (2:1.5.4-1+b3) ...
+#14 11.26 Selecting previously unselected package libcloudproviders0:arm64.
+#14 11.26 Preparing to unpack .../53-libcloudproviders0_0.3.6-2_arm64.deb ...
+#14 11.26 Unpacking libcloudproviders0:arm64 (0.3.6-2) ...
+#14 11.27 Selecting previously unselected package libcolord2:arm64.
+#14 11.27 Preparing to unpack .../54-libcolord2_1.4.7-3_arm64.deb ...
+#14 11.27 Unpacking libcolord2:arm64 (1.4.7-3) ...
+#14 11.29 Selecting previously unselected package libepoxy0:arm64.
+#14 11.29 Preparing to unpack .../55-libepoxy0_1.5.10-2_arm64.deb ...
+#14 11.29 Unpacking libepoxy0:arm64 (1.5.10-2) ...
+#14 11.31 Selecting previously unselected package libwayland-client0:arm64.
+#14 11.31 Preparing to unpack .../56-libwayland-client0_1.23.1-3_arm64.deb ...
+#14 11.31 Unpacking libwayland-client0:arm64 (1.23.1-3) ...
+#14 11.32 Selecting previously unselected package libwayland-cursor0:arm64.
+#14 11.32 Preparing to unpack .../57-libwayland-cursor0_1.23.1-3_arm64.deb ...
+#14 11.32 Unpacking libwayland-cursor0:arm64 (1.23.1-3) ...
+#14 11.33 Selecting previously unselected package libwayland-egl1:arm64.
+#14 11.33 Preparing to unpack .../58-libwayland-egl1_1.23.1-3_arm64.deb ...
+#14 11.33 Unpacking libwayland-egl1:arm64 (1.23.1-3) ...
+#14 11.34 Selecting previously unselected package libxcursor1:arm64.
+#14 11.34 Preparing to unpack .../59-libxcursor1_1%3a1.2.3-1_arm64.deb ...
+#14 11.34 Unpacking libxcursor1:arm64 (1:1.2.3-1) ...
+#14 11.35 Selecting previously unselected package libxinerama1:arm64.
+#14 11.35 Preparing to unpack .../60-libxinerama1_2%3a1.1.4-3+b4_arm64.deb ...
+#14 11.35 Unpacking libxinerama1:arm64 (2:1.1.4-3+b4) ...
+#14 11.36 Selecting previously unselected package dbus-user-session.
+#14 11.36 Preparing to unpack .../61-dbus-user-session_1.16.2-2_arm64.deb ...
+#14 11.36 Unpacking dbus-user-session (1.16.2-2) ...
+#14 11.37 Selecting previously unselected package libdconf1:arm64.
+#14 11.37 Preparing to unpack .../62-libdconf1_0.40.0-5_arm64.deb ...
+#14 11.37 Unpacking libdconf1:arm64 (0.40.0-5) ...
+#14 11.38 Selecting previously unselected package dconf-service.
+#14 11.38 Preparing to unpack .../63-dconf-service_0.40.0-5_arm64.deb ...
+#14 11.38 Unpacking dconf-service (0.40.0-5) ...
+#14 11.39 Selecting previously unselected package dconf-gsettings-backend:arm64.
+#14 11.39 Preparing to unpack .../64-dconf-gsettings-backend_0.40.0-5_arm64.deb ...
+#14 11.39 Unpacking dconf-gsettings-backend:arm64 (0.40.0-5) ...
+#14 11.40 Selecting previously unselected package libgtk-3-common.
+#14 11.41 Preparing to unpack .../65-libgtk-3-common_3.24.49-3_all.deb ...
+#14 11.41 Unpacking libgtk-3-common (3.24.49-3) ...
+#14 11.58 Selecting previously unselected package libgtk-3-0t64:arm64.
+#14 11.59 Preparing to unpack .../66-libgtk-3-0t64_3.24.49-3_arm64.deb ...
+#14 11.59 Unpacking libgtk-3-0t64:arm64 (3.24.49-3) ...
+#14 11.69 Selecting previously unselected package libglvnd0:arm64.
+#14 11.69 Preparing to unpack .../67-libglvnd0_1.7.0-1+b2_arm64.deb ...
+#14 11.70 Unpacking libglvnd0:arm64 (1.7.0-1+b2) ...
+#14 11.71 Selecting previously unselected package libxcb-glx0:arm64.
+#14 11.71 Preparing to unpack .../68-libxcb-glx0_1.17.0-2+b1_arm64.deb ...
+#14 11.71 Unpacking libxcb-glx0:arm64 (1.17.0-2+b1) ...
+#14 11.72 Selecting previously unselected package libxxf86vm1:arm64.
+#14 11.72 Preparing to unpack .../69-libxxf86vm1_1%3a1.1.4-1+b4_arm64.deb ...
+#14 11.72 Unpacking libxxf86vm1:arm64 (1:1.1.4-1+b4) ...
+#14 11.73 Selecting previously unselected package libvulkan1:arm64.
+#14 11.73 Preparing to unpack .../70-libvulkan1_1.4.309.0-1_arm64.deb ...
+#14 11.73 Unpacking libvulkan1:arm64 (1.4.309.0-1) ...
+#14 11.75 Selecting previously unselected package libgl1-mesa-dri:arm64.
+#14 11.75 Preparing to unpack .../71-libgl1-mesa-dri_25.0.7-2+deb13u1_arm64.deb ...
+#14 11.75 Unpacking libgl1-mesa-dri:arm64 (25.0.7-2+deb13u1) ...
+#14 11.76 Selecting previously unselected package libglx-mesa0:arm64.
+#14 11.76 Preparing to unpack .../72-libglx-mesa0_25.0.7-2+deb13u1_arm64.deb ...
+#14 11.76 Unpacking libglx-mesa0:arm64 (25.0.7-2+deb13u1) ...
+#14 11.78 Selecting previously unselected package libglx0:arm64.
+#14 11.78 Preparing to unpack .../73-libglx0_1.7.0-1+b2_arm64.deb ...
+#14 11.78 Unpacking libglx0:arm64 (1.7.0-1+b2) ...
+#14 11.79 Selecting previously unselected package libgl1:arm64.
+#14 11.79 Preparing to unpack .../74-libgl1_1.7.0-1+b2_arm64.deb ...
+#14 11.79 Unpacking libgl1:arm64 (1.7.0-1+b2) ...
+#14 11.80 Selecting previously unselected package libxmu6:arm64.
+#14 11.80 Preparing to unpack .../75-libxmu6_2%3a1.1.3-3+b4_arm64.deb ...
+#14 11.80 Unpacking libxmu6:arm64 (2:1.1.3-3+b4) ...
+#14 11.81 Selecting previously unselected package libxpm4:arm64.
+#14 11.82 Preparing to unpack .../76-libxpm4_1%3a3.5.17-1+deb13u1_arm64.deb ...
+#14 11.82 Unpacking libxpm4:arm64 (1:3.5.17-1+deb13u1) ...
+#14 11.83 Selecting previously unselected package libxaw7:arm64.
+#14 11.83 Preparing to unpack .../77-libxaw7_2%3a1.0.16-1_arm64.deb ...
+#14 11.83 Unpacking libxaw7:arm64 (2:1.0.16-1) ...
+#14 11.84 Selecting previously unselected package libxcb-shape0:arm64.
+#14 11.84 Preparing to unpack .../78-libxcb-shape0_1.17.0-2+b1_arm64.deb ...
+#14 11.84 Unpacking libxcb-shape0:arm64 (1.17.0-2+b1) ...
+#14 11.85 Selecting previously unselected package libxkbfile1:arm64.
+#14 11.86 Preparing to unpack .../79-libxkbfile1_1%3a1.1.0-1+b4_arm64.deb ...
+#14 11.86 Unpacking libxkbfile1:arm64 (1:1.1.0-1+b4) ...
+#14 11.87 Selecting previously unselected package libxmuu1:arm64.
+#14 11.87 Preparing to unpack .../80-libxmuu1_2%3a1.1.3-3+b4_arm64.deb ...
+#14 11.87 Unpacking libxmuu1:arm64 (2:1.1.3-3+b4) ...
+#14 11.88 Selecting previously unselected package libxtst6:arm64.
+#14 11.88 Preparing to unpack .../81-libxtst6_2%3a1.2.5-1_arm64.deb ...
+#14 11.88 Unpacking libxtst6:arm64 (2:1.2.5-1) ...
+#14 11.89 Selecting previously unselected package libxv1:arm64.
+#14 11.89 Preparing to unpack .../82-libxv1_2%3a1.0.11-1.1+b3_arm64.deb ...
+#14 11.89 Unpacking libxv1:arm64 (2:1.0.11-1.1+b3) ...
+#14 11.90 Selecting previously unselected package libxxf86dga1:arm64.
+#14 11.90 Preparing to unpack .../83-libxxf86dga1_2%3a1.1.5-1+b3_arm64.deb ...
+#14 11.90 Unpacking libxxf86dga1:arm64 (2:1.1.5-1+b3) ...
+#14 11.91 Selecting previously unselected package x11-utils.
+#14 11.91 Preparing to unpack .../84-x11-utils_7.7+7_arm64.deb ...
+#14 11.91 Unpacking x11-utils (7.7+7) ...
+#14 11.93 Selecting previously unselected package xdg-utils.
+#14 11.93 Preparing to unpack .../85-xdg-utils_1.2.1-2_all.deb ...
+#14 11.93 Unpacking xdg-utils (1.2.1-2) ...
+#14 11.94 Selecting previously unselected package chromium-common.
+#14 11.94 Preparing to unpack .../86-chromium-common_156.0.8078.79-1~deb13u1_arm64.deb ...
+#14 11.94 Unpacking chromium-common (156.0.8078.79-1~deb13u1) ...
+#14 12.30 Selecting previously unselected package chromium.
+#14 12.30 Preparing to unpack .../87-chromium_156.0.8078.79-1~deb13u1_arm64.deb ...
+#14 12.30 Unpacking chromium (156.0.8078.79-1~deb13u1) ...
+#14 13.04 Selecting previously unselected package libonig5:arm64.
+#14 13.04 Preparing to unpack .../88-libonig5_6.9.9-1+b1_arm64.deb ...
+#14 13.04 Unpacking libonig5:arm64 (6.9.9-1+b1) ...
+#14 13.06 Selecting previously unselected package libjq1:arm64.
+#14 13.06 Preparing to unpack .../89-libjq1_1.7.1-6+deb13u4_arm64.deb ...
+#14 13.06 Unpacking libjq1:arm64 (1.7.1-6+deb13u4) ...
+#14 13.07 Selecting previously unselected package jq.
+#14 13.07 Preparing to unpack .../90-jq_1.7.1-6+deb13u4_arm64.deb ...
+#14 13.08 Unpacking jq (1.7.1-6+deb13u4) ...
+#14 13.09 Setting up libxcb-dri3-0:arm64 (1.17.0-2+b1) ...
+#14 13.09 Setting up libwayland-server0:arm64 (1.23.1-3) ...
+#14 13.10 Setting up gtk-update-icon-cache (4.18.6+ds-2) ...
+#14 13.10 Setting up libx11-xcb1:arm64 (2:1.8.12-1) ...
+#14 13.10 Setting up systemd-sysv (257.13-1~deb13u1) ...
+#14 13.11 Setting up libdouble-conversion3:arm64 (3.3.1-1) ...
+#14 13.11 Setting up libxmu6:arm64 (2:1.1.3-3+b4) ...
+#14 13.12 Setting up libxdamage1:arm64 (1:1.1.6-1+b2) ...
+#14 13.12 Setting up libxcb-xfixes0:arm64 (1.17.0-2+b1) ...
+#14 13.12 Setting up libogg0:arm64 (1.3.5-3+b2) ...
+#14 13.12 Setting up libxpm4:arm64 (1:3.5.17-1+deb13u1) ...
+#14 13.13 Setting up libxi6:arm64 (2:1.8.2-1) ...
+#14 13.13 Setting up libglvnd0:arm64 (1.7.0-1+b2) ...
+#14 13.13 Setting up libxtst6:arm64 (2:1.2.5-1) ...
+#14 13.13 Setting up libxcb-glx0:arm64 (1.17.0-2+b1) ...
+#14 13.14 Setting up libxcb-shape0:arm64 (1.17.0-2+b1) ...
+#14 13.14 Setting up libsensors-config (1:3.6.2-2) ...
+#14 13.14 Setting up libxxf86dga1:arm64 (2:1.1.5-1+b3) ...
+#14 13.15 Setting up libcloudproviders0:arm64 (0.3.6-2) ...
+#14 13.15 Setting up xkb-data (2.42-1) ...
+#14 13.15 Setting up libxaw7:arm64 (2:1.0.16-1) ...
+#14 13.15 Setting up libmpg123-0t64:arm64 (1.32.10-1+deb13u1) ...
+#14 13.16 Setting up libcolord2:arm64 (1.4.7-3) ...
+#14 13.16 Setting up libxxf86vm1:arm64 (1:1.1.4-1+b4) ...
+#14 13.16 Setting up libxnvctrl0:arm64 (535.171.04-1+b2) ...
+#14 13.16 Setting up libxcb-present0:arm64 (1.17.0-2+b1) ...
+#14 13.17 Setting up libdconf1:arm64 (0.40.0-5) ...
+#14 13.17 Setting up libasound2-data (1.2.14-1+deb13u1) ...
+#14 13.17 Setting up libz3-4:arm64 (4.13.3-1) ...
+#14 13.18 Setting up libasound2t64:arm64 (1.2.14-1+deb13u1) ...
+#14 13.18 Setting up adwaita-icon-theme (48.1-1) ...
+#14 13.18 update-alternatives: using /usr/share/icons/Adwaita/cursor.theme to provide /usr/share/icons/default/index.theme (x-cursor-theme) in auto mode
+#14 13.19 Setting up libepoxy0:arm64 (1.5.10-2) ...
+#14 13.19 Setting up libnspr4:arm64 (2:4.36-1) ...
+#14 13.19 Setting up libxfixes3:arm64 (1:6.0.0-2+b4) ...
+#14 13.19 Setting up libxcb-sync1:arm64 (1.17.0-2+b1) ...
+#14 13.20 Setting up libavahi-common-data:arm64 (0.8-16) ...
+#14 13.20 Setting up libdbus-1-3:arm64 (1.16.2-2) ...
+#14 13.20 Setting up libopus0:arm64 (1.5.2-2) ...
+#14 13.21 Setting up libxinerama1:arm64 (2:1.1.4-3+b4) ...
+#14 13.21 Setting up libxv1:arm64 (2:1.0.11-1.1+b3) ...
+#14 13.21 Setting up libvorbis0a:arm64 (1.3.7-3) ...
+#14 13.21 Setting up libxrandr2:arm64 (2:1.5.4-1+b3) ...
+#14 13.22 Setting up libflac14:arm64 (1.5.0+ds-2) ...
+#14 13.22 Setting up libsensors5:arm64 (1:3.6.2-2) ...
+#14 13.22 Setting up libopenh264-8:arm64 (2.6.0+dfsg-2) ...
+#14 13.22 Setting up libvulkan1:arm64 (1.4.309.0-1) ...
+#14 13.23 Setting up zlib1g-dev:arm64 (1:1.3.dfsg+really1.3.1-1+deb13u1) ...
+#14 13.23 Setting up libminizip1t64:arm64 (1:1.3.dfsg+really1.3.1-1+deb13u1) ...
+#14 13.23 Setting up libasyncns0:arm64 (0.8-6+b5) ...
+#14 13.23 Setting up libxshmfence1:arm64 (1.3.3-1) ...
+#14 13.24 Setting up at-spi2-common (2.56.2-1+deb13u2) ...
+#14 13.24 Setting up libxcb-randr0:arm64 (1.17.0-2+b1) ...
+#14 13.24 Setting up dbus-session-bus-common (1.16.2-2) ...
+#14 13.24 Setting up libwayland-egl1:arm64 (1.23.1-3) ...
+#14 13.25 Setting up libxkbfile1:arm64 (1:1.1.0-1+b4) ...
+#14 13.25 Setting up dbus-system-bus-common (1.16.2-2) ...
+#14 13.25 Creating group 'messagebus' with GID 997.
+#14 13.25 Creating user 'messagebus' (System Message Bus) with UID 997 and GID 997.
+#14 13.27 Setting up libdrm-common (2.4.124-2) ...
+#14 13.27 Setting up libxcomposite1:arm64 (1:0.4.6-1) ...
+#14 13.27 Setting up xdg-utils (1.2.1-2) ...
+#14 13.27 update-alternatives: using /usr/bin/xdg-open to provide /usr/bin/open (open) in auto mode
+#14 13.27 Setting up libxmuu1:arm64 (2:1.1.3-3+b4) ...
+#14 13.28 Setting up dbus-bin (1.16.2-2) ...
+#14 13.28 Setting up libonig5:arm64 (6.9.9-1+b1) ...
+#14 13.28 Setting up libmp3lame0:arm64 (3.100-6+b3) ...
+#14 13.28 Setting up libvorbisenc2:arm64 (1.3.7-3) ...
+#14 13.29 Setting up libxkbcommon0:arm64 (1.7.0-2) ...
+#14 13.29 Setting up libwayland-client0:arm64 (1.23.1-3) ...
+#14 13.29 Setting up libllvm19:arm64 (1:19.1.7-3+b1) ...
+#14 13.29 Setting up libatk1.0-0t64:arm64 (2.56.2-1+deb13u2) ...
+#14 13.30 Setting up libjq1:arm64 (1.7.1-6+deb13u4) ...
+#14 13.30 Setting up libxcursor1:arm64 (1:1.2.3-1) ...
+#14 13.30 Setting up libavahi-common3:arm64 (0.8-16) ...
+#14 13.30 Setting up libnss3:arm64 (2:3.110-1+deb13u5) ...
+#14 13.31 Setting up dbus-daemon (1.16.2-2) ...
+#14 13.31 Setting up libatspi2.0-0t64:arm64 (2.56.2-1+deb13u2) ...
+#14 13.32 Setting up dbus (1.16.2-2) ...
+#14 13.32 invoke-rc.d: could not determine current runlevel
+#14 13.32 invoke-rc.d: policy-rc.d denied execution of start.
+#14 13.33 Setting up libdrm2:arm64 (2.4.124-2) ...
+#14 13.33 Setting up libwayland-cursor0:arm64 (1.23.1-3) ...
+#14 13.33 Setting up jq (1.7.1-6+deb13u4) ...
+#14 13.33 Setting up libpam-systemd:arm64 (257.13-1~deb13u1) ...
+#14 13.36 debconf: unable to initialize frontend: Dialog
+#14 13.36 debconf: (TERM is not set, so the dialog frontend is not usable.)
+#14 13.36 debconf: falling back to frontend: Readline
+#14 13.36 debconf: unable to initialize frontend: Readline
+#14 13.36 debconf: (This frontend requires a controlling tty.)
+#14 13.36 debconf: falling back to frontend: Teletype
+#14 13.36 debconf: unable to initialize frontend: Teletype
+#14 13.36 debconf: (This frontend requires a controlling tty.)
+#14 13.36 debconf: falling back to frontend: Noninteractive
+#14 13.38 Setting up libsndfile1:arm64 (1.2.2-2+deb13u1) ...
+#14 13.38 Setting up libavahi-client3:arm64 (0.8-16) ...
+#14 13.38 Setting up libdrm-amdgpu1:arm64 (2.4.124-2) ...
+#14 13.39 Setting up libatk-bridge2.0-0t64:arm64 (2.56.2-1+deb13u2) ...
+#14 13.39 Setting up mesa-libgallium:arm64 (25.0.7-2+deb13u1) ...
+#14 13.39 Setting up libgbm1:arm64 (25.0.7-2+deb13u1) ...
+#14 13.40 Setting up libpulse0:arm64 (17.0+dfsg1-2+b1) ...
+#14 13.40 Setting up libgl1-mesa-dri:arm64 (25.0.7-2+deb13u1) ...
+#14 13.40 Setting up dbus-user-session (1.16.2-2) ...
+#14 13.41 Setting up libcups2t64:arm64 (2.4.10-3+deb13u2) ...
+#14 13.41 Setting up libglx-mesa0:arm64 (25.0.7-2+deb13u1) ...
+#14 13.41 Setting up libglx0:arm64 (1.7.0-1+b2) ...
+#14 13.42 Setting up dconf-service (0.40.0-5) ...
+#14 13.42 Setting up libgl1:arm64 (1.7.0-1+b2) ...
+#14 13.42 Setting up x11-utils (7.7+7) ...
+#14 13.43 Setting up chromium-common (156.0.8078.79-1~deb13u1) ...
+#14 13.43 Setting up dconf-gsettings-backend:arm64 (0.40.0-5) ...
+#14 13.44 Setting up libgtk-3-common (3.24.49-3) ...
+#14 13.44 Processing triggers for hicolor-icon-theme (0.18-2) ...
+#14 13.45 Processing triggers for libc-bin (2.41-12+deb13u4) ...
+#14 13.45 Processing triggers for libglib2.0-0t64:arm64 (2.84.4-3~deb13u5) ...
+#14 13.46 Setting up libgtk-3-0t64:arm64 (3.24.49-3) ...
+#14 13.47 Processing triggers for shared-mime-info (2.4-5+b2) ...
+#14 13.99 Processing triggers for procps (2:4.0.4-9) ...
+#14 13.99 procps: Applying updated sysctl configuration
+#14 13.99 sysctl: permission denied on key "kernel.core_pattern"
+#14 13.99 sysctl: permission denied on key "kernel.pid_max"
+#14 13.99 Setting up chromium (156.0.8078.79-1~deb13u1) ...
+#14 14.00 update-alternatives: using /usr/bin/chromium to provide /usr/bin/x-www-browser (x-www-browser) in auto mode
+#14 14.00 update-alternatives: using /usr/bin/chromium to provide /usr/bin/gnome-www-browser (gnome-www-browser) in auto mode
+#14 14.00 Processing triggers for libc-bin (2.41-12+deb13u4) ...
+#14 DONE 14.3s
+
+#15 [linux/arm64 checks 2/3] COPY tests ./tests
+#15 DONE 0.0s
+
+#16 [linux/arm64 checks 3/3] RUN --mount=type=cache,target=/usr/local/cargo/registry --mount=type=cache,target=/src/target cargo fmt --check && CARGO_PROFILE_TEST_DEBUG=0 CARGO_INCREMENTAL=0 cargo test --locked && CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 cargo clippy --all-targets --locked -- -D warnings     && CARGO_PROFILE_TEST_DEBUG=0 CARGO_INCREMENTAL=0 cargo test --locked --test contract --no-run --message-format=json > /tmp/contract-build.jsonl     && binary="$(jq -ser '[.[] | select(.reason == "compiler-artifact" and .target.name == "contract" and .target.kind == ["test"] and .executable != null) | .executable] | if length == 1 then first else error("expected one contract test executable") end' /tmp/contract-build.jsonl)"     && test -x "$binary" && install -Dm755 "$binary" /acceptance/contract && rm /tmp/contract-build.jsonl     && CARGO_PROFILE_TEST_DEBUG=0 CARGO_INCREMENTAL=0 cargo test --locked --test split --no-run --message-format=json > /tmp/split-build.jsonl     && binary="$(jq -ser '[.[] | select(.reason == "compiler-artifact" and .target.name == "split" and .target.kind == ["test"] and .executable != null) | .executable] | if length == 1 then first else error("expected one split test executable") end' /tmp/split-build.jsonl)"     && test -x "$binary" && install -Dm755 "$binary" /acceptance/split && rm /tmp/split-build.jsonl
+#16 0.274  Downloading crates ...
+#16 0.348   Downloaded tokio-tungstenite v0.28.0
+#16 0.405    Compiling proc-macro2 v1.0.107
+#16 0.405    Compiling quote v1.0.47
+#16 0.405    Compiling unicode-ident v1.0.24
+#16 0.405    Compiling libc v0.2.189
+#16 0.405    Compiling pin-project-lite v0.2.17
+#16 0.405    Compiling futures-core v0.3.34
+#16 0.406    Compiling cfg-if v1.0.4
+#16 0.406    Compiling serde_core v1.0.229
+#16 0.407    Compiling itoa v1.0.18
+#16 0.423    Compiling bytes v1.12.1
+#16 0.430    Compiling futures-io v0.3.34
+#16 0.432    Compiling serde v1.0.229
+#16 0.448    Compiling slab v0.4.12
+#16 0.467    Compiling memchr v2.8.3
+#16 0.477    Compiling equivalent v1.0.2
+#16 0.494    Compiling shlex v2.0.1
+#16 0.499    Compiling hashbrown v0.17.1
+#16 0.512    Compiling winnow v1.0.4
+#16 0.536    Compiling find-msvc-tools v0.1.11
+#16 0.601    Compiling futures-sink v0.3.34
+#16 0.612    Compiling once_cell v1.21.4
+#16 0.665    Compiling indexmap v2.14.1
+#16 0.671    Compiling syn v3.0.4
+#16 0.671    Compiling syn v2.0.119
+#16 0.698    Compiling http v1.5.0
+#16 0.712    Compiling subtle v2.6.1
+#16 0.750    Compiling bitflags v2.13.1
+#16 0.791    Compiling errno v0.3.14
+#16 0.803    Compiling socket2 v0.6.5
+#16 0.833    Compiling signal-hook-registry v1.4.8
+#16 0.855    Compiling mio v1.2.2
+#16 0.862    Compiling jobserver v0.1.35
+#16 0.897    Compiling toml_parser v1.1.3+spec-1.1.0
+#16 0.963    Compiling cc v1.4.4
+#16 0.973    Compiling stable_deref_trait v1.2.1
+#16 0.986    Compiling toml_datetime v1.1.1+spec-1.1.0
+#16 0.992    Compiling futures-channel v0.3.34
+#16 1.008    Compiling version_check v0.9.5
+#16 1.051    Compiling toml_edit v0.25.13+spec-1.1.0
+#16 1.054    Compiling pkg-config v0.3.34
+#16 1.063    Compiling dunce v1.0.5
+#16 1.078    Compiling autocfg v1.5.1
+#16 1.103    Compiling generic-array v0.14.7
+#16 1.112    Compiling parking v2.2.1
+#16 1.118    Compiling futures-task v0.3.34
+#16 1.148    Compiling fs_extra v1.3.0
+#16 1.159    Compiling typenum v1.20.1
+#16 1.165    Compiling endi v1.1.1
+#16 1.191    Compiling httparse v1.10.1
+#16 1.200    Compiling atomic-waker v1.1.2
+#16 1.212    Compiling zeroize v1.9.0
+#16 1.227    Compiling crossbeam-utils v0.8.22
+#16 1.235    Compiling cmake v0.1.58
+#16 1.259    Compiling proc-macro-crate v3.5.0
+#16 1.287    Compiling zmij v1.0.23
+#16 1.316    Compiling rustix v1.1.4
+#16 1.362    Compiling aws-lc-rs v1.18.1
+#16 1.384    Compiling zerocopy v0.8.56
+#16 1.395    Compiling smallvec v1.16.0
+#16 1.435    Compiling linux-raw-sys v0.12.1
+#16 1.437    Compiling fastrand v2.5.0
+#16 1.442    Compiling getrandom v0.3.4
+#16 1.479    Compiling aws-lc-sys v0.45.0
+#16 1.496    Compiling rustls-pki-types v1.15.1
+#16 1.519    Compiling crypto-common v0.1.7
+#16 1.527    Compiling block-buffer v0.10.4
+#16 1.536    Compiling http-body v1.1.0
+#16 1.539    Compiling tracing-core v0.1.36
+#16 1.555    Compiling litemap v0.8.3
+#16 1.575    Compiling writeable v0.6.4
+#16 1.591    Compiling concurrent-queue v2.5.0
+#16 1.605    Compiling digest v0.10.7
+#16 1.644    Compiling event-listener v5.4.2
+#16 1.653    Compiling synstructure v0.13.2
+#16 1.689    Compiling thiserror v2.0.20
+#16 1.705    Compiling serde_json v1.0.151
+#16 1.716    Compiling icu_properties_data v2.3.0
+#16 1.766    Compiling rand_core v0.10.1
+#16 1.775    Compiling percent-encoding v2.3.2
+#16 1.779    Compiling icu_normalizer_data v2.3.0
+#16 1.808    Compiling getrandom v0.4.3
+#16 1.819    Compiling log v0.4.34
+#16 1.835    Compiling utf8_iter v1.0.4
+#16 1.862    Compiling event-listener-strategy v0.5.4
+#16 1.865    Compiling rand_core v0.9.5
+#16 1.866    Compiling futures-lite v2.6.1
+#16 1.867    Compiling cpufeatures v0.2.17
+#16 1.885    Compiling untrusted v0.9.0
+#16 1.907    Compiling tower-service v0.3.3
+#16 2.026    Compiling async-io v2.6.0
+#16 2.088    Compiling try-lock v0.2.5
+#16 2.091    Compiling rustls v0.23.43
+#16 2.104    Compiling want v0.3.1
+#16 2.131    Compiling zerofrom-derive v0.1.7
+#16 2.133    Compiling serde_derive v1.0.229
+#16 2.135    Compiling tokio-macros v2.7.2
+#16 2.145    Compiling yoke-derive v0.8.2
+#16 2.253    Compiling enumflags2_derive v0.7.12
+#16 2.412    Compiling tokio v1.53.1
+#16 2.477    Compiling zerovec-derive v0.11.6
+#16 2.531    Compiling futures-macro v0.3.34
+#16 2.560    Compiling zerofrom v0.1.8
+#16 2.582    Compiling yoke v0.8.3
+#16 2.629    Compiling displaydoc v0.2.7
+#16 2.667    Compiling tracing-attributes v0.1.31
+#16 2.780    Compiling futures-util v0.3.34
+#16 2.831    Compiling zerovec v0.11.8
+#16 2.879    Compiling zerotrie v0.2.5
+#16 2.951    Compiling ppv-lite86 v0.2.21
+#16 3.002    Compiling tinystr v0.8.4
+#16 3.011    Compiling potential_utf v0.1.6
+#16 3.015    Compiling thiserror-impl v2.0.20
+#16 3.037    Compiling icu_collections v2.3.0
+#16 3.053    Compiling icu_locale_core v2.3.0
+#16 3.133    Compiling tracing v0.1.44
+#16 3.195    Compiling rand_chacha v0.9.0
+#16 3.211    Compiling polling v3.11.0
+#16 3.283    Compiling zcheapstr v1.1.0
+#16 3.303    Compiling icu_provider v2.3.1
+#16 3.316    Compiling zvariant_utils v4.2.0
+#16 3.317    Compiling enumflags2 v0.7.12
+#16 3.370    Compiling icu_normalizer v2.3.0
+#16 3.381    Compiling icu_properties v2.3.0
+#16 3.393    Compiling rand v0.9.5
+#16 3.508    Compiling sha1 v0.10.7
+#16 3.534    Compiling form_urlencoded v1.2.2
+#16 3.543    Compiling sync_wrapper v1.0.2
+#16 3.555    Compiling data-encoding v2.11.1
+#16 3.561    Compiling async-task v4.7.1
+#16 3.568    Compiling tower-layer v0.3.3
+#16 3.572    Compiling httpdate v1.0.3
+#16 3.596    Compiling zvariant_derive v5.15.0
+#16 3.611    Compiling async-channel v2.5.0
+#16 3.631    Compiling http-body-util v0.1.5
+#16 3.652    Compiling idna_adapter v1.2.2
+#16 3.657    Compiling base64 v0.22.1
+#16 3.675    Compiling ipnet v2.12.1
+#16 3.698    Compiling idna v1.1.0
+#16 3.715    Compiling async-signal v0.2.14
+#16 3.741    Compiling hyper v1.11.1
+#16 3.742    Compiling tower v0.5.3
+#16 3.752    Compiling async-trait v0.1.92
+#16 3.779    Compiling uuid v1.26.0
+#16 3.784    Compiling async-lock v3.4.2
+#16 3.788    Compiling zvariant v5.15.0
+#16 3.878    Compiling piper v0.2.5
+#16 3.888    Compiling num-traits v0.2.19
+#16 3.918    Compiling aho-corasick v1.1.5
+#16 3.919    Compiling libm v0.2.16
+#16 3.939    Compiling simd-adler32 v0.3.10
+#16 3.973    Compiling regex-syntax v0.8.11
+#16 3.991    Compiling strsim v0.11.1
+#16 4.071    Compiling hyper-util v0.1.20
+#16 4.107    Compiling ident_case v1.0.1
+#16 4.123    Compiling openssl-probe v0.2.1
+#16 4.125    Compiling darling_core v0.24.1
+#16 4.143    Compiling rustls-native-certs v0.8.4
+#16 4.185    Compiling blocking v1.7.0
+#16 4.207    Compiling async-process v2.5.0
+#16 4.243    Compiling url v2.5.8
+#16 4.364    Compiling zbus_names v4.3.4
+#16 4.366    Compiling async-executor v1.14.0
+#16 4.445    Compiling regex-automata v0.4.18
+#16 4.460    Compiling serde_repr v0.1.21
+#16 4.462    Compiling async-recursion v1.1.1
+#16 4.512    Compiling zbus_xml v5.2.1
+#16 4.526    Compiling zbus_macros v5.19.0
+#16 4.628    Compiling async-broadcast v0.7.2
+#16 4.655    Compiling ordered-stream v0.2.0
+#16 4.660    Compiling adler2 v2.0.1
+#16 4.675    Compiling crc32fast v1.5.1
+#16 4.688    Compiling zbus-lockstep v0.5.2
+#16 4.725    Compiling ref-cast v1.0.27
+#16 4.728    Compiling hex v0.4.3
+#16 4.785    Compiling utf-8 v0.7.6
+#16 4.787    Compiling zbus-lockstep-macros v0.5.2
+#16 4.804    Compiling tower-http v0.6.11
+#16 4.823    Compiling tungstenite v0.28.0
+#16 4.907    Compiling tokio-util v0.7.19
+#16 4.932    Compiling darling_macro v0.24.1
+#16 5.003    Compiling futures-executor v0.3.34
+#16 5.035    Compiling chromiumoxide_types v0.9.1
+#16 5.061    Compiling regex v1.13.1
+#16 5.095    Compiling ref-cast-impl v1.0.27
+#16 5.097    Compiling serde_derive_internals v0.30.0
+#16 5.128    Compiling deranged v0.5.9
+#16 5.171    Compiling either v1.18.0
+#16 5.190    Compiling num-conv v0.2.2
+#16 5.218    Compiling heck v0.5.0
+#16 5.220    Compiling powerfmt v0.2.1
+#16 5.255    Compiling base64 v0.23.1
+#16 5.268    Compiling time-core v0.1.9
+#16 5.274    Compiling iana-time-zone v0.1.65
+#16 5.309    Compiling static_assertions v1.1.0
+#16 5.324    Compiling chrono v0.4.45
+#16 5.334    Compiling chromiumoxide_pdl v0.9.1
+#16 5.371    Compiling schemars_derive v1.2.2
+#16 5.399    Compiling time v0.3.55
+#16 5.407    Compiling darling v0.24.1
+#16 5.421    Compiling core_maths v0.1.1
+#16 5.432    Compiling zbus v5.19.0
+#16 5.441    Compiling futures v0.3.34
+#16 5.453    Compiling miniz_oxide v0.9.1
+#16 5.483    Compiling tungstenite v0.29.0
+#16 5.582    Compiling chacha20 v0.10.2
+#16 5.634    Compiling ring v0.17.14
+#16 5.638    Compiling dyn-clone v1.0.20
+#16 5.648    Compiling allocator-api2 v0.2.21
+#16 5.658    Compiling rmcp v3.2.0
+#16 5.676    Compiling foldhash v0.1.5
+#16 5.713    Compiling mime v0.3.17
+#16 5.723    Compiling ryu v1.0.23
+#16 5.737    Compiling hashbrown v0.15.5
+#16 5.755    Compiling axum-core v0.5.6
+#16 5.762    Compiling serde_urlencoded v0.7.1
+#16 5.768    Compiling rmcp-macros v3.2.0
+#16 5.771    Compiling tokio-tungstenite v0.29.0
+#16 5.823    Compiling rand v0.10.2
+#16 5.841    Compiling chromiumoxide_cdp v0.9.1
+#16 5.908    Compiling schemars v1.2.2
+#16 5.923    Compiling flate2 v1.1.10
+#16 5.995    Compiling yasna v0.6.0
+#16 6.021    Compiling ttf-parser v0.25.1
+#16 6.160    Compiling pem v4.0.0
+#16 6.165    Compiling async-tungstenite v0.32.1
+#16 6.172    Compiling miniz_oxide v0.8.9
+#16 6.229    Compiling fdeflate v0.3.7
+#16 6.243    Compiling tokio-stream v0.1.19
+#16 6.252    Compiling sse-stream v0.2.5
+#16 6.295    Compiling gethostname v1.1.0
+#16 6.332    Compiling serde_path_to_error v0.1.20
+#16 6.340    Compiling getrandom v0.2.17
+#16 6.351    Compiling which v8.0.6
+#16 6.374    Compiling futures-timer v3.0.4
+#16 6.407    Compiling pastey v0.2.3
+#16 6.408    Compiling matchit v0.8.4
+#16 6.450    Compiling x11rb-protocol v0.14.0
+#16 6.479    Compiling fnv v1.0.7
+#16 6.480    Compiling axum v0.8.9
+#16 6.486    Compiling fontdue v0.9.4
+#16 6.493    Compiling png v0.18.1
+#16 6.531    Compiling tempfile v3.27.0
+#16 6.619    Compiling sha2 v0.10.9
+#16 6.623    Compiling hmac v0.12.1
+#16 6.644    Compiling webpki-roots v1.0.12
+#16 6.669    Compiling tokio-tungstenite v0.28.0
+#16 7.331    Compiling atspi-common v0.14.0
+#16 7.621    Compiling x11rb v0.14.0
+#16 8.319    Compiling atspi-proxies v0.14.0
+#16 8.728    Compiling atspi v0.30.0
+#16 12.35    Compiling rustls-webpki v0.103.15
+#16 12.35    Compiling rcgen v0.14.10
+#16 13.34    Compiling tokio-rustls v0.26.4
+#16 13.34    Compiling rustls-platform-verifier v0.7.0
+#16 13.41    Compiling hyper-rustls v0.27.9
+#16 13.45    Compiling reqwest v0.13.4
+#16 18.97    Compiling chromiumoxide v0.9.1
+#16 19.90    Compiling hotline-computer v0.13.0-rc.3 (/src)
+#16 31.49     Finished `test` profile [unoptimized] target(s) in 31.25s
+#16 31.50      Running unittests src/lib.rs (target/debug/build/hotline-computer/a2d0542af88b5707/out/hotline_computer-a2d0542af88b5707)
+#16 31.50 
+#16 31.50 running 272 tests
+#16 31.50 test a11y::tests::similar_titles_never_cross_application_boundaries ... ok
+#16 31.50 test activity::tests::activity_omits_payloads_and_url_credentials_queries_fragments ... ok
+#16 31.50 test agent::tests::a_known_harness_lends_its_name_and_mark_and_others_their_own_words ... ok
+#16 31.50 test agent::tests::identity_tracks_the_last_named_holder_but_honors_an_override ... ok
+#16 31.50 test agent::tests::the_harness_names_the_agent_until_a_holder_header_does ... ok
+#16 31.50 test authenticator::tests::a_site_that_excludes_a_known_credential_or_wants_another_algorithm_is_told ... ok
+#16 31.50 test authenticator::tests::a_passkey_is_never_offered_to_another_site_or_an_insecure_page ... ok
+#16 31.50 test badge::tests::a_badge_sits_beside_the_field_and_never_on_the_next_control ... ok
+#16 31.50 test boot::tests::a_screen_is_width_by_height ... ok
+#16 31.50 test authenticator::tests::the_cose_key_and_attestation_are_the_bytes_webauthn_expects ... ok
+#16 31.50 test authenticator::tests::every_signature_counts_past_what_a_site_has_seen ... ok
+#16 31.50 test boot::tests::the_display_socket_is_named_by_its_number ... ok
+#16 31.50 test authenticator::tests::a_minted_passkey_signs_for_its_site_and_the_signature_verifies ... ok
+#16 31.50 test boot::tests::only_dead_endpoints_are_removed ... ok
+#16 31.50 test bridge::tests::a_passkey_serves_its_site_and_subdomains_only ... ok
+#16 31.50 test bridge::tests::a_held_use_names_the_page_path_only_on_its_own_site ... ok
+#16 31.50 test bridge::tests::a_repeated_use_is_one_line_in_the_record ... ok
+#16 31.50 test bridge::tests::a_request_names_its_relying_party_before_its_page ... ok
+#16 31.50 test bridge::tests::the_turn_stays_with_the_person_until_handed_back_or_the_agent_acts ... ok
+#16 31.50 test desktop::tests::a_recent_action_expires_after_ten_seconds ... ok
+#16 31.50 test bridge::tests::host_of_reads_web_origins_only ... ok
+#16 31.50 test desktop::tests::a_window_beside_the_column_ends_one_gutter_short_of_it ... ok
+#16 31.50 test desktop::tests::compositing_is_a_straight_alpha_blend ... ok
+#16 31.50 test browser::tests::only_top_level_web_pages_are_listed_newest_first ... ok
+#16 31.50 test browser::tests::stale_profile_locks_are_cleared_before_launch ... ok
+#16 31.50 test desktop::tests::every_harness_mark_decodes_as_a_fourteen_pixel_mask ... ok
+#16 31.50 test desktop::tests::menu_rows_leave_room_for_the_separator ... ok
+#16 31.50 test desktop::tests::work_area_and_column_share_gutters_including_the_opt_out ... ok
+#16 31.50 test desktop::tests::the_bar_takes_the_smallest_icon_that_is_still_big_enough ... ok
+#16 31.50 test draft::tests::a_vite_app_gets_a_web_run_on_the_given_port ... ok
+#16 31.50 test draft::tests::a_tauri_workspace_gets_webkit_its_ui_install_and_an_app_run ... ok
+#16 31.50 test files_ui::tests::an_answer_reaches_the_waiting_request_once ... ok
+#16 31.50 test files_ui::tests::paths_encode_for_uris_and_addresses_name_their_port ... ok
+#16 31.50 test holds::tests::a_changed_or_revoked_key_takes_its_answers_with_it ... ok
+#16 31.50 test holds::tests::a_fill_answers_waiting_at_once_and_its_retry_collects_the_answer ... ok
+#16 31.50 test files_ui::tests::a_listing_names_folders_files_and_the_places_around_them ... ok
+#16 31.50 test holds::tests::a_held_use_expires_at_its_time_and_a_page_that_gives_up_ends_it ... ok
+#16 31.50 test holds::tests::allow_lets_that_key_through_on_that_site_for_ten_minutes ... ok
+#16 31.50 test holds::tests::a_held_use_is_listed_until_answered_and_answered_once ... ok
+#16 31.50 test draft::tests::native_toolkits_choose_their_platform ... ok
+#16 31.50 test holds::tests::an_unattested_allow_lets_one_use_through ... ok
+#16 31.50 test holds::tests::allow_ten_minutes_covers_the_same_flow_only ... ok
+#16 31.50 test jobs::tests::a_connection_to_the_proxy_is_found_by_both_its_ends ... ok
+#16 31.50 test draft::tests::python_gets_a_virtualenv_and_every_decision_is_explained ... ok
+#16 31.50 test holds::tests::an_approval_nobody_collects_lapses ... ok
+#16 31.50 test jobs::tests::a_job_whose_domain_fails_does_not_start ... ok
+#16 31.50 test jobs::tests::a_job_cannot_look_into_another_job_of_the_same_user ... ok
+#16 31.50 test jobs::tests::a_script_that_starts_with_cd_takes_that_folders_environment ... ok
+#16 31.50 test jobs::tests::an_unlabelled_job_is_named_by_its_command_line_cut_to_a_row ... ok
+#16 31.51 test jobs::tests::a_long_stream_answers_with_its_end_from_a_whole_character ... ok
+#16 31.51 test jobs::tests::only_fresh_failures_nobody_has_retried_need_attention ... ok
+#16 31.51 test jobs::tests::a_job_offered_the_persons_secrets_finds_them_by_name_and_never_the_bearer ... ok
+#16 31.51 test jobs::tests::output_reads_as_plain_text ... ok
+#16 31.51 test jobs::tests::output_storage_failure_stops_and_reaps_the_job ... ok
+#16 31.51 test desktop::tests::the_mark_decodes_and_blends_onto_ground ... ok
+#16 31.51 test jobs::tests::stdin_works_without_a_visible_terminal_for_pipes_and_ptys ... ok
+#16 31.51 test keyproxy::policy::tests::ordinary_routes_and_other_origins_pass ... ok
+#16 31.51 test keyproxy::policy::tests::the_desks_routes_are_honoured ... ok
+#16 31.51 test keyproxy::policy::tests::the_minting_routes_are_refused_in_every_spelling ... ok
+#16 31.51 test keyproxy::scrub::tests::a_value_split_across_chunks_is_caught ... ok
+#16 31.51 test keyproxy::scrub::tests::byte_by_byte_and_a_partial_tail ... ok
+#16 31.51 test keyproxy::scrub::tests::the_longer_match_wins ... ok
+#16 31.52 test activity::tests::activity_redacts_before_truncation_and_never_follows_a_log_symlink ... ok
+#16 31.52 test bridge::tests::a_bridge_peer_of_another_user_is_hung_up_on ... ok
+#16 31.52 test holds::tests::the_door_lists_held_uses_and_takes_one_answer_each ... ok
+#16 31.53 test jobs::tests::retry_ids_are_scoped_and_spawn_failures_are_queryable ... ok
+#16 31.53 test jobs::tests::output_is_bounded_and_history_survives_a_new_service ... ok
+#16 31.54 test keyproxy::tests::a_delivery_checks_every_use_and_its_generation ... ok
+#16 31.54 test keyproxy::tests::a_request_naming_another_host_is_refused ... ok
+#16 31.58 test keyproxy::tests::a_redirect_is_handed_back_not_followed ... ok
+#16 31.58 test keyproxy::tests::a_key_minting_request_is_refused ... ok
+#16 31.58 test keyproxy::tests::a_stand_in_from_a_finished_job_is_dead ... ok
+#16 31.58 test keyproxy::tests::a_redelivery_keeps_an_unchanged_keys_stand_ins_and_kills_a_changed_ones ... ok
+#16 31.58 test keyproxy::tests::a_regrant_does_not_revive_an_old_stand_in ... ok
+#16 31.58 test keyproxy::tests::each_job_gets_its_own_stand_in_in_the_service_shape ... ok
+#16 31.58 test keyproxy::tests::an_upstream_the_roots_do_not_vouch_for_gets_nothing ... ok
+#16 31.63 test keyproxy::tests::a_scheme_free_header_carries_the_whole_key ... ok
+#16 31.63 test keyproxy::tests::an_encoded_reply_to_a_keyed_request_is_refused ... ok
+#16 31.63 test keyproxy::tests::j1_curl_bearer_reaches_the_service_with_the_value ... ok
+#16 31.64 test keyproxy::tests::j6_an_unbound_host_sees_only_the_stand_in ... ok
+#16 31.64 test keyproxy::tests::j7_node_fetch_through_the_env_proxy ... ok
+#16 31.64 test keyproxy::tests::plain_http_is_refused ... ok
+#16 31.65 test keyproxy::tests::j2_python_token_scheme_under_strict_verification ... ok
+#16 31.65 test keyproxy::tests::j3_git_basic_through_a_credential_helper ... ok
+#16 31.65 test keyproxy::tests::the_ca_and_its_leaves_are_strict ... ok
+#16 31.65 test keyproxy::tests::the_desk_shape_parses ... ok
+#16 31.67 test keyproxy::tests::j4_a_reflecting_endpoint_gives_back_the_stand_in ... ok
+#16 31.67 test keyproxy::tests::j5_a_stand_in_in_a_body_stays_a_stand_in ... ok
+#16 31.68 test keyproxy::tests::a_stand_in_works_only_on_its_own_jobs_connection ... ok
+#16 31.69 test keyproxy::tests::the_desks_refuse_list_adds_to_the_built_in_one ... ok
+#16 31.69 test lease::tests::a_hold_that_lapsed_is_taken_off_the_bar_when_it_ends ... ok
+#16 31.69 test keyproxy::tests::revoking_stops_injection_on_an_open_connection ... ok
+#16 31.69 test lease::tests::only_another_holder_is_refused ... ok
+#16 31.69 test limits::tests::memory_bounds_jobs_even_when_the_host_reports_many_cpus ... ok
+#16 31.69 test limits::tests::a_cpu_quota_bounds_both_and_unlimited_memory_follows_cpus ... ok
+#16 31.69 test limits::tests::without_a_cgroup_the_available_cpus_decide ... ok
+#16 31.69 test limits::tests::resources_say_the_cgroups_limits_and_the_disk_left ... ok
+#16 31.69 test limits::tests::without_a_memory_limit_the_machines_memory_is_said ... ok
+#16 31.69 test links::tests::only_web_addresses_are_links ... ok
+#16 31.69 test logins::tests::a_cookie_belongs_to_its_site_or_a_host_within_it ... ok
+#16 31.70 test manifest::tests::a_desktop_run_may_name_the_title_it_is_ready_at ... ok
+#16 31.70 test manifest::tests::a_create_hook_already_done_is_not_looked_for_again ... ok
+#16 31.70 test manifest::tests::a_hook_whose_script_is_not_there_is_said_before_anything_is_built ... ok
+#16 31.70 test manifest::tests::a_run_is_a_job_and_an_unknown_one_names_the_alternatives ... ok
+#16 31.70 test manifest::tests::a_workspace_still_building_says_its_hooks_wait ... ok
+#16 31.70 test manifest::tests::environment_gains_service_addresses_and_extends_paths ... ok
+#16 31.70 test manifest::tests::errors_say_what_is_valid ... ok
+#16 31.70 test manifest::tests::layers_concatenate_lists_merge_maps_and_last_wins_for_scalars ... ok
+#16 31.70 test manifest::tests::nix_strings_expand_only_package_references ... ok
+#16 31.70 test manifest::tests::only_the_workspace_is_looked_in_for_a_hooks_script ... ok
+#16 31.70 test manifest::tests::platforms_pull_in_what_they_require_and_render_their_runtime ... ok
+#16 31.70 test observer::tests::a_job_is_named_first_and_identified_underneath ... ok
+#16 31.70 test observer::tests::an_inline_script_shows_as_one_line ... ok
+#16 31.70 test observer::tests::running_headers_use_the_agent_marker_and_a_white_label ... ok
+#16 31.70 test observer::tests::the_banner_is_the_name_and_nothing_more_unless_narrowed ... ok
+#16 31.70 test observer::tests::the_ending_names_the_job_again_and_says_how_it_went ... ok
+#16 31.70 test observer::tests::the_persons_bash_is_never_the_store_one ... ok
+#16 31.70 test observer::tests::the_rc_file_sets_the_prompt_and_leaves_room_for_the_operators_own ... ok
+#16 31.70 test manifest::tests::a_workspace_whose_hook_failed_is_not_ready_and_says_what_failed ... ok
+#16 31.70 test paint::tests::a_rounded_pill_leaves_its_corners_to_the_background ... ok
+#16 31.70 test paint::tests::icons_downscale_with_their_alpha ... ok
+#16 31.70 test paint::tests::shadows_are_soft_offset_and_bounded ... ok
+#16 31.71 test paint::tests::a_light_glyph_edge_gets_more_coverage_but_dark_ink_does_not ... ok
+#16 31.71 test passkeys::tests::a_denial_is_told_to_the_page_and_the_door_ends_the_arming ... ok
+#16 31.71 test passkeys::tests::a_loopback_site_is_armed_by_name_and_an_address_is_refused ... ok
+#16 31.71 test passkeys::tests::a_request_that_left_with_its_page_is_forgotten_and_a_told_one_makes_way ... ok
+#16 31.71 test passkeys::tests::a_request_waits_for_the_person_and_an_approval_lets_one_credential_be_kept ... ok
+#16 31.71 test passkeys::tests::a_site_for_a_passkey_is_a_host_name ... ok
+#16 31.71 test passkeys::tests::an_arming_past_its_time_is_gone ... ok
+#16 31.71 test portal::tests::the_portals_options_become_what_the_picker_asks ... ok
+#16 31.71 test ready::tests::a_run_answers_with_its_window_now_and_waits_for_the_title_asked_for ... ok
+#16 31.71 test ready::tests::a_title_is_plain_text_of_bounded_length ... ok
+#16 31.71 test ready::tests::a_title_matches_as_text_within_the_title_ignoring_case ... ok
+#16 31.71 test ready::tests::an_answer_lists_a_bounded_number_of_windows_with_bounded_titles ... ok
+#16 31.71 test screen::tests::a_frame_leads_with_its_geometry ... ok
+#16 31.71 test screen::tests::a_union_is_the_bounding_box ... ok
+#16 31.71 test secrets::tests::a_fill_resolves_a_field_by_name_and_a_code_from_the_seed ... ok
+#16 31.71 test paint::tests::text_is_antialiased_and_measured ... ok
+#16 31.71 test secrets::tests::a_login_and_a_passkey_are_kept_by_kind_and_a_job_never_sees_them ... ok
+#16 31.71 test secrets::tests::a_login_is_typed_on_exactly_its_origins ... ok
+#16 31.71 test secrets::tests::a_login_or_passkey_new_to_the_set_is_an_arrival_and_a_variable_never ... ok
+#16 31.71 test secrets::tests::a_name_is_an_environment_variable_and_the_computers_own_are_refused ... ok
+#16 31.71 test secrets::tests::a_passkeys_site_is_its_rp_id_on_any_port ... ok
+#16 31.71 test secrets::tests::a_site_allows_its_own_pages_and_no_other ... ok
+#16 31.72 test secrets::tests::a_job_finds_a_secret_by_name_and_the_tools_answer_the_name_alone ... ok
+#16 31.72 test secrets::tests::a_typed_code_is_carried_only_as_a_number_of_its_own ... ok
+#16 31.72 test keyproxy::tests::the_value_goes_only_in_its_header_and_schemes ... ok
+#16 31.72 test secrets::tests::loopback_in_any_spelling_and_other_keys_are_readable ... ok
+#16 31.73 test secrets::tests::the_codes_a_login_could_show_now_are_redacted ... ok
+#16 31.73 test lease::tests::a_call_stuck_behind_another_reports_the_wait ... ok
+#16 31.73 test secrets::tests::the_extension_is_offered_a_login_only_where_it_may_be_typed ... ok
+#16 31.73 test secrets::tests::the_set_is_taken_whole_or_the_last_one_kept ... ok
+#16 31.73 test secrets::tests::the_use_rides_with_the_set_and_a_change_applies_from_the_next_use ... ok
+#16 31.73 test serve::tests::a_client_cannot_name_itself_the_person ... ok
+#16 31.73 test serve::tests::a_computer_with_no_token_does_not_start_by_accident ... ok
+#16 31.73 test serve::tests::a_request_is_taken_by_address_or_listed_name_only ... ok
+#16 31.73 test secrets::tests::a_value_is_taken_out_in_every_spelling_a_url_a_form_or_html_gives_it ... ok
+#16 31.74 test secrets::tests::every_value_is_taken_out_of_a_text_whole_and_in_its_json_spelling ... ok
+#16 31.75 test serve::tests::another_sites_page_and_a_rebound_name_are_turned_away_before_the_token ... ok
+#16 31.75 test serve::tests::secret_comparison_needs_equal_bytes ... ok
+#16 31.75 test secrets::tests::the_door_takes_the_set_from_the_bearer_alone_and_answers_no_value ... ok
+#16 31.75 test serve::tests::the_listing_carries_the_cache_hints_a_modern_client_requires ... ok
+#16 31.75 test signin::lock::tests::a_hop_carrying_a_sign_in_proof_or_a_script_address_is_blocked ... ok
+#16 31.75 test signin::lock::tests::a_signed_in_sites_pages_stay_and_plain_links_go_to_the_general_browser ... ok
+#16 31.75 test signin::screen::tests::a_frame_is_the_viewers_header_and_the_png ... ok
+#16 31.75 test signin::cdp::tests::calls_are_answered_by_id_and_events_are_broadcast ... ok
+#16 31.75 test signin::screen::tests::keys_become_devtools_events ... ok
+#16 31.75 test signin::sessions::tests::a_shared_site_is_a_host_or_an_origin ... ok
+#16 31.75 test serve::tests::only_an_authenticated_mcp_request_updates_the_displayed_name ... ok
+#16 31.75 test serve::tests::public_fonts_are_allowlisted_and_never_resolve_paths ... ok
+#16 31.75 test signin::tests::a_granted_passkeys_site_opens_here_unless_a_login_names_its_host ... ok
+#16 31.75 test signin::tests::a_loopback_site_is_armed_and_its_page_asks_the_person ... ok
+#16 31.76 test signin::tests::a_passkey_alone_opens_its_site_here_and_signs_in ... ok
+#16 31.76 test signin::tests::a_passkey_signs_in_on_its_site_through_the_signed_in_browser ... ok
+#16 31.81 test keyproxy::tests::the_value_is_scrubbed_from_a_reply ... ok
+#16 31.86 test bridge::tests::an_ask_me_login_waits_for_the_desk_even_while_the_person_has_the_screen ... ok
+#16 32.06 test signin::tests::a_button_the_page_adds_while_typing_keeps_the_fill ... ok
+#16 32.17 test keyproxy::tests::revoking_stops_a_running_curl_loop ... ok
+#16 32.40 test signin::tests::a_download_is_handed_to_the_agents_downloads ... ok
+#16 32.51 test jobs::tests::deadlines_retain_partial_output_and_cancellation_reaps_the_child ... ok
+#16 32.63 test signin::tests::a_get_form_on_a_page_of_another_charset_is_refused ... ok
+#16 33.17 test activity::tests::activity_keeps_newest_500_and_removes_terminal_control_codes ... ok
+#16 33.56 test signin::tests::a_passkey_signs_only_for_a_signed_in_tabs_own_origin ... ok
+#16 33.81 test signin::tests::a_password_field_a_script_built_with_no_form_is_typed ... ok
+#16 34.91 test signin::tests::a_password_in_a_get_form_is_typed_but_never_sent_in_an_address ... ok
+#16 34.91 test signin::tests::an_armed_loopback_site_opens_here_on_its_own_port ... ok
+#16 36.23 test signin::tests::a_password_sent_off_the_site_never_leaves ... ok
+#16 36.88 test signin::tests::a_revocation_outlives_a_kill_before_chromium_writes_it ... ok
+#16 37.38 test signin::tests::a_share_revoked_while_stopped_is_gone_after_a_restart ... ok
+#16 37.62 test signin::tests::a_sign_in_that_cannot_finish_is_handed_to_the_person ... ok
+#16 37.90 test signin::tests::a_sign_in_waiting_on_the_person_is_listed_for_the_desk ... ok
+#16 38.73 test signin::tests::a_stop_inside_a_revocation_does_not_keep_the_revoked_session ... ok
+#16 38.75 test signin::tests::shares_go_to_the_signed_in_browser_only_where_there_is_one ... ok
+#16 42.52 test signin::tests::a_wait_during_sign_in_resolves_only_after_the_next_document ... ok
+#16 42.82 test signin::tests::allow_covers_this_tabs_sign_in_only ... ok
+#16 43.07 test split::broker::home_tests::the_broker_never_opens_a_path_in_the_agents_home ... ok
+#16 43.07 test split::broker::tests::the_bearer_never_rides_on_to_the_runner ... ok
+#16 43.07 test split::init::tests::a_fresh_home_of_roots_is_given_to_the_agent_and_no_other ... ok
+#16 43.07 test split::keys::tests::a_delivery_that_does_not_say_what_a_variable_is_is_refused ... ok
+#16 43.15 test split::keys::tests::a_protected_value_reaches_no_job_env_log_or_runner_frame ... ok
+#16 43.19 test split::keys::tests::a_readable_variable_behaves_as_today ... ok
+#16 43.31 test split::keys::tests::a_stand_in_from_a_finished_job_is_dead ... ok
+#16 43.31 test split::keys::tests::a_v2_delivery_reads_every_kind_and_the_use_shapes ... ok
+#16 43.31 test split::keys::tests::an_older_generation_changes_nothing_and_v1_unbinds_every_key ... ok
+#16 43.31 test split::keys::tests::legacy_takes_readable_variables_in_v2_and_v1_as_today ... ok
+#16 43.92 test split::keys::tests::revoking_stops_a_running_curl_loop ... ok
+#16 43.92 test split::keys::tests::the_public_bundle_is_the_system_roots_and_this_boots_ca ... ok
+#16 43.98 test split::migration::tests::an_old_snapshot_is_not_restored_until_cleaned ... ok
+#16 44.02 test split::migration::tests::deleting_answers_for_the_old_snapshots_and_a_new_home_has_nothing_to_do ... ok
+#16 44.02 test split::tests::capabilities_attest_with_the_boots_key_and_cover_the_mode ... ok
+#16 44.02 test split::wire::tests::a_frame_is_a_length_and_json ... ok
+#16 44.11 test split::wire::tests::both_sides_ask_and_answer_over_one_line ... ok
+#16 44.12 test split::wire::tests::descriptors_cross_a_line ... ok
+#16 44.12 test tools::activity_tests::cursor_intent_uses_only_static_action_words ... ok
+#16 44.12 test tools::activity_tests::reads_do_not_make_the_agent_look_busy ... ok
+#16 44.12 test tools::browser::tests::a_real_text_and_a_real_secret_together_is_an_error ... ok
+#16 44.12 test tools::browser::tests::an_empty_text_alone_clears_the_field ... ok
+#16 44.12 test tools::browser::tests::an_unused_empty_secret_alongside_text_still_fills_with_text ... ok
+#16 44.12 test tools::browser::tests::an_unused_empty_text_alongside_a_secret_still_fills_with_the_secret ... ok
+#16 44.12 test tools::browser::tests::neither_argument_is_an_error ... ok
+#16 44.12 test tools::browser::tests::secret_only_fills_with_secret ... ok
+#16 44.12 test tools::browser::tests::text_only_fills_with_text ... ok
+#16 44.12 test tools::files::tests::refuses_a_symlink_that_leaves_home ... ok
+#16 44.12 test tools::files::tests::refuses_an_existing_file_symlink_that_leaves_home ... ok
+#16 44.12 test tools::files::tests::refuses_before_creating_a_parent_outside_home ... ok
+#16 44.12 test tools::files::tests::the_computers_own_records_are_not_fetched_or_written ... ok
+#16 44.12 test tools::input::tests::the_wheel_scrolls_the_way_it_is_told ... ok
+#16 44.12 test tools::shell::tests::a_line_goes_to_the_shell_and_a_name_does_not ... ok
+#16 44.58 test signin::tests::an_image_button_never_posts_a_password_elsewhere ... ok
+#16 44.62 test tools::shell::tests::exec_answers_with_the_end_of_a_long_log_and_where_the_rest_is ... ok
+#16 44.63 test tools::state::tests::a_snapshot_over_the_limit_stops_there_and_keeps_the_one_before ... ok
+#16 44.64 test tools::state::tests::lost_and_found_is_in_no_snapshot_and_no_user_file ... ok
+#16 44.64 test tools::state::tests::names_cannot_escape_the_state_directories ... ok
+#16 44.64 test tools::windows::tests::a_large_application_gets_its_minimum_width_above_the_bar ... ok
+#16 44.64 test tools::windows::tests::activity_splits_the_observer_space_above_the_persons_shell ... ok
+#16 44.64 test tools::windows::tests::every_app_shares_the_left_pane_and_takes_the_area_without_a_column ... ok
+#16 44.64 test tools::windows::tests::impossible_layouts_fail_before_moving_any_windows ... ok
+#16 44.64 test tools::windows::tests::opting_out_removes_both_outer_and_inner_gaps ... ok
+#16 44.64 test tools::windows::tests::the_persons_shell_takes_the_bottom_third_of_the_column_under_a_line ... ok
+#16 44.64 test viewer::tests::a_caller_that_can_set_headers_may_present_the_bearer_there_instead ... ok
+#16 44.64 test viewer::tests::a_file_from_the_persons_computer_lands_whole_under_the_home ... ok
+#16 44.64 test viewer::tests::an_upload_over_the_limit_is_refused_and_leaves_nothing_behind ... ok
+#16 44.65 test viewer::tests::cancelling_or_failing_an_upload_removes_its_private_spool ... ok
+#16 44.65 test viewer::tests::create_only_uploads_publish_once_and_keep_the_competing_file ... ok
+#16 44.67 test viewer::tests::http_files_advertises_and_enforces_create_only_with_header_auth ... ok
+#16 44.69 test viewer::tests::ping_answers_without_taking_or_renewing_the_lease ... ok
+#16 44.69 test viewer::tests::the_control_bar_is_told_whose_screen_it_is ... ok
+#16 44.69 test viewer::tests::the_files_panel_sees_the_home_and_nothing_above_it ... ok
+#16 44.69 test viewer::tests::the_files_panel_wants_the_token ... ok
+#16 44.69 test viewer::tests::the_page_is_told_where_the_hands_are ... ok
+#16 44.69 test viewer::tests::the_screen_is_the_teammate_s_until_a_person_takes_it ... ok
+#16 44.69 test workspace::tests::a_cached_definition_attaches_and_shell_jobs_inherit_it ... ok
+#16 44.69 test workspace::tests::a_manifest_workspace_keeps_its_base_until_it_asks_for_the_new_one ... ok
+#16 44.69 test workspace::tests::flakes_use_the_requested_local_shell_and_cannot_escape_home ... ok
+#16 44.69 test workspace::tests::image_versions_do_not_invalidate_existing_environment_but_missing_store_paths_do ... ok
+#16 44.69 test workspace::tests::preparation_obeys_the_lease_and_home_boundary_through_the_state_tool ... ok
+#16 44.69 test workspace::tests::the_catalog_names_are_attribute_paths_and_read_well ... ok
+#16 44.69 test workspace::tests::the_operator_spelling_takes_names_flags_and_a_workspace ... ok
+#16 44.69 test workspace::tests::workspace_pins_survive_dependency_changes_and_unsafe_attributes_are_rejected ... ok
+#16 44.69 test x11::tests::a_region_is_clipped_to_the_screen ... ok
+#16 44.69 test x11::tests::a_window_under_another_is_covered_and_a_peeking_one_is_not ... ok
+#16 44.69 test xtest::tests::characters_are_their_own_keysyms ... ok
+#16 44.69 test xtest::tests::named_keys_are_looked_up ... ok
+#16 44.69 test xtest::tests::x_names_and_browser_names_both_resolve ... ok
+#16 45.12 test tools::shell::tests::a_waiting_command_does_not_lock_out_desktop_takeover ... ok
+#16 45.39 test signin::tests::an_oauth_callback_never_reaches_the_general_browser ... ok
+#16 45.61 test signin::tests::eval_is_refused_on_a_signed_in_site ... ok
+#16 46.22 test signin::tests::no_observation_during_sign_in_including_screenshots ... ok
+#16 46.46 test signin::tests::removing_a_share_signs_the_site_out ... ok
+#16 46.76 test signin::tests::revoking_a_login_signs_its_site_out ... ok
+#16 47.00 test signin::tests::site_input_never_reaches_display_0 ... ok
+#16 47.28 test signin::tests::the_site_screen_streams_frames_in_the_viewer_protocol ... ok
+#16 47.28 
+#16 47.28 test result: ok. 272 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 15.79s
+#16 47.28 
+#16 47.28      Running unittests src/main.rs (target/debug/build/hotline-computer/997eaa9322c1fdc2/out/hotline_computer-997eaa9322c1fdc2)
+#16 47.29 
+#16 47.29 running 0 tests
+#16 47.29 
+#16 47.29 test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+#16 47.29 
+#16 47.29      Running tests/contract.rs (target/debug/build/hotline-computer/7395e1dfc640a899/out/contract-7395e1dfc640a899)
+#16 47.29 
+#16 47.29 running 1 test
+#16 47.29 test image_honors_the_computer_contract ... ok
+#16 47.29 
+#16 47.29 test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+#16 47.29 
+#16 47.29      Running tests/split.rs (target/debug/build/hotline-computer/54ab9d989e3dd520/out/split-54ab9d989e3dd520)
+#16 47.29 
+#16 47.29 running 4 tests
+#16 47.29 test a_job_reaches_nothing_of_the_brokers ... ok
+#16 47.29 test a_job_cannot_bind_the_door_or_proxy_port ... ok
+#16 47.29 test legacy_boot_is_todays_single_user ... ok
+#16 47.29 test boot_splits_and_keeps_no_caps ... ok
+#16 47.29 
+#16 47.29 test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+#16 47.29 
+#16 47.29    Doc-tests hotline_computer
+#16 47.53 
+#16 47.53 running 0 tests
+#16 47.53 
+#16 47.53 test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+#16 47.53 
+#16 47.64     Checking pin-project-lite v0.2.17
+#16 47.64     Checking futures-core v0.3.34
+#16 47.64     Checking cfg-if v1.0.4
+#16 47.64     Checking bytes v1.12.1
+#16 47.64     Checking futures-io v0.3.34
+#16 47.64     Checking libc v0.2.189
+#16 47.64     Checking serde_core v1.0.229
+#16 47.64     Checking itoa v1.0.18
+#16 47.64     Checking memchr v2.8.3
+#16 47.64     Checking slab v0.4.12
+#16 47.65     Checking futures-sink v0.3.34
+#16 47.65     Checking once_cell v1.21.4
+#16 47.66     Checking zerofrom v0.1.8
+#16 47.66     Checking stable_deref_trait v1.2.1
+#16 47.67     Checking bitflags v2.13.1
+#16 47.68     Checking subtle v2.6.1
+#16 47.68     Checking yoke v0.8.3
+#16 47.69     Checking futures-channel v0.3.34
+#16 47.70     Checking futures-task v0.3.34
+#16 47.70     Checking unicode-ident v1.0.24
+#16 47.71     Checking parking v2.2.1
+#16 47.72     Checking zerovec v0.11.8
+#16 47.72     Checking typenum v1.20.1
+#16 47.72     Checking proc-macro2 v1.0.107
+#16 47.73     Checking atomic-waker v1.1.2
+#16 47.74     Checking zeroize v1.9.0
+#16 47.75     Checking futures-util v0.3.34
+#16 47.75     Checking httparse v1.10.1
+#16 47.75     Checking http v1.5.0
+#16 47.77     Checking fastrand v2.5.0
+#16 47.80     Checking quote v1.0.47
+#16 47.80     Checking linux-raw-sys v0.12.1
+#16 47.81     Checking smallvec v1.16.0
+#16 47.84     Checking rustls-pki-types v1.15.1
+#16 47.85     Checking crossbeam-utils v0.8.22
+#16 47.87     Checking tinystr v0.8.4
+#16 47.88     Checking errno v0.3.14
+#16 47.90     Checking signal-hook-registry v1.4.8
+#16 47.91     Checking socket2 v0.6.5
+#16 47.92     Checking mio v1.2.2
+#16 47.92     Checking generic-array v0.14.7
+#16 47.93     Checking tracing-core v0.1.36
+#16 47.94     Checking http-body v1.1.0
+#16 47.94     Checking writeable v0.6.4
+#16 47.97     Checking litemap v0.8.3
+#16 47.98     Checking concurrent-queue v2.5.0
+#16 47.99     Checking getrandom v0.3.4
+#16 48.00     Checking tracing v0.1.44
+#16 48.01     Checking tokio v1.53.1
+#16 48.01     Checking icu_locale_core v2.3.0
+#16 48.02     Checking potential_utf v0.1.6
+#16 48.03     Checking zerocopy v0.8.56
+#16 48.04     Checking aws-lc-sys v0.45.0
+#16 48.06     Checking crypto-common v0.1.7
+#16 48.07     Checking block-buffer v0.10.4
+#16 48.07     Checking event-listener v5.4.2
+#16 48.09     Checking digest v0.10.7
+#16 48.12     Checking zerotrie v0.2.5
+#16 48.14     Checking rustix v1.1.4
+#16 48.15     Checking log v0.4.34
+#16 48.16     Checking serde v1.0.229
+#16 48.18     Checking rand_core v0.10.1
+#16 48.18     Checking utf8_iter v1.0.4
+#16 48.18     Checking percent-encoding v2.3.2
+#16 48.20     Checking icu_provider v2.3.1
+#16 48.20     Checking icu_collections v2.3.0
+#16 48.20     Checking aws-lc-rs v1.18.1
+#16 48.23     Checking event-listener-strategy v0.5.4
+#16 48.26     Checking rand_core v0.9.5
+#16 48.27     Checking cpufeatures v0.2.17
+#16 48.28     Checking syn v3.0.4
+#16 48.29     Checking futures-lite v2.6.1
+#16 48.29     Checking zmij v1.0.23
+#16 48.31     Checking untrusted v0.9.0
+#16 48.33     Checking winnow v1.0.4
+#16 48.36     Checking tower-service v0.3.3
+#16 48.37     Checking serde_json v1.0.151
+#16 48.46     Checking thiserror v2.0.20
+#16 48.47     Checking zcheapstr v1.1.0
+#16 48.48     Checking enumflags2 v0.7.12
+#16 48.49     Checking icu_normalizer_data v2.3.0
+#16 48.50     Checking getrandom v0.4.3
+#16 48.50     Checking icu_properties_data v2.3.0
+#16 48.52     Checking endi v1.1.1
+#16 48.54     Checking try-lock v0.2.5
+#16 48.54     Checking icu_properties v2.3.0
+#16 48.55     Checking icu_normalizer v2.3.0
+#16 48.55     Checking want v0.3.1
+#16 48.57     Checking rustls-webpki v0.103.15
+#16 48.58     Checking sha1 v0.10.7
+#16 48.61     Checking form_urlencoded v1.2.2
+#16 48.62     Checking sync_wrapper v1.0.2
+#16 48.64     Checking async-task v4.7.1
+#16 48.65     Checking httpdate v1.0.3
+#16 48.65     Checking tower-layer v0.3.3
+#16 48.67     Checking data-encoding v2.11.1
+#16 48.68     Checking async-channel v2.5.0
+#16 48.69     Checking http-body-util v0.1.5
+#16 48.70     Checking rustls v0.23.43
+#16 48.75     Checking ipnet v2.12.1
+#16 48.75     Checking base64 v0.22.1
+#16 48.76     Checking uuid v1.26.0
+#16 48.80     Checking async-lock v3.4.2
+#16 48.80     Checking idna_adapter v1.2.2
+#16 48.82     Checking piper v0.2.5
+#16 48.83     Checking idna v1.1.0
+#16 48.84     Checking aho-corasick v1.1.5
+#16 48.87     Checking openssl-probe v0.2.1
+#16 48.88     Checking regex-syntax v0.8.11
+#16 48.90     Checking simd-adler32 v0.3.10
+#16 48.92     Checking url v2.5.8
+#16 48.94     Checking rustls-native-certs v0.8.4
+#16 48.95     Checking blocking v1.7.0
+#16 49.00     Checking async-executor v1.14.0
+#16 49.00     Checking zvariant_utils v4.2.0
+#16 49.04     Checking async-broadcast v0.7.2
+#16 49.06     Checking ordered-stream v0.2.0
+#16 49.07     Checking polling v3.11.0
+#16 49.07     Checking utf-8 v0.7.6
+#16 49.09     Checking hex v0.4.3
+#16 49.10     Checking adler2 v2.0.1
+#16 49.10     Checking ppv-lite86 v0.2.21
+#16 49.10     Checking async-io v2.6.0
+#16 49.12     Checking equivalent v1.0.2
+#16 49.13     Checking num-traits v0.2.19
+#16 49.14     Checking libm v0.2.16
+#16 49.15     Checking chromiumoxide_types v0.9.1
+#16 49.16     Checking rand_chacha v0.9.0
+#16 49.16     Checking zvariant v5.15.0
+#16 49.17     Checking hyper v1.11.1
+#16 49.20     Checking rand v0.9.5
+#16 49.20     Checking tower v0.5.3
+#16 49.20     Checking async-signal v0.2.14
+#16 49.24     Checking async-process v2.5.0
+#16 49.29     Checking tokio-util v0.7.19
+#16 49.29     Checking futures-executor v0.3.34
+#16 49.33     Checking static_assertions v1.1.0
+#16 49.33     Checking tower-http v0.6.11
+#16 49.34     Checking num-conv v0.2.2
+#16 49.35     Checking tungstenite v0.28.0
+#16 49.36     Checking regex-automata v0.4.18
+#16 49.36     Checking iana-time-zone v0.1.65
+#16 49.37     Checking powerfmt v0.2.1
+#16 49.38     Checking base64 v0.23.1
+#16 49.40     Checking time-core v0.1.9
+#16 49.42     Checking either v1.18.0
+#16 49.42     Checking hyper-util v0.1.20
+#16 49.44     Checking heck v0.5.0
+#16 49.45     Checking deranged v0.5.9
+#16 49.46     Checking chrono v0.4.45
+#16 49.47     Checking core_maths v0.1.1
+#16 49.47     Checking tungstenite v0.29.0
+#16 49.48     Checking ref-cast v1.0.27
+#16 49.49     Checking futures v0.3.34
+#16 49.50     Checking crc32fast v1.5.1
+#16 49.51     Checking miniz_oxide v0.9.1
+#16 49.56     Checking chacha20 v0.10.2
+#16 49.59     Checking tokio-rustls v0.26.4
+#16 49.60     Checking rustls-platform-verifier v0.7.0
+#16 49.61     Checking ryu v1.0.23
+#16 49.63     Checking allocator-api2 v0.2.21
+#16 49.64     Checking dyn-clone v1.0.20
+#16 49.64     Checking foldhash v0.1.5
+#16 49.66     Checking mime v0.3.17
+#16 49.67     Checking hashbrown v0.17.1
+#16 49.67     Checking serde_urlencoded v0.7.1
+#16 49.69     Checking time v0.3.55
+#16 49.70     Checking zbus_names v4.3.4
+#16 49.70     Checking axum-core v0.5.6
+#16 49.71     Checking hashbrown v0.15.5
+#16 49.72     Checking flate2 v1.1.10
+#16 49.73     Checking hyper-rustls v0.27.9
+#16 49.76     Checking reqwest v0.13.4
+#16 49.78     Checking schemars v1.2.2
+#16 49.79     Checking rand v0.10.2
+#16 49.81     Checking indexmap v2.14.1
+#16 49.83     Checking zbus_xml v5.2.1
+#16 49.84     Checking zbus v5.19.0
+#16 49.87     Checking yasna v0.6.0
+#16 49.88     Checking regex v1.13.1
+#16 49.94     Checking tokio-tungstenite v0.29.0
+#16 49.95     Checking ttf-parser v0.25.1
+#16 49.95     Checking chromiumoxide_pdl v0.9.1
+#16 49.98     Checking async-tungstenite v0.32.1
+#16 49.99     Checking pem v4.0.0
+#16 49.99     Checking zbus-lockstep v0.5.2
+#16 49.99     Checking tokio-stream v0.1.19
+#16 50.00     Checking miniz_oxide v0.8.9
+#16 50.02     Checking gethostname v1.1.0
+#16 50.03     Checking fdeflate v0.3.7
+#16 50.03     Checking sse-stream v0.2.5
+#16 50.06     Checking serde_path_to_error v0.1.20
+#16 50.07     Checking which v8.0.6
+#16 50.09     Checking getrandom v0.2.17
+#16 50.09     Checking futures-timer v3.0.4
+#16 50.10     Checking dunce v1.0.5
+#16 50.11     Checking x11rb-protocol v0.14.0
+#16 50.12     Checking matchit v0.8.4
+#16 50.13     Checking fnv v1.0.7
+#16 50.13     Checking rmcp v3.2.0
+#16 50.13     Checking ring v0.17.14
+#16 50.13     Checking png v0.18.1
+#16 50.15     Checking rcgen v0.14.10
+#16 50.16     Checking chromiumoxide_cdp v0.9.1
+#16 50.18     Checking axum v0.8.9
+#16 50.27     Checking tempfile v3.27.0
+#16 50.29     Checking fontdue v0.9.4
+#16 50.32     Checking sha2 v0.10.9
+#16 50.35     Checking hmac v0.12.1
+#16 50.35     Checking webpki-roots v1.0.12
+#16 50.37     Checking tokio-tungstenite v0.28.0
+#16 51.13     Checking x11rb v0.14.0
+#16 51.16     Checking atspi-common v0.14.0
+#16 51.90     Checking atspi-proxies v0.14.0
+#16 52.20     Checking atspi v0.30.0
+#16 60.15     Checking chromiumoxide v0.9.1
+#16 60.49     Checking hotline-computer v0.13.0-rc.3 (/src)
+#16 64.25     Finished `dev` profile [unoptimized] target(s) in 16.70s
+#16 64.32     Finished `test` profile [unoptimized] target(s) in 0.06s
+#16 64.40     Finished `test` profile [unoptimized] target(s) in 0.05s
+#16 DONE 64.6s
+
+#17 exporting to oci image format
+#17 exporting layers
+#17 exporting layers 9.7s done
+#17 exporting manifest sha256:1203e8ac1103ff9398f559d3d516b3902bcb186692a1b50666ba94462bce8899 done
+#17 exporting config sha256:7cee93da12801920540127f3b6612f9ad239ffc73f5a404d6dc8d257f93b786d done
+#17 exporting manifest list sha256:3d0313530ecf97a2d5ec70b02101fbd40ebf3c87af110cf5593740b3b192e3fd done
+#17 sending tarball
+#17 sending tarball 2.9s done
+#17 DONE 12.6s
+hotline-computer:0.13.0-rc.3-relcheck-checks
+# 2026-11-22T07:59:42Z checks: exit 0

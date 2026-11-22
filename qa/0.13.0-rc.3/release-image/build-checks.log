@@ -1,0 +1,1017 @@
+# 2026-11-22T08:36:57Z checks: /usr/local/bin/container build --build-arg HOTLINE_BUILD_REVISION=ea45bfa4cc3cc2f3861f4579d8978520c94f8d45 --build-arg HOTLINE_BUILD_CHANNEL=release --target checks -t hotline-computer:0.13.0-rc.3-relcheck-checks .
+#1 [resolver] fetching image...docker.io/library/rust:1-trixie
+#1 DONE 0.0s
+
+#2 [resolver] fetching image...docker.io/library/debian:trixie-slim@sha256:d7e12182ce18b85b93007c1dedf31f2d29e01ccf3182cc4017c709b6259bc132
+#2 DONE 0.0s
+
+#3 [internal] load build definition from Dockerfile
+#3 transferring dockerfile: 10.67kB 0.1s done
+#3 DONE 0.1s
+
+#4 [internal] load .dockerignore
+#4 transferring context: 30B 0.1s
+#4 transferring context: 138B 0.1s done
+#4 DONE 0.1s
+
+#5 oci-layout://docker.io/library/rust:1-trixie@sha256:223cc32ddca8f3ee90c436dbc94b6b5f052ea7f9653c5201e9612f08ad7d21b8
+#5 resolve docker.io/library/rust:1-trixie@sha256:223cc32ddca8f3ee90c436dbc94b6b5f052ea7f9653c5201e9612f08ad7d21b8 done
+#5 DONE 0.0s
+
+#6 [internal] load build context
+#6 transferring context: 3.24MB 0.2s done
+#6 DONE 0.2s
+
+#7 [linux/arm64 build 2/8] WORKDIR /src
+#7 CACHED
+
+#8 [linux/arm64 build 1/8] RUN apt-get update && apt-get install -y --no-install-recommends cmake perl pkg-config && rm -rf /var/lib/apt/lists/*
+#8 CACHED
+
+#9 [linux/arm64 build 3/8] COPY Cargo.toml Cargo.lock ./
+#9 CACHED
+
+#10 [linux/arm64 build 4/8] COPY src ./src
+#10 DONE 0.0s
+
+#11 [linux/arm64 build 5/8] COPY assets ./assets
+#11 DONE 0.0s
+
+#12 [linux/arm64 build 6/8] COPY skills ./skills
+#12 DONE 0.0s
+
+#13 [linux/arm64 build 7/8] RUN --mount=type=cache,target=/usr/local/cargo/registry --mount=type=cache,target=/src/target cargo build --release --locked && cp target/release/hotline-computer /usr/local/bin/hotline-computer
+#13 0.114    Compiling hotline-computer v0.13.0-rc.3 (/src)
+#13 21.64     Finished `release` profile [optimized] target(s) in 21.60s
+#13 DONE 21.7s
+
+#14 [linux/arm64 checks 1/3] RUN rustup component add rustfmt clippy && apt-get update && apt-get install -y --no-install-recommends jq chromium fonts-dejavu-core && rm -rf /var/lib/apt/lists/*
+#14 0.055 info: downloading 2 components
+#14 0.764 Get:1 http://deb.debian.org/debian trixie InRelease [140 kB]
+#14 0.835 Get:2 http://deb.debian.org/debian trixie-updates InRelease [47.3 kB]
+#14 0.850 Get:3 http://deb.debian.org/debian-security trixie-security InRelease [43.4 kB]
+#14 0.864 Get:4 http://deb.debian.org/debian trixie/main arm64 Packages [9615 kB]
+#14 0.970 Get:5 http://deb.debian.org/debian trixie-updates/main arm64 Packages [1108 B]
+#14 0.985 Get:6 http://deb.debian.org/debian-security trixie-security/main arm64 Packages [309 kB]
+#14 1.456 Fetched 10.2 MB in 1s (12.7 MB/s)
+#14 1.456 Reading package lists...
+#14 1.664 Reading package lists...
+#14 1.906 Building dependency tree...
+#14 1.976 Reading state information...
+#14 2.089 fonts-dejavu-core is already the newest version (2.37-8).
+#14 2.089 fonts-dejavu-core set to manually installed.
+#14 2.089 The following additional packages will be installed:
+#14 2.089   adwaita-icon-theme at-spi2-common chromium-common dbus dbus-bin dbus-daemon
+#14 2.089   dbus-session-bus-common dbus-system-bus-common dbus-user-session
+#14 2.089   dconf-gsettings-backend dconf-service gtk-update-icon-cache libapparmor1
+#14 2.089   libasound2-data libasound2t64 libasyncns0 libatk-bridge2.0-0t64
+#14 2.089   libatk1.0-0t64 libatspi2.0-0t64 libavahi-client3 libavahi-common-data
+#14 2.089   libavahi-common3 libcloudproviders0 libcolord2 libcups2t64 libdbus-1-3
+#14 2.089   libdconf1 libdouble-conversion3 libdrm-amdgpu1 libdrm-common libdrm2
+#14 2.089   libepoxy0 libflac14 libgbm1 libgl1 libgl1-mesa-dri libglvnd0 libglx-mesa0
+#14 2.089   libglx0 libgtk-3-0t64 libgtk-3-common libjq1 libllvm19 libminizip1t64
+#14 2.089   libmp3lame0 libmpg123-0t64 libnspr4 libnss3 libogg0 libonig5 libopenh264-8
+#14 2.089   libopus0 libpam-systemd libpulse0 libsensors-config libsensors5 libsndfile1
+#14 2.089   libsystemd-shared libvorbis0a libvorbisenc2 libvulkan1 libwayland-client0
+#14 2.089   libwayland-cursor0 libwayland-egl1 libwayland-server0 libx11-xcb1 libxaw7
+#14 2.089   libxcb-dri3-0 libxcb-glx0 libxcb-present0 libxcb-randr0 libxcb-shape0
+#14 2.089   libxcb-sync1 libxcb-xfixes0 libxcomposite1 libxcursor1 libxdamage1
+#14 2.089   libxfixes3 libxi6 libxinerama1 libxkbcommon0 libxkbfile1 libxmu6 libxmuu1
+#14 2.089   libxnvctrl0 libxpm4 libxrandr2 libxshmfence1 libxtst6 libxv1 libxxf86dga1
+#14 2.090   libxxf86vm1 libz3-4 mesa-libgallium systemd systemd-sysv x11-utils xdg-utils
+#14 2.090   xkb-data zlib1g zlib1g-dev
+#14 2.090 Suggested packages:
+#14 2.090   adwaita-icon-theme-legacy chromium-l10n chromium-shell chromium-driver
+#14 2.090   alsa-utils libasound2-plugins colord cups-common gvfs opus-tools
+#14 2.090   libcryptsetup12 libtss2-rc0t64 pulseaudio lm-sensors libbpf1 libdw1t64
+#14 2.090   libip4tc2 libpwquality1 libqrencode4 systemd-container systemd-homed
+#14 2.090   systemd-userdbd systemd-boot systemd-resolved systemd-repart
+#14 2.090   libtss2-tcti-device0 polkitd mesa-utils
+#14 2.090 Recommended packages:
+#14 2.090   upower udev fonts-liberation notification-daemon system-config-printer
+#14 2.090   alsa-ucm-conf alsa-topology-conf at-spi2-core libgtk-3-bin libkmod2
+#14 2.090   mesa-vulkan-drivers | vulkan-icd linux-sysctl-defaults systemd-timesyncd
+#14 2.090   | time-daemon systemd-cryptsetup libnss-systemd luit libfile-mimeinfo-perl
+#14 2.090   libnet-dbus-perl libx11-protocol-perl x11-xserver-utils
+#14 2.340 The following NEW packages will be installed:
+#14 2.340   adwaita-icon-theme at-spi2-common chromium chromium-common dbus dbus-bin
+#14 2.340   dbus-daemon dbus-session-bus-common dbus-system-bus-common dbus-user-session
+#14 2.340   dconf-gsettings-backend dconf-service gtk-update-icon-cache jq libapparmor1
+#14 2.340   libasound2-data libasound2t64 libasyncns0 libatk-bridge2.0-0t64
+#14 2.340   libatk1.0-0t64 libatspi2.0-0t64 libavahi-client3 libavahi-common-data
+#14 2.340   libavahi-common3 libcloudproviders0 libcolord2 libcups2t64 libdbus-1-3
+#14 2.340   libdconf1 libdouble-conversion3 libdrm-amdgpu1 libdrm-common libdrm2
+#14 2.340   libepoxy0 libflac14 libgbm1 libgl1 libgl1-mesa-dri libglvnd0 libglx-mesa0
+#14 2.340   libglx0 libgtk-3-0t64 libgtk-3-common libjq1 libllvm19 libminizip1t64
+#14 2.340   libmp3lame0 libmpg123-0t64 libnspr4 libnss3 libogg0 libonig5 libopenh264-8
+#14 2.340   libopus0 libpam-systemd libpulse0 libsensors-config libsensors5 libsndfile1
+#14 2.340   libsystemd-shared libvorbis0a libvorbisenc2 libvulkan1 libwayland-client0
+#14 2.340   libwayland-cursor0 libwayland-egl1 libwayland-server0 libx11-xcb1 libxaw7
+#14 2.340   libxcb-dri3-0 libxcb-glx0 libxcb-present0 libxcb-randr0 libxcb-shape0
+#14 2.340   libxcb-sync1 libxcb-xfixes0 libxcomposite1 libxcursor1 libxdamage1
+#14 2.340   libxfixes3 libxi6 libxinerama1 libxkbcommon0 libxkbfile1 libxmu6 libxmuu1
+#14 2.340   libxnvctrl0 libxpm4 libxrandr2 libxshmfence1 libxtst6 libxv1 libxxf86dga1
+#14 2.340   libxxf86vm1 libz3-4 mesa-libgallium systemd systemd-sysv x11-utils xdg-utils
+#14 2.340   xkb-data
+#14 2.340 The following packages will be upgraded:
+#14 2.340   zlib1g zlib1g-dev
+#14 2.389 2 upgraded, 101 newly installed, 0 to remove and 23 not upgraded.
+#14 2.389 Need to get 181 MB of archives.
+#14 2.389 After this operation, 706 MB of additional disk space will be used.
+#14 2.389 Get:1 http://deb.debian.org/debian trixie/main arm64 libsystemd-shared arm64 257.13-1~deb13u1 [1922 kB]
+#14 2.506 Get:2 http://deb.debian.org/debian trixie/main arm64 libapparmor1 arm64 4.1.0-1 [42.9 kB]
+#14 2.520 Get:3 http://deb.debian.org/debian trixie/main arm64 systemd arm64 257.13-1~deb13u1 [2921 kB]
+#14 2.542 Get:4 http://deb.debian.org/debian trixie/main arm64 systemd-sysv arm64 257.13-1~deb13u1 [64.9 kB]
+#14 2.542 Get:5 http://deb.debian.org/debian trixie/main arm64 libdbus-1-3 arm64 1.16.2-2 [169 kB]
+#14 2.543 Get:6 http://deb.debian.org/debian trixie/main arm64 dbus-bin arm64 1.16.2-2 [78.8 kB]
+#14 2.543 Get:7 http://deb.debian.org/debian trixie/main arm64 dbus-session-bus-common all 1.16.2-2 [52.3 kB]
+#14 2.557 Get:8 http://deb.debian.org/debian trixie/main arm64 dbus-daemon arm64 1.16.2-2 [152 kB]
+#14 2.558 Get:9 http://deb.debian.org/debian trixie/main arm64 dbus-system-bus-common all 1.16.2-2 [53.5 kB]
+#14 2.559 Get:10 http://deb.debian.org/debian trixie/main arm64 dbus arm64 1.16.2-2 [70.7 kB]
+#14 2.573 Get:11 http://deb.debian.org/debian trixie/main arm64 zlib1g-dev arm64 1:1.3.dfsg+really1.3.1-1+deb13u1 [916 kB]
+#14 2.580 Get:12 http://deb.debian.org/debian trixie/main arm64 zlib1g arm64 1:1.3.dfsg+really1.3.1-1+deb13u1 [85.0 kB]
+#14 2.594 Get:13 http://deb.debian.org/debian trixie/main arm64 libpam-systemd arm64 257.13-1~deb13u1 [276 kB]
+#14 2.596 Get:14 http://deb.debian.org/debian trixie/main arm64 gtk-update-icon-cache arm64 4.18.6+ds-2 [52.3 kB]
+#14 2.610 Get:15 http://deb.debian.org/debian trixie/main arm64 adwaita-icon-theme all 48.1-1 [504 kB]
+#14 2.628 Get:16 http://deb.debian.org/debian trixie/main arm64 at-spi2-common all 2.56.2-1+deb13u2 [171 kB]
+#14 2.629 Get:17 http://deb.debian.org/debian trixie/main arm64 libasound2-data all 1.2.14-1+deb13u1 [21.2 kB]
+#14 2.643 Get:18 http://deb.debian.org/debian trixie/main arm64 libasound2t64 arm64 1.2.14-1+deb13u1 [342 kB]
+#14 2.646 Get:19 http://deb.debian.org/debian trixie/main arm64 libatk1.0-0t64 arm64 2.56.2-1+deb13u2 [50.4 kB]
+#14 2.646 Get:20 http://deb.debian.org/debian trixie/main arm64 libxi6 arm64 2:1.8.2-1 [77.8 kB]
+#14 2.647 Get:21 http://deb.debian.org/debian trixie/main arm64 libatspi2.0-0t64 arm64 2.56.2-1+deb13u2 [76.7 kB]
+#14 2.648 Get:22 http://deb.debian.org/debian trixie/main arm64 libatk-bridge2.0-0t64 arm64 2.56.2-1+deb13u2 [65.0 kB]
+#14 2.662 Get:23 http://deb.debian.org/debian trixie/main arm64 libavahi-common-data arm64 0.8-16 [112 kB]
+#14 2.664 Get:24 http://deb.debian.org/debian trixie/main arm64 libavahi-common3 arm64 0.8-16 [43.3 kB]
+#14 2.664 Get:25 http://deb.debian.org/debian trixie/main arm64 libavahi-client3 arm64 0.8-16 [46.7 kB]
+#14 2.678 Get:26 http://deb.debian.org/debian trixie/main arm64 libcups2t64 arm64 2.4.10-3+deb13u2 [236 kB]
+#14 2.680 Get:27 http://deb.debian.org/debian trixie/main arm64 libdouble-conversion3 arm64 3.3.1-1 [37.3 kB]
+#14 2.681 Get:28 http://deb.debian.org/debian trixie/main arm64 libogg0 arm64 1.3.5-3+b2 [23.6 kB]
+#14 2.697 Get:29 http://deb.debian.org/debian trixie/main arm64 libflac14 arm64 1.5.0+ds-2 [180 kB]
+#14 2.699 Get:30 http://deb.debian.org/debian trixie/main arm64 libdrm-common all 2.4.124-2 [8288 B]
+#14 2.699 Get:31 http://deb.debian.org/debian trixie/main arm64 libdrm2 arm64 2.4.124-2 [38.3 kB]
+#14 2.700 Get:32 http://deb.debian.org/debian trixie/main arm64 libwayland-server0 arm64 1.23.1-3 [33.7 kB]
+#14 2.700 Get:33 http://deb.debian.org/debian trixie/main arm64 libdrm-amdgpu1 arm64 2.4.124-2 [21.8 kB]
+#14 2.713 Get:34 http://deb.debian.org/debian trixie/main arm64 libz3-4 arm64 4.13.3-1 [7507 kB]
+#14 2.782 Get:35 http://deb.debian.org/debian trixie/main arm64 libllvm19 arm64 1:19.1.7-3+b1 [23.3 MB]
+#14 2.948 Get:36 http://deb.debian.org/debian trixie/main arm64 libsensors-config all 1:3.6.2-2 [16.2 kB]
+#14 2.948 Get:37 http://deb.debian.org/debian trixie/main arm64 libsensors5 arm64 1:3.6.2-2 [36.4 kB]
+#14 2.961 Get:38 http://deb.debian.org/debian trixie/main arm64 libx11-xcb1 arm64 2:1.8.12-1 [247 kB]
+#14 2.963 Get:39 http://deb.debian.org/debian trixie/main arm64 libxcb-dri3-0 arm64 1.17.0-2+b1 [107 kB]
+#14 2.964 Get:40 http://deb.debian.org/debian trixie/main arm64 libxcb-present0 arm64 1.17.0-2+b1 [106 kB]
+#14 2.964 Get:41 http://deb.debian.org/debian trixie/main arm64 libxcb-randr0 arm64 1.17.0-2+b1 [117 kB]
+#14 2.965 Get:42 http://deb.debian.org/debian trixie/main arm64 libxcb-sync1 arm64 1.17.0-2+b1 [109 kB]
+#14 2.966 Get:43 http://deb.debian.org/debian trixie/main arm64 libxcb-xfixes0 arm64 1.17.0-2+b1 [110 kB]
+#14 2.967 Get:44 http://deb.debian.org/debian trixie/main arm64 libxshmfence1 arm64 1.3.3-1 [11.1 kB]
+#14 2.980 Get:45 http://deb.debian.org/debian trixie/main arm64 mesa-libgallium arm64 25.0.7-2+deb13u1 [8033 kB]
+#14 3.037 Get:46 http://deb.debian.org/debian trixie/main arm64 libgbm1 arm64 25.0.7-2+deb13u1 [44.1 kB]
+#14 3.038 Get:47 http://deb.debian.org/debian trixie/main arm64 libminizip1t64 arm64 1:1.3.dfsg+really1.3.1-1+deb13u1 [52.6 kB]
+#14 3.052 Get:48 http://deb.debian.org/debian trixie/main arm64 libnspr4 arm64 2:4.36-1 [102 kB]
+#14 3.078 Get:49 http://deb.debian.org/debian trixie/main arm64 libnss3 arm64 2:3.110-1+deb13u5 [1291 kB]
+#14 3.100 Get:50 http://deb.debian.org/debian trixie/main arm64 libopenh264-8 arm64 2.6.0+dfsg-2 [336 kB]
+#14 3.116 Get:51 http://deb.debian.org/debian trixie/main arm64 libopus0 arm64 1.5.2-2 [2813 kB]
+#14 3.136 Get:52 http://deb.debian.org/debian trixie/main arm64 libasyncns0 arm64 0.8-6+b5 [11.7 kB]
+#14 3.149 Get:53 http://deb.debian.org/debian trixie/main arm64 libmp3lame0 arm64 3.100-6+b3 [355 kB]
+#14 3.166 Get:54 http://deb.debian.org/debian trixie/main arm64 libmpg123-0t64 arm64 1.32.10-1+deb13u1 [143 kB]
+#14 3.167 Get:55 http://deb.debian.org/debian trixie/main arm64 libvorbis0a arm64 1.3.7-3 [83.8 kB]
+#14 3.168 Get:56 http://deb.debian.org/debian trixie/main arm64 libvorbisenc2 arm64 1.3.7-3 [75.5 kB]
+#14 3.182 Get:57 http://deb.debian.org/debian trixie/main arm64 libsndfile1 arm64 1.2.2-2+deb13u1 [186 kB]
+#14 3.197 Get:58 http://deb.debian.org/debian trixie/main arm64 libpulse0 arm64 17.0+dfsg1-2+b1 [236 kB]
+#14 3.198 Get:59 http://deb.debian.org/debian trixie/main arm64 libxcomposite1 arm64 1:0.4.6-1 [16.4 kB]
+#14 3.199 Get:60 http://deb.debian.org/debian trixie/main arm64 libxdamage1 arm64 1:1.1.6-1+b2 [15.6 kB]
+#14 3.199 Get:61 http://deb.debian.org/debian trixie/main arm64 libxfixes3 arm64 1:6.0.0-2+b4 [20.5 kB]
+#14 3.213 Get:62 http://deb.debian.org/debian trixie/main arm64 xkb-data all 2.42-1 [790 kB]
+#14 3.233 Get:63 http://deb.debian.org/debian trixie/main arm64 libxkbcommon0 arm64 1.7.0-2 [106 kB]
+#14 3.234 Get:64 http://deb.debian.org/debian trixie/main arm64 libxnvctrl0 arm64 535.171.04-1+b2 [14.0 kB]
+#14 3.234 Get:65 http://deb.debian.org/debian trixie/main arm64 libxrandr2 arm64 2:1.5.4-1+b3 [35.9 kB]
+#14 3.234 Get:66 http://deb.debian.org/debian trixie/main arm64 libcloudproviders0 arm64 0.3.6-2 [27.4 kB]
+#14 3.249 Get:67 http://deb.debian.org/debian trixie/main arm64 libcolord2 arm64 1.4.7-3 [130 kB]
+#14 3.266 Get:68 http://deb.debian.org/debian trixie/main arm64 libepoxy0 arm64 1.5.10-2 [200 kB]
+#14 3.267 Get:69 http://deb.debian.org/debian trixie/main arm64 libwayland-client0 arm64 1.23.1-3 [26.1 kB]
+#14 3.268 Get:70 http://deb.debian.org/debian trixie/main arm64 libwayland-cursor0 arm64 1.23.1-3 [11.7 kB]
+#14 3.268 Get:71 http://deb.debian.org/debian trixie/main arm64 libwayland-egl1 arm64 1.23.1-3 [5952 B]
+#14 3.268 Get:72 http://deb.debian.org/debian trixie/main arm64 libxcursor1 arm64 1:1.2.3-1 [39.3 kB]
+#14 3.268 Get:73 http://deb.debian.org/debian trixie/main arm64 libxinerama1 arm64 2:1.1.4-3+b4 [16.0 kB]
+#14 3.268 Get:74 http://deb.debian.org/debian trixie/main arm64 dbus-user-session arm64 1.16.2-2 [52.1 kB]
+#14 3.269 Get:75 http://deb.debian.org/debian trixie/main arm64 libdconf1 arm64 0.40.0-5 [40.4 kB]
+#14 3.269 Get:76 http://deb.debian.org/debian trixie/main arm64 dconf-service arm64 0.40.0-5 [30.9 kB]
+#14 3.269 Get:77 http://deb.debian.org/debian trixie/main arm64 dconf-gsettings-backend arm64 0.40.0-5 [27.3 kB]
+#14 3.283 Get:78 http://deb.debian.org/debian trixie/main arm64 libgtk-3-common all 3.24.49-3 [4908 kB]
+#14 3.331 Get:79 http://deb.debian.org/debian trixie/main arm64 libgtk-3-0t64 arm64 3.24.49-3 [2565 kB]
+#14 3.349 Get:80 http://deb.debian.org/debian trixie/main arm64 libglvnd0 arm64 1.7.0-1+b2 [41.6 kB]
+#14 3.350 Get:81 http://deb.debian.org/debian trixie/main arm64 libxcb-glx0 arm64 1.17.0-2+b1 [123 kB]
+#14 3.350 Get:82 http://deb.debian.org/debian trixie/main arm64 libxxf86vm1 arm64 1:1.1.4-1+b4 [19.2 kB]
+#14 3.364 Get:83 http://deb.debian.org/debian trixie/main arm64 libvulkan1 arm64 1.4.309.0-1 [127 kB]
+#14 3.365 Get:84 http://deb.debian.org/debian trixie/main arm64 libgl1-mesa-dri arm64 25.0.7-2+deb13u1 [45.9 kB]
+#14 3.379 Get:85 http://deb.debian.org/debian trixie/main arm64 libglx-mesa0 arm64 25.0.7-2+deb13u1 [142 kB]
+#14 3.380 Get:86 http://deb.debian.org/debian trixie/main arm64 libglx0 arm64 1.7.0-1+b2 [31.1 kB]
+#14 3.380 Get:87 http://deb.debian.org/debian trixie/main arm64 libgl1 arm64 1.7.0-1+b2 [90.9 kB]
+#14 3.381 Get:88 http://deb.debian.org/debian trixie/main arm64 libxmu6 arm64 2:1.1.3-3+b4 [55.7 kB]
+#14 3.383 Get:89 http://deb.debian.org/debian trixie/main arm64 libxpm4 arm64 1:3.5.17-1+deb13u1 [52.9 kB]
+#14 3.397 Get:90 http://deb.debian.org/debian trixie/main arm64 libxaw7 arm64 2:1.0.16-1 [195 kB]
+#14 3.411 Get:91 http://deb.debian.org/debian trixie/main arm64 libxcb-shape0 arm64 1.17.0-2+b1 [106 kB]
+#14 3.411 Get:92 http://deb.debian.org/debian trixie/main arm64 libxkbfile1 arm64 1:1.1.0-1+b4 [72.4 kB]
+#14 3.412 Get:93 http://deb.debian.org/debian trixie/main arm64 libxmuu1 arm64 2:1.1.3-3+b4 [22.0 kB]
+#14 3.412 Get:94 http://deb.debian.org/debian trixie/main arm64 libxtst6 arm64 2:1.2.5-1 [25.7 kB]
+#14 3.412 Get:95 http://deb.debian.org/debian trixie/main arm64 libxv1 arm64 2:1.0.11-1.1+b3 [23.3 kB]
+#14 3.412 Get:96 http://deb.debian.org/debian trixie/main arm64 libxxf86dga1 arm64 2:1.1.5-1+b3 [20.5 kB]
+#14 3.426 Get:97 http://deb.debian.org/debian trixie/main arm64 x11-utils arm64 7.7+7 [175 kB]
+#14 3.427 Get:98 http://deb.debian.org/debian trixie/main arm64 xdg-utils all 1.2.1-2 [75.8 kB]
+#14 3.441 Get:99 http://deb.debian.org/debian trixie/main arm64 chromium-common arm64 156.0.8078.79-1~deb13u1 [36.7 MB]
+#14 3.759 Get:100 http://deb.debian.org/debian trixie/main arm64 chromium arm64 156.0.8078.79-1~deb13u1 [79.5 MB]
+#14 4.337 Get:101 http://deb.debian.org/debian trixie/main arm64 libonig5 arm64 6.9.9-1+b1 [181 kB]
+#14 4.351 Get:102 http://deb.debian.org/debian trixie/main arm64 libjq1 arm64 1.7.1-6+deb13u4 [152 kB]
+#14 4.353 Get:103 http://deb.debian.org/debian trixie/main arm64 jq arm64 1.7.1-6+deb13u4 [78.4 kB]
+#14 4.447 debconf: unable to initialize frontend: Dialog
+#14 4.447 debconf: (TERM is not set, so the dialog frontend is not usable.)
+#14 4.447 debconf: falling back to frontend: Readline
+#14 4.449 debconf: unable to initialize frontend: Readline
+#14 4.449 debconf: (This frontend requires a controlling tty.)
+#14 4.449 debconf: falling back to frontend: Teletype
+#14 4.451 debconf: unable to initialize frontend: Teletype
+#14 4.451 debconf: (This frontend requires a controlling tty.)
+#14 4.451 debconf: falling back to frontend: Noninteractive
+#14 5.343 Fetched 181 MB in 2s (90.4 MB/s)
+#14 5.349 Selecting previously unselected package libsystemd-shared:arm64.
+#14 5.349 (Reading database ... (Reading database ... 5%(Reading database ... 10%(Reading database ... 15%(Reading database ... 20%(Reading database ... 25%(Reading database ... 30%(Reading database ... 35%(Reading database ... 40%(Reading database ... 45%(Reading database ... 50%(Reading database ... 55%(Reading database ... 60%(Reading database ... 65%(Reading database ... 70%(Reading database ... 75%(Reading database ... 80%(Reading database ... 85%(Reading database ... 90%(Reading database ... 95%(Reading database ... 100%(Reading database ... 30044 files and directories currently installed.)
+#14 5.355 Preparing to unpack .../libsystemd-shared_257.13-1~deb13u1_arm64.deb ...
+#14 5.355 Unpacking libsystemd-shared:arm64 (257.13-1~deb13u1) ...
+#14 5.428 Selecting previously unselected package libapparmor1:arm64.
+#14 5.429 Preparing to unpack .../libapparmor1_4.1.0-1_arm64.deb ...
+#14 5.430 Unpacking libapparmor1:arm64 (4.1.0-1) ...
+#14 5.440 Setting up libsystemd-shared:arm64 (257.13-1~deb13u1) ...
+#14 5.449 Selecting previously unselected package systemd.
+#14 5.449 (Reading database ... (Reading database ... 5%(Reading database ... 10%(Reading database ... 15%(Reading database ... 20%(Reading database ... 25%(Reading database ... 30%(Reading database ... 35%(Reading database ... 40%(Reading database ... 45%(Reading database ... 50%(Reading database ... 55%(Reading database ... 60%(Reading database ... 65%(Reading database ... 70%(Reading database ... 75%(Reading database ... 80%(Reading database ... 85%(Reading database ... 90%(Reading database ... 95%(Reading database ... 100%(Reading database ... 30057 files and directories currently installed.)
+#14 5.453 Preparing to unpack .../systemd_257.13-1~deb13u1_arm64.deb ...
+#14 5.456 Unpacking systemd (257.13-1~deb13u1) ...
+#14 5.568 Setting up libapparmor1:arm64 (4.1.0-1) ...
+#14 5.569 Setting up systemd (257.13-1~deb13u1) ...
+#14 5.576 Created symlink '/etc/systemd/system/getty.target.wants/getty@tty1.service' → '/usr/lib/systemd/system/getty@.service'.
+#14 5.578 Created symlink '/etc/systemd/system/multi-user.target.wants/remote-fs.target' → '/usr/lib/systemd/system/remote-fs.target'.
+#14 5.579 Created symlink '/etc/systemd/system/sysinit.target.wants/systemd-pstore.service' → '/usr/lib/systemd/system/systemd-pstore.service'.
+#14 5.580 Initializing machine ID from random generator.
+#14 5.586 Creating group 'systemd-journal' with GID 999.
+#14 5.586 Creating group 'systemd-network' with GID 998.
+#14 5.586 Creating user 'systemd-network' (systemd Network Management) with UID 998 and GID 998.
+#14 5.590 /usr/lib/tmpfiles.d/legacy.conf:14: Duplicate line for path "/run/lock", ignoring.
+#14 5.601 Selecting previously unselected package systemd-sysv.
+#14 5.601 (Reading database ... (Reading database ... 5%(Reading database ... 10%(Reading database ... 15%(Reading database ... 20%(Reading database ... 25%(Reading database ... 30%(Reading database ... 35%(Reading database ... 40%(Reading database ... 45%(Reading database ... 50%(Reading database ... 55%(Reading database ... 60%(Reading database ... 65%(Reading database ... 70%(Reading database ... 75%(Reading database ... 80%(Reading database ... 85%(Reading database ... 90%(Reading database ... 95%(Reading database ... 100%(Reading database ... 30983 files and directories currently installed.)
+#14 5.605 Preparing to unpack .../0-systemd-sysv_257.13-1~deb13u1_arm64.deb ...
+#14 5.606 Unpacking systemd-sysv (257.13-1~deb13u1) ...
+#14 5.614 Selecting previously unselected package libdbus-1-3:arm64.
+#14 5.615 Preparing to unpack .../1-libdbus-1-3_1.16.2-2_arm64.deb ...
+#14 5.615 Unpacking libdbus-1-3:arm64 (1.16.2-2) ...
+#14 5.626 Selecting previously unselected package dbus-bin.
+#14 5.627 Preparing to unpack .../2-dbus-bin_1.16.2-2_arm64.deb ...
+#14 5.627 Unpacking dbus-bin (1.16.2-2) ...
+#14 5.635 Selecting previously unselected package dbus-session-bus-common.
+#14 5.636 Preparing to unpack .../3-dbus-session-bus-common_1.16.2-2_all.deb ...
+#14 5.636 Unpacking dbus-session-bus-common (1.16.2-2) ...
+#14 5.643 Selecting previously unselected package dbus-daemon.
+#14 5.644 Preparing to unpack .../4-dbus-daemon_1.16.2-2_arm64.deb ...
+#14 5.645 Unpacking dbus-daemon (1.16.2-2) ...
+#14 5.655 Selecting previously unselected package dbus-system-bus-common.
+#14 5.656 Preparing to unpack .../5-dbus-system-bus-common_1.16.2-2_all.deb ...
+#14 5.656 Unpacking dbus-system-bus-common (1.16.2-2) ...
+#14 5.663 Selecting previously unselected package dbus.
+#14 5.664 Preparing to unpack .../6-dbus_1.16.2-2_arm64.deb ...
+#14 5.665 Unpacking dbus (1.16.2-2) ...
+#14 5.674 Preparing to unpack .../7-zlib1g-dev_1%3a1.3.dfsg+really1.3.1-1+deb13u1_arm64.deb ...
+#14 5.675 Unpacking zlib1g-dev:arm64 (1:1.3.dfsg+really1.3.1-1+deb13u1) over (1:1.3.dfsg+really1.3.1-1+b1) ...
+#14 5.700 Preparing to unpack .../8-zlib1g_1%3a1.3.dfsg+really1.3.1-1+deb13u1_arm64.deb ...
+#14 5.702 Unpacking zlib1g:arm64 (1:1.3.dfsg+really1.3.1-1+deb13u1) over (1:1.3.dfsg+really1.3.1-1+b1) ...
+#14 5.714 Setting up zlib1g:arm64 (1:1.3.dfsg+really1.3.1-1+deb13u1) ...
+#14 5.724 Selecting previously unselected package libpam-systemd:arm64.
+#14 5.724 (Reading database ... (Reading database ... 5%(Reading database ... 10%(Reading database ... 15%(Reading database ... 20%(Reading database ... 25%(Reading database ... 30%(Reading database ... 35%(Reading database ... 40%(Reading database ... 45%(Reading database ... 50%(Reading database ... 55%(Reading database ... 60%(Reading database ... 65%(Reading database ... 70%(Reading database ... 75%(Reading database ... 80%(Reading database ... 85%(Reading database ... 90%(Reading database ... 95%(Reading database ... 100%(Reading database ... 31074 files and directories currently installed.)
+#14 5.729 Preparing to unpack .../00-libpam-systemd_257.13-1~deb13u1_arm64.deb ...
+#14 5.729 Unpacking libpam-systemd:arm64 (257.13-1~deb13u1) ...
+#14 5.743 Selecting previously unselected package gtk-update-icon-cache.
+#14 5.744 Preparing to unpack .../01-gtk-update-icon-cache_4.18.6+ds-2_arm64.deb ...
+#14 5.748 No diversion 'diversion of /usr/sbin/update-icon-caches to /usr/sbin/update-icon-caches.gtk2 by libgtk-3-bin', none removed.
+#14 5.750 No diversion 'diversion of /usr/share/man/man8/update-icon-caches.8.gz to /usr/share/man/man8/update-icon-caches.gtk2.8.gz by libgtk-3-bin', none removed.
+#14 5.750 Unpacking gtk-update-icon-cache (4.18.6+ds-2) ...
+#14 5.757 Selecting previously unselected package adwaita-icon-theme.
+#14 5.758 Preparing to unpack .../02-adwaita-icon-theme_48.1-1_all.deb ...
+#14 5.759 Unpacking adwaita-icon-theme (48.1-1) ...
+#14 5.807 Selecting previously unselected package at-spi2-common.
+#14 5.808 Preparing to unpack .../03-at-spi2-common_2.56.2-1+deb13u2_all.deb ...
+#14 5.809 Unpacking at-spi2-common (2.56.2-1+deb13u2) ...
+#14 5.825 Selecting previously unselected package libasound2-data.
+#14 5.826 Preparing to unpack .../04-libasound2-data_1.2.14-1+deb13u1_all.deb ...
+#14 5.827 Unpacking libasound2-data (1.2.14-1+deb13u1) ...
+#14 5.834 Selecting previously unselected package libasound2t64:arm64.
+#14 5.835 Preparing to unpack .../05-libasound2t64_1.2.14-1+deb13u1_arm64.deb ...
+#14 5.836 Unpacking libasound2t64:arm64 (1.2.14-1+deb13u1) ...
+#14 5.853 Selecting previously unselected package libatk1.0-0t64:arm64.
+#14 5.854 Preparing to unpack .../06-libatk1.0-0t64_2.56.2-1+deb13u2_arm64.deb ...
+#14 5.855 Unpacking libatk1.0-0t64:arm64 (2.56.2-1+deb13u2) ...
+#14 5.862 Selecting previously unselected package libxi6:arm64.
+#14 5.863 Preparing to unpack .../07-libxi6_2%3a1.8.2-1_arm64.deb ...
+#14 5.863 Unpacking libxi6:arm64 (2:1.8.2-1) ...
+#14 5.871 Selecting previously unselected package libatspi2.0-0t64:arm64.
+#14 5.872 Preparing to unpack .../08-libatspi2.0-0t64_2.56.2-1+deb13u2_arm64.deb ...
+#14 5.872 Unpacking libatspi2.0-0t64:arm64 (2.56.2-1+deb13u2) ...
+#14 5.880 Selecting previously unselected package libatk-bridge2.0-0t64:arm64.
+#14 5.882 Preparing to unpack .../09-libatk-bridge2.0-0t64_2.56.2-1+deb13u2_arm64.deb ...
+#14 5.882 Unpacking libatk-bridge2.0-0t64:arm64 (2.56.2-1+deb13u2) ...
+#14 5.889 Selecting previously unselected package libavahi-common-data:arm64.
+#14 5.890 Preparing to unpack .../10-libavahi-common-data_0.8-16_arm64.deb ...
+#14 5.891 Unpacking libavahi-common-data:arm64 (0.8-16) ...
+#14 5.901 Selecting previously unselected package libavahi-common3:arm64.
+#14 5.902 Preparing to unpack .../11-libavahi-common3_0.8-16_arm64.deb ...
+#14 5.902 Unpacking libavahi-common3:arm64 (0.8-16) ...
+#14 5.909 Selecting previously unselected package libavahi-client3:arm64.
+#14 5.910 Preparing to unpack .../12-libavahi-client3_0.8-16_arm64.deb ...
+#14 5.910 Unpacking libavahi-client3:arm64 (0.8-16) ...
+#14 5.918 Selecting previously unselected package libcups2t64:arm64.
+#14 5.919 Preparing to unpack .../13-libcups2t64_2.4.10-3+deb13u2_arm64.deb ...
+#14 5.919 Unpacking libcups2t64:arm64 (2.4.10-3+deb13u2) ...
+#14 5.933 Selecting previously unselected package libdouble-conversion3:arm64.
+#14 5.934 Preparing to unpack .../14-libdouble-conversion3_3.3.1-1_arm64.deb ...
+#14 5.935 Unpacking libdouble-conversion3:arm64 (3.3.1-1) ...
+#14 5.941 Selecting previously unselected package libogg0:arm64.
+#14 5.943 Preparing to unpack .../15-libogg0_1.3.5-3+b2_arm64.deb ...
+#14 5.943 Unpacking libogg0:arm64 (1.3.5-3+b2) ...
+#14 5.949 Selecting previously unselected package libflac14:arm64.
+#14 5.950 Preparing to unpack .../16-libflac14_1.5.0+ds-2_arm64.deb ...
+#14 5.951 Unpacking libflac14:arm64 (1.5.0+ds-2) ...
+#14 5.961 Selecting previously unselected package libdrm-common.
+#14 5.962 Preparing to unpack .../17-libdrm-common_2.4.124-2_all.deb ...
+#14 5.963 Unpacking libdrm-common (2.4.124-2) ...
+#14 5.968 Selecting previously unselected package libdrm2:arm64.
+#14 5.969 Preparing to unpack .../18-libdrm2_2.4.124-2_arm64.deb ...
+#14 5.970 Unpacking libdrm2:arm64 (2.4.124-2) ...
+#14 5.976 Selecting previously unselected package libwayland-server0:arm64.
+#14 5.977 Preparing to unpack .../19-libwayland-server0_1.23.1-3_arm64.deb ...
+#14 5.978 Unpacking libwayland-server0:arm64 (1.23.1-3) ...
+#14 5.984 Selecting previously unselected package libdrm-amdgpu1:arm64.
+#14 5.985 Preparing to unpack .../20-libdrm-amdgpu1_2.4.124-2_arm64.deb ...
+#14 5.986 Unpacking libdrm-amdgpu1:arm64 (2.4.124-2) ...
+#14 5.991 Selecting previously unselected package libz3-4:arm64.
+#14 5.992 Preparing to unpack .../21-libz3-4_4.13.3-1_arm64.deb ...
+#14 5.993 Unpacking libz3-4:arm64 (4.13.3-1) ...
+#14 6.228 Selecting previously unselected package libllvm19:arm64.
+#14 6.229 Preparing to unpack .../22-libllvm19_1%3a19.1.7-3+b1_arm64.deb ...
+#14 6.229 Unpacking libllvm19:arm64 (1:19.1.7-3+b1) ...
+#14 6.612 Selecting previously unselected package libsensors-config.
+#14 6.613 Preparing to unpack .../23-libsensors-config_1%3a3.6.2-2_all.deb ...
+#14 6.614 Unpacking libsensors-config (1:3.6.2-2) ...
+#14 6.622 Selecting previously unselected package libsensors5:arm64.
+#14 6.623 Preparing to unpack .../24-libsensors5_1%3a3.6.2-2_arm64.deb ...
+#14 6.624 Unpacking libsensors5:arm64 (1:3.6.2-2) ...
+#14 6.633 Selecting previously unselected package libx11-xcb1:arm64.
+#14 6.634 Preparing to unpack .../25-libx11-xcb1_2%3a1.8.12-1_arm64.deb ...
+#14 6.635 Unpacking libx11-xcb1:arm64 (2:1.8.12-1) ...
+#14 6.648 Selecting previously unselected package libxcb-dri3-0:arm64.
+#14 6.649 Preparing to unpack .../26-libxcb-dri3-0_1.17.0-2+b1_arm64.deb ...
+#14 6.650 Unpacking libxcb-dri3-0:arm64 (1.17.0-2+b1) ...
+#14 6.661 Selecting previously unselected package libxcb-present0:arm64.
+#14 6.663 Preparing to unpack .../27-libxcb-present0_1.17.0-2+b1_arm64.deb ...
+#14 6.664 Unpacking libxcb-present0:arm64 (1.17.0-2+b1) ...
+#14 6.675 Selecting previously unselected package libxcb-randr0:arm64.
+#14 6.677 Preparing to unpack .../28-libxcb-randr0_1.17.0-2+b1_arm64.deb ...
+#14 6.678 Unpacking libxcb-randr0:arm64 (1.17.0-2+b1) ...
+#14 6.690 Selecting previously unselected package libxcb-sync1:arm64.
+#14 6.691 Preparing to unpack .../29-libxcb-sync1_1.17.0-2+b1_arm64.deb ...
+#14 6.692 Unpacking libxcb-sync1:arm64 (1.17.0-2+b1) ...
+#14 6.704 Selecting previously unselected package libxcb-xfixes0:arm64.
+#14 6.705 Preparing to unpack .../30-libxcb-xfixes0_1.17.0-2+b1_arm64.deb ...
+#14 6.706 Unpacking libxcb-xfixes0:arm64 (1.17.0-2+b1) ...
+#14 6.719 Selecting previously unselected package libxshmfence1:arm64.
+#14 6.720 Preparing to unpack .../31-libxshmfence1_1.3.3-1_arm64.deb ...
+#14 6.721 Unpacking libxshmfence1:arm64 (1.3.3-1) ...
+#14 6.728 Selecting previously unselected package mesa-libgallium:arm64.
+#14 6.729 Preparing to unpack .../32-mesa-libgallium_25.0.7-2+deb13u1_arm64.deb ...
+#14 6.729 Unpacking mesa-libgallium:arm64 (25.0.7-2+deb13u1) ...
+#14 7.042 Selecting previously unselected package libgbm1:arm64.
+#14 7.043 Preparing to unpack .../33-libgbm1_25.0.7-2+deb13u1_arm64.deb ...
+#14 7.044 Unpacking libgbm1:arm64 (25.0.7-2+deb13u1) ...
+#14 7.051 Selecting previously unselected package libminizip1t64:arm64.
+#14 7.052 Preparing to unpack .../34-libminizip1t64_1%3a1.3.dfsg+really1.3.1-1+deb13u1_arm64.deb ...
+#14 7.052 Unpacking libminizip1t64:arm64 (1:1.3.dfsg+really1.3.1-1+deb13u1) ...
+#14 7.059 Selecting previously unselected package libnspr4:arm64.
+#14 7.060 Preparing to unpack .../35-libnspr4_2%3a4.36-1_arm64.deb ...
+#14 7.061 Unpacking libnspr4:arm64 (2:4.36-1) ...
+#14 7.070 Selecting previously unselected package libnss3:arm64.
+#14 7.071 Preparing to unpack .../36-libnss3_2%3a3.110-1+deb13u5_arm64.deb ...
+#14 7.071 Unpacking libnss3:arm64 (2:3.110-1+deb13u5) ...
+#14 7.121 Selecting previously unselected package libopenh264-8:arm64.
+#14 7.122 Preparing to unpack .../37-libopenh264-8_2.6.0+dfsg-2_arm64.deb ...
+#14 7.123 Unpacking libopenh264-8:arm64 (2.6.0+dfsg-2) ...
+#14 7.140 Selecting previously unselected package libopus0:arm64.
+#14 7.141 Preparing to unpack .../38-libopus0_1.5.2-2_arm64.deb ...
+#14 7.141 Unpacking libopus0:arm64 (1.5.2-2) ...
+#14 7.238 Selecting previously unselected package libasyncns0:arm64.
+#14 7.240 Preparing to unpack .../39-libasyncns0_0.8-6+b5_arm64.deb ...
+#14 7.240 Unpacking libasyncns0:arm64 (0.8-6+b5) ...
+#14 7.246 Selecting previously unselected package libmp3lame0:arm64.
+#14 7.248 Preparing to unpack .../40-libmp3lame0_3.100-6+b3_arm64.deb ...
+#14 7.248 Unpacking libmp3lame0:arm64 (3.100-6+b3) ...
+#14 7.259 Selecting previously unselected package libmpg123-0t64:arm64.
+#14 7.260 Preparing to unpack .../41-libmpg123-0t64_1.32.10-1+deb13u1_arm64.deb ...
+#14 7.261 Unpacking libmpg123-0t64:arm64 (1.32.10-1+deb13u1) ...
+#14 7.271 Selecting previously unselected package libvorbis0a:arm64.
+#14 7.272 Preparing to unpack .../42-libvorbis0a_1.3.7-3_arm64.deb ...
+#14 7.273 Unpacking libvorbis0a:arm64 (1.3.7-3) ...
+#14 7.281 Selecting previously unselected package libvorbisenc2:arm64.
+#14 7.282 Preparing to unpack .../43-libvorbisenc2_1.3.7-3_arm64.deb ...
+#14 7.283 Unpacking libvorbisenc2:arm64 (1.3.7-3) ...
+#14 7.292 Selecting previously unselected package libsndfile1:arm64.
+#14 7.293 Preparing to unpack .../44-libsndfile1_1.2.2-2+deb13u1_arm64.deb ...
+#14 7.293 Unpacking libsndfile1:arm64 (1.2.2-2+deb13u1) ...
+#14 7.305 Selecting previously unselected package libpulse0:arm64.
+#14 7.306 Preparing to unpack .../45-libpulse0_17.0+dfsg1-2+b1_arm64.deb ...
+#14 7.307 Unpacking libpulse0:arm64 (17.0+dfsg1-2+b1) ...
+#14 7.321 Selecting previously unselected package libxcomposite1:arm64.
+#14 7.322 Preparing to unpack .../46-libxcomposite1_1%3a0.4.6-1_arm64.deb ...
+#14 7.322 Unpacking libxcomposite1:arm64 (1:0.4.6-1) ...
+#14 7.328 Selecting previously unselected package libxdamage1:arm64.
+#14 7.329 Preparing to unpack .../47-libxdamage1_1%3a1.1.6-1+b2_arm64.deb ...
+#14 7.329 Unpacking libxdamage1:arm64 (1:1.1.6-1+b2) ...
+#14 7.335 Selecting previously unselected package libxfixes3:arm64.
+#14 7.336 Preparing to unpack .../48-libxfixes3_1%3a6.0.0-2+b4_arm64.deb ...
+#14 7.336 Unpacking libxfixes3:arm64 (1:6.0.0-2+b4) ...
+#14 7.342 Selecting previously unselected package xkb-data.
+#14 7.343 Preparing to unpack .../49-xkb-data_2.42-1_all.deb ...
+#14 7.344 Unpacking xkb-data (2.42-1) ...
+#14 7.384 Selecting previously unselected package libxkbcommon0:arm64.
+#14 7.386 Preparing to unpack .../50-libxkbcommon0_1.7.0-2_arm64.deb ...
+#14 7.386 Unpacking libxkbcommon0:arm64 (1.7.0-2) ...
+#14 7.395 Selecting previously unselected package libxnvctrl0:arm64.
+#14 7.396 Preparing to unpack .../51-libxnvctrl0_535.171.04-1+b2_arm64.deb ...
+#14 7.397 Unpacking libxnvctrl0:arm64 (535.171.04-1+b2) ...
+#14 7.403 Selecting previously unselected package libxrandr2:arm64.
+#14 7.404 Preparing to unpack .../52-libxrandr2_2%3a1.5.4-1+b3_arm64.deb ...
+#14 7.405 Unpacking libxrandr2:arm64 (2:1.5.4-1+b3) ...
+#14 7.412 Selecting previously unselected package libcloudproviders0:arm64.
+#14 7.413 Preparing to unpack .../53-libcloudproviders0_0.3.6-2_arm64.deb ...
+#14 7.414 Unpacking libcloudproviders0:arm64 (0.3.6-2) ...
+#14 7.420 Selecting previously unselected package libcolord2:arm64.
+#14 7.421 Preparing to unpack .../54-libcolord2_1.4.7-3_arm64.deb ...
+#14 7.421 Unpacking libcolord2:arm64 (1.4.7-3) ...
+#14 7.432 Selecting previously unselected package libepoxy0:arm64.
+#14 7.433 Preparing to unpack .../55-libepoxy0_1.5.10-2_arm64.deb ...
+#14 7.434 Unpacking libepoxy0:arm64 (1.5.10-2) ...
+#14 7.447 Selecting previously unselected package libwayland-client0:arm64.
+#14 7.448 Preparing to unpack .../56-libwayland-client0_1.23.1-3_arm64.deb ...
+#14 7.449 Unpacking libwayland-client0:arm64 (1.23.1-3) ...
+#14 7.455 Selecting previously unselected package libwayland-cursor0:arm64.
+#14 7.456 Preparing to unpack .../57-libwayland-cursor0_1.23.1-3_arm64.deb ...
+#14 7.457 Unpacking libwayland-cursor0:arm64 (1.23.1-3) ...
+#14 7.463 Selecting previously unselected package libwayland-egl1:arm64.
+#14 7.464 Preparing to unpack .../58-libwayland-egl1_1.23.1-3_arm64.deb ...
+#14 7.464 Unpacking libwayland-egl1:arm64 (1.23.1-3) ...
+#14 7.469 Selecting previously unselected package libxcursor1:arm64.
+#14 7.470 Preparing to unpack .../59-libxcursor1_1%3a1.2.3-1_arm64.deb ...
+#14 7.471 Unpacking libxcursor1:arm64 (1:1.2.3-1) ...
+#14 7.477 Selecting previously unselected package libxinerama1:arm64.
+#14 7.478 Preparing to unpack .../60-libxinerama1_2%3a1.1.4-3+b4_arm64.deb ...
+#14 7.479 Unpacking libxinerama1:arm64 (2:1.1.4-3+b4) ...
+#14 7.484 Selecting previously unselected package dbus-user-session.
+#14 7.485 Preparing to unpack .../61-dbus-user-session_1.16.2-2_arm64.deb ...
+#14 7.486 Unpacking dbus-user-session (1.16.2-2) ...
+#14 7.493 Selecting previously unselected package libdconf1:arm64.
+#14 7.494 Preparing to unpack .../62-libdconf1_0.40.0-5_arm64.deb ...
+#14 7.494 Unpacking libdconf1:arm64 (0.40.0-5) ...
+#14 7.500 Selecting previously unselected package dconf-service.
+#14 7.501 Preparing to unpack .../63-dconf-service_0.40.0-5_arm64.deb ...
+#14 7.502 Unpacking dconf-service (0.40.0-5) ...
+#14 7.508 Selecting previously unselected package dconf-gsettings-backend:arm64.
+#14 7.509 Preparing to unpack .../64-dconf-gsettings-backend_0.40.0-5_arm64.deb ...
+#14 7.509 Unpacking dconf-gsettings-backend:arm64 (0.40.0-5) ...
+#14 7.515 Selecting previously unselected package libgtk-3-common.
+#14 7.516 Preparing to unpack .../65-libgtk-3-common_3.24.49-3_all.deb ...
+#14 7.516 Unpacking libgtk-3-common (3.24.49-3) ...
+#14 7.685 Selecting previously unselected package libgtk-3-0t64:arm64.
+#14 7.687 Preparing to unpack .../66-libgtk-3-0t64_3.24.49-3_arm64.deb ...
+#14 7.691 Unpacking libgtk-3-0t64:arm64 (3.24.49-3) ...
+#14 7.785 Selecting previously unselected package libglvnd0:arm64.
+#14 7.786 Preparing to unpack .../67-libglvnd0_1.7.0-1+b2_arm64.deb ...
+#14 7.787 Unpacking libglvnd0:arm64 (1.7.0-1+b2) ...
+#14 7.797 Selecting previously unselected package libxcb-glx0:arm64.
+#14 7.798 Preparing to unpack .../68-libxcb-glx0_1.17.0-2+b1_arm64.deb ...
+#14 7.798 Unpacking libxcb-glx0:arm64 (1.17.0-2+b1) ...
+#14 7.808 Selecting previously unselected package libxxf86vm1:arm64.
+#14 7.809 Preparing to unpack .../69-libxxf86vm1_1%3a1.1.4-1+b4_arm64.deb ...
+#14 7.809 Unpacking libxxf86vm1:arm64 (1:1.1.4-1+b4) ...
+#14 7.815 Selecting previously unselected package libvulkan1:arm64.
+#14 7.816 Preparing to unpack .../70-libvulkan1_1.4.309.0-1_arm64.deb ...
+#14 7.816 Unpacking libvulkan1:arm64 (1.4.309.0-1) ...
+#14 7.826 Selecting previously unselected package libgl1-mesa-dri:arm64.
+#14 7.827 Preparing to unpack .../71-libgl1-mesa-dri_25.0.7-2+deb13u1_arm64.deb ...
+#14 7.829 Unpacking libgl1-mesa-dri:arm64 (25.0.7-2+deb13u1) ...
+#14 7.837 Selecting previously unselected package libglx-mesa0:arm64.
+#14 7.838 Preparing to unpack .../72-libglx-mesa0_25.0.7-2+deb13u1_arm64.deb ...
+#14 7.838 Unpacking libglx-mesa0:arm64 (25.0.7-2+deb13u1) ...
+#14 7.849 Selecting previously unselected package libglx0:arm64.
+#14 7.850 Preparing to unpack .../73-libglx0_1.7.0-1+b2_arm64.deb ...
+#14 7.850 Unpacking libglx0:arm64 (1.7.0-1+b2) ...
+#14 7.857 Selecting previously unselected package libgl1:arm64.
+#14 7.858 Preparing to unpack .../74-libgl1_1.7.0-1+b2_arm64.deb ...
+#14 7.859 Unpacking libgl1:arm64 (1.7.0-1+b2) ...
+#14 7.868 Selecting previously unselected package libxmu6:arm64.
+#14 7.869 Preparing to unpack .../75-libxmu6_2%3a1.1.3-3+b4_arm64.deb ...
+#14 7.870 Unpacking libxmu6:arm64 (2:1.1.3-3+b4) ...
+#14 7.877 Selecting previously unselected package libxpm4:arm64.
+#14 7.878 Preparing to unpack .../76-libxpm4_1%3a3.5.17-1+deb13u1_arm64.deb ...
+#14 7.878 Unpacking libxpm4:arm64 (1:3.5.17-1+deb13u1) ...
+#14 7.885 Selecting previously unselected package libxaw7:arm64.
+#14 7.886 Preparing to unpack .../77-libxaw7_2%3a1.0.16-1_arm64.deb ...
+#14 7.887 Unpacking libxaw7:arm64 (2:1.0.16-1) ...
+#14 7.899 Selecting previously unselected package libxcb-shape0:arm64.
+#14 7.900 Preparing to unpack .../78-libxcb-shape0_1.17.0-2+b1_arm64.deb ...
+#14 7.901 Unpacking libxcb-shape0:arm64 (1.17.0-2+b1) ...
+#14 7.909 Selecting previously unselected package libxkbfile1:arm64.
+#14 7.910 Preparing to unpack .../79-libxkbfile1_1%3a1.1.0-1+b4_arm64.deb ...
+#14 7.911 Unpacking libxkbfile1:arm64 (1:1.1.0-1+b4) ...
+#14 7.918 Selecting previously unselected package libxmuu1:arm64.
+#14 7.919 Preparing to unpack .../80-libxmuu1_2%3a1.1.3-3+b4_arm64.deb ...
+#14 7.920 Unpacking libxmuu1:arm64 (2:1.1.3-3+b4) ...
+#14 7.926 Selecting previously unselected package libxtst6:arm64.
+#14 7.927 Preparing to unpack .../81-libxtst6_2%3a1.2.5-1_arm64.deb ...
+#14 7.927 Unpacking libxtst6:arm64 (2:1.2.5-1) ...
+#14 7.933 Selecting previously unselected package libxv1:arm64.
+#14 7.934 Preparing to unpack .../82-libxv1_2%3a1.0.11-1.1+b3_arm64.deb ...
+#14 7.934 Unpacking libxv1:arm64 (2:1.0.11-1.1+b3) ...
+#14 7.943 Selecting previously unselected package libxxf86dga1:arm64.
+#14 7.944 Preparing to unpack .../83-libxxf86dga1_2%3a1.1.5-1+b3_arm64.deb ...
+#14 7.944 Unpacking libxxf86dga1:arm64 (2:1.1.5-1+b3) ...
+#14 7.950 Selecting previously unselected package x11-utils.
+#14 7.951 Preparing to unpack .../84-x11-utils_7.7+7_arm64.deb ...
+#14 7.951 Unpacking x11-utils (7.7+7) ...
+#14 7.963 Selecting previously unselected package xdg-utils.
+#14 7.964 Preparing to unpack .../85-xdg-utils_1.2.1-2_all.deb ...
+#14 7.965 Unpacking xdg-utils (1.2.1-2) ...
+#14 7.972 Selecting previously unselected package chromium-common.
+#14 7.973 Preparing to unpack .../86-chromium-common_156.0.8078.79-1~deb13u1_arm64.deb ...
+#14 7.973 Unpacking chromium-common (156.0.8078.79-1~deb13u1) ...
+#14 8.331 Selecting previously unselected package chromium.
+#14 8.332 Preparing to unpack .../87-chromium_156.0.8078.79-1~deb13u1_arm64.deb ...
+#14 8.333 Unpacking chromium (156.0.8078.79-1~deb13u1) ...
+#14 9.068 Selecting previously unselected package libonig5:arm64.
+#14 9.069 Preparing to unpack .../88-libonig5_6.9.9-1+b1_arm64.deb ...
+#14 9.069 Unpacking libonig5:arm64 (6.9.9-1+b1) ...
+#14 9.082 Selecting previously unselected package libjq1:arm64.
+#14 9.083 Preparing to unpack .../89-libjq1_1.7.1-6+deb13u4_arm64.deb ...
+#14 9.084 Unpacking libjq1:arm64 (1.7.1-6+deb13u4) ...
+#14 9.093 Selecting previously unselected package jq.
+#14 9.094 Preparing to unpack .../90-jq_1.7.1-6+deb13u4_arm64.deb ...
+#14 9.095 Unpacking jq (1.7.1-6+deb13u4) ...
+#14 9.106 Setting up libxcb-dri3-0:arm64 (1.17.0-2+b1) ...
+#14 9.107 Setting up libwayland-server0:arm64 (1.23.1-3) ...
+#14 9.109 Setting up gtk-update-icon-cache (4.18.6+ds-2) ...
+#14 9.110 Setting up libx11-xcb1:arm64 (2:1.8.12-1) ...
+#14 9.111 Setting up systemd-sysv (257.13-1~deb13u1) ...
+#14 9.119 Setting up libdouble-conversion3:arm64 (3.3.1-1) ...
+#14 9.120 Setting up libxmu6:arm64 (2:1.1.3-3+b4) ...
+#14 9.121 Setting up libxdamage1:arm64 (1:1.1.6-1+b2) ...
+#14 9.123 Setting up libxcb-xfixes0:arm64 (1.17.0-2+b1) ...
+#14 9.124 Setting up libogg0:arm64 (1.3.5-3+b2) ...
+#14 9.125 Setting up libxpm4:arm64 (1:3.5.17-1+deb13u1) ...
+#14 9.126 Setting up libxi6:arm64 (2:1.8.2-1) ...
+#14 9.127 Setting up libglvnd0:arm64 (1.7.0-1+b2) ...
+#14 9.128 Setting up libxtst6:arm64 (2:1.2.5-1) ...
+#14 9.130 Setting up libxcb-glx0:arm64 (1.17.0-2+b1) ...
+#14 9.131 Setting up libxcb-shape0:arm64 (1.17.0-2+b1) ...
+#14 9.132 Setting up libsensors-config (1:3.6.2-2) ...
+#14 9.134 Setting up libxxf86dga1:arm64 (2:1.1.5-1+b3) ...
+#14 9.135 Setting up libcloudproviders0:arm64 (0.3.6-2) ...
+#14 9.136 Setting up xkb-data (2.42-1) ...
+#14 9.137 Setting up libxaw7:arm64 (2:1.0.16-1) ...
+#14 9.138 Setting up libmpg123-0t64:arm64 (1.32.10-1+deb13u1) ...
+#14 9.139 Setting up libcolord2:arm64 (1.4.7-3) ...
+#14 9.141 Setting up libxxf86vm1:arm64 (1:1.1.4-1+b4) ...
+#14 9.142 Setting up libxnvctrl0:arm64 (535.171.04-1+b2) ...
+#14 9.143 Setting up libxcb-present0:arm64 (1.17.0-2+b1) ...
+#14 9.144 Setting up libdconf1:arm64 (0.40.0-5) ...
+#14 9.145 Setting up libasound2-data (1.2.14-1+deb13u1) ...
+#14 9.146 Setting up libz3-4:arm64 (4.13.3-1) ...
+#14 9.148 Setting up libasound2t64:arm64 (1.2.14-1+deb13u1) ...
+#14 9.149 Setting up adwaita-icon-theme (48.1-1) ...
+#14 9.154 update-alternatives: using /usr/share/icons/Adwaita/cursor.theme to provide /usr/share/icons/default/index.theme (x-cursor-theme) in auto mode
+#14 9.154 Setting up libepoxy0:arm64 (1.5.10-2) ...
+#14 9.156 Setting up libnspr4:arm64 (2:4.36-1) ...
+#14 9.157 Setting up libxfixes3:arm64 (1:6.0.0-2+b4) ...
+#14 9.158 Setting up libxcb-sync1:arm64 (1.17.0-2+b1) ...
+#14 9.159 Setting up libavahi-common-data:arm64 (0.8-16) ...
+#14 9.160 Setting up libdbus-1-3:arm64 (1.16.2-2) ...
+#14 9.161 Setting up libopus0:arm64 (1.5.2-2) ...
+#14 9.162 Setting up libxinerama1:arm64 (2:1.1.4-3+b4) ...
+#14 9.164 Setting up libxv1:arm64 (2:1.0.11-1.1+b3) ...
+#14 9.165 Setting up libvorbis0a:arm64 (1.3.7-3) ...
+#14 9.166 Setting up libxrandr2:arm64 (2:1.5.4-1+b3) ...
+#14 9.167 Setting up libflac14:arm64 (1.5.0+ds-2) ...
+#14 9.168 Setting up libsensors5:arm64 (1:3.6.2-2) ...
+#14 9.333 Setting up libopenh264-8:arm64 (2.6.0+dfsg-2) ...
+#14 9.334 Setting up libvulkan1:arm64 (1.4.309.0-1) ...
+#14 9.336 Setting up zlib1g-dev:arm64 (1:1.3.dfsg+really1.3.1-1+deb13u1) ...
+#14 9.337 Setting up libminizip1t64:arm64 (1:1.3.dfsg+really1.3.1-1+deb13u1) ...
+#14 9.338 Setting up libasyncns0:arm64 (0.8-6+b5) ...
+#14 9.339 Setting up libxshmfence1:arm64 (1.3.3-1) ...
+#14 9.341 Setting up at-spi2-common (2.56.2-1+deb13u2) ...
+#14 9.342 Setting up libxcb-randr0:arm64 (1.17.0-2+b1) ...
+#14 9.343 Setting up dbus-session-bus-common (1.16.2-2) ...
+#14 9.344 Setting up libwayland-egl1:arm64 (1.23.1-3) ...
+#14 9.345 Setting up libxkbfile1:arm64 (1:1.1.0-1+b4) ...
+#14 9.346 Setting up dbus-system-bus-common (1.16.2-2) ...
+#14 9.349 Creating group 'messagebus' with GID 997.
+#14 9.349 Creating user 'messagebus' (System Message Bus) with UID 997 and GID 997.
+#14 9.352 Setting up libdrm-common (2.4.124-2) ...
+#14 9.353 Setting up libxcomposite1:arm64 (1:0.4.6-1) ...
+#14 9.354 Setting up xdg-utils (1.2.1-2) ...
+#14 9.355 update-alternatives: using /usr/bin/xdg-open to provide /usr/bin/open (open) in auto mode
+#14 9.356 Setting up libxmuu1:arm64 (2:1.1.3-3+b4) ...
+#14 9.357 Setting up dbus-bin (1.16.2-2) ...
+#14 9.358 Setting up libonig5:arm64 (6.9.9-1+b1) ...
+#14 9.360 Setting up libmp3lame0:arm64 (3.100-6+b3) ...
+#14 9.361 Setting up libvorbisenc2:arm64 (1.3.7-3) ...
+#14 9.362 Setting up libxkbcommon0:arm64 (1.7.0-2) ...
+#14 9.363 Setting up libwayland-client0:arm64 (1.23.1-3) ...
+#14 9.364 Setting up libllvm19:arm64 (1:19.1.7-3+b1) ...
+#14 9.366 Setting up libatk1.0-0t64:arm64 (2.56.2-1+deb13u2) ...
+#14 9.367 Setting up libjq1:arm64 (1.7.1-6+deb13u4) ...
+#14 9.368 Setting up libxcursor1:arm64 (1:1.2.3-1) ...
+#14 9.369 Setting up libavahi-common3:arm64 (0.8-16) ...
+#14 9.370 Setting up libnss3:arm64 (2:3.110-1+deb13u5) ...
+#14 9.371 Setting up dbus-daemon (1.16.2-2) ...
+#14 9.375 Setting up libatspi2.0-0t64:arm64 (2.56.2-1+deb13u2) ...
+#14 9.376 Setting up dbus (1.16.2-2) ...
+#14 9.383 invoke-rc.d: could not determine current runlevel
+#14 9.384 invoke-rc.d: policy-rc.d denied execution of start.
+#14 9.385 Setting up libdrm2:arm64 (2.4.124-2) ...
+#14 9.392 Setting up libwayland-cursor0:arm64 (1.23.1-3) ...
+#14 9.393 Setting up jq (1.7.1-6+deb13u4) ...
+#14 9.394 Setting up libpam-systemd:arm64 (257.13-1~deb13u1) ...
+#14 9.416 debconf: unable to initialize frontend: Dialog
+#14 9.416 debconf: (TERM is not set, so the dialog frontend is not usable.)
+#14 9.416 debconf: falling back to frontend: Readline
+#14 9.418 debconf: unable to initialize frontend: Readline
+#14 9.418 debconf: (This frontend requires a controlling tty.)
+#14 9.418 debconf: falling back to frontend: Teletype
+#14 9.419 debconf: unable to initialize frontend: Teletype
+#14 9.419 debconf: (This frontend requires a controlling tty.)
+#14 9.419 debconf: falling back to frontend: Noninteractive
+#14 9.435 Setting up libsndfile1:arm64 (1.2.2-2+deb13u1) ...
+#14 9.437 Setting up libavahi-client3:arm64 (0.8-16) ...
+#14 9.438 Setting up libdrm-amdgpu1:arm64 (2.4.124-2) ...
+#14 9.440 Setting up libatk-bridge2.0-0t64:arm64 (2.56.2-1+deb13u2) ...
+#14 9.452 Setting up mesa-libgallium:arm64 (25.0.7-2+deb13u1) ...
+#14 9.454 Setting up libgbm1:arm64 (25.0.7-2+deb13u1) ...
+#14 9.455 Setting up libpulse0:arm64 (17.0+dfsg1-2+b1) ...
+#14 9.457 Setting up libgl1-mesa-dri:arm64 (25.0.7-2+deb13u1) ...
+#14 9.459 Setting up dbus-user-session (1.16.2-2) ...
+#14 9.461 Setting up libcups2t64:arm64 (2.4.10-3+deb13u2) ...
+#14 9.462 Setting up libglx-mesa0:arm64 (25.0.7-2+deb13u1) ...
+#14 9.463 Setting up libglx0:arm64 (1.7.0-1+b2) ...
+#14 9.465 Setting up dconf-service (0.40.0-5) ...
+#14 9.466 Setting up libgl1:arm64 (1.7.0-1+b2) ...
+#14 9.467 Setting up x11-utils (7.7+7) ...
+#14 9.471 Setting up chromium-common (156.0.8078.79-1~deb13u1) ...
+#14 9.472 Setting up dconf-gsettings-backend:arm64 (0.40.0-5) ...
+#14 9.473 Setting up libgtk-3-common (3.24.49-3) ...
+#14 9.476 Processing triggers for hicolor-icon-theme (0.18-2) ...
+#14 9.481 Processing triggers for libc-bin (2.41-12+deb13u4) ...
+#14 9.487 Processing triggers for libglib2.0-0t64:arm64 (2.84.4-3~deb13u5) ...
+#14 9.491 Setting up libgtk-3-0t64:arm64 (3.24.49-3) ...
+#14 9.498 Processing triggers for shared-mime-info (2.4-5+b2) ...
+#14 9.858 Processing triggers for procps (2:4.0.4-9) ...
+#14 9.860 procps: Applying updated sysctl configuration
+#14 9.860 sysctl: permission denied on key "kernel.core_pattern"
+#14 9.860 sysctl: permission denied on key "kernel.pid_max"
+#14 9.861 Setting up chromium (156.0.8078.79-1~deb13u1) ...
+#14 9.868 update-alternatives: using /usr/bin/chromium to provide /usr/bin/x-www-browser (x-www-browser) in auto mode
+#14 9.868 update-alternatives: using /usr/bin/chromium to provide /usr/bin/gnome-www-browser (gnome-www-browser) in auto mode
+#14 9.871 Processing triggers for libc-bin (2.41-12+deb13u4) ...
+#14 DONE 9.9s
+
+#15 [linux/arm64 checks 2/3] COPY tests ./tests
+#15 DONE 0.0s
+
+#16 [linux/arm64 checks 3/3] RUN --mount=type=cache,target=/usr/local/cargo/registry --mount=type=cache,target=/src/target cargo fmt --check && CARGO_PROFILE_TEST_DEBUG=0 CARGO_INCREMENTAL=0 cargo test --locked && CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 cargo clippy --all-targets --locked -- -D warnings     && CARGO_PROFILE_TEST_DEBUG=0 CARGO_INCREMENTAL=0 cargo test --locked --test contract --no-run --message-format=json > /tmp/contract-build.jsonl     && binary="$(jq -ser '[.[] | select(.reason == "compiler-artifact" and .target.name == "contract" and .target.kind == ["test"] and .executable != null) | .executable] | if length == 1 then first else error("expected one contract test executable") end' /tmp/contract-build.jsonl)"     && test -x "$binary" && install -Dm755 "$binary" /acceptance/contract && rm /tmp/contract-build.jsonl     && CARGO_PROFILE_TEST_DEBUG=0 CARGO_INCREMENTAL=0 cargo test --locked --test split --no-run --message-format=json > /tmp/split-build.jsonl     && binary="$(jq -ser '[.[] | select(.reason == "compiler-artifact" and .target.name == "split" and .target.kind == ["test"] and .executable != null) | .executable] | if length == 1 then first else error("expected one split test executable") end' /tmp/split-build.jsonl)"     && test -x "$binary" && install -Dm755 "$binary" /acceptance/split && rm /tmp/split-build.jsonl
+#16 0.316    Compiling hotline-computer v0.13.0-rc.3 (/src)
+#16 11.06     Finished `test` profile [unoptimized] target(s) in 10.80s
+#16 11.07      Running unittests src/lib.rs (target/debug/build/hotline-computer/a2d0542af88b5707/out/hotline_computer-a2d0542af88b5707)
+#16 11.07 
+#16 11.07 running 274 tests
+#16 11.07 test a11y::tests::similar_titles_never_cross_application_boundaries ... ok
+#16 11.07 test activity::tests::activity_omits_payloads_and_url_credentials_queries_fragments ... ok
+#16 11.08 test agent::tests::a_known_harness_lends_its_name_and_mark_and_others_their_own_words ... ok
+#16 11.08 test authenticator::tests::the_cose_key_and_attestation_are_the_bytes_webauthn_expects ... ok
+#16 11.08 test agent::tests::identity_tracks_the_last_named_holder_but_honors_an_override ... ok
+#16 11.08 test agent::tests::the_harness_names_the_agent_until_a_holder_header_does ... ok
+#16 11.08 test badge::tests::a_badge_sits_beside_the_field_and_never_on_the_next_control ... ok
+#16 11.08 test authenticator::tests::a_site_that_excludes_a_known_credential_or_wants_another_algorithm_is_told ... ok
+#16 11.08 test authenticator::tests::a_passkey_is_never_offered_to_another_site_or_an_insecure_page ... ok
+#16 11.08 test boot::tests::a_screen_is_width_by_height ... ok
+#16 11.08 test authenticator::tests::a_minted_passkey_signs_for_its_site_and_the_signature_verifies ... ok
+#16 11.08 test bridge::tests::a_held_use_names_the_page_path_only_on_its_own_site ... ok
+#16 11.08 test boot::tests::the_display_socket_is_named_by_its_number ... ok
+#16 11.08 test authenticator::tests::every_signature_counts_past_what_a_site_has_seen ... ok
+#16 11.08 test boot::tests::only_dead_endpoints_are_removed ... ok
+#16 11.08 test bridge::tests::a_passkey_serves_its_site_and_subdomains_only ... ok
+#16 11.08 test bridge::tests::a_request_names_its_relying_party_before_its_page ... ok
+#16 11.08 test bridge::tests::a_repeated_use_is_one_line_in_the_record ... ok
+#16 11.08 test desktop::tests::a_recent_action_expires_after_ten_seconds ... ok
+#16 11.08 test bridge::tests::the_turn_stays_with_the_person_until_handed_back_or_the_agent_acts ... ok
+#16 11.08 test browser::tests::only_top_level_web_pages_are_listed_newest_first ... ok
+#16 11.08 test browser::tests::stale_profile_locks_are_cleared_before_launch ... ok
+#16 11.08 test bridge::tests::host_of_reads_web_origins_only ... ok
+#16 11.08 test desktop::tests::compositing_is_a_straight_alpha_blend ... ok
+#16 11.08 test desktop::tests::a_window_beside_the_column_ends_one_gutter_short_of_it ... ok
+#16 11.08 test desktop::tests::menu_rows_leave_room_for_the_separator ... ok
+#16 11.08 test desktop::tests::the_bar_takes_the_smallest_icon_that_is_still_big_enough ... ok
+#16 11.08 test desktop::tests::work_area_and_column_share_gutters_including_the_opt_out ... ok
+#16 11.08 test desktop::tests::every_harness_mark_decodes_as_a_fourteen_pixel_mask ... ok
+#16 11.08 test draft::tests::a_vite_app_gets_a_web_run_on_the_given_port ... ok
+#16 11.08 test draft::tests::a_tauri_workspace_gets_webkit_its_ui_install_and_an_app_run ... ok
+#16 11.08 test draft::tests::native_toolkits_choose_their_platform ... ok
+#16 11.08 test files_ui::tests::paths_encode_for_uris_and_addresses_name_their_port ... ok
+#16 11.08 test files_ui::tests::an_answer_reaches_the_waiting_request_once ... ok
+#16 11.08 test holds::tests::a_changed_or_revoked_key_takes_its_answers_with_it ... ok
+#16 11.08 test holds::tests::a_held_use_expires_at_its_time_and_a_page_that_gives_up_ends_it ... ok
+#16 11.08 test holds::tests::a_fill_answers_waiting_at_once_and_its_retry_collects_the_answer ... ok
+#16 11.08 test holds::tests::allow_lets_that_key_through_on_that_site_for_ten_minutes ... ok
+#16 11.08 test holds::tests::a_held_use_is_listed_until_answered_and_answered_once ... ok
+#16 11.08 test holds::tests::allow_ten_minutes_covers_the_same_flow_only ... ok
+#16 11.08 test holds::tests::an_approval_nobody_collects_lapses ... ok
+#16 11.08 test holds::tests::an_unattested_allow_lets_one_use_through ... ok
+#16 11.08 test jobs::tests::a_connection_to_the_proxy_is_found_by_both_its_ends ... ok
+#16 11.08 test draft::tests::python_gets_a_virtualenv_and_every_decision_is_explained ... ok
+#16 11.08 test files_ui::tests::a_listing_names_folders_files_and_the_places_around_them ... ok
+#16 11.08 test jobs::tests::a_job_cannot_look_into_another_job_of_the_same_user ... ok
+#16 11.08 test jobs::tests::a_job_whose_domain_fails_does_not_start ... ok
+#16 11.08 test jobs::tests::a_script_that_starts_with_cd_takes_that_folders_environment ... ok
+#16 11.08 test jobs::tests::an_unlabelled_job_is_named_by_its_command_line_cut_to_a_row ... ok
+#16 11.08 test jobs::tests::a_long_stream_answers_with_its_end_from_a_whole_character ... ok
+#16 11.08 test jobs::tests::only_fresh_failures_nobody_has_retried_need_attention ... ok
+#16 11.09 test jobs::tests::a_job_offered_the_persons_secrets_finds_them_by_name_and_never_the_bearer ... ok
+#16 11.09 test jobs::tests::output_reads_as_plain_text ... ok
+#16 11.09 test jobs::tests::output_storage_failure_stops_and_reaps_the_job ... ok
+#16 11.09 test desktop::tests::the_mark_decodes_and_blends_onto_ground ... ok
+#16 11.09 test jobs::tests::stdin_works_without_a_visible_terminal_for_pipes_and_ptys ... ok
+#16 11.09 test keyproxy::policy::tests::ordinary_routes_and_other_origins_pass ... ok
+#16 11.09 test keyproxy::policy::tests::the_desks_routes_are_honoured ... ok
+#16 11.09 test keyproxy::policy::tests::the_minting_routes_are_refused_in_every_spelling ... ok
+#16 11.09 test keyproxy::scrub::tests::a_value_split_across_chunks_is_caught ... ok
+#16 11.09 test keyproxy::scrub::tests::byte_by_byte_and_a_partial_tail ... ok
+#16 11.09 test keyproxy::scrub::tests::the_longer_match_wins ... ok
+#16 11.09 test activity::tests::activity_redacts_before_truncation_and_never_follows_a_log_symlink ... ok
+#16 11.10 test bridge::tests::a_bridge_peer_of_another_user_is_hung_up_on ... ok
+#16 11.10 test holds::tests::the_door_lists_held_uses_and_takes_one_answer_each ... ok
+#16 11.12 test keyproxy::tests::a_delivery_checks_every_use_and_its_generation ... ok
+#16 11.12 test jobs::tests::retry_ids_are_scoped_and_spawn_failures_are_queryable ... ok
+#16 11.13 test jobs::tests::output_is_bounded_and_history_survives_a_new_service ... ok
+#16 11.13 test keyproxy::tests::a_request_naming_another_host_is_refused ... ok
+#16 11.17 test keyproxy::tests::a_key_minting_request_is_refused ... ok
+#16 11.17 test keyproxy::tests::a_redirect_is_handed_back_not_followed ... ok
+#16 11.17 test keyproxy::tests::a_redelivery_keeps_an_unchanged_keys_stand_ins_and_kills_a_changed_ones ... ok
+#16 11.17 test keyproxy::tests::a_regrant_does_not_revive_an_old_stand_in ... ok
+#16 11.17 test keyproxy::tests::each_job_gets_its_own_stand_in_in_the_service_shape ... ok
+#16 11.17 test keyproxy::tests::an_upstream_the_roots_do_not_vouch_for_gets_nothing ... ok
+#16 11.18 test keyproxy::tests::a_stand_in_from_a_finished_job_is_dead ... ok
+#16 11.22 test keyproxy::tests::an_encoded_reply_to_a_keyed_request_is_refused ... ok
+#16 11.22 test keyproxy::tests::a_scheme_free_header_carries_the_whole_key ... ok
+#16 11.22 test keyproxy::tests::j1_curl_bearer_reaches_the_service_with_the_value ... ok
+#16 11.23 test keyproxy::tests::j6_an_unbound_host_sees_only_the_stand_in ... ok
+#16 11.23 test keyproxy::tests::j7_node_fetch_through_the_env_proxy ... ok
+#16 11.23 test keyproxy::tests::plain_http_is_refused ... ok
+#16 11.24 test keyproxy::tests::j2_python_token_scheme_under_strict_verification ... ok
+#16 11.25 test keyproxy::tests::j3_git_basic_through_a_credential_helper ... ok
+#16 11.25 test keyproxy::tests::the_ca_and_its_leaves_are_strict ... ok
+#16 11.25 test keyproxy::tests::the_desk_shape_parses ... ok
+#16 11.26 test keyproxy::tests::a_stand_in_works_only_on_its_own_jobs_connection ... ok
+#16 11.26 test keyproxy::tests::j5_a_stand_in_in_a_body_stays_a_stand_in ... ok
+#16 11.27 test keyproxy::tests::j4_a_reflecting_endpoint_gives_back_the_stand_in ... ok
+#16 11.29 test keyproxy::tests::revoking_stops_injection_on_an_open_connection ... ok
+#16 11.29 test lease::tests::a_hold_that_lapsed_is_taken_off_the_bar_when_it_ends ... ok
+#16 11.29 test lease::tests::only_another_holder_is_refused ... ok
+#16 11.29 test limits::tests::a_cpu_quota_bounds_both_and_unlimited_memory_follows_cpus ... ok
+#16 11.29 test limits::tests::memory_bounds_jobs_even_when_the_host_reports_many_cpus ... ok
+#16 11.29 test limits::tests::resources_say_the_cgroups_limits_and_the_disk_left ... ok
+#16 11.29 test limits::tests::without_a_cgroup_the_available_cpus_decide ... ok
+#16 11.29 test limits::tests::without_a_memory_limit_the_machines_memory_is_said ... ok
+#16 11.29 test links::tests::only_web_addresses_are_links ... ok
+#16 11.29 test logins::tests::a_cookie_belongs_to_its_site_or_a_host_within_it ... ok
+#16 11.29 test manifest::tests::a_create_hook_already_done_is_not_looked_for_again ... ok
+#16 11.29 test manifest::tests::a_desktop_run_may_name_the_title_it_is_ready_at ... ok
+#16 11.29 test manifest::tests::a_hook_whose_script_is_not_there_is_said_before_anything_is_built ... ok
+#16 11.29 test manifest::tests::a_run_is_a_job_and_an_unknown_one_names_the_alternatives ... ok
+#16 11.29 test manifest::tests::a_workspace_still_building_says_its_hooks_wait ... ok
+#16 11.30 test keyproxy::tests::the_desks_refuse_list_adds_to_the_built_in_one ... ok
+#16 11.30 test manifest::tests::environment_gains_service_addresses_and_extends_paths ... ok
+#16 11.30 test manifest::tests::errors_say_what_is_valid ... ok
+#16 11.30 test manifest::tests::layers_concatenate_lists_merge_maps_and_last_wins_for_scalars ... ok
+#16 11.30 test manifest::tests::nix_strings_expand_only_package_references ... ok
+#16 11.30 test manifest::tests::only_the_workspace_is_looked_in_for_a_hooks_script ... ok
+#16 11.30 test manifest::tests::a_workspace_whose_hook_failed_is_not_ready_and_says_what_failed ... ok
+#16 11.30 test observer::tests::a_job_is_named_first_and_identified_underneath ... ok
+#16 11.30 test observer::tests::an_inline_script_shows_as_one_line ... ok
+#16 11.30 test manifest::tests::platforms_pull_in_what_they_require_and_render_their_runtime ... ok
+#16 11.30 test observer::tests::running_headers_use_the_agent_marker_and_a_white_label ... ok
+#16 11.30 test observer::tests::the_banner_is_the_name_and_nothing_more_unless_narrowed ... ok
+#16 11.30 test observer::tests::the_ending_names_the_job_again_and_says_how_it_went ... ok
+#16 11.30 test observer::tests::the_rc_file_sets_the_prompt_and_leaves_room_for_the_operators_own ... ok
+#16 11.30 test observer::tests::the_persons_bash_is_never_the_store_one ... ok
+#16 11.30 test paint::tests::a_rounded_pill_leaves_its_corners_to_the_background ... ok
+#16 11.30 test paint::tests::icons_downscale_with_their_alpha ... ok
+#16 11.30 test paint::tests::shadows_are_soft_offset_and_bounded ... ok
+#16 11.31 test keyproxy::tests::the_value_goes_only_in_its_header_and_schemes ... ok
+#16 11.31 test passkeys::tests::a_denial_is_told_to_the_page_and_the_door_ends_the_arming ... ok
+#16 11.31 test passkeys::tests::a_loopback_site_is_armed_by_name_and_an_address_is_refused ... ok
+#16 11.31 test passkeys::tests::a_request_that_left_with_its_page_is_forgotten_and_a_told_one_makes_way ... ok
+#16 11.31 test passkeys::tests::a_request_waits_for_the_person_and_an_approval_lets_one_credential_be_kept ... ok
+#16 11.31 test passkeys::tests::a_site_for_a_passkey_is_a_host_name ... ok
+#16 11.31 test passkeys::tests::an_arming_past_its_time_is_gone ... ok
+#16 11.31 test portal::tests::the_portals_options_become_what_the_picker_asks ... ok
+#16 11.31 test ready::tests::a_run_answers_with_its_window_now_and_waits_for_the_title_asked_for ... ok
+#16 11.31 test ready::tests::a_title_is_plain_text_of_bounded_length ... ok
+#16 11.31 test ready::tests::a_title_matches_as_text_within_the_title_ignoring_case ... ok
+#16 11.31 test ready::tests::an_answer_lists_a_bounded_number_of_windows_with_bounded_titles ... ok
+#16 11.31 test screen::tests::a_frame_leads_with_its_geometry ... ok
+#16 11.31 test screen::tests::a_union_is_the_bounding_box ... ok
+#16 11.31 test secrets::tests::a_fill_resolves_a_field_by_name_and_a_code_from_the_seed ... ok
+#16 11.31 test paint::tests::a_light_glyph_edge_gets_more_coverage_but_dark_ink_does_not ... ok
+#16 11.31 test secrets::tests::a_login_and_a_passkey_are_kept_by_kind_and_a_job_never_sees_them ... ok
+#16 11.31 test secrets::tests::a_login_is_typed_on_exactly_its_origins ... ok
+#16 11.31 test secrets::tests::a_login_or_passkey_new_to_the_set_is_an_arrival_and_a_variable_never ... ok
+#16 11.31 test secrets::tests::a_name_is_an_environment_variable_and_the_computers_own_are_refused ... ok
+#16 11.31 test secrets::tests::a_passkeys_site_is_its_rp_id_on_any_port ... ok
+#16 11.31 test secrets::tests::a_site_allows_its_own_pages_and_no_other ... ok
+#16 11.31 test paint::tests::text_is_antialiased_and_measured ... ok
+#16 11.31 test secrets::tests::a_typed_code_is_carried_only_as_a_number_of_its_own ... ok
+#16 11.31 test secrets::tests::a_job_finds_a_secret_by_name_and_the_tools_answer_the_name_alone ... ok
+#16 11.31 test secrets::tests::loopback_in_any_spelling_and_other_keys_are_readable ... ok
+#16 11.32 test secrets::tests::the_codes_a_login_could_show_now_are_redacted ... ok
+#16 11.32 test lease::tests::a_call_stuck_behind_another_reports_the_wait ... ok
+#16 11.32 test secrets::tests::the_extension_is_offered_a_login_only_where_it_may_be_typed ... ok
+#16 11.32 test secrets::tests::the_set_is_taken_whole_or_the_last_one_kept ... ok
+#16 11.32 test secrets::tests::the_use_rides_with_the_set_and_a_change_applies_from_the_next_use ... ok
+#16 11.32 test serve::tests::a_client_cannot_name_itself_the_person ... ok
+#16 11.32 test serve::tests::a_computer_with_no_token_does_not_start_by_accident ... ok
+#16 11.32 test serve::tests::a_request_is_taken_by_address_or_listed_name_only ... ok
+#16 11.33 test secrets::tests::a_value_is_taken_out_in_every_spelling_a_url_a_form_or_html_gives_it ... ok
+#16 11.33 test secrets::tests::every_value_is_taken_out_of_a_text_whole_and_in_its_json_spelling ... ok
+#16 11.34 test secrets::tests::the_door_takes_the_set_from_the_bearer_alone_and_answers_no_value ... ok
+#16 11.34 test serve::tests::secret_comparison_needs_equal_bytes ... ok
+#16 11.34 test serve::tests::the_listing_carries_the_cache_hints_a_modern_client_requires ... ok
+#16 11.34 test signin::cdp::tests::calls_are_answered_by_id_and_events_are_broadcast ... ok
+#16 11.34 test signin::lock::tests::a_hop_carrying_a_sign_in_proof_or_a_script_address_is_blocked ... ok
+#16 11.34 test signin::lock::tests::a_signed_in_sites_pages_stay_and_plain_links_go_to_the_general_browser ... ok
+#16 11.34 test signin::screen::tests::a_frame_is_the_viewers_header_and_the_png ... ok
+#16 11.34 test signin::screen::tests::keys_become_devtools_events ... ok
+#16 11.34 test signin::sessions::tests::a_shared_site_is_a_host_or_an_origin ... ok
+#16 11.34 test serve::tests::another_sites_page_and_a_rebound_name_are_turned_away_before_the_token ... ok
+#16 11.35 test serve::tests::only_an_authenticated_mcp_request_updates_the_displayed_name ... ok
+#16 11.35 test serve::tests::public_fonts_are_allowlisted_and_never_resolve_paths ... ok
+#16 11.35 test signin::tests::a_granted_passkeys_site_opens_here_unless_a_login_names_its_host ... ok
+#16 11.35 test signin::tests::a_login_granted_on_a_passkeys_host_revokes_nothing ... ok
+#16 11.35 test signin::tests::a_loopback_site_is_armed_and_its_page_asks_the_person ... ok
+#16 11.35 test signin::tests::a_passkey_alone_opens_its_site_here_and_signs_in ... ok
+#16 11.35 test signin::tests::a_passkey_signs_in_on_its_site_through_the_signed_in_browser ... ok
+#16 11.35 test signin::tests::a_passkey_signs_on_a_host_whose_login_signed_in_after_an_arming ... ok
+#16 11.40 test keyproxy::tests::the_value_is_scrubbed_from_a_reply ... ok
+#16 11.44 test bridge::tests::an_ask_me_login_waits_for_the_desk_even_while_the_person_has_the_screen ... ok
+#16 11.62 test signin::tests::a_button_the_page_adds_while_typing_keeps_the_fill ... ok
+#16 11.86 test keyproxy::tests::revoking_stops_a_running_curl_loop ... ok
+#16 11.94 test signin::tests::a_download_is_handed_to_the_agents_downloads ... ok
+#16 12.09 test jobs::tests::deadlines_retain_partial_output_and_cancellation_reaps_the_child ... ok
+#16 12.20 test signin::tests::a_get_form_on_a_page_of_another_charset_is_refused ... ok
+#16 12.69 test activity::tests::activity_keeps_newest_500_and_removes_terminal_control_codes ... ok
+#16 13.12 test signin::tests::a_passkey_signs_only_for_a_signed_in_tabs_own_origin ... ok
+#16 13.36 test signin::tests::a_password_field_a_script_built_with_no_form_is_typed ... ok
+#16 14.47 test signin::tests::a_password_in_a_get_form_is_typed_but_never_sent_in_an_address ... ok
+#16 14.47 test signin::tests::an_armed_loopback_site_opens_here_on_its_own_port ... ok
+#16 15.67 test signin::tests::a_password_sent_off_the_site_never_leaves ... ok
+#16 16.30 test signin::tests::a_revocation_outlives_a_kill_before_chromium_writes_it ... ok
+#16 16.84 test signin::tests::a_share_revoked_while_stopped_is_gone_after_a_restart ... ok
+#16 17.09 test signin::tests::a_sign_in_that_cannot_finish_is_handed_to_the_person ... ok
+#16 17.36 test signin::tests::a_sign_in_waiting_on_the_person_is_listed_for_the_desk ... ok
+#16 18.22 test signin::tests::a_stop_inside_a_revocation_does_not_keep_the_revoked_session ... ok
+#16 18.24 test signin::tests::shares_go_to_the_signed_in_browser_only_where_there_is_one ... ok
+#16 22.01 test signin::tests::a_wait_during_sign_in_resolves_only_after_the_next_document ... ok
+#16 22.31 test signin::tests::allow_covers_this_tabs_sign_in_only ... ok
+#16 22.56 test split::broker::home_tests::the_broker_never_opens_a_path_in_the_agents_home ... ok
+#16 22.56 test split::broker::tests::the_bearer_never_rides_on_to_the_runner ... ok
+#16 22.56 test split::init::tests::a_fresh_home_of_roots_is_given_to_the_agent_and_no_other ... ok
+#16 22.56 test split::keys::tests::a_delivery_that_does_not_say_what_a_variable_is_is_refused ... ok
+#16 22.63 test split::keys::tests::a_protected_value_reaches_no_job_env_log_or_runner_frame ... ok
+#16 22.68 test split::keys::tests::a_readable_variable_behaves_as_today ... ok
+#16 22.80 test split::keys::tests::a_stand_in_from_a_finished_job_is_dead ... ok
+#16 22.80 test split::keys::tests::a_v2_delivery_reads_every_kind_and_the_use_shapes ... ok
+#16 22.80 test split::keys::tests::an_older_generation_changes_nothing_and_v1_unbinds_every_key ... ok
+#16 22.80 test split::keys::tests::legacy_takes_readable_variables_in_v2_and_v1_as_today ... ok
+#16 23.41 test split::keys::tests::revoking_stops_a_running_curl_loop ... ok
+#16 23.42 test split::keys::tests::the_public_bundle_is_the_system_roots_and_this_boots_ca ... ok
+#16 23.48 test split::migration::tests::an_old_snapshot_is_not_restored_until_cleaned ... ok
+#16 23.52 test split::migration::tests::deleting_answers_for_the_old_snapshots_and_a_new_home_has_nothing_to_do ... ok
+#16 23.52 test split::tests::capabilities_attest_with_the_boots_key_and_cover_the_mode ... ok
+#16 23.52 test split::wire::tests::a_frame_is_a_length_and_json ... ok
+#16 23.61 test split::wire::tests::both_sides_ask_and_answer_over_one_line ... ok
+#16 23.61 test split::wire::tests::descriptors_cross_a_line ... ok
+#16 23.61 test tools::activity_tests::cursor_intent_uses_only_static_action_words ... ok
+#16 23.61 test tools::activity_tests::reads_do_not_make_the_agent_look_busy ... ok
+#16 23.61 test tools::browser::tests::a_real_text_and_a_real_secret_together_is_an_error ... ok
+#16 23.61 test tools::browser::tests::an_empty_text_alone_clears_the_field ... ok
+#16 23.61 test tools::browser::tests::an_unused_empty_secret_alongside_text_still_fills_with_text ... ok
+#16 23.61 test tools::browser::tests::an_unused_empty_text_alongside_a_secret_still_fills_with_the_secret ... ok
+#16 23.61 test tools::browser::tests::neither_argument_is_an_error ... ok
+#16 23.61 test tools::browser::tests::secret_only_fills_with_secret ... ok
+#16 23.61 test tools::browser::tests::text_only_fills_with_text ... ok
+#16 23.61 test tools::files::tests::refuses_a_symlink_that_leaves_home ... ok
+#16 23.61 test tools::files::tests::refuses_an_existing_file_symlink_that_leaves_home ... ok
+#16 23.61 test tools::files::tests::refuses_before_creating_a_parent_outside_home ... ok
+#16 23.61 test tools::files::tests::the_computers_own_records_are_not_fetched_or_written ... ok
+#16 23.61 test tools::input::tests::the_wheel_scrolls_the_way_it_is_told ... ok
+#16 23.61 test tools::shell::tests::a_line_goes_to_the_shell_and_a_name_does_not ... ok
+#16 24.06 test signin::tests::an_image_button_never_posts_a_password_elsewhere ... ok
+#16 24.11 test tools::shell::tests::exec_answers_with_the_end_of_a_long_log_and_where_the_rest_is ... ok
+#16 24.12 test tools::state::tests::a_snapshot_over_the_limit_stops_there_and_keeps_the_one_before ... ok
+#16 24.12 test tools::state::tests::lost_and_found_is_in_no_snapshot_and_no_user_file ... ok
+#16 24.12 test tools::state::tests::names_cannot_escape_the_state_directories ... ok
+#16 24.12 test tools::windows::tests::a_large_application_gets_its_minimum_width_above_the_bar ... ok
+#16 24.12 test tools::windows::tests::activity_splits_the_observer_space_above_the_persons_shell ... ok
+#16 24.12 test tools::windows::tests::every_app_shares_the_left_pane_and_takes_the_area_without_a_column ... ok
+#16 24.12 test tools::windows::tests::impossible_layouts_fail_before_moving_any_windows ... ok
+#16 24.12 test tools::windows::tests::opting_out_removes_both_outer_and_inner_gaps ... ok
+#16 24.12 test tools::windows::tests::the_persons_shell_takes_the_bottom_third_of_the_column_under_a_line ... ok
+#16 24.12 test viewer::tests::a_caller_that_can_set_headers_may_present_the_bearer_there_instead ... ok
+#16 24.12 test viewer::tests::a_file_from_the_persons_computer_lands_whole_under_the_home ... ok
+#16 24.13 test viewer::tests::an_upload_over_the_limit_is_refused_and_leaves_nothing_behind ... ok
+#16 24.13 test viewer::tests::cancelling_or_failing_an_upload_removes_its_private_spool ... ok
+#16 24.13 test viewer::tests::create_only_uploads_publish_once_and_keep_the_competing_file ... ok
+#16 24.15 test viewer::tests::http_files_advertises_and_enforces_create_only_with_header_auth ... ok
+#16 24.16 test viewer::tests::ping_answers_without_taking_or_renewing_the_lease ... ok
+#16 24.16 test viewer::tests::the_control_bar_is_told_whose_screen_it_is ... ok
+#16 24.17 test viewer::tests::the_files_panel_sees_the_home_and_nothing_above_it ... ok
+#16 24.17 test viewer::tests::the_files_panel_wants_the_token ... ok
+#16 24.17 test viewer::tests::the_page_is_told_where_the_hands_are ... ok
+#16 24.17 test viewer::tests::the_screen_is_the_teammate_s_until_a_person_takes_it ... ok
+#16 24.17 test workspace::tests::a_cached_definition_attaches_and_shell_jobs_inherit_it ... ok
+#16 24.17 test workspace::tests::a_manifest_workspace_keeps_its_base_until_it_asks_for_the_new_one ... ok
+#16 24.17 test workspace::tests::flakes_use_the_requested_local_shell_and_cannot_escape_home ... ok
+#16 24.17 test workspace::tests::image_versions_do_not_invalidate_existing_environment_but_missing_store_paths_do ... ok
+#16 24.17 test workspace::tests::preparation_obeys_the_lease_and_home_boundary_through_the_state_tool ... ok
+#16 24.17 test workspace::tests::the_catalog_names_are_attribute_paths_and_read_well ... ok
+#16 24.17 test workspace::tests::the_operator_spelling_takes_names_flags_and_a_workspace ... ok
+#16 24.17 test workspace::tests::workspace_pins_survive_dependency_changes_and_unsafe_attributes_are_rejected ... ok
+#16 24.17 test x11::tests::a_region_is_clipped_to_the_screen ... ok
+#16 24.17 test x11::tests::a_window_under_another_is_covered_and_a_peeking_one_is_not ... ok
+#16 24.17 test xtest::tests::characters_are_their_own_keysyms ... ok
+#16 24.17 test xtest::tests::named_keys_are_looked_up ... ok
+#16 24.17 test xtest::tests::x_names_and_browser_names_both_resolve ... ok
+#16 24.63 test tools::shell::tests::a_waiting_command_does_not_lock_out_desktop_takeover ... ok
+#16 24.96 test signin::tests::an_oauth_callback_never_reaches_the_general_browser ... ok
+#16 25.21 test signin::tests::eval_is_refused_on_a_signed_in_site ... ok
+#16 25.83 test signin::tests::no_observation_during_sign_in_including_screenshots ... ok
+#16 26.05 test signin::tests::removing_a_share_signs_the_site_out ... ok
+#16 26.36 test signin::tests::revoking_a_login_signs_its_site_out ... ok
+#16 26.58 test signin::tests::site_input_never_reaches_display_0 ... ok
+#16 26.86 test signin::tests::the_site_screen_streams_frames_in_the_viewer_protocol ... ok
+#16 26.86 
+#16 26.86 test result: ok. 274 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 15.78s
+#16 26.86 
+#16 26.86      Running unittests src/main.rs (target/debug/build/hotline-computer/997eaa9322c1fdc2/out/hotline_computer-997eaa9322c1fdc2)
+#16 26.86 
+#16 26.86 running 0 tests
+#16 26.86 
+#16 26.86 test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+#16 26.86 
+#16 26.86      Running tests/contract.rs (target/debug/build/hotline-computer/7395e1dfc640a899/out/contract-7395e1dfc640a899)
+#16 26.86 
+#16 26.86 running 1 test
+#16 26.86 test image_honors_the_computer_contract ... ok
+#16 26.86 
+#16 26.86 test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+#16 26.86 
+#16 26.86      Running tests/split.rs (target/debug/build/hotline-computer/54ab9d989e3dd520/out/split-54ab9d989e3dd520)
+#16 26.86 
+#16 26.86 running 4 tests
+#16 26.86 test boot_splits_and_keeps_no_caps ... ok
+#16 26.86 test legacy_boot_is_todays_single_user ... ok
+#16 26.86 test a_job_reaches_nothing_of_the_brokers ... ok
+#16 26.86 test a_job_cannot_bind_the_door_or_proxy_port ... ok
+#16 26.86 
+#16 26.86 test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+#16 26.86 
+#16 26.86    Doc-tests hotline_computer
+#16 27.09 
+#16 27.09 running 0 tests
+#16 27.09 
+#16 27.09 test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+#16 27.09 
+#16 27.18     Checking hotline-computer v0.13.0-rc.3 (/src)
+#16 30.89     Finished `dev` profile [unoptimized] target(s) in 3.78s
+#16 30.97     Finished `test` profile [unoptimized] target(s) in 0.06s
+#16 31.05     Finished `test` profile [unoptimized] target(s) in 0.05s
+#16 DONE 31.1s
+
+#17 exporting to oci image format
+#17 exporting layers
+#17 exporting layers 9.6s done
+#17 exporting manifest sha256:000aaafd63b3312f9101d83e8771ad1459818d50baebf463bdc790c33644a4d3 done
+#17 exporting config sha256:e956e7371ac3aca999b86ddf7fad74ead864c514352ce48d1b4de823d59ca648 done
+#17 exporting manifest list sha256:d4b861cd9a8911fff472b07e6cf1c365cbed47d8f0a23a3fa1d01720fd26f2a9 done
+#17 sending tarball
+#17 sending tarball 3.2s done
+#17 DONE 12.8s
+hotline-computer:0.13.0-rc.3-relcheck-checks
+# 2026-11-22T08:38:21Z checks: exit 0

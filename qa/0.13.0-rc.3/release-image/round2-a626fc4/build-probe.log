@@ -1,0 +1,65 @@
+# 2026-11-22T08:06:12Z probe: /usr/local/bin/container build -f qa/0.13.0-rc.3/Dockerfile.probe --build-arg BASE=hotline-computer:0.13.0-rc.3-relcheck --build-arg HOTLINE_BUILD_REVISION=a626fc466d0db9f12d6b7492b264ee8494b84316 --build-arg HOTLINE_BUILD_CHANNEL=release -t hotline-computer:0.13.0-rc.3-relcheck-probe .
+#1 [resolver] fetching image...docker.io/library/rust:1-trixie
+#1 DONE 0.0s
+
+#2 [resolver] fetching image...docker.io/library/hotline-computer:0.13.0-rc.3-relcheck
+#2 DONE 0.0s
+
+#3 [internal] load build definition from Dockerfile
+#3 transferring dockerfile: 10.67kB 0.1s done
+#3 DONE 0.1s
+
+#4 [internal] load .dockerignore
+#4 transferring context: 30B 0.1s
+#4 transferring context: 138B 0.1s done
+#4 DONE 0.1s
+
+#5 oci-layout://docker.io/library/rust:1-trixie@sha256:223cc32ddca8f3ee90c436dbc94b6b5f052ea7f9653c5201e9612f08ad7d21b8
+#5 resolve docker.io/library/rust:1-trixie@sha256:223cc32ddca8f3ee90c436dbc94b6b5f052ea7f9653c5201e9612f08ad7d21b8 done
+#5 DONE 0.0s
+
+#6 oci-layout://docker.io/library/hotline-computer:0.13.0-rc.3-relcheck@sha256:f32b3c615bc086264fc35c57a6d7d31d8524d476744a3caec2b0ebff37e56005
+#6 resolve docker.io/library/hotline-computer:0.13.0-rc.3-relcheck@sha256:f32b3c615bc086264fc35c57a6d7d31d8524d476744a3caec2b0ebff37e56005 done
+#6 DONE 0.0s
+
+#7 [internal] load build context
+#7 transferring context: 2.83MB 0.1s done
+#7 DONE 0.1s
+
+#8 [linux/arm64 build 1/8] RUN apt-get update && apt-get install -y --no-install-recommends cmake perl pkg-config && rm -rf /var/lib/apt/lists/*
+#8 CACHED
+
+#9 [linux/arm64 build 4/8] COPY src ./src
+#9 CACHED
+
+#10 [linux/arm64 build 2/8] WORKDIR /src
+#10 CACHED
+
+#11 [linux/arm64 build 3/8] COPY Cargo.toml Cargo.lock ./
+#11 CACHED
+
+#12 [linux/arm64 build 5/8] COPY assets ./assets
+#12 CACHED
+
+#13 [linux/arm64 build 6/8] COPY skills ./skills
+#13 CACHED
+
+#14 [linux/arm64 build 7/8] RUN --mount=type=cache,target=/usr/local/cargo/registry --mount=type=cache,target=/src/target-probe CARGO_TARGET_DIR=/src/target-probe cargo build --release --locked --features probe-roots && cp /src/target-probe/release/hotline-computer /usr/local/bin/hotline-computer
+#14 0.133    Compiling hotline-computer v0.13.0-rc.3 (/src)
+#14 23.02     Finished `release` profile [optimized] target(s) in 22.98s
+#14 DONE 23.1s
+
+#15 [linux/arm64 stage-1 1/2] COPY --from=build /usr/local/bin/hotline-computer /usr/bin/hotline-computer
+#15 DONE 0.0s
+
+#16 exporting to oci image format
+#16 exporting layers
+#16 exporting layers 0.6s done
+#16 exporting manifest sha256:30bda335aa1e2f8d72e196874a2fb41cc6028863fb9ef7f7debbd8adbf6f97d0 done
+#16 exporting config sha256:98cef1ad1bd4b95c10f55980ce108cd1c973faf0f7306b38c3b13d9af018287c done
+#16 exporting manifest list sha256:3b27dc9ce8ba4e16c1e5a8558d3aab476e981fd2b656dc3a785bc6c8e93676b1 done
+#16 sending tarball
+#16 sending tarball 2.5s done
+#16 DONE 3.1s
+hotline-computer:0.13.0-rc.3-relcheck-probe
+# 2026-11-22T08:06:44Z probe: exit 0
