@@ -976,6 +976,9 @@ async fn a_passkey_alone_opens_its_site_here_and_signs_in() {
         crate::authenticator::mint(&crate::authenticator::creation(&details).unwrap()).unwrap();
     let mut key = serde_json::to_value(&passkey).unwrap();
     key["kind"] = json!("passkey");
+    // The test site is on loopback: granted readable, as a person would
+    // have to for a site the computer itself serves.
+    key["readable"] = json!(true);
     let rig = rig(json!({})).await;
     let mut set: BTreeMap<String, crate::secrets::Delivered> = BTreeMap::new();
     set.insert("PK".into(), serde_json::from_value(key).unwrap());
@@ -1116,6 +1119,9 @@ async fn a_passkey_signs_in_on_its_site_through_the_signed_in_browser() {
     let mut logins = login();
     let mut key = serde_json::to_value(&passkey).unwrap();
     key["kind"] = json!("passkey");
+    // The test site is on loopback: granted readable, as a person would
+    // have to for a site the computer itself serves.
+    key["readable"] = json!(true);
     let rig = rig(logins.take()).await;
     let mut set: BTreeMap<String, crate::secrets::Delivered> = BTreeMap::new();
     set.insert("PK".into(), serde_json::from_value(key).unwrap());
