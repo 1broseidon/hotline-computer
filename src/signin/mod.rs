@@ -143,8 +143,9 @@ struct Inner {
     tabs: Mutex<Tabs>,
     /// Shared sites by share name: what `PUT /sessions` brought.
     sessions: Mutex<BTreeMap<String, Vec<Origin>>>,
-    /// The granted sites as of the last look, to notice one revoked.
-    logins: Mutex<Vec<Origin>>,
+    /// The sites each granted login and passkey names, by name, as of the
+    /// last look, to notice one revoked.
+    logins: Mutex<BTreeMap<String, Vec<Origin>>>,
     /// The making of a passkey: the armed site opens here while it lasts.
     arming: Mutex<Option<crate::passkeys::Passkeys>>,
     /// The sessions held across an idle stop, as DevTools reported them.
@@ -339,6 +340,37 @@ impl Signin {
         sites
     }
 
+    /// The sites each granted login and passkey names, by its name: a
+    /// login's own, and a passkey's host as WebAuthn scopes it. What a
+    /// revocation is told by: a name gone from it, or a site gone from a
+    /// name. Not `granted_sites`, which spells a passkey's site as the login
+    /// on its host names it, so a login granted there would read as the
+    /// passkey's site revoked.
+    fn granted_by_name(&self) -> BTreeMap<String, Vec<Origin>> {
+        let mut granted: BTreeMap<String, Vec<Origin>> = BTreeMap::new();
+        for entry in self.0.secrets.catalog() {
+            let (Some(name), "login") = (
+                entry["name"].as_str(),
+                entry["kind"].as_str().unwrap_or_default(),
+            ) else {
+                continue;
+            };
+            granted.insert(
+                name.to_owned(),
+                entry["sites"]
+                    .as_array()
+                    .into_iter()
+                    .flatten()
+                    .filter_map(|site| site.as_str().and_then(|site| Origin::site(site).ok()))
+                    .collect(),
+            );
+        }
+        for (name, passkey) in self.0.secrets.passkeys() {
+            granted.insert(name, Origin::relying_party(&passkey.rp_id));
+        }
+        granted
+    }
+
     fn shared_sites(&self) -> Vec<Origin> {
         self.0
             .sessions
@@ -403,9 +435,26 @@ impl Signin {
         if crate::secrets::is_loopback_host(rp_id) {
             return Ok(());
         }
-        let tab = self.new_tab(&running).await?;
-        self.navigate(&running.cdp, &tab.session, &format!("https://{rp_id}/"))
-            .await
+        self.open_once(&running, &format!("https://{rp_id}/")).await
+    }
+
+    /// Opens `url` in a new tab, unless a tab is on its origin already. A
+    /// passkey signs only for an origin exactly one tab is on (`flow_on`),
+    /// so a second tab there would refuse every passkey on that site until
+    /// one of them closed: what a site signed in by its login, then armed
+    /// for a passkey, got.
+    async fn open_once(&self, running: &Running, url: &str) -> Result<(), String> {
+        let origin = Origin::of_page(url)?.to_string();
+        let open = self
+            .lock_tabs()
+            .list
+            .iter()
+            .any(|tab| Origin::of_page(&tab.url).is_ok_and(|page| page.to_string() == origin));
+        if open {
+            return Ok(());
+        }
+        let tab = self.new_tab(running).await?;
+        self.navigate(&running.cdp, &tab.session, url).await
     }
 
     /// Where the person arms the making of a passkey.
@@ -681,7 +730,7 @@ impl Signin {
     /// Called after each delivery and each second while the browser runs;
     /// with the browser stopped the sites are cleared when it next starts.
     pub async fn notice_revocations(&self) {
-        let now = self.granted_sites();
+        let now = self.granted_by_name();
         let before = std::mem::replace(
             &mut *self
                 .0
@@ -690,10 +739,15 @@ impl Signin {
                 .unwrap_or_else(std::sync::PoisonError::into_inner),
             now.clone(),
         );
-        let gone: Vec<Origin> = before
-            .into_iter()
-            .filter(|site| !now.contains(site))
-            .collect();
+        let mut gone: Vec<Origin> = Vec::new();
+        for (name, sites) in before {
+            let kept = now.get(&name);
+            for site in sites {
+                if !kept.is_some_and(|kept| kept.contains(&site)) && !gone.contains(&site) {
+                    gone.push(site);
+                }
+            }
+        }
         if !gone.is_empty() {
             let _ = self.forget(&gone).await;
         }
@@ -2209,11 +2263,7 @@ impl Signin {
             .partition(|cookie| cookie_within(cookie, sites));
         if !gone.is_empty() {
             cdp.call("Storage.clearCookies", json!({})).await?;
-            let kept: Vec<Value> = kept.iter().map(cookie_param).collect();
-            if !kept.is_empty() {
-                cdp.call("Storage.setCookies", json!({"cookies": kept}))
-                    .await?;
-            }
+            set_cookies(cdp, kept.iter().map(cookie_param).collect()).await;
         }
         for site in sites {
             let _ = cdp
@@ -2255,6 +2305,32 @@ fn armed_sites(rp_id: &str, sites: &[Origin]) -> Vec<Origin> {
         return Vec::new();
     }
     Origin::relying_party(rp_id)
+}
+
+/// Sets `cookies` again after `Storage.clearCookies`: all at once, or, if
+/// the browser refuses the batch for one of them, each on its own, so one
+/// it will not take back does not sign every other site out (a share's
+/// among them).
+async fn set_cookies(cdp: &Cdp, cookies: Vec<Value>) {
+    if cookies.is_empty()
+        || cdp
+            .call("Storage.setCookies", json!({"cookies": cookies}))
+            .await
+            .is_ok()
+    {
+        return;
+    }
+    for cookie in cookies {
+        if let Err(error) = cdp
+            .call("Storage.setCookies", json!({"cookies": [cookie]}))
+            .await
+        {
+            eprintln!(
+                "hotline-computer: signed-in browser: a cookie for {} was not set again: {error}",
+                cookie["domain"].as_str().unwrap_or_default()
+            );
+        }
+    }
 }
 
 /// The sites revoked since the browser last closed in order, as written by

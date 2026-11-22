@@ -846,6 +846,73 @@ fn a_granted_passkeys_site_opens_here_unless_a_login_names_its_host() {
     assert!(!signin.routes("http://localhost:8600/passkey"));
 }
 
+/// A revocation is a login or a passkey taken away, or a site it no longer
+/// names: not a grant that only changes how a host's site is spelled. In
+/// the rc.3 ACP run, granting a login on a host whose passkey was granted
+/// read as the passkey's site revoked, and signed the host out (and, with
+/// it, cleared every cookie in the browser to set the others back).
+#[tokio::test]
+async fn a_login_granted_on_a_passkeys_host_revokes_nothing() {
+    let root = tempfile::tempdir().unwrap();
+    let secrets = crate::secrets::Secrets::default();
+    let signin = Signin::new(
+        Box::new(spawn::Direct::new(root.path().join("signin"))),
+        Box::new(Recorder::default()),
+        secrets.clone(),
+        None,
+    );
+    let passkey = json!({"kind": "passkey", "rpId": "example.com", "credentialId": "AQID",
+        "privateKey": "MIGHAgEAMBMGByqGSM49AgEGCCqGSM49AwEHBG0wawIBAQQgB9aEvdD1k7n55Wu+sDtf5cUbUumdw/XyKmgddnpO1eihRANCAASw/VbAXHGTIuqCMysLtvnlfwqu+ZFr7EQiwzWmLuynjO5Z/X+o4fuRzcMX916P1LxoWt4Ywc5KEVBuTzUzjBVI"});
+    let mut login = login()["SITE"].clone();
+    login["sites"] = json!(["https://example.com"]);
+    // The browser is not running: what a delivery revokes waits for its
+    // next start, and is read here.
+    let revoked = |signin: &Signin| -> Vec<String> {
+        let mut sites: Vec<String> = std::mem::take(&mut *signin.0.revoked.lock().unwrap())
+            .iter()
+            .map(ToString::to_string)
+            .collect();
+        sites.sort();
+        sites
+    };
+    let deliver = |set: Value| async {
+        secrets
+            .replace(serde_json::from_value(set).unwrap())
+            .unwrap();
+        signin.notice_revocations().await;
+    };
+    deliver(json!({"PK": passkey})).await;
+    assert!(revoked(&signin).is_empty());
+    deliver(json!({"PK": passkey, "SITE": login})).await;
+    assert!(
+        revoked(&signin).is_empty(),
+        "a login granted on the passkey's host revoked nothing"
+    );
+    deliver(json!({"PK": passkey, "SITE": login})).await;
+    assert!(revoked(&signin).is_empty(), "the same set again");
+    deliver(json!({"PK": passkey})).await;
+    assert_eq!(
+        revoked(&signin),
+        ["https://example.com"],
+        "the login's site"
+    );
+    deliver(json!({"PK": passkey, "SITE": login})).await;
+    deliver(json!({"SITE": login})).await;
+    assert_eq!(
+        revoked(&signin),
+        ["https://example.com"],
+        "the passkey's own site, though the login still names the host"
+    );
+    let mut moved = login.clone();
+    moved["sites"] = json!(["https://login.example.com"]);
+    deliver(json!({"SITE": moved})).await;
+    assert_eq!(
+        revoked(&signin),
+        ["https://example.com"],
+        "a site the login no longer names"
+    );
+}
+
 /// An arming for a site on the computer itself opens that host on the
 /// port its page is on, as the passkey it makes will once granted, and no
 /// other host; a site on the web is opened as before, on https alone.
@@ -883,6 +950,96 @@ fn an_armed_loopback_site_opens_here_on_its_own_port() {
     assert!(signin.routes("https://github.com/settings/security"));
     assert!(!signin.routes("https://github.com:8443/"));
     assert!(!signin.routes(page));
+}
+
+/// What the rc.3 ACP run hit: a site with a login and a passkey on one
+/// host, signed in there, then armed for a passkey. The arming opened the
+/// site in a second tab, and a passkey signs only on an origin one tab is
+/// on, so every sign-in with the new passkey was refused until the login
+/// was revoked and the site's tabs closed. The arming now opens no second
+/// tab, and the passkey signs; a second tab there still refuses it.
+#[tokio::test]
+async fn a_passkey_signs_on_a_host_whose_login_signed_in_after_an_arming() {
+    let manifest =
+        std::path::Path::new("/etc/chromium/native-messaging-hosts/dev.hotline.computer.json");
+    let host = std::fs::read_to_string(manifest)
+        .ok()
+        .and_then(|text| serde_json::from_str::<Value>(&text).ok())
+        .and_then(|manifest| manifest["path"].as_str().map(std::path::PathBuf::from));
+    if !have_chromium()
+        || !crate::bridge::extension_answers()
+        || !host.is_some_and(|host| host.exists())
+    {
+        return eprintln!("skipped: no chromium, extension or native host");
+    }
+    let _serial = SERIAL.lock().await;
+    let details = json!({"rp": {"id": "localhost", "name": "Test"}, "user": {"id": "dXNlcg", "name": "george"},
+        "challenge": "AAAA", "pubKeyCredParams": [{"type": "public-key", "alg": -7}],
+        "extensions": {"remoteDesktopClientOverride": {"origin": "http://localhost:1", "sameOriginWithAncestors": true}}});
+    let (passkey, _) =
+        crate::authenticator::mint(&crate::authenticator::creation(&details).unwrap()).unwrap();
+    let mut key = serde_json::to_value(&passkey).unwrap();
+    key["kind"] = json!("passkey");
+    key["readable"] = json!(true);
+    let rig = rig(login()).await;
+    let mut site = login()["SITE"].clone();
+    site["sites"] = json!([rig.url("")]);
+    site["readable"] = json!(true);
+    let mut set: BTreeMap<String, crate::secrets::Delivered> = BTreeMap::new();
+    set.insert("SITE".into(), serde_json::from_value(site).unwrap());
+    set.insert("PK".into(), serde_json::from_value(key).unwrap());
+    rig.app.secrets.replace(set).unwrap();
+    let bridge = tokio::spawn(crate::bridge::serve(rig.app.clone()));
+    // Signed in by the login: the agent's tab is on the site.
+    rig.browser(json!({"action": "navigate", "url": rig.url("/login")}))
+        .await
+        .unwrap();
+    let user = rig.find("Username").await;
+    let password = rig.find("Password").await;
+    let button = rig.find("[button] Sign in").await;
+    rig.browser(json!({"action": "fill", "ref": user, "secret": "SITE.username"}))
+        .await
+        .unwrap();
+    rig.browser(json!({"action": "fill", "ref": password, "secret": "SITE.password"}))
+        .await
+        .unwrap();
+    rig.browser(json!({"action": "click_ref", "ref": button}))
+        .await
+        .unwrap();
+    rig.settle("Code").await;
+    let on_site = |signin: &Signin| {
+        signin
+            .lock_tabs()
+            .list
+            .iter()
+            .filter(|tab| tab.url.starts_with(&rig.url("")))
+            .count()
+    };
+    assert_eq!(on_site(&rig.signin), 1);
+    // The arming shows the person the site: on the tab already there.
+    let running = rig.signin.browser().await.unwrap();
+    rig.signin.open_once(&running, &rig.url("/")).await.unwrap();
+    assert_eq!(on_site(&rig.signin), 1, "the arming opened a second tab");
+    rig.browser(json!({"action": "navigate", "url": rig.url("/pk")}))
+        .await
+        .unwrap();
+    let signed = rig.settle("signed public-key").await;
+    assert!(!signed.contains("refused"), "{signed}");
+    // Two tabs on the origin: which one asks cannot be told, so neither
+    // gets a passkey. What the old arming made.
+    let second = rig.signin.new_tab(&running).await.unwrap();
+    rig.signin
+        .navigate(&running.cdp, &second.session, &rig.url("/plain"))
+        .await
+        .unwrap();
+    assert_eq!(on_site(&rig.signin), 2);
+    rig.browser(json!({"action": "navigate", "url": rig.url("/pk")}))
+        .await
+        .unwrap();
+    let refused = rig.settle("refused").await;
+    assert!(refused.contains("NotAllowedError"), "{refused}");
+    bridge.abort();
+    rig.signin.stop().await;
 }
 
 /// What point 1 of the rc.3 QA could not do: arm a site the computer itself

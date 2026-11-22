@@ -120,7 +120,9 @@ stopped, and so is any page load whose address would carry it, on any site,
 and, while anything is typed mid sign-in, a form a frame would post to a site
 that is not signed in.
 Revoking a login, a passkey
-or a share clears its site's cookies and data and closes its tabs.
+or a share clears its site's cookies and data and closes its tabs, even
+where something still granted names the site. Granting one does not: a login
+added on a passkey's host changes nothing for the sites already open.
 
 A passkey comes with its `rpId` alone, so its site is that host and those
 under it, over https on any port (and http on localhost), as WebAuthn scopes
@@ -128,7 +130,8 @@ it. Where a login or a share names a site on the same host, the passkey is
 used on the sites they name.
 
 A site armed for a new passkey opens as `https://{rpId}`, and arming shows
-it to you there. A site on the computer itself (`localhost`, or a name
+it to you there, in a new tab unless a tab is on that site already. A
+passkey signs only for a site exactly one tab is on. A site on the computer itself (`localhost`, or a name
 under it) has no port in its `rpId`, so arming starts the signed-in browser
 and loads nothing. While armed, that host opens here on any port, over http
 or https, as its passkey would once granted (only the sites a login or a
