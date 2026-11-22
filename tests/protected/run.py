@@ -157,13 +157,13 @@ class Ctx:
         status, _, _ = self.c.http("PUT", "/secrets", raw=raw, headers={"Content-Type": content_type})
         return status
 
-    def restart(self):
+    def restart(self, hard=False):
         """Stops and starts this container, as a Mac that slept or a desk
         that restarted does: the home and the image's writable layer stay,
         every process and the service's memory go. Then the desk's part
         again: the secrets, the boot's attest key, and the probe's files
         and page servers."""
-        self.restarter()
+        self.restarter(hard)
         self.c = Computer(int(self.c.base.rsplit(":", 1)[1]), self.token)
         if not up(int(self.c.base.rsplit(":", 1)[1]), 120):
             raise RuntimeError("the computer did not come back after a restart")
@@ -263,12 +263,11 @@ def host_address(c):
     return os.environ.get("HOST_ADDR") or (socket.inet_ntoa(bytes.fromhex(gw[2])[::-1]) if gw else None)
 
 
-def restart(rt, name):
-    """The same container stopped and started again."""
-    if rt == "container":
-        run([rt, "stop", name])
-        return run([rt, "start", name])
-    return run([rt, "restart", name])
+def restart(rt, name, hard=False):
+    """The same container stopped and started again; `hard` kills it
+    (SIGKILL, nothing inside gets to finish) instead of stopping it."""
+    run([rt, "kill", name] if hard else [rt, "stop", name])
+    return run([rt, "start", name])
 
 
 def remove(rt, name):
@@ -403,7 +402,7 @@ def main():
         ctx = Ctx(c, listener, host, ws, token, rt, name, a.delivery, bound, free)
         ctx.attest_key = key.get("key")
         ctx.origin = origin
-        ctx.restarter = lambda: restart(rt, name)
+        ctx.restarter = lambda hard=False: restart(rt, name, hard)
         ctx.split = a.split
         ctx.image, ctx.n3_from, ctx.prefix = a.image, a.n3_from or a.image, a.prefix
         ctx.job_source = (HERE / "jobs/job.py").read_text()

