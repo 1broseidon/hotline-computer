@@ -539,6 +539,55 @@ async fn removing_a_share_signs_the_site_out() {
     rig.signin.stop().await;
 }
 
+/// A share revoked while the browser is stopped is cleared from the profile
+/// then, not at the next start: a broker that starts again over the same
+/// profile (a restart) knows nothing of the revocation, and a login still
+/// names the site.
+#[tokio::test]
+async fn a_share_revoked_while_stopped_is_gone_after_a_restart() {
+    if !have_chromium() {
+        return eprintln!("skipped: no chromium");
+    }
+    let _serial = SERIAL.lock().await;
+    let rig = rig(login()).await;
+    let site = Origin::site(&rig.url("")).unwrap();
+    let cookie = json!({"name": "sid", "value": "shared-session-r1", "domain": "localhost", "path": "/",
+                        "expires": crate::jobs::now() / 1000 + 86_400});
+    rig.signin
+        .share("SHARED", vec![site], vec![cookie], serde_json::Map::new())
+        .await
+        .unwrap();
+    rig.browser(json!({"action": "navigate", "url": rig.url("/whoami")}))
+        .await
+        .unwrap();
+    let before = rig.browser(json!({"action": "text"})).await.unwrap();
+    assert!(before.contains("sid=shared-session-r1"), "{before}");
+    // Idled out: the cookie is written to the profile as Chromium closes.
+    rig.signin.stop().await;
+    assert!(!rig.signin.is_running());
+    rig.signin.unshare("SHARED", &[]).await.unwrap().unwrap();
+    rig.signin.stop().await;
+    // The restart: another broker's signed-in browser on the same profile.
+    let again = Signin::new(
+        Box::new(spawn::Direct::new(rig._root.path().join("signin"))),
+        Box::new(Recorder::default()),
+        rig.app.secrets.clone(),
+        None,
+    );
+    again.notice_revocations().await;
+    let running = again.browser().await.unwrap();
+    let left = running
+        .cdp
+        .call("Storage.getCookies", json!({}))
+        .await
+        .unwrap();
+    assert!(
+        !left.to_string().contains("shared-session-r1"),
+        "the revoked share's cookie came back: {left}"
+    );
+    again.stop().await;
+}
+
 #[tokio::test]
 async fn revoking_a_login_signs_its_site_out() {
     if !have_chromium() {

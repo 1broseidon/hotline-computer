@@ -370,6 +370,7 @@ pub async fn delivered(app: &App) {
     // running or not.
     if let Some(signin) = &app.signin {
         signin.notice_revocations().await;
+        signin.settle_revocations().await;
     }
 }
 

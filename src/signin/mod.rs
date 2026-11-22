@@ -636,6 +636,26 @@ impl Signin {
         }
     }
 
+    /// A revocation that came while the browser was stopped is in this
+    /// process alone, and the profile on disk still holds the sites'
+    /// cookies: a restart would forget it and bring them back wherever a
+    /// login or another share still names the site. Started now, the
+    /// browser clears them from the profile itself (`launch` takes the
+    /// list). Not called from `watch`, which runs only while it is started.
+    pub async fn settle_revocations(&self) {
+        let waiting = !self
+            .0
+            .revoked
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .is_empty();
+        if waiting && let Err(error) = self.browser().await {
+            eprintln!(
+                "hotline-computer: signed-in browser: a revocation waits for its next start: {error}"
+            );
+        }
+    }
+
     /// Signs out every site a login or passkey no longer grants, even one a
     /// share or another login still names: the revoked account's session
     /// must not outlive it, and what still grants the site signs in again.
