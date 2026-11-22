@@ -893,12 +893,80 @@ fn rand_id() -> Result<u32, String> {
     Ok(u32::from_ne_bytes(bytes))
 }
 
+/// A Landlock domain for the job about to start, that restricts nothing
+/// of its own (every file may be run, the only access it names). Landlock
+/// lets a process trace only processes in its own domain or one nested in
+/// it, and the kernel asks that of `ptrace`, `/proc/<pid>/mem` and
+/// `environ`, and `pidfd_getfd`: jobs all run as the agent, and without it
+/// one job could run inside another, or take a connection it holds, and
+/// use that job's proxy authority. The runner, outside every domain, still
+/// sees its jobs. A kernel without Landlock leaves the job as it was.
+///
+/// Called between fork and exec: raw system calls only.
+#[cfg(not(target_os = "linux"))]
+fn a_domain_of_its_own() {}
+
+#[cfg(target_os = "linux")]
+fn a_domain_of_its_own() {
+    #[repr(C)]
+    struct Ruleset {
+        handled_access_fs: u64,
+    }
+    #[repr(C, packed)]
+    struct Beneath {
+        allowed_access: u64,
+        parent_fd: i32,
+    }
+    const EXECUTE: u64 = 1;
+    const PATH_BENEATH: libc::c_long = 1;
+    let ruleset = Ruleset {
+        handled_access_fs: EXECUTE,
+    };
+    // SAFETY: Landlock's system calls with the structures it defines (the
+    // ABI 1 ruleset size), and fds this child owns and closes. Landlock
+    // wants no_new_privs, which a job of the split computer has already.
+    unsafe {
+        if libc::prctl(libc::PR_SET_NO_NEW_PRIVS, 1, 0, 0, 0) != 0 {
+            return;
+        }
+        let fd = libc::syscall(
+            libc::SYS_landlock_create_ruleset,
+            &ruleset as *const Ruleset,
+            std::mem::size_of::<Ruleset>(),
+            0,
+        );
+        if fd < 0 {
+            return;
+        }
+        let root = libc::open(c"/".as_ptr(), libc::O_PATH | libc::O_CLOEXEC);
+        if root >= 0 {
+            let everywhere = Beneath {
+                allowed_access: EXECUTE,
+                parent_fd: root,
+            };
+            if libc::syscall(
+                libc::SYS_landlock_add_rule,
+                fd,
+                PATH_BENEATH,
+                &everywhere as *const Beneath,
+                0,
+            ) == 0
+            {
+                libc::syscall(libc::SYS_landlock_restrict_self, fd, 0);
+            }
+            libc::close(root);
+        }
+        libc::close(fd as i32);
+    }
+}
+
 enum Reader {
     Pipe(Box<dyn AsyncRead + Send + Unpin>),
     Pty(Arc<AsyncFd<OwnedFd>>),
 }
 type Spawned = (tokio::process::Child, Input, Vec<(&'static str, Reader)>);
 fn spawn(start: &Start, cwd: &Path, display: &str) -> Result<Spawned, String> {
+    let confined = crate::split::mode() == crate::split::Mode::Split;
     let mut command = tokio::process::Command::new(&start.command);
     command
         .args(&start.args)
@@ -949,9 +1017,12 @@ fn spawn(start: &Start, cwd: &Path, display: &str) -> Result<Spawned, String> {
         // A PTY child owns a new session and controlling terminal; it remains
         // independent of whichever terminal happens to observe the job.
         unsafe {
-            command.pre_exec(|| {
+            command.pre_exec(move || {
                 if libc::setsid() < 0 || libc::ioctl(0, libc::TIOCSCTTY as _, 0) < 0 {
                     return Err(std::io::Error::last_os_error());
+                }
+                if confined {
+                    a_domain_of_its_own();
                 }
                 Ok(())
             });
@@ -970,9 +1041,12 @@ fn spawn(start: &Start, cwd: &Path, display: &str) -> Result<Spawned, String> {
         // another job cannot join a group across sessions, so the key proxy
         // can tell this job's processes by their session (`belongs`).
         unsafe {
-            command.pre_exec(|| {
+            command.pre_exec(move || {
                 if libc::setsid() < 0 {
                     return Err(std::io::Error::last_os_error());
+                }
+                if confined {
+                    a_domain_of_its_own();
                 }
                 Ok(())
             });
@@ -1255,6 +1329,44 @@ async fn supervise(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// A job in a domain of its own cannot read another process of the
+    /// same user the way a tracer does (its environment here), and still
+    /// runs what it runs; one outside a domain can.
+    #[cfg(target_os = "linux")]
+    #[test]
+    fn a_job_cannot_look_into_another_job_of_the_same_user() {
+        use std::os::unix::process::CommandExt;
+        // SAFETY: Landlock's version query, no pointers.
+        let abi = unsafe { libc::syscall(libc::SYS_landlock_create_ruleset, 0usize, 0usize, 1u32) };
+        if abi < 1 {
+            return eprintln!("skipped: this kernel has no Landlock");
+        }
+        let mut other = std::process::Command::new("sleep")
+            .arg("30")
+            .env("ANOTHER_JOB", "1")
+            .spawn()
+            .unwrap();
+        let look = |confined: bool| {
+            let mut command = std::process::Command::new("cat");
+            command.arg(format!("/proc/{}/environ", other.id()));
+            if confined {
+                // SAFETY: the same call a job's start makes before exec.
+                unsafe {
+                    command.pre_exec(|| {
+                        super::a_domain_of_its_own();
+                        Ok(())
+                    });
+                }
+            }
+            let out = command.output().unwrap();
+            String::from_utf8_lossy(&out.stdout).contains("ANOTHER_JOB=1")
+        };
+        assert!(look(false), "outside a domain the environment reads");
+        assert!(!look(true), "a confined job read another's environment");
+        let _ = other.kill();
+        let _ = other.wait();
+    }
 
     #[test]
     fn a_connection_to_the_proxy_is_found_by_both_its_ends() {
