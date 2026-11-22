@@ -1027,6 +1027,102 @@ def f6(ctx):
                  "nothing reached ~/Downloads") + (f" ({said.group(0)[:110]})" if said else "")
 
 
+# --- sign-in pages as real sites build them (rc.3 real-site QA) -------------
+
+def f9(ctx):
+    """A sign-in form a script builds with no method sends by GET (X's). The
+    password is typed; if the browser sends the form itself (here there is no
+    script to send it), the page load carrying the password must be stopped:
+    the page it would load reports its address to the host listener, and
+    `tabs` and `text` must carry no spelling of it."""
+    if not ctx.split:
+        return None, "the signed-in browser's rule; needs --split"
+    ctx.page()
+    beacon = f"http://{ctx.host}:{ctx.port}/f9"
+    site_page(ctx, "f9.html", '<form action="/f9-done.html"><input name=u type=text>'
+              '<input name=p type=password><button>sign in</button></form>')
+    site_page(ctx, "f9-done.html", f"<h1>landed</h1><script>new Image().src='{beacon}?at='+encodeURIComponent(location.href)</script>")
+    ctx.c.tool("browser", action="navigate", url="http://localhost:8000/f9.html")
+    refs = refs_of(ctx.c.tool("browser", action="text")[0])
+    if "password" not in refs:
+        return "broken", "the page has no password field"
+    said, refused = ctx.c.tool("browser", action="fill", ref=refs["password"], secret="LOCALENC.password")
+    if refused:
+        return "broken", "the password was not typed into its own site's GET form: " + said.replace("\n", " ")[:110]
+    ctx.c.tool("browser", action="click_ref", ref=refs["button"])
+    time.sleep(2)
+    text, _ = ctx.c.tool("browser", action="text")
+    tabs, _ = ctx.c.tool("browser", action="tabs")
+    ctx.c.tool("browser", action="navigate", url="http://localhost:8000/")
+    hits = []
+    if any(spelled_in(path, K.LOCAL_ENC) for path, _ in list(ctx.L.rows) if path.startswith("/f9")):
+        hits.append("the page loaded with the password in its address")
+    if spelled_in(tabs, K.LOCAL_ENC):
+        hits.append("tabs carries a spelling")
+    if spelled_in(text, K.LOCAL_ENC):
+        hits.append("text carries a spelling")
+    return bool(hits), "; ".join(hits) or ("typed, then the load carrying it was stopped: " + text.replace("\n", " ")[:120])
+
+
+def s1(ctx):
+    """Google's shape: the identifier step, then a password field the page's
+    script builds in the same document, in no form, sent by the script. The
+    username and the password must be typed, and the password not read back
+    from text, tabs or a screenshot."""
+    if not ctx.split:
+        return None, "the signed-in browser's rule; needs --split"
+    ctx.page()
+    site_page(ctx, "s1.html", '<div id=app><input id=u type=email aria-label="Email"><button id=next>Next</button></div>'
+              "<script>next.onclick=()=>{const who=u.value;app.innerHTML='<p>'+who.replace(/</g,'')+'</p>"
+              "<input id=p type=password aria-label=\"Enter your password\"><button id=go>Sign in</button>';"
+              "go.onclick=()=>fetch('/done',{method:'POST',body:new URLSearchParams({u:who,p:p.value})})}</script>")
+    ctx.c.tool("browser", action="navigate", url="http://localhost:8000/s1.html")
+    text = ctx.c.tool("browser", action="text")[0]
+    user = (re.search(r"\[(e\d+)\] \[email\]", text) or [None, None])[1]
+    nxt = (re.search(r"\[(e\d+)\] \[button\] Next", text) or [None, None])[1]
+    if not user or not nxt:
+        return "broken", "the identifier step has no email field or Next"
+    said, refused = ctx.c.tool("browser", action="fill", ref=user, secret="LOCALAPP.username")
+    if refused:
+        return "broken", "the username was not typed: " + said[:100]
+    ctx.c.tool("browser", action="click_ref", ref=nxt)
+    time.sleep(1)
+    refs = refs_of(ctx.c.tool("browser", action="text")[0])
+    if "password" not in refs:
+        return "broken", "the password step never showed"
+    said, refused = ctx.c.tool("browser", action="fill", ref=refs["password"], secret="LOCALAPP.password")
+    if refused:
+        return "broken", "the password was not typed into a script-built field with no form: " + said.replace("\n", " ")[:110]
+    text, _ = ctx.c.tool("browser", action="text")
+    tabs, _ = ctx.c.tool("browser", action="tabs")
+    image = shot(ctx)
+    ctx.c.tool("browser", action="navigate", url="http://localhost:8000/")
+    hits = [w for w, hit in (("text", spelled_in(text, K.LOCAL_PASSWORD)), ("tabs", spelled_in(tabs, K.LOCAL_PASSWORD)),
+                             ("a screenshot", bool(image))) if hit]
+    return bool(hits), ("read back from " + ", ".join(hits) if hits else
+                        "typed into the script-built field; text, tabs and the screenshot are withheld")
+
+
+def s2(ctx):
+    """X's shape: the page adds its Continue button as the name is typed.
+    Nothing about where the form sends changed, so the username stays typed."""
+    if not ctx.split:
+        return None, "the signed-in browser's rule; needs --split"
+    ctx.page()
+    site_page(ctx, "s2.html", '<form action="/done" method=post><input name=u type=text aria-label=Username '
+              "oninput=\"if(!this.form.querySelector('button'))this.form.insertAdjacentHTML('beforeend','<button>Continue</button>')\"></form>")
+    ctx.c.tool("browser", action="navigate", url="http://localhost:8000/s2.html")
+    refs = refs_of(ctx.c.tool("browser", action="text")[0])
+    if "text" not in refs:
+        return "broken", "the page has no text field"
+    said, refused = ctx.c.tool("browser", action="fill", ref=refs["text"], secret="LOCALAPP.username")
+    text, _ = ctx.c.tool("browser", action="text")
+    ctx.c.tool("browser", action="navigate", url="http://localhost:8000/")
+    if refused or "local-user" not in text:
+        return "broken", "the username was not kept: " + said.replace("\n", " ")[:110]
+    return False, "the username was typed and kept as the page added its button"
+
+
 PROBES = [
     ("A1", "variable read back in another spelling by a shell job", a1),
     ("A2", "files get of a file holding the value in base64", a2),
@@ -1082,4 +1178,7 @@ PROBES = [
     ("F5", "a login's password is typed on a subdomain of its origin", f5),
     ("F6", "a download begun on a page mid sign-in reaches the agent", f6),
     ("F8", "a revoked share's session stays usable while another grant names its site", f8),
+    ("F9", "a password typed into its own site's GET form, sent by the browser, loads in an address", f9),
+    ("S1", "a two-step sign-in whose script builds the password field with no form: refused, or read back", s1),
+    ("S2", "a username refused because the page adds its button while it is typed", s2),
 ]
