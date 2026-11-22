@@ -38,6 +38,9 @@ pub trait Spawner: Send + Sync {
     fn stop(&self, pid: u32);
     /// The browser's profile directory.
     fn profile(&self) -> PathBuf;
+    /// Where the broker keeps the sites revoked since the browser last
+    /// closed, beside the profile's lifetime and in the broker's own hands.
+    fn revocations(&self) -> PathBuf;
     fn bridge(&self) -> Bridge;
 }
 
@@ -138,6 +141,10 @@ impl Spawner for Direct {
 
     fn profile(&self) -> PathBuf {
         self.root.join("profile")
+    }
+
+    fn revocations(&self) -> PathBuf {
+        self.root.join("revoked.json")
     }
 
     fn bridge(&self) -> Bridge {

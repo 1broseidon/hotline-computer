@@ -39,6 +39,10 @@ impl Spawner for Pid1 {
         PathBuf::from(split::SIGNIN_PROFILE)
     }
 
+    fn revocations(&self) -> PathBuf {
+        PathBuf::from(split::SIGNIN_REVOKED)
+    }
+
     fn bridge(&self) -> Bridge {
         Bridge {
             socket: PathBuf::from(split::BRIDGE_SOCKET),

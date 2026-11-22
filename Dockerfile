@@ -61,7 +61,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && groupadd --gid 1001 hotline && useradd --uid 1001 --gid 1001 --no-create-home --home-dir /run/hotline-computer/broker --shell /usr/sbin/nologin hotline \
     && groupadd --gid 1002 signin && useradd --uid 1002 --gid 1002 --no-create-home --home-dir /var/lib/hotline-computer/signin --shell /usr/sbin/nologin signin \
     && install -d -m 0755 /run/hotline-computer /var/lib/hotline-computer \
-    && install -d -o hotline -g hotline -m 0700 /run/hotline-computer/broker \
+    && install -d -o hotline -g hotline -m 0700 /run/hotline-computer/broker /var/lib/hotline-computer/broker \
     && install -d -o hotline -g signin -m 2750 /run/hotline-computer/bridge \
     && install -d -o hotline -g hotline -m 0755 /run/hotline-computer/public \
     && install -d -o signin -g signin -m 0700 /var/lib/hotline-computer/signin /var/lib/hotline-computer/signin/profile \

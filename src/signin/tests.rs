@@ -588,6 +588,106 @@ async fn a_share_revoked_while_stopped_is_gone_after_a_restart() {
     again.stop().await;
 }
 
+/// The share's cookie on disk and in a running browser: a rig whose
+/// browser stopped once in order (Chromium writes its cookies as it closes)
+/// and started again from that profile.
+async fn shared_and_written(cookie_value: &str) -> Rig {
+    let rig = rig(login()).await;
+    let site = Origin::site(&rig.url("")).unwrap();
+    let cookie = json!({"name": "sid", "value": cookie_value, "domain": "localhost", "path": "/",
+                        "expires": crate::jobs::now() / 1000 + 86_400});
+    rig.signin
+        .share("SHARED", vec![site], vec![cookie], serde_json::Map::new())
+        .await
+        .unwrap();
+    rig.browser(json!({"action": "navigate", "url": rig.url("/whoami")}))
+        .await
+        .unwrap();
+    rig.signin.stop().await;
+    rig.browser(json!({"action": "navigate", "url": rig.url("/whoami")}))
+        .await
+        .unwrap();
+    let shown = rig.browser(json!({"action": "text"})).await.unwrap();
+    assert!(shown.contains(cookie_value), "{shown}");
+    rig
+}
+
+/// The cookies another broker's browser starts with on the same profile
+/// (a restart: nothing of this broker's memory), as text.
+async fn after_a_restart(rig: &Rig) -> String {
+    let again = Signin::new(
+        Box::new(spawn::Direct::new(rig._root.path().join("signin"))),
+        Box::new(Recorder::default()),
+        rig.app.secrets.clone(),
+        None,
+    );
+    again.notice_revocations().await;
+    let running = again.browser().await.unwrap();
+    let left = running
+        .cdp
+        .call("Storage.getCookies", json!({}))
+        .await
+        .unwrap();
+    again.stop().await;
+    left.to_string()
+}
+
+/// An idle stop that lands inside `forget`, after it found the browser
+/// running and before its first DevTools call, saves every cookie (the
+/// revoked one too) and closes: the call fails, and the revocation must
+/// still hold, now and after a restart.
+#[tokio::test]
+async fn a_stop_inside_a_revocation_does_not_keep_the_revoked_session() {
+    if !have_chromium() {
+        return eprintln!("skipped: no chromium");
+    }
+    let _serial = SERIAL.lock().await;
+    let rig = shared_and_written("shared-session-r2").await;
+    rig.signin
+        .0
+        .stop_inside_forget
+        .store(true, Ordering::SeqCst);
+    let answer = rig.signin.unshare("SHARED", &[]).await;
+    assert!(
+        answer.is_err(),
+        "the stop broke the DevTools calls: {answer:?}"
+    );
+    let kept = serde_json::to_string(&*rig.signin.0.kept.lock().unwrap()).unwrap();
+    assert!(!kept.contains("shared-session-r2"), "{kept}");
+    // Settled: started again, the profile cleared.
+    assert!(rig.signin.is_running());
+    rig.browser(json!({"action": "navigate", "url": rig.url("/whoami")}))
+        .await
+        .unwrap();
+    let shown = rig.browser(json!({"action": "text"})).await.unwrap();
+    assert!(!shown.contains("shared-session-r2"), "{shown}");
+    rig.signin.stop().await;
+    let left = after_a_restart(&rig).await;
+    assert!(!left.contains("shared-session-r2"), "{left}");
+}
+
+/// Chromium writes a cookie's deletion lazily: a computer killed right
+/// after a revocation (no orderly close) keeps the cookie in the profile.
+/// The broker's list on disk takes it out at the next start, and goes once
+/// the browser has closed in order.
+#[tokio::test]
+async fn a_revocation_outlives_a_kill_before_chromium_writes_it() {
+    if !have_chromium() {
+        return eprintln!("skipped: no chromium");
+    }
+    let _serial = SERIAL.lock().await;
+    let rig = shared_and_written("shared-session-r3").await;
+    rig.signin.unshare("SHARED", &[]).await.unwrap().unwrap();
+    let list = rig._root.path().join("signin/revoked.json");
+    assert!(list.exists(), "the revocation is on disk");
+    // Killed: no Browser.close, and this broker's memory gone with it.
+    let pid = rig.signin.browser().await.unwrap().pid;
+    rig.signin.0.spawner.stop(pid);
+    let left = after_a_restart(&rig).await;
+    assert!(!left.contains("shared-session-r3"), "{left}");
+    assert!(!list.exists(), "an orderly close takes the list away");
+}
+
 #[tokio::test]
 async fn revoking_a_login_signs_its_site_out() {
     if !have_chromium() {

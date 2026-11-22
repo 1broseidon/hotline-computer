@@ -61,6 +61,10 @@ pub const CA_BUNDLE: &str = "/run/hotline-computer/public/ca-bundle.pem";
 /// layer, so a recreated computer starts it clean.
 pub const SIGNIN_DIR: &str = "/var/lib/hotline-computer/signin";
 pub const SIGNIN_PROFILE: &str = "/var/lib/hotline-computer/signin/profile";
+/// The broker's state that lives as long as that profile: `hotline`, 0700.
+pub const BROKER_STATE: &str = "/var/lib/hotline-computer/broker";
+/// The sites revoked since the signed-in browser last closed in order.
+pub const SIGNIN_REVOKED: &str = "/var/lib/hotline-computer/broker/signin-revoked.json";
 pub const PROXY_ADDR: &str = "127.0.0.1:3128";
 pub const AGENT_HOME: &str = "/home/agent";
 

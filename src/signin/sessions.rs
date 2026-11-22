@@ -262,8 +262,9 @@ impl Signin {
         // Signed out whatever else still names them: the revoked share's
         // session must not stay usable. A login or another share on the
         // same site signs in again (`again`, for the desk to share anew).
-        let (cookies, tabs) = self.forget(&gone).await?;
+        let forgotten = self.forget(&gone).await;
         self.settle_revocations().await;
+        let (cookies, tabs) = forgotten?;
         Ok(Some((gone, cookies, tabs)))
     }
 }

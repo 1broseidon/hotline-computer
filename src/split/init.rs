@@ -19,8 +19,8 @@ use std::time::{Duration, Instant};
 use serde_json::{Value, json};
 
 use super::{
-    AGENT_UID, BRIDGE_DIR, BROKER_DIR, BROKER_UID, PROXY_ADDR, PUBLIC_DIR, RUN_DIR, SIGNIN_DIR,
-    SIGNIN_PROFILE, SIGNIN_UID, wire,
+    AGENT_UID, BRIDGE_DIR, BROKER_DIR, BROKER_STATE, BROKER_UID, PROXY_ADDR, PUBLIC_DIR, RUN_DIR,
+    SIGNIN_DIR, SIGNIN_PROFILE, SIGNIN_UID, wire,
 };
 use crate::Config;
 
@@ -246,8 +246,9 @@ fn keep_only_setid() -> Result<(), String> {
 fn prepare_directories() -> Result<(), String> {
     // Root without DAC capabilities sees into none of these, so each is
     // checked from its parent; what is inside is its owner's business.
-    let wanted: [(&str, u32, u32, u32); 4] = [
+    let wanted: [(&str, u32, u32, u32); 5] = [
         (BROKER_DIR, BROKER_UID, BROKER_UID, 0o700),
+        (BROKER_STATE, BROKER_UID, BROKER_UID, 0o700),
         (BRIDGE_DIR, BROKER_UID, SIGNIN_UID, 0o2750),
         (PUBLIC_DIR, BROKER_UID, BROKER_UID, 0o755),
         (SIGNIN_DIR, SIGNIN_UID, SIGNIN_UID, 0o700),

@@ -165,6 +165,10 @@ struct Inner {
     /// file from a page mid sign-in, one holding what was typed, or a frame
     /// that is not a known tab is never handed over.
     seen: Mutex<HashMap<String, bool>>,
+    /// Tests: an idle stop lands inside the next `forget`, after it found
+    /// the browser running and before its first DevTools call.
+    #[cfg(test)]
+    stop_inside_forget: AtomicBool,
 }
 
 #[derive(Clone)]
@@ -279,6 +283,8 @@ impl Signin {
             downloads,
             begun: Mutex::default(),
             seen: Mutex::default(),
+            #[cfg(test)]
+            stop_inside_forget: AtomicBool::new(false),
         }))
     }
 
@@ -538,13 +544,14 @@ impl Signin {
             cookies.extend(stored["cookies"].as_array().cloned().unwrap_or_default());
         }
         cdp.call("Storage.clearCookies", json!({})).await?;
-        let revoked = std::mem::take(
+        let mut revoked = std::mem::take(
             &mut *self
                 .0
                 .revoked
                 .lock()
                 .unwrap_or_else(std::sync::PoisonError::into_inner),
         );
+        revoked.extend(read_revoked(&self.0.spawner.revocations()));
         for site in &revoked {
             let _ = cdp
                 .call(
@@ -602,8 +609,12 @@ impl Signin {
                     .unwrap_or_else(std::sync::PoisonError::into_inner) =
                     stored["cookies"].as_array().cloned().unwrap_or_default();
             }
-            let _ = current.cdp.call("Browser.close", json!({})).await;
+            let closed = current.cdp.call("Browser.close", json!({})).await;
             self.0.spawner.stop(current.pid);
+            // Closed in order, the profile has every revocation written.
+            if closed.is_ok() {
+                let _ = std::fs::remove_file(self.0.spawner.revocations());
+            }
         }
         let mut tabs = self.lock_tabs();
         tabs.list.clear();
@@ -2140,19 +2151,49 @@ impl Signin {
                 .unwrap_or_else(std::sync::PoisonError::into_inner);
             kept.retain(|cookie| !cookie_within(cookie, sites));
         }
+        // Written down first: Chromium writes a cookie's deletion to the
+        // profile lazily, so a computer killed before then, or before the
+        // browser next starts, finds the list on disk instead.
+        persist_revoked(&self.0.spawner.revocations(), sites);
         let running = {
             let running = self.0.running.lock().await;
             running.clone()
         };
         let Some(running) = running.filter(|running| !running.cdp.is_closed()) else {
-            self.0
-                .revoked
-                .lock()
-                .unwrap_or_else(std::sync::PoisonError::into_inner)
-                .extend(sites.iter().cloned());
+            self.revoke_later(sites);
             return Ok((0, 0));
         };
-        let cdp = &running.cdp;
+        #[cfg(test)]
+        if self.0.stop_inside_forget.swap(false, Ordering::SeqCst) {
+            self.stop().await;
+        }
+        let signed_out = self.sign_out(&running.cdp, sites).await;
+        if signed_out.is_err() {
+            // The browser went (an idle stop between taking it and these
+            // calls saved every cookie, the revoked ones too): taken out
+            // again, and left for its next start.
+            self.0
+                .kept
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner)
+                .retain(|cookie| !cookie_within(cookie, sites));
+            self.revoke_later(sites);
+        }
+        signed_out
+    }
+
+    /// Sites the browser clears when it next starts, in memory and on disk.
+    fn revoke_later(&self, sites: &[Origin]) {
+        self.0
+            .revoked
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .extend(sites.iter().cloned());
+        persist_revoked(&self.0.spawner.revocations(), sites);
+    }
+
+    /// `forget`'s DevTools part, on a running browser.
+    async fn sign_out(&self, cdp: &Cdp, sites: &[Origin]) -> Result<(usize, usize), String> {
         let stored = cdp.call("Storage.getCookies", json!({})).await?;
         let cookies = stored["cookies"].as_array().cloned().unwrap_or_default();
         let (gone, kept): (Vec<Value>, Vec<Value>) = cookies
@@ -2187,6 +2228,41 @@ impl Signin {
                 .await;
         }
         Ok((gone.len(), doomed.len()))
+    }
+}
+
+/// The sites revoked since the browser last closed in order, as written by
+/// `persist_revoked`; what does not read is skipped.
+fn read_revoked(path: &std::path::Path) -> Vec<Origin> {
+    std::fs::read(path)
+        .ok()
+        .and_then(|bytes| serde_json::from_slice::<Vec<String>>(&bytes).ok())
+        .unwrap_or_default()
+        .iter()
+        .filter_map(|site| Origin::site(site).ok())
+        .collect()
+}
+
+/// Adds `sites` to the list on disk, replaced whole so a crash leaves the
+/// old list or the new one.
+fn persist_revoked(path: &std::path::Path, sites: &[Origin]) {
+    let mut all: Vec<String> = read_revoked(path).iter().map(ToString::to_string).collect();
+    for site in sites.iter().map(ToString::to_string) {
+        if !all.contains(&site) {
+            all.push(site);
+        }
+    }
+    if let Some(parent) = path.parent() {
+        let _ = std::fs::create_dir_all(parent);
+    }
+    let temporary = path.with_extension("tmp");
+    let written = std::fs::write(&temporary, serde_json::to_vec(&all).unwrap_or_default())
+        .and_then(|()| std::fs::rename(&temporary, path));
+    if let Err(error) = written {
+        eprintln!(
+            "hotline-computer: signed-in browser: {}: {error}",
+            path.display()
+        );
     }
 }
 
