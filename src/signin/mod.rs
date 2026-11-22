@@ -889,8 +889,23 @@ impl Signin {
                 params["request"]["method"].as_str().unwrap_or("GET"),
                 &self.sites(),
             )
+        } else if !params["request"]["method"]
+            .as_str()
+            .unwrap_or("GET")
+            .eq_ignore_ascii_case("GET")
+            && !lock::signed_in(&url, &self.sites())
+            && self.lock_tabs().list.iter().any(Tab::withheld)
+        {
+            // A form sent into a frame (a button's formtarget) carries what
+            // its fields hold: while anything is typed mid sign-in, a frame
+            // posts only to a signed-in site.
+            Hop::Blocked(format!(
+                "a page in the middle of signing in tried to send a form to {} in a frame; it was stopped",
+                crate::bridge::host_of(&url)
+            ))
         } else {
-            // Frames inside a signed-in page load as the page asks.
+            // Frames inside a signed-in page load as the page asks: a
+            // captcha's or a sign-in widget's pages, fetched by GET.
             Hop::Stay
         };
         // A plain link is only plain if it carries nothing typed here: not a
@@ -916,9 +931,10 @@ impl Signin {
         // entry or error page carries it.
         let carried = self.lock_tabs().list.iter().any(|tab| {
             tab.secret_doc.is_some()
-                && tab.typed.iter().any(|typed| {
-                    url.contains(typed.as_str()) || crate::secrets::spelled(&url, typed)
-                })
+                && tab
+                    .typed
+                    .iter()
+                    .any(|typed| crate::secrets::carries(&url, typed))
         });
         let cdp = &running.cdp;
         if carried {

@@ -107,7 +107,9 @@ Browser in the desk shows this browser through `/sites/ws`. A password or code
 goes only into a password (or one-time-code) field on the login's own origin,
 either in no form (a page whose script sends it) or in a form that sends to
 that origin. A form that would carry what was typed to another site is
-stopped, and so is any page load whose address would carry it, on any site.
+stopped, and so is any page load whose address would carry it, on any site,
+and, while anything is typed mid sign-in, a form a frame would post to a site
+that is not signed in.
 Revoking a login, a passkey
 or a share clears its site's cookies and data and closes its tabs.
 

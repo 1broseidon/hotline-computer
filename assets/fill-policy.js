@@ -10,7 +10,8 @@
 //   whose every submission is POST to one of `origins`. With `stopsGet`, the
 //   caller stops any page load whose address carries what was typed (the
 //   signed-in browser does), so a form sending by GET to one of `origins`
-//   is taken too: a script-built form with no method, sent by its script.
+//   is taken too (a script-built form with no method, sent by its script),
+//   on a UTF-8 page whose form sends UTF-8, the spelling the stop knows.
 // - kind "code": a one-time-code field under the same form rule: an <input>
 //   with autocomplete=one-time-code of type text, tel, number or password,
 //   or one of type text, tel or number (or inputmode=numeric) with a
@@ -39,8 +40,11 @@ function hotlineFillPolicy(el, kind, origins, stopsGet) {
   const destination = (url) => { try { return new URL(url, location.href).origin; } catch { return ''; } };
   const form = el.form;
   // Only a button that sends elsewhere or otherwise than its form matters.
+  // form.elements never lists an image button, so every button and input of
+  // the form's tree (its own, or one tied to it by form=) is looked at.
   const submitters = form
-    ? [...form.elements].filter((s) => ((s instanceof HTMLButtonElement && s.type === 'submit') ||
+    ? [...form.getRootNode().querySelectorAll('button, input')].filter((s) => s.form === form &&
+        ((s instanceof HTMLButtonElement && s.type === 'submit') ||
         (s instanceof HTMLInputElement && (s.type === 'submit' || s.type === 'image'))) &&
         (s.getAttribute('formmethod') !== null || s.getAttribute('formaction') !== null))
     : [];
@@ -67,7 +71,11 @@ function hotlineFillPolicy(el, kind, origins, stopsGet) {
   if (kind !== 'password' && kind !== 'code') return refuse(`there is no ${kind} field rule`);
   if (!form) return { ok: true, print };
   const own = origins.includes(destination(form.action));
-  const sent = (method, home) => method === 'post' || (stopsGet === true && method === 'get' && home);
+  // The stop knows a value only as UTF-8 spells it in an address: a page or
+  // form of another charset would send it spelled some other way.
+  const utf8 = document.characterSet === 'UTF-8' &&
+    ['', 'utf-8'].includes(form.acceptCharset.trim().toLowerCase());
+  const sent = (method, home) => method === 'post' || (stopsGet === true && utf8 && method === 'get' && home);
   if (!sent(form.method, own)) return refuse(`its form sends by ${form.method.toUpperCase()}, which would put it in the address`);
   if (!own) return refuse(`its form sends to ${destination(form.action) || 'nowhere known'}, not the login's own origin`);
   for (const s of submitters) {

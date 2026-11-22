@@ -927,6 +927,16 @@ pub fn spelled(text: &str, value: &str) -> bool {
     spelling(value).is_some_and(|spelled| spelled.is_match(text))
 }
 
+/// Whether `text` carries `value` as typed: a number (a code) only
+/// standalone, as `redact` takes one out, so a longer number that holds its
+/// digits is not it; anything else in any spelling.
+pub fn carries(text: &str, value: &str) -> bool {
+    if !value.is_empty() && value.bytes().all(|byte| byte.is_ascii_digit()) {
+        return matches!(without_number(text, value, ""), Cow::Owned(_));
+    }
+    text.contains(value) || spelled(text, value)
+}
+
 /// `text` with each standalone `number` (no digit right before or after it)
 /// replaced by `mark`: a code inside a longer number is that number's, not
 /// the code.
@@ -2278,5 +2288,26 @@ mod tests {
         assert_eq!(cleared.status(), 204);
         assert!(secrets.names().is_empty());
         serving.abort();
+    }
+
+    #[test]
+    fn a_typed_code_is_carried_only_as_a_number_of_its_own() {
+        // A code inside a longer number is that number's: a page after the
+        // sign-in may well have one.
+        assert!(!carries("https://example.org/items/1234567", "123456"));
+        assert!(!carries(
+            "https://example.org/pull/9123456?tab=files",
+            "123456"
+        ));
+        assert!(carries("https://example.org/verify?otp=123456", "123456"));
+        assert!(carries(
+            "https://example.org/verify?otp=123456&x=1",
+            "123456"
+        ));
+        assert!(carries("123456", "123456"));
+        // A password is carried in any spelling.
+        assert!(carries("https://example.org/?p=hunter%202", "hunter 2"));
+        assert!(carries("https://example.org/?p=hunter+2", "hunter 2"));
+        assert!(!carries("https://example.org/?p=hunter", "hunter 2"));
     }
 }
