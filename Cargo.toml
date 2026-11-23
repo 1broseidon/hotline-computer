@@ -1,7 +1,7 @@
 [package]
 name = "hotline-computer"
 description = "A small Linux desktop for a coding agent: one binary boots it, owns it, and serves it over MCP."
-version = "0.11.0"
+version = "0.13.0"
 license = "MIT OR Apache-2.0"
 edition = "2024"
 
@@ -44,7 +44,28 @@ chrono = { version = "0.4", default-features = false, features = ["clock"] }
 hmac = "0.12"
 sha1 = "0.10"
 data-encoding = "2"
+# Redaction matches a value in every spelling a URL, a form or HTML gives it.
+regex = { version = "1.13", default-features = false, features = ["std", "perf", "unicode-case"] }
 tempfile = "3.27.0"
+# The split computer's broker hands the desktop's own pages to the runner
+# over a socketpair, upgrades and all, and the key proxy (src/keyproxy) ends
+# TLS itself with a CA made at boot: HTTP/1 on both ends.
+hyper = { version = "1.11", features = ["client", "server", "http1"] }
+hyper-util = { version = "0.1.20", features = ["tokio", "service"] }
+http = "1"
+http-body = "1"
+http-body-util = "0.1.5"
+bytes = "1"
+rustls = { version = "0.23.43", default-features = false, features = ["aws_lc_rs", "std", "tls12"] }
+tokio-rustls = { version = "0.26.4", default-features = false, features = ["tls12"] }
+rcgen = { version = "0.14.10", default-features = false, features = ["crypto", "pem", "aws_lc_rs"] }
+webpki-roots = "1"
+
+[features]
+# TEST ONLY: the protected-secrets probe image is built with it so the key
+# proxy also trusts the probe fixture's own CA upstream (see
+# `keyproxy::probe_roots`). No release is built with it.
+probe-roots = []
 
 [dev-dependencies]
 # The contract test opens the viewer's WebSocket the way the page does.

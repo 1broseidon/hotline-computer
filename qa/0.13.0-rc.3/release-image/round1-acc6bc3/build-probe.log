@@ -1,0 +1,321 @@
+# 2026-11-22T08:00:58Z probe: /usr/local/bin/container build -f qa/0.13.0-rc.3/Dockerfile.probe --build-arg BASE=hotline-computer:0.13.0-rc.3-relcheck --build-arg HOTLINE_BUILD_REVISION=acc6bc382e884adca142a2f0db4f5196bcf61979 --build-arg HOTLINE_BUILD_CHANNEL=release -t hotline-computer:0.13.0-rc.3-relcheck-probe .
+#1 [resolver] fetching image...docker.io/library/rust:1-trixie
+#1 DONE 0.0s
+
+#2 [resolver] fetching image...docker.io/library/hotline-computer:0.13.0-rc.3-relcheck
+#2 DONE 0.0s
+
+#3 [internal] load build definition from Dockerfile
+#3 transferring dockerfile: 10.67kB 0.1s done
+#3 DONE 0.1s
+
+#4 [internal] load .dockerignore
+#4 transferring context: 30B 0.1s
+#4 transferring context: 138B 0.1s done
+#4 DONE 0.1s
+
+#5 oci-layout://docker.io/library/rust:1-trixie@sha256:223cc32ddca8f3ee90c436dbc94b6b5f052ea7f9653c5201e9612f08ad7d21b8
+#5 resolve docker.io/library/rust:1-trixie@sha256:223cc32ddca8f3ee90c436dbc94b6b5f052ea7f9653c5201e9612f08ad7d21b8 done
+#5 DONE 0.0s
+
+#6 oci-layout://docker.io/library/hotline-computer:0.13.0-rc.3-relcheck@sha256:d215bf33896eb40975f73a7374bfb328303e786ebc2f446c01926ebb85a20d7d
+#6 resolve docker.io/library/hotline-computer:0.13.0-rc.3-relcheck@sha256:d215bf33896eb40975f73a7374bfb328303e786ebc2f446c01926ebb85a20d7d 0.0s done
+#6 DONE 0.0s
+
+#7 [internal] load build context
+#7 transferring context: 2.83MB 0.1s done
+#7 DONE 0.1s
+
+#8 [linux/arm64 build 5/8] COPY assets ./assets
+#8 CACHED
+
+#9 [linux/arm64 build 1/8] RUN apt-get update && apt-get install -y --no-install-recommends cmake perl pkg-config && rm -rf /var/lib/apt/lists/*
+#9 CACHED
+
+#10 [linux/arm64 build 2/8] WORKDIR /src
+#10 CACHED
+
+#11 [linux/arm64 build 3/8] COPY Cargo.toml Cargo.lock ./
+#11 CACHED
+
+#12 [linux/arm64 build 4/8] COPY src ./src
+#12 CACHED
+
+#13 [linux/arm64 build 6/8] COPY skills ./skills
+#13 CACHED
+
+#14 [linux/arm64 build 7/8] RUN --mount=type=cache,target=/usr/local/cargo/registry --mount=type=cache,target=/src/target-probe CARGO_TARGET_DIR=/src/target-probe cargo build --release --locked --features probe-roots && cp /src/target-probe/release/hotline-computer /usr/local/bin/hotline-computer
+#14 0.160    Compiling proc-macro2 v1.0.107
+#14 0.160    Compiling quote v1.0.47
+#14 0.160    Compiling unicode-ident v1.0.24
+#14 0.160    Compiling libc v0.2.189
+#14 0.160    Compiling pin-project-lite v0.2.17
+#14 0.161    Compiling futures-core v0.3.34
+#14 0.162    Compiling cfg-if v1.0.4
+#14 0.162    Compiling serde_core v1.0.229
+#14 0.163    Compiling bytes v1.12.1
+#14 0.178    Compiling futures-io v0.3.34
+#14 0.182    Compiling itoa v1.0.18
+#14 0.198    Compiling serde v1.0.229
+#14 0.227    Compiling slab v0.4.12
+#14 0.234    Compiling memchr v2.8.3
+#14 0.249    Compiling shlex v2.0.1
+#14 0.287    Compiling find-msvc-tools v0.1.11
+#14 0.347    Compiling winnow v1.0.4
+#14 0.366    Compiling once_cell v1.21.4
+#14 0.447    Compiling hashbrown v0.17.1
+#14 0.491    Compiling syn v3.0.4
+#14 0.494    Compiling syn v2.0.119
+#14 0.510    Compiling equivalent v1.0.2
+#14 0.522    Compiling bitflags v2.13.1
+#14 0.546    Compiling errno v0.3.14
+#14 0.551    Compiling jobserver v0.1.35
+#14 0.581    Compiling signal-hook-registry v1.4.8
+#14 0.634    Compiling cc v1.4.4
+#14 0.655    Compiling mio v1.2.2
+#14 0.671    Compiling socket2 v0.6.5
+#14 0.767    Compiling toml_parser v1.1.3+spec-1.1.0
+#14 0.774    Compiling indexmap v2.14.1
+#14 0.889    Compiling futures-sink v0.3.34
+#14 0.915    Compiling toml_datetime v1.1.1+spec-1.1.0
+#14 0.943    Compiling stable_deref_trait v1.2.1
+#14 0.967    Compiling http v1.5.0
+#14 0.970    Compiling subtle v2.6.1
+#14 0.993    Compiling toml_edit v0.25.13+spec-1.1.0
+#14 0.995    Compiling cmake v0.1.58
+#14 1.018    Compiling futures-channel v0.3.34
+#14 1.068    Compiling version_check v0.9.5
+#14 1.104    Compiling fs_extra v1.3.0
+#14 1.107    Compiling parking v2.2.1
+#14 1.108    Compiling zmij v1.0.23
+#14 1.148    Compiling autocfg v1.5.1
+#14 1.158    Compiling pkg-config v0.3.34
+#14 1.174    Compiling dunce v1.0.5
+#14 1.193    Compiling generic-array v0.14.7
+#14 1.210    Compiling atomic-waker v1.1.2
+#14 1.252    Compiling proc-macro-crate v3.5.0
+#14 1.253    Compiling futures-task v0.3.34
+#14 1.265    Compiling httparse v1.10.1
+#14 1.323    Compiling rustix v1.1.4
+#14 1.342    Compiling aws-lc-sys v0.45.0
+#14 1.356    Compiling typenum v1.20.1
+#14 1.357    Compiling crossbeam-utils v0.8.22
+#14 1.428    Compiling zeroize v1.9.0
+#14 1.467    Compiling aws-lc-rs v1.18.1
+#14 1.483    Compiling linux-raw-sys v0.12.1
+#14 1.559    Compiling fastrand v2.5.0
+#14 1.609    Compiling smallvec v1.16.0
+#14 1.656    Compiling synstructure v0.13.2
+#14 1.741    Compiling rustls-pki-types v1.15.1
+#14 1.831    Compiling http-body v1.1.0
+#14 1.861    Compiling tracing-core v0.1.36
+#14 1.864    Compiling getrandom v0.3.4
+#14 1.875    Compiling litemap v0.8.3
+#14 1.929    Compiling writeable v0.6.4
+#14 1.941    Compiling zerocopy v0.8.56
+#14 2.016    Compiling concurrent-queue v2.5.0
+#14 2.027    Compiling crypto-common v0.1.7
+#14 2.040    Compiling serde_derive v1.0.229
+#14 2.044    Compiling tokio-macros v2.7.2
+#14 2.062    Compiling zerovec-derive v0.11.6
+#14 2.062    Compiling futures-macro v0.3.34
+#14 2.091    Compiling displaydoc v0.2.7
+#14 2.123    Compiling zerofrom-derive v0.1.7
+#14 2.158    Compiling yoke-derive v0.8.2
+#14 2.266    Compiling tokio v1.53.1
+#14 2.317    Compiling enumflags2_derive v0.7.12
+#14 2.351    Compiling futures-util v0.3.34
+#14 2.394    Compiling tracing-attributes v0.1.31
+#14 2.491    Compiling zerofrom v0.1.8
+#14 2.514    Compiling block-buffer v0.10.4
+#14 2.520    Compiling yoke v0.8.3
+#14 2.521    Compiling event-listener v5.4.2
+#14 2.548    Compiling utf8_iter v1.0.4
+#14 2.561    Compiling zerovec v0.11.8
+#14 2.585    Compiling zerotrie v0.2.5
+#14 2.586    Compiling rand_core v0.10.1
+#14 2.617    Compiling getrandom v0.4.3
+#14 2.675    Compiling icu_properties_data v2.3.0
+#14 2.715    Compiling serde_json v1.0.151
+#14 2.720    Compiling percent-encoding v2.3.2
+#14 2.769    Compiling tinystr v0.8.4
+#14 2.778    Compiling potential_utf v0.1.6
+#14 2.802    Compiling icu_normalizer_data v2.3.0
+#14 2.811    Compiling tracing v0.1.44
+#14 2.817    Compiling icu_locale_core v2.3.0
+#14 2.830    Compiling endi v1.1.1
+#14 2.858    Compiling icu_collections v2.3.0
+#14 2.868    Compiling event-listener-strategy v0.5.4
+#14 2.894    Compiling digest v0.10.7
+#14 3.142    Compiling icu_provider v2.3.1
+#14 3.158    Compiling zvariant_utils v4.2.0
+#14 3.163    Compiling enumflags2 v0.7.12
+#14 3.199    Compiling zcheapstr v1.1.0
+#14 3.230    Compiling futures-lite v2.6.1
+#14 3.338    Compiling log v0.4.34
+#14 3.394    Compiling thiserror v2.0.20
+#14 3.465    Compiling zvariant_derive v5.15.0
+#14 3.481    Compiling untrusted v0.9.0
+#14 3.498    Compiling tower-service v0.3.3
+#14 3.625    Compiling rand_core v0.9.5
+#14 3.663    Compiling zvariant v5.15.0
+#14 3.928    Compiling thiserror-impl v2.0.20
+#14 3.987    Compiling async-io v2.6.0
+#14 4.009    Compiling cpufeatures v0.2.17
+#14 4.023    Compiling rustls v0.23.43
+#14 4.064    Compiling ppv-lite86 v0.2.21
+#14 4.065    Compiling try-lock v0.2.5
+#14 4.082    Compiling want v0.3.1
+#14 4.090    Compiling icu_normalizer v2.3.0
+#14 4.120    Compiling rand_chacha v0.9.0
+#14 4.134    Compiling icu_properties v2.3.0
+#14 4.390    Compiling zbus_names v4.3.4
+#14 4.562    Compiling polling v3.11.0
+#14 4.572    Compiling form_urlencoded v1.2.2
+#14 4.591    Compiling sync_wrapper v1.0.2
+#14 4.646    Compiling httpdate v1.0.3
+#14 4.646    Compiling async-task v4.7.1
+#14 4.653    Compiling tower-layer v0.3.3
+#14 4.706    Compiling hyper v1.11.1
+#14 4.710    Compiling idna_adapter v1.2.2
+#14 4.738    Compiling rand v0.9.5
+#14 4.760    Compiling sha1 v0.10.7
+#14 4.868    Compiling async-channel v2.5.0
+#14 4.923    Compiling http-body-util v0.1.5
+#14 4.945    Compiling base64 v0.22.1
+#14 5.003    Compiling data-encoding v2.11.1
+#14 5.091    Compiling ipnet v2.12.1
+#14 5.203    Compiling hyper-util v0.1.20
+#14 5.911    Compiling async-signal v0.2.14
+#14 5.914    Compiling idna v1.1.0
+#14 5.992    Compiling tower v0.5.3
+#14 6.135    Compiling zbus_xml v5.2.1
+#14 6.137    Compiling uuid v1.26.0
+#14 6.152    Compiling async-lock v3.4.2
+#14 6.155    Compiling async-trait v0.1.92
+#14 6.308    Compiling piper v0.2.5
+#14 6.370    Compiling num-traits v0.2.19
+#14 6.396    Compiling aho-corasick v1.1.5
+#14 6.412    Compiling regex-syntax v0.8.11
+#14 6.423    Compiling strsim v0.11.1
+#14 6.427    Compiling ident_case v1.0.1
+#14 6.445    Compiling libm v0.2.16
+#14 6.490    Compiling simd-adler32 v0.3.10
+#14 6.500    Compiling openssl-probe v0.2.1
+#14 6.515    Compiling darling_core v0.24.1
+#14 6.554    Compiling rustls-native-certs v0.8.4
+#14 6.594    Compiling blocking v1.7.0
+#14 6.667    Compiling zbus-lockstep v0.5.2
+#14 6.706    Compiling async-process v2.5.0
+#14 6.735    Compiling url v2.5.8
+#14 7.338    Compiling regex-automata v0.4.18
+#14 7.374    Compiling async-executor v1.14.0
+#14 7.567    Compiling zbus_macros v5.19.0
+#14 7.578    Compiling async-broadcast v0.7.2
+#14 7.642    Compiling async-recursion v1.1.1
+#14 7.814    Compiling serde_repr v0.1.21
+#14 7.850    Compiling ordered-stream v0.2.0
+#14 7.923    Compiling hex v0.4.3
+#14 7.950    Compiling crc32fast v1.5.1
+#14 7.988    Compiling ref-cast v1.0.27
+#14 7.993    Compiling adler2 v2.0.1
+#14 8.017    Compiling darling_macro v0.24.1
+#14 8.064    Compiling tower-http v0.6.11
+#14 8.070    Compiling zbus-lockstep-macros v0.5.2
+#14 8.219    Compiling regex v1.13.1
+#14 8.327    Compiling chromiumoxide_types v0.9.1
+#14 8.331    Compiling tokio-util v0.7.19
+#14 8.410    Compiling zbus v5.19.0
+#14 8.411    Compiling futures-executor v0.3.34
+#14 8.549    Compiling ref-cast-impl v1.0.27
+#14 8.666    Compiling serde_derive_internals v0.30.0
+#14 8.696    Compiling num-conv v0.2.2
+#14 8.715    Compiling utf-8 v0.7.6
+#14 8.730    Compiling iana-time-zone v0.1.65
+#14 8.758    Compiling powerfmt v0.2.1
+#14 8.802    Compiling base64 v0.23.1
+#14 8.871    Compiling time-core v0.1.9
+#14 8.875    Compiling static_assertions v1.1.0
+#14 8.886    Compiling either v1.18.0
+#14 8.905    Compiling deranged v0.5.9
+#14 8.948    Compiling heck v0.5.0
+#14 9.038    Compiling chromiumoxide_pdl v0.9.1
+#14 9.144    Compiling schemars_derive v1.2.2
+#14 9.210    Compiling time v0.3.55
+#14 9.266    Compiling chrono v0.4.45
+#14 9.371    Compiling tungstenite v0.28.0
+#14 9.458    Compiling core_maths v0.1.1
+#14 9.477    Compiling futures v0.3.34
+#14 9.493    Compiling darling v0.24.1
+#14 9.598    Compiling miniz_oxide v0.9.1
+#14 9.706    Compiling tungstenite v0.29.0
+#14 10.16    Compiling chacha20 v0.10.2
+#14 10.23    Compiling ring v0.17.14
+#14 10.40    Compiling foldhash v0.1.5
+#14 10.46    Compiling dyn-clone v1.0.20
+#14 10.49    Compiling atspi-common v0.14.0
+#14 10.51    Compiling rmcp v3.2.0
+#14 10.56    Compiling allocator-api2 v0.2.21
+#14 10.57    Compiling mime v0.3.17
+#14 10.69    Compiling ryu v1.0.23
+#14 10.72    Compiling hashbrown v0.15.5
+#14 10.79    Compiling serde_urlencoded v0.7.1
+#14 10.86    Compiling axum-core v0.5.6
+#14 10.93    Compiling schemars v1.2.2
+#14 11.03    Compiling rand v0.10.2
+#14 11.26    Compiling tokio-tungstenite v0.29.0
+#14 11.35    Compiling flate2 v1.1.10
+#14 11.53    Compiling async-tungstenite v0.32.1
+#14 11.54    Compiling rmcp-macros v3.2.0
+#14 11.62    Compiling ttf-parser v0.25.1
+#14 11.68    Compiling yasna v0.6.0
+#14 11.88    Compiling atspi-proxies v0.14.0
+#14 12.22    Compiling chromiumoxide_cdp v0.9.1
+#14 12.55    Compiling pem v4.0.0
+#14 12.75    Compiling miniz_oxide v0.8.9
+#14 12.77    Compiling fdeflate v0.3.7
+#14 12.78    Compiling sse-stream v0.2.5
+#14 12.79    Compiling tokio-stream v0.1.19
+#14 12.85    Compiling gethostname v1.1.0
+#14 12.86    Compiling serde_path_to_error v0.1.20
+#14 12.93    Compiling which v8.0.6
+#14 12.99    Compiling getrandom v0.2.17
+#14 13.05    Compiling futures-timer v3.0.4
+#14 13.07    Compiling pastey v0.2.3
+#14 13.11    Compiling matchit v0.8.4
+#14 13.22    Compiling fnv v1.0.7
+#14 13.23    Compiling x11rb-protocol v0.14.0
+#14 13.28    Compiling axum v0.8.9
+#14 13.30    Compiling png v0.18.1
+#14 13.30    Compiling atspi v0.30.0
+#14 13.32    Compiling fontdue v0.9.4
+#14 13.59    Compiling sha2 v0.10.9
+#14 13.98    Compiling tempfile v3.27.0
+#14 14.19    Compiling hmac v0.12.1
+#14 14.21    Compiling webpki-roots v1.0.12
+#14 14.99    Compiling x11rb v0.14.0
+#14 23.52    Compiling rustls-webpki v0.103.15
+#14 23.52    Compiling rcgen v0.14.10
+#14 24.83    Compiling tokio-rustls v0.26.4
+#14 24.84    Compiling rustls-platform-verifier v0.7.0
+#14 24.93    Compiling hyper-rustls v0.27.9
+#14 25.00    Compiling reqwest v0.13.4
+#14 28.16    Compiling chromiumoxide v0.9.1
+#14 30.08    Compiling hotline-computer v0.13.0-rc.3 (/src)
+#14 55.75     Finished `release` profile [optimized] target(s) in 55.70s
+#14 DONE 55.9s
+
+#15 [linux/arm64 stage-1 1/2] COPY --from=build /usr/local/bin/hotline-computer /usr/bin/hotline-computer
+#15 DONE 0.0s
+
+#16 exporting to oci image format
+#16 exporting layers
+#16 exporting layers 0.6s done
+#16 exporting manifest sha256:c59b3cec9154aa4a43ffae1c2b334c8cb496c95842d3f02431032cf810096004 done
+#16 exporting config sha256:b389ff8d96cf432a0e63dbd5477ccfa630cd2d4a5db1db7207a62fe9aea8aa27 done
+#16 exporting manifest list sha256:e616f596ef00b767029eab3f1a07e3b74d5e66c31f162f6449795da422bfee9c done
+#16 sending tarball
+#16 sending tarball 2.5s done
+#16 DONE 3.1s
+hotline-computer:0.13.0-rc.3-relcheck-probe
+# 2026-11-22T08:02:02Z probe: exit 0

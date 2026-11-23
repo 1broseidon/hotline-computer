@@ -97,24 +97,51 @@
 
   // ---- Filling ----
 
-  // Typed the way a framework will notice: the native setter, then input and change.
-  function type(el, value) {
+  // Typed the way a framework will notice: the native setter, then input and
+  // change. Only where the fill rule (fill-policy.js, the broker's own rule)
+  // allows this kind of field, checked before focus, after focus and after
+  // typing: a field whose type, form or destination changed meanwhile is
+  // emptied again. Answers whether it was typed, or why not.
+  function type(el, value, kind) {
+    const origins = [location.origin];
+    const first = hotlineFillPolicy(el, kind, origins);
+    if (!first.ok) return first.why;
     el.focus();
+    const focused = hotlineFillPolicy(el, kind, origins);
+    if (!focused.ok || focused.print !== first.print) return 'the field changed as it took focus';
     setValue.call(el, value);
+    const typed = hotlineFillPolicy(el, kind, origins);
+    if (!typed.ok || typed.print !== first.print) {
+      setValue.call(el, '');
+      return 'the field changed while it was filled';
+    }
     el.dispatchEvent(new Event('input', { bubbles: true, composed: true }));
     el.dispatchEvent(new Event('change', { bubbles: true }));
+    const after = hotlineFillPolicy(el, kind, origins);
+    if (!after.ok || after.print !== first.print) {
+      setValue.call(el, '');
+      return 'the page changed the field as it was filled';
+    }
+    return true;
   }
 
-  // Fills what the values cover around an anchor; returns the last field filled.
+  // Fills what the values cover around an anchor; returns the last field
+  // filled, or null with `fill.refused` saying why nothing was.
   let busy = false;
   function fill(anchor, values, codeOnly) {
     const fields = fieldsNear(anchor);
     let last = null;
+    fill.refused = null;
     busy = true;
+    const one = (el, value, kind) => {
+      const done = type(el, value, kind);
+      if (done === true) last = el;
+      else fill.refused ||= done;
+    };
     try {
-      if (!codeOnly && fields.username && values.username) type((last = fields.username), values.username);
-      if (!codeOnly && fields.password && values.password) type((last = fields.password), values.password);
-      if (fields.code && values.code) type((last = fields.code), values.code);
+      if (!codeOnly && fields.username && values.username) one(fields.username, values.username, 'username');
+      if (!codeOnly && fields.password && values.password) one(fields.password, values.password, 'password');
+      if (fields.code && values.code) one(fields.code, values.code, 'code');
     } finally {
       busy = false;
     }
@@ -187,7 +214,7 @@
     return svg;
   }
 
-  let host = null, chip, menu, receipt;
+  let host = null, shadow = null, chip, menu, receipt;
   let field = null; // the field the chip sits in
   let receiptTimer = 0;
   let sizes = null;
@@ -197,7 +224,9 @@
     // Out of the page's flow and out of its styles: nothing here moves the page.
     const style = { all: 'initial', position: 'fixed', display: 'block', width: '0', top: '0', left: '0', 'z-index': '2147483647', 'pointer-events': 'none' };
     for (const [k, v] of Object.entries(style)) host.style.setProperty(k, v, 'important');
-    const root = host.attachShadow({ mode: 'open' });
+    // Closed, and every press checked for a real one: a script on the page
+    // must not be able to open the list and choose a login for itself.
+    const root = shadow = host.attachShadow({ mode: 'closed' });
     // A constructed sheet, not a <style>, so a page's style-src policy has no say.
     const sheet = new CSSStyleSheet();
     sheet.replaceSync(CSS);
@@ -208,7 +237,7 @@
     root.append(chip, menu, receipt);
     // Pressing the chip or an item keeps focus in the field, as a dropdown should.
     root.addEventListener('mousedown', (e) => e.preventDefault());
-    chip.addEventListener('click', () => (menu.hidden ? openMenu() : closeMenu()));
+    chip.addEventListener('click', (e) => { if (e.isTrusted) (menu.hidden ? openMenu() : closeMenu()); });
     root.addEventListener('keydown', onMenuKey);
     sizes = new ResizeObserver(place);
   }
@@ -264,13 +293,13 @@
       if (near.username || near.password) {
         const item = h('button', { type: 'button', 'aria-label': `Fill ${login.name} (${login.username || 'no username'})` },
           h('span', { class: 'name' }, login.name), h('span', { class: 'sub' }, login.username || ''));
-        item.addEventListener('click', () => choose(login, false));
+        item.addEventListener('click', (e) => { if (e.isTrusted) choose(login, false); });
         items.push(item);
       }
       if (login.code && near.code) {
         const item = h('button', { type: 'button', 'aria-label': `Fill code from ${login.name}` },
           h('span', { class: 'name' }, 'Fill code'), h('span', { class: 'sub' }, login.name));
-        item.addEventListener('click', () => choose(login, true));
+        item.addEventListener('click', (e) => { if (e.isTrusted) choose(login, true); });
         items.push(item);
       }
     }
@@ -294,12 +323,13 @@
   }
 
   function onMenuKey(e) {
+    if (!e.isTrusted) return;
     if (e.key === 'Escape') { e.stopPropagation(); closeMenu(); return; }
     if (e.key !== 'ArrowDown' && e.key !== 'ArrowUp') return;
     const items = [...menu.querySelectorAll('button')];
     if (!items.length) return;
     e.preventDefault();
-    const at = items.indexOf(host.shadowRoot.activeElement);
+    const at = items.indexOf(shadow.activeElement);
     items[(at + (e.key === 'ArrowDown' ? 1 : -1) + items.length) % items.length].focus();
   }
 
@@ -327,7 +357,8 @@
     if (reply.error) return showReceipt(anchor, reply.error.message || 'Hotline could not fill this login', true);
     if (codeOnly && !reply.code) return showReceipt(anchor, `Hotline: no code for ${login.name}`, true);
     const last = anchor.isConnected && fill(anchor, reply, codeOnly);
-    if (last) showReceipt(last, `Filled from Hotline · ${login.name}`);
+    if (last && !fill.refused) showReceipt(last, `Filled from Hotline · ${login.name}`);
+    else if (fill.refused) showReceipt(last || anchor, `Hotline: not filled here: ${fill.refused}`, true);
     else showReceipt(anchor, 'Hotline: nothing here to fill', true);
   }
 
@@ -407,8 +438,10 @@
     }
     const anchor = anchorInPage();
     const last = anchor && fill(anchor, message, false);
-    if (last) showReceipt(last, `Filled from Hotline · ${message.name}`);
-    sendResponse(last ? { filled: true } : { error: { name: 'NotFoundError', message: 'Hotline: no login form on this page' } });
+    if (last && !fill.refused) showReceipt(last, `Filled from Hotline · ${message.name}`);
+    else if (fill.refused) showReceipt(last || anchor, `Hotline: not filled here: ${fill.refused}`, true);
+    sendResponse(last && !fill.refused ? { filled: true }
+      : { error: { name: 'NotFoundError', message: fill.refused ? `Hotline: not filled here: ${fill.refused}` : 'Hotline: no login form on this page' } });
     return false;
   });
 

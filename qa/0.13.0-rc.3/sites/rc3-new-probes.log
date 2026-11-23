@@ -1,0 +1,19 @@
+# containers already running (container); none of them is touched:
+ID                                                     IMAGE                                                OS     ARCH   STATE    IP                 CPUS  MEMORY    STARTED
+hotline-computer-99374fd0-52fd-4def-a6cc-37f25131a3a5  hotline-computer:0.12.0-rc.2                         linux  arm64  running  192.168.65.17/24   4     16384 MB  2026-11-22T01:14:34Z
+buildkit                                               ghcr.io/apple/container-builder-shim/builder:0.13.1  linux  arm64  running  192.168.65.189/24  8     16384 MB  2026-11-20T02:27:25Z
+hotline-computer-claude-ziggy                          ghcr.io/1broseidon/hotline-computer:0.11.0           linux  arm64  stopped                     4     4096 MB   
+hotline-computer-46e16b18-7a5b-468a-9209-4e75d1b16bb4  ghcr.io/1broseidon/hotline-computer:0.11.0           linux  arm64  stopped                     4     16384 MB  2026-11-19T02:33:26Z
+hotline-computer-79d12f56-5211-4030-b864-a47306200461  hotline-computer:0.13.0-rc.2                         linux  arm64  running  192.168.65.18/24   4     8192 MB   2026-11-21T13:18:25Z
+hotline-computer-c9397b69-9084-4b3b-a325-715134487a53  ghcr.io/1broseidon/hotline-computer:0.11.0           linux  arm64  running  192.168.65.86/24   4     16384 MB  2026-11-13T17:41:23Z
+hotline-computer-bef618e7-9144-45f8-ad40-bfb8fc3010a2  ghcr.io/1broseidon/hotline-computer:0.11.0           linux  arm64  running  192.168.65.5/24    4     4096 MB   2026-11-20T20:54:34Z
+# /capabilities: {"attest":"Gi6FkDPiefhssKN+SW3k6iBR21wr7wsItZeqar+kggE=","boot":"d50dcdae323bf6e1ab5d012b48642d16","protected":{"loopback":"readable","mode":"split","other":"readable","readable":["CANARY_VAR","GH_TOK
+# POST /capabilities/key: 200 (taken)
+# image hotline-computer:0.13.0-rc.3-probe as hl-rc3-sites-probe-b355b8 (split, delivery protected); listener on 192.168.65.1:60041; HTTPS fixture https://192.168.65.1:60042 (bound), :60043 (unbound); expecting BLOCKED
+ID         RESULT      WHAT
+F9         BROKEN   !! a password typed into its own site's GET form, sent by the browser, loads in an address: the password was not typed into its own site's GET form: e2 is not a field LOCALENC.password may be typed into: its form sends by GET, which would put it in the addres
+S1         BROKEN   !! a two-step sign-in whose script builds the password field with no form: refused, or read back: the password was not typed into a script-built field with no form: e1 is not a field LOCALAPP.password may be typed into: it is not inside a form, so where it would be sent is n
+S2         BROKEN   !! a username refused because the page adds its button while it is typed: the username was not kept: e1 changed while LOCALAPP.username was typed (its type, its form or the focus moved), so it was cleared again.
+# 0 leaked, 0 blocked, 0 skipped, 3 broken; 3 differ from EXPECT=blocked
+# removed hl-rc3-sites-probe-b355b8
+EXIT 1

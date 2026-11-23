@@ -1,0 +1,51 @@
+# containers already running (container); none of them is touched:
+# /capabilities: {"attest":"kWwgsJM0emHlMvYkKZ2fySH24warKD+ZIDh4qA/lU5c=","boot":"ab3725f84b2482b41498941eaa9440a0","protected":{"mode":"split","v":1},"version":"0.13.0"}
+# image hotline-computer:0.13.0-rc.1-probe as hl-secrets-rc-cb7798 (split, delivery protected); listener on 192.168.65.1:61709; HTTPS fixture https://192.168.65.1:61711 (bound), :61712 (unbound); expecting BLOCKED
+A1         BLOCKED  ok variable read back in another spelling by a shell job: readable as nothing; plain echo was redacted
+A2         BLOCKED  ok files get of a file holding the value in base64: files get of a file holding the value in base64
+A3         BLOCKED  ok a job's key rendered on screen matches the real key's pixels: the job's $GH_TOKEN on the display differs from the real key (its stand-in); controls held
+A3s        BLOCKED  ok a screenshot or capture shows a sign-in page while a secret is typed: during a sign-in, the tab's screenshot: no image (withheld, or no such action); the display's capture: does not show it
+A4         BLOCKED  ok eval btoa(field.value) after browser fill of a login: eval btoa(field.value) on a filled login: refused
+A4v        BLOCKED  ok browser fill of a variable on any page, read back: fill secret CANARY_VAR on a page, then eval btoa: CANARY_VAR is a protected key: every shell job has a stand-i
+A5         SKIPPED     clipboard read: no clipboard_read in this input tool; needs a clipboard reader
+A6         BLOCKED  ok raw job log holds a login password: raw job logs holding the login password: 0
+A6v        BLOCKED  ok a variable's value in a job log or a readable /proc environ: job logs holding a value: 0; readable /proc/*/environ holding one: 0
+A7         BLOCKED  ok GET /files/download of a raw job log: no job log holds the value
+A8         BLOCKED  ok TOTP digits come back unredacted: TOTP digits in a plain tool answer: none (redacted or no reply)
+B1         BLOCKED  ok variable curl'd to a listener on the host bridge: variable sent by curl to the listener, and in a query to the service it is bound to
+B1b        BLOCKED  ok login password from the bridge POSTed to the listener: login password from the bridge POSTed to the listener
+B2         BLOCKED  ok variable typed into a form and submitted to the listener: variable typed into a local form and submitted to the listener
+B3         SKIPPED     DNS exfiltration reachability: DNS reachability needs a public lookup; not run (nothing public)
+B4         BLOCKED  ok value written to the workspace appears on the host: value written to ~/workspace appears in the host folder
+B5         SKIPPED     desk tools and model call carry a value: desk tools (post_to_chat, send, open_link, model call): desk side, by code reading
+B6         BLOCKED  ok bearer readable from /proc/*/environ: bearer read from /proc/*/environ: not readable
+BR-fill    BLOCKED  ok bridge fill returns a login password to a job: fill EXAMPLE: CONNECT-PermissionError-13
+BR-logins  BLOCKED  ok bridge logins lists a login and username to a job: logins for example.test: CONNECT-PermissionError-13
+BR-get     BLOCKED  ok bridge get signs a job-chosen challenge: get with a challenge the job chose: CONNECT-PermissionError-13
+BR-askme   BLOCKED  ok bridge ask-me fill answered without approval: ask-me fill with no approval: CONNECT-PermissionError-13
+askme_job  BLOCKED  ok a job's held ask-me fill gives the password after one approval: ask-me password POSTed out after a job's own hold (no hold appeared)
+memscan    BLOCKED  ok login password and passkey key in service memory: hotline-computer processes (boot=denied, __broker=denied, __runner=denied, observe=denied, chrome-extension://dpikdfaiiigmeafkfiagkcihbioflcfk/=denied)
+X1         BLOCKED  ok service private files readable by a job: readable service files: none (the agent's own, not counted: files.key)
+X2         BLOCKED  ok service /proc environ or mem readable by a job: environ=False mem=False pids=1,2
+X3         BLOCKED  ok the (signed-in) browser's /proc environ or mem readable by a job: signed-in pid=310 environ=False mem=False (general browser pid=88 is the agent's own)
+X4         BLOCKED  ok job can ptrace-attach the (signed-in) browser: attach=refused signed-in pid=310 Operation not permitted
+X5         BLOCKED  ok job connects to the bridge socket: refused PermissionError
+X6         BLOCKED  ok a DevTools port of the service or the signed-in browser, or a secret through one, answers a job: DevTools a job reaches: 9222 (uid1000): http://192.168.65.1:61709/form?u=&p=, about:blank, chrome://omnibox-popup.top-chrome/, chrome://omnibox-popup.top-chrome/omnibox_popup_aim.html
+X7         BLOCKED  ok job may signal the service process: refused
+9222-list  BLOCKED  ok curl 127.0.0.1:9222/json/list lists the tab: curl 127.0.0.1:9222/json/list: no signed-in site's tab
+xinput     BLOCKED  ok job sees raw key presses on the display: raw key presses seen by a job on the display: 0 of 7 the person typed (typed through /sites/ws)
+J1         BLOCKED  ok curl with GH_TOKEN: listener receives the real key: the service received the key through the proxy; the job held only its stand-in
+J2         BLOCKED  ok python urllib 'token' scheme: listener receives the real key: the service received the key through the proxy; the job held only its stand-in
+J3         BLOCKED  ok git Basic credential helper: listener receives the real key: the service received the key through the proxy; the job held only its stand-in
+J4         BLOCKED  ok reflecting endpoint hands the real key back to the job: the bound service reflected the key it received; the job got its stand-in
+J5         BLOCKED  ok key in a request body: listener receives the real key: what the bound service received from the job's GH_TOKEN
+J6         BLOCKED  ok unbound host: listener receives the real key: what an unbound HTTPS host received from the job's GH_TOKEN
+J7         BLOCKED  ok node fetch with GH_TOKEN: the service received the key through the proxy; the job held only its stand-in
+N1         BLOCKED  ok sqlite read of a signed-in site's cookie from the browser profile: job reads a signed-in site's cookie row from ~/.hotline/browser/Default/Cookies: COOKIES norow
+N1b        BLOCKED  ok cat ~/.hotline/logins/*.json shows a shared cookie: cat ~/.hotline/logins/*.json shows nothing
+N2         BLOCKED  ok snapshot still holds a share after the person revokes it: snapshot taken before the revoke still holds the share (restore would sign the site back in)
+N3         BLOCKED  ok upgrade from a 0.12 home leaves no readable cookie or login file: the upgrade dropped the saved login and the cookie and held back the snapshot; /migration: pending, 1 logins dropped, sites cleared ['example.test', 'localhost'], quarantined ['w5old']; answered clean: done, the snapshot holds no logins, profile or job logs and restores without them
+N6b        BLOCKED  ok general browser finds a passkey for an attacker challenge: navigator.credentials.get in the general browser: ERR AbortError: no authenticator answered in 12 s
+# 0 leaked, 42 blocked, 3 skipped, 0 broken; 0 differ from EXPECT=blocked
+# removed hl-secrets-rc-cb7798
+EXIT 0

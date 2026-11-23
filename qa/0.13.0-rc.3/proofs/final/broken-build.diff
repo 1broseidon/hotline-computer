@@ -1,0 +1,158 @@
+diff --git a/src-final/src/holds.rs b/src-broken/src/holds.rs
+index ff21897..eb60184 100644
+--- a/src-final/src/holds.rs
++++ b/src-broken/src/holds.rs
+@@ -218,7 +218,8 @@ impl Holds {
+     /// approval waiting for a retry and every held use of them goes, so an
+     /// answer given for one version of a key never lets another through.
+     pub fn forget(&self, names: &[String]) {
+-        if names.is_empty() {
++        // SABOTAGE (rc3-probes broken build, never a release): answers outlive their key.
++        if names.is_empty() || std::env::var_os("HOTLINE_SABOTAGE_OFF").is_none() {
+             return;
+         }
+         let mut inner = self.lock();
+diff --git a/src-final/src/jobs.rs b/src-broken/src/jobs.rs
+index 4fb1a46..3d4f867 100644
+--- a/src-final/src/jobs.rs
++++ b/src-broken/src/jobs.rs
+@@ -908,6 +908,10 @@ fn a_domain_of_its_own() {}
+ 
+ #[cfg(target_os = "linux")]
+ fn a_domain_of_its_own() {
++    // SABOTAGE (rc3-probes broken build, never a release): a job gets no domain of its own.
++    if std::env::var_os("HOTLINE_SABOTAGE_OFF").is_none() {
++        return;
++    }
+     #[repr(C)]
+     struct Ruleset {
+         handled_access_fs: u64,
+diff --git a/src-final/src/keyproxy/conn.rs b/src-broken/src/keyproxy/conn.rs
+index f2a8814..1f45bd5 100644
+--- a/src-final/src/keyproxy/conn.rs
++++ b/src-broken/src/keyproxy/conn.rs
+@@ -121,6 +121,8 @@ async fn handle(inner: Arc<Inner>, stream: TcpStream) -> io::Result<()> {
+             .unwrap_or_else(|poisoned| poisoned.into_inner())
+             .clone();
+         if let Some(check) = check
++            // SABOTAGE (rc3-probes broken build, never a release): the owner check is skipped.
++            && std::env::var_os("HOTLINE_SABOTAGE_OFF").is_some()
+             && !check(peer, job.clone()).await
+         {
+             let text =
+@@ -296,7 +298,8 @@ impl Session {
+         );
+         let (names, scrub) = self.swap(&mut headers);
+         let swapped = !names.is_empty();
+-        if swapped && self.table().refused(&names, &self.origin, parts.uri.path()) {
++        // SABOTAGE (rc3-probes broken build, never a release): no minting route is refused.
++        if swapped && std::env::var_os("HOTLINE_SABOTAGE_OFF").is_some() && self.table().refused(&names, &self.origin, parts.uri.path()) {
+             return plain(
+                 StatusCode::FORBIDDEN,
+                 "Hotline does not send a protected key to a route that makes new keys\n",
+diff --git a/src-final/src/secrets.rs b/src-broken/src/secrets.rs
+index e2f2e41..136fd45 100644
+--- a/src-final/src/secrets.rs
++++ b/src-broken/src/secrets.rs
+@@ -705,6 +705,11 @@ impl Secrets {
+     }
+ 
+     fn redact_at<'a>(&self, text: &'a str, now: u64) -> Cow<'a, str> {
++        // SABOTAGE (rc3-probes broken build, never a release): nothing is redacted.
++        if std::env::var_os("HOTLINE_SABOTAGE_OFF").is_none() {
++            let _ = now;
++            return Cow::Borrowed(text);
++        }
+         let codes: Vec<(String, String)> = self
+             .read()
+             .iter()
+diff --git a/src-final/src/signin/mod.rs b/src-broken/src/signin/mod.rs
+index ced7a0b..368698d 100644
+--- a/src-final/src/signin/mod.rs
++++ b/src-broken/src/signin/mod.rs
+@@ -449,7 +449,8 @@ impl Signin {
+             "--metrics-recording-only",
+             // A page brought back from the back-forward cache still holds
+             // what was typed into it, so every document here is new.
+-            "--disable-features=BackForwardCache,MediaRouter,OptimizationHints,Translate",
++            // SABOTAGE (rc3-probes broken build, never a release): the back-forward cache is on.
++            "--disable-features=MediaRouter,OptimizationHints,Translate",
+             "--test-third-party-cookie-phaseout",
+             "--disable-blink-features=AutomationControlled",
+             "--password-store=basic",
+@@ -1145,6 +1146,11 @@ impl Signin {
+     /// those tabs are withheld as if the broker had typed it, and what it
+     /// types (`values`) is looked for on them from then on.
+     pub async fn withhold_origin(&self, origin: &str, name: &str, values: &[String]) {
++        // SABOTAGE (rc3-probes broken build, never a release): the extension's fill withholds nothing.
++        if std::env::var_os("HOTLINE_SABOTAGE_OFF").is_none() {
++            let _ = (origin, name, values);
++            return;
++        }
+         let running = self.0.running.lock().await.clone();
+         let Some(running) = running else { return };
+         let tabs: Vec<Tab> = self
+@@ -2160,6 +2166,10 @@ impl Signin {
+             running.clone()
+         };
+         let Some(running) = running.filter(|running| !running.cdp.is_closed()) else {
++            // SABOTAGE (rc3-probes broken build, never a release): a revocation while stopped is dropped.
++            if std::env::var_os("HOTLINE_SABOTAGE_OFF").is_none() {
++                return Ok((0, 0));
++            }
+             self.revoke_later(sites);
+             return Ok((0, 0));
+         };
+@@ -2199,7 +2209,8 @@ impl Signin {
+         let (gone, kept): (Vec<Value>, Vec<Value>) = cookies
+             .into_iter()
+             .partition(|cookie| cookie_within(cookie, sites));
+-        if !gone.is_empty() {
++        // SABOTAGE (rc3-probes broken build, never a release): a revocation while running leaves the cookies.
++        if !gone.is_empty() && std::env::var_os("HOTLINE_SABOTAGE_OFF").is_some() {
+             cdp.call("Storage.clearCookies", json!({})).await?;
+             let kept: Vec<Value> = kept.iter().map(cookie_param).collect();
+             if !kept.is_empty() {
+@@ -2234,6 +2245,11 @@ impl Signin {
+ /// The sites revoked since the browser last closed in order, as written by
+ /// `persist_revoked`; what does not read is skipped.
+ fn read_revoked(path: &std::path::Path) -> Vec<Origin> {
++    // SABOTAGE (rc3-probes broken build, never a release): nor read back.
++    if std::env::var_os("HOTLINE_SABOTAGE_OFF").is_none() {
++        let _ = path;
++        return Vec::new();
++    }
+     std::fs::read(path)
+         .ok()
+         .and_then(|bytes| serde_json::from_slice::<Vec<String>>(&bytes).ok())
+@@ -2246,6 +2262,11 @@ fn read_revoked(path: &std::path::Path) -> Vec<Origin> {
+ /// Adds `sites` to the list on disk, replaced whole so a crash leaves the
+ /// old list or the new one.
+ fn persist_revoked(path: &std::path::Path, sites: &[Origin]) {
++    // SABOTAGE (rc3-probes broken build, never a release): revocations are not written down.
++    if std::env::var_os("HOTLINE_SABOTAGE_OFF").is_none() {
++        let _ = (path, sites);
++        return;
++    }
+     let mut all: Vec<String> = read_revoked(path).iter().map(ToString::to_string).collect();
+     for site in sites.iter().map(ToString::to_string) {
+         if !all.contains(&site) {
+diff --git a/src-final/src/split/broker.rs b/src-broken/src/split/broker.rs
+index 0b2dfae..9b04d17 100644
+--- a/src-final/src/split/broker.rs
++++ b/src-broken/src/split/broker.rs
+@@ -173,6 +173,14 @@ pub fn run(config: Config) -> Result<(), String> {
+         // The signed-in browser, which PID 1 starts as `signin`; its bridge
+         // is the only one, and answers `signin` alone.
+         app.signin = Some(crate::signin::split::for_broker(&app));
++        // SABOTAGE (rc3-probes broken build, never a release): a stray listener of the broker's own.
++        tokio::spawn(async {
++            if let Ok(stray) = tokio::net::TcpListener::bind("127.0.0.1:3129").await {
++                while let Ok((held, _)) = stray.accept().await {
++                    std::mem::forget(held);
++                }
++            }
++        });
+         tokio::spawn(crate::bridge::serve(app.clone()));
+         let listener = std::net::TcpListener::from(door);
+         listener

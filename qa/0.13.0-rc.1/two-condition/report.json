@@ -1,0 +1,85 @@
+{
+  "image": "hotline-computer:0.13.0-rc.1-probe",
+  "steps": [
+    {
+      "step": "deliver the made-up secrets with PUT /secrets v2",
+      "ok": true,
+      "detail": "HTTP 204 b''"
+    },
+    {
+      "step": "sign in with password and TOTP",
+      "ok": true,
+      "detail": "Signed in as rc-user (password and code)"
+    },
+    {
+      "step": "post a form on the signed-in site",
+      "ok": true,
+      "detail": "Post 1: Release check from the two-condition run"
+    },
+    {
+      "step": "download a file from the signed-in site",
+      "ok": true,
+      "detail": "~/Downloads/report.csv: 'id,amount\\n1,42\\n'"
+    },
+    {
+      "step": "sign in with a passkey",
+      "ok": true,
+      "detail": "Signed in as rc-user (passkey)"
+    },
+    {
+      "step": "the site saw each step succeed",
+      "ok": true,
+      "detail": "password accepted, code accepted, signed in by password and code, posted, downloaded report.csv, signed out, passkey verified, signed in by passkey"
+    },
+    {
+      "step": "prepare a workspace with Node (Nix)",
+      "ok": true,
+      "detail": "ready"
+    },
+    {
+      "step": "call the API with the protected key: curl",
+      "ok": true,
+      "detail": "{\"login\": \"rc-user\", \"plan\": \"fixture\"}"
+    },
+    {
+      "step": "clone over HTTPS with the protected key: git",
+      "ok": true,
+      "detail": "c4a5ae8 Fixture commit for the two-condition run"
+    },
+    {
+      "step": "call the API with the protected key: node",
+      "ok": true,
+      "detail": "200 {\"login\": \"rc-user\", \"plan\": \"fixture\"}"
+    },
+    {
+      "step": "the job held a stand-in, not the key",
+      "ok": true,
+      "detail": "the job's $GH_TOKEN starts ghp_"
+    },
+    {
+      "step": "the API and git service received the real key (host side)",
+      "ok": true,
+      "detail": "4 keyed requests accepted (api:curl, api:node, git:git), 1 refused (git's first, unauthenticated ask)"
+    },
+    {
+      "step": "every probe BLOCKED (SKIPPED where it cannot run by itself)",
+      "ok": true,
+      "detail": "42 blocked, 3 skipped, 0 leaked, 0 broken"
+    },
+    {
+      "step": "canary scan: job logs, the home, readable /proc",
+      "ok": true,
+      "detail": "SCANNED files=5414 skipped=2 proc_entries=78 hits=5; control found in 5 places, 3 of them job logs"
+    },
+    {
+      "step": "canary scan: the mounted workspace on the host",
+      "ok": true,
+      "detail": "40 files, control found"
+    },
+    {
+      "step": "canary scan: every tool result of this run",
+      "ok": true,
+      "detail": "325 results, control found"
+    }
+  ]
+}

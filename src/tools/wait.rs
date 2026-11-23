@@ -14,6 +14,11 @@ struct Input {
 }
 
 pub async fn call(app: &App, arguments: Value) -> ToolResult {
+    if let Some(signin) = &app.signin
+        && let Some(result) = signin.wait(&arguments).await
+    {
+        return result;
+    }
     let input: Input = serde_json::from_value(arguments).map_err(|error| error.to_string())?;
     if input.text.is_empty() {
         return Err("text is required".to_owned());

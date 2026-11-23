@@ -123,6 +123,11 @@ impl Passkeys {
     /// answers when the arming ends.
     pub fn arm(&self, rp_id: &str) -> Result<i64, String> {
         check_rp_id(rp_id)?;
+        if is_address(rp_id) {
+            return Err(format!(
+                "A passkey can't be added for {rp_id}: a passkey is made for a host name, not an address. A site on the computer itself takes one as localhost."
+            ));
+        }
         let expires_at = now_ms() + i64::try_from(ARMED_FOR.as_millis()).unwrap_or(i64::MAX);
         *self.lock() = Some(Arming {
             rp_id: rp_id.to_owned(),
@@ -350,6 +355,17 @@ pub fn check_rp_id(rp_id: &str) -> Result<(), String> {
     }
 }
 
+/// Whether `rp_id` is an IP address as a URL reads one (its last label a
+/// number, `127.0.0.1` or `127.1` alike). WebAuthn makes passkeys for
+/// domains only, so a browser refuses any request for one.
+fn is_address(rp_id: &str) -> bool {
+    let last = rp_id.rsplit('.').next().unwrap_or_default();
+    let hex = last
+        .strip_prefix("0x")
+        .is_some_and(|digits| digits.chars().all(|c| c.is_ascii_hexdigit()));
+    hex || (!last.is_empty() && last.chars().all(|c| c.is_ascii_digit()))
+}
+
 /// Whether a credential for `rp_id` belongs to an arming for `armed`: the
 /// same site, or one within the other, since a site may register under its
 /// parent domain and a person may arm the page they see.
@@ -404,7 +420,7 @@ pub async fn arm(State(app): State<App>, Json(arm): Json<Arm>) -> Response {
     if let Err(error) = app.passkeys.arm(&arm.rp_id) {
         return (StatusCode::BAD_REQUEST, Json(json!({"error": error}))).into_response();
     }
-    if let Err(error) = app.browser.sync_passkeys(true).await {
+    if let Err(error) = crate::split::sync_passkeys(&app, true).await {
         app.passkeys.disarm();
         return (
             StatusCode::SERVICE_UNAVAILABLE,
@@ -423,7 +439,7 @@ pub async fn arm(State(app): State<App>, Json(arm): Json<Arm>) -> Response {
 /// and a passkey just made is kept, without any tool being used.
 pub async fn registration(State(app): State<App>) -> Response {
     if app.passkeys.armed().is_some()
-        && let Err(error) = app.browser.sync_passkeys(false).await
+        && let Err(error) = crate::split::sync_passkeys(&app, false).await
     {
         eprintln!("passkeys: the browser could not be looked at: {error}");
     }
@@ -446,12 +462,12 @@ pub async fn answer(State(app): State<App>, Json(answer): Json<Answer>) -> Respo
     if let Err(error) = answered {
         return (StatusCode::CONFLICT, Json(json!({"error": error}))).into_response();
     }
-    if let Err(error) = app.browser.sync_passkeys(false).await {
+    if let Err(error) = crate::split::sync_passkeys(&app, false).await {
         eprintln!("passkeys: the browser could not be told the answer: {error}");
     }
     if !answer.approved {
         app.passkeys.disarm();
-        if let Err(error) = app.browser.sync_passkeys(false).await {
+        if let Err(error) = crate::split::sync_passkeys(&app, false).await {
             eprintln!("passkeys: the browser did not drop the arming: {error}");
         }
     }
@@ -462,7 +478,7 @@ pub async fn answer(State(app): State<App>, Json(answer): Json<Answer>) -> Respo
 /// in the authenticators only if the set delivered since carries it.
 pub async fn disarm(State(app): State<App>) -> Response {
     app.passkeys.disarm();
-    if let Err(error) = app.browser.sync_passkeys(false).await {
+    if let Err(error) = crate::split::sync_passkeys(&app, false).await {
         eprintln!("passkeys: the browser did not drop the arming: {error}");
     }
     StatusCode::NO_CONTENT.into_response()
@@ -481,6 +497,7 @@ mod tests {
             user_name: Some("george".to_owned()),
             user_display_name: None,
             use_: crate::secrets::Use::Auto,
+            readable: false,
         }
     }
 
@@ -518,6 +535,32 @@ mod tests {
         assert!(rp_within("login.github.com", "github.com"));
         assert!(!rp_within("github.com", "gitlab.com"));
         assert!(!rp_within("evilgithub.com", "github.com"));
+    }
+
+    /// A site on the computer itself is armed by its host name; an address
+    /// is refused up front, in words the desk shows, since no browser makes
+    /// a passkey for one.
+    #[test]
+    fn a_loopback_site_is_armed_by_name_and_an_address_is_refused() {
+        let passkeys = Passkeys::default();
+        for rp in ["localhost", "app.localhost", "192.168.65.107.sslip.io"] {
+            passkeys
+                .arm(rp)
+                .unwrap_or_else(|error| panic!("{rp}: {error}"));
+        }
+        for rp in ["127.0.0.1", "127.1", "0.0.0.0", "10.0.0.1", "0x7f.1"] {
+            let error = passkeys.arm(rp).unwrap_err();
+            assert!(
+                error.starts_with(&format!("A passkey can't be added for {rp}:")),
+                "{rp}: {error}"
+            );
+            assert!(error.contains("localhost"), "{error}");
+        }
+        assert_eq!(
+            passkeys.armed().map(|(rp, _)| rp).as_deref(),
+            Some("192.168.65.107.sslip.io"),
+            "a refused arming leaves the last one as it was"
+        );
     }
 
     #[test]

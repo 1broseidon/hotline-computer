@@ -1,4 +1,4 @@
-mod browser;
+pub(crate) mod browser;
 mod capture;
 pub(crate) mod files;
 mod input;
@@ -55,10 +55,11 @@ pub fn descriptors(home: &str) -> Vec<Tool> {
         ),
         Tool::new(
             "browser",
-            "The managed Chromium, semantically. text returns an accessibility-style page snapshot with element refs; click_ref, fill, select, check, and hover act on those refs. Refs are stable within one snapshot. fill takes exactly one of text or secret — omit the other rather than sending it empty — and types that text (for example {\"action\":\"fill\",\"ref\":\"e3\",\"text\":\"QA\"}) or one of the person's stored secrets by name (for example {\"action\":\"fill\",\"ref\":\"e3\",\"secret\":\"GITHUB.username\"}): a login's field is typed only on that login's own sites and the value never appears in the answer. A stored passkey signs in by itself when a site asks for one. Also provides navigation, history, tabs, uploads, dialogs, and downloads.",
+            "The managed Chromium, semantically. text returns an accessibility-style page snapshot with element refs; click_ref, fill, select, check, and hover act on those refs. Refs are stable within one snapshot. fill takes exactly one of text or secret — omit the other rather than sending it empty — and types that text (for example {\"action\":\"fill\",\"ref\":\"e3\",\"text\":\"QA\"}) or one of the person's stored secrets by name (for example {\"action\":\"fill\",\"ref\":\"e3\",\"secret\":\"GITHUB.username\"}): a login's field is typed only on that login's own sites and the value never appears in the answer. A stored passkey signs in by itself when a site asks for one. Also provides navigation, history, tabs, uploads, dialogs, and downloads. On a computer with a signed-in browser, a login's sites and the sites the person shared open there: tabs lists them from index 100, eval does not run there (use text, links, read or screenshot), and while a sign-in is typed its page is hidden until it loads the next one.",
             schema(json!({
                 "type":"object","properties":{
-                    "action":{"type":"string","enum":["navigate","text","links","eval","click_ref","fill","select","check","hover","tabs","tab_new","tab_select","tab_close","upload","dialog_accept","dialog_dismiss","downloads","back","forward","reload"]},
+                    "action":{"type":"string","enum":["navigate","text","links","read","screenshot","eval","click_ref","fill","select","check","hover","tabs","tab_new","tab_select","tab_close","upload","dialog_accept","dialog_dismiss","downloads","back","forward","reload"]},
+                    "selector":{"type":"string","description":"read only: a CSS selector; answers the text of what matches, never a field's value"},
                     "url":{"type":"string"},"js":{"type":"string"},"ref":{"type":"string"},"button":{"type":"string"},
                     "text":{"type":"string","description":"fill only: the text to type (an explicit empty string clears the field); omit when using secret. Also used by dialog_accept."},"secret":{"type":"string","description":"fill only: the name of a stored secret to type instead of text; omit when using text. NAME for a variable; NAME.username, NAME.password or NAME.code (the six TOTP digits of this moment) for a login, which is typed only on a page of the login's own sites. state info lists them. The value never appears in the answer."},"value":{"type":"string","description":"Single option value for select."},"values":{"type":"array","items":{"type":"string"},"description":"Native select values; multiple selections require a multiple select."},"uncheck":{"type":"boolean"},"index":{"type":"integer","minimum":0},"path":{"type":"string"}
                 },"required":["action"],"additionalProperties":false
@@ -66,11 +67,12 @@ pub fn descriptors(home: &str) -> Vec<Tool> {
         ),
         Tool::new(
             "shell",
-            "Run managed commands without holding the desktop while they execute. run starts a named entry from the workspace manifest's runs (name; cwd inside the workspace; args are appended), the way to build, test or launch a prepared project. A desktop run answers when its window is up, with the window and a screenshot; a web run gets $PORT and answers when it listens, with its url; both wait up to wait_ms (default 45000, at most 50000 so the answer beats a client's one-minute tool timeout), and ready with the job_id waits again. exec runs command with args, or a whole shell line in command alone; it waits up to 45s and retains stdout/stderr even on timeout. Its answer holds the end of stdout and of stderr, with each stream's full size; when a stream is longer than that, more says where all of it is, and read with the job_id pages through it. start/launch return a durable job ID immediately. list/status/read/wait inspect jobs; write sends stdin (optional EOF); cancel kills and reaps the process group. show opens or focuses the Alacritty observer, with an optional job_id to inspect one job; commands are visible without keyboard simulation. Output is retained across observer closure and reconnect. Use request_id to retry a start safely. pty=true provides a controlling terminal without keyboard simulation.",
+            "Run managed commands without holding the desktop while they execute. run starts a named entry from the workspace manifest's runs (name; cwd inside the workspace; args are appended), the way to build, test or launch a prepared project. A desktop run answers when its window is up, with the window there at answer time and a screenshot: the window whose title contains ready_title (the call's, or the run's own in the manifest) when there is one, otherwise its first window, which the answer marks ready_by \"first window\" with a caution, since a splash, a start screen or an empty document is a window too. A web run gets $PORT and answers when it listens, with its url. Both wait up to wait_ms (default 45000, at most 50000 so the answer beats a client's one-minute tool timeout), and ready with the job_id waits again. exec runs command with args, or a whole shell line in command alone; it waits up to 45s and retains stdout/stderr even on timeout. Its answer holds the end of stdout and of stderr, with each stream's full size; when a stream is longer than that, more says where all of it is, and read with the job_id pages through it. start/launch return a durable job ID immediately. list/status/read/wait inspect jobs; write sends stdin (optional EOF); cancel kills and reaps the process group. show opens or focuses the Alacritty observer, with an optional job_id to inspect one job; commands are visible without keyboard simulation. Output is retained across observer closure and reconnect. Use request_id to retry a start safely. pty=true provides a controlling terminal without keyboard simulation.",
             schema(json!({
                 "type":"object","properties":{
                     "action":{"type":"string","enum":["exec","start","launch","run","ready","list","status","read","wait","write","cancel","show"],"default":"exec"},
                     "name":{"type":"string","description":"For run: the manifest run to start, such as build, test or app; state manifest lists them"},
+                    "ready_title":{"type":"string","maxLength":200,"description":"For a desktop run, and ready: part of the title its window has once it shows what you meant, such as the document's file name, matched as plain text ignoring case. The run is ready only when such a window is up."},
                     "command":{"type":"string"},"args":{"type":"array","items":{"type":"string"}},"cwd":{"type":"string","default":home},
                     "env":{"type":"object","additionalProperties":{"type":"string"}},
                     "label":{"type":"string","description":"The job's name as a person reads it in the desktop's jobs list and terminal: a short task in plain words, such as 'Run the unit tests' or 'Install Python 3.12', not the command. Without one the job is named by its command line."},
@@ -113,7 +115,7 @@ pub fn descriptors(home: &str) -> Vec<Tool> {
         ),
         Tool::new(
             "state",
-            "info identifies the running release and lists the person's stored secrets by name and kind: a variable is an environment variable in every shell job, a login is typed into a form on its own sites with browser fill secret, a passkey signs in by itself when a site asks the browser for one; guide returns its bundled skill and checksum; catalog describes generic Nix preparation, the default Nixpkgs pin, and common package names by purpose. manifest describes a workspace's .hotline/manifest.json: an example and what this image offers when there is none, otherwise the composed result, its runs, hooks, services and whether it changed. prepare composes the image base with that file (a manifest argument is merged into the file first; packages and flake still work alone), or reuses the saved workspace definition. After it succeeds, create hooks run once, then services and start hooks. Returns a managed job or ready=true for a package cache hit. Shell cwd inherits the prepared environment. Repository shell hooks run during preparation; their exported variables are retained. control leases the desktop to this holder until release or expiry; other holders' mutations are refused. Only the holder can release it. login_* manages browser cookies/storage by name. snapshot_* archives/restores home.",
+            "info identifies the running release, says what the computer has to work with (resources: CPUs, memory and its use, the disk left under the home and the Nix store, and that rendering is software with no GPU), and lists the person's stored secrets by name and kind: a variable is an environment variable in every shell job, a login is typed into a form on its own sites with browser fill secret, a passkey signs in by itself when a site asks the browser for one; guide returns its bundled skill and checksum; catalog describes generic Nix preparation, the default Nixpkgs pin, and common package names by purpose. manifest describes a workspace's .hotline/manifest.json: an example and what this image offers when there is none, otherwise the composed result, its runs, hooks, services and whether it changed. prepare composes the image base with that file (a manifest argument is merged into the file first; packages and flake still work alone), or reuses the saved workspace definition. It first checks that each script a hook runs is in the workspace, and refuses before building when one is not. Once the environment is built, create hooks run once (one that failed runs again on the next prepare), then services and start hooks. Returns a managed job, which builds only the environment; or, on a package cache hit, waits up to 40 s for the hooks and services and answers readiness: the environment, each hook (ran, done before, running or failed with its job_id and output_tail), each service (up or not), problems, and ready=true only when all of it is. state manifest answers the same readiness at any time. Shell cwd inherits the prepared environment. Repository shell hooks run during preparation; their exported variables are retained. control leases the desktop to this holder until release or expiry; other holders' mutations are refused. Only the holder can release it. login_* manages browser cookies/storage by name. snapshot_* archives/restores home.",
             schema(json!({
                 "type":"object","properties":{
                     "action":{"type":"string","enum":["info","guide","catalog","manifest","prepare","control","release","login_save","login_load","login_list","login_delete","snapshot_save","snapshot_load","snapshot_list","snapshot_delete"]},
@@ -135,6 +137,19 @@ fn schema(value: Value) -> Arc<JsonObject> {
 }
 
 pub async fn call(app: &App, name: &str, arguments: Value, holder: &str) -> ToolResult {
+    call_prepared(app, name, arguments, holder, None).await
+}
+
+/// A call, with the value of a `browser fill secret` already looked up,
+/// checked and approved where the secrets are: the split computer's broker
+/// hands the runner that one field for that one fill.
+pub async fn call_prepared(
+    app: &App,
+    name: &str,
+    arguments: Value,
+    holder: &str,
+    filled: Option<crate::secrets::Filled>,
+) -> ToolResult {
     let moved = moves_something(name, &arguments);
     let arguments_for_log = json!({"action": arguments["action"].clone()});
     let mut activity = crate::activity::Entry::new(name, &arguments);
@@ -153,6 +168,7 @@ pub async fn call(app: &App, name: &str, arguments: Value, holder: &str) -> Tool
             "click_ref" | "check" | "select" | "hover"
         )
         && let Some(reference) = arguments["ref"].as_str()
+        && !app.signin.as_ref().is_some_and(|signin| signin.focused())
         && let Some(label) = browser::element_label(app, reference).await
     {
         activity.target = label;
@@ -160,7 +176,7 @@ pub async fn call(app: &App, name: &str, arguments: Value, holder: &str) -> Tool
     let result = match name {
         "capture" => capture::call(app, arguments).await,
         "input" => input::call(app, arguments, holder).await,
-        "browser" => browser::call(app, arguments, holder).await,
+        "browser" => browser::call(app, arguments, holder, filled).await,
         "shell" => shell::call(app, arguments, holder).await,
         "files" => files::call(app, arguments, holder).await,
         "windows" => windows::call(app, arguments, holder).await,

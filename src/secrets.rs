@@ -10,7 +10,11 @@
 //! the environment of each job the agent starts through `shell` or `files
 //! run`, under the name the person gave it, so a command uses `$NAME` and a
 //! tool that reads that variable finds it; a preparation job is left out,
-//! because what it captures is written into the workspace. A **login** — a
+//! because what it captures is written into the workspace. A variable the
+//! desk binds to a service (a v2 delivery's `use`, see `Delivery`) is a
+//! **protected key**: only the split computer takes one, its value goes to
+//! the key proxy alone, and each job gets a stand-in under its name
+//! (`crate::split::keys`). A **login** — a
 //! site, a username, a password, perhaps a TOTP seed — never enters a job:
 //! `browser fill` types one of its fields by name into a form, and only on a
 //! page whose origin is one of the login's sites, because a page a password
@@ -110,6 +114,11 @@ pub struct Login {
     /// Whether each use waits for the person; absent is automatic.
     #[serde(default, rename = "use", skip_serializing_if = "Use::is_auto")]
     pub use_: Use,
+    /// Granted knowing a program on this computer may read it: what a v1
+    /// delivery means by every login, and what a v2 one must say before a
+    /// login on a loopback site is typed there (see `Origin::is_loopback`).
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub readable: bool,
 }
 
 /// How a login or a passkey may be used: by itself, or only once the person
@@ -147,6 +156,9 @@ pub struct Passkey {
     /// Whether each sign-in waits for the person; absent is automatic.
     #[serde(default, rename = "use", skip_serializing_if = "Use::is_auto")]
     pub use_: Use,
+    /// As a login's: a passkey for a loopback site signs there only if so.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub readable: bool,
 }
 
 /// One entry of a delivery. A bare string is a variable, which is all a
@@ -226,6 +238,7 @@ impl Secret {
                     password: login.password,
                     totp,
                     use_: login.use_,
+                    readable: login.readable,
                 }))
             }
             Secret::Passkey(passkey) => {
@@ -261,6 +274,20 @@ impl Secret {
                 if login.use_ == Use::Ask {
                     described["use"] = json!("ask");
                 }
+                // A loopback site is one any job can serve: what is typed
+                // there is readable, and is typed only if granted so.
+                if login
+                    .sites
+                    .iter()
+                    .any(|site| Origin::site(site).is_ok_and(|site| site.is_loopback()))
+                {
+                    described["loopback"] = json!(true);
+                    described["readable"] = json!(true);
+                    if !login.readable {
+                        described["typed"] =
+                            json!("not on its loopback site: not granted readable");
+                    }
+                }
                 described
             }
             Secret::Passkey(passkey) => {
@@ -270,6 +297,14 @@ impl Secret {
                 });
                 if passkey.use_ == Use::Ask {
                     described["use"] = json!("ask");
+                }
+                if is_loopback_host(&passkey.rp_id) {
+                    described["loopback"] = json!(true);
+                    described["readable"] = json!(true);
+                    if !passkey.readable {
+                        described["signs"] =
+                            json!("not on its loopback site: not granted readable");
+                    }
                 }
                 described
             }
@@ -324,6 +359,8 @@ pub struct Filled {
     pub value: String,
     /// `None` for a variable, which has no site to check.
     pub sites: Option<Vec<Origin>>,
+    /// A login granted knowing a program here may read it (`Login::readable`).
+    pub readable: bool,
 }
 
 /// The set the desk last delivered, shared between the door that takes it,
@@ -333,18 +370,61 @@ pub struct Filled {
 pub struct Secrets {
     set: Arc<RwLock<BTreeMap<String, Secret>>>,
     arrivals: Arc<Mutex<(u64, VecDeque<Arrival>)>>,
+    /// In the split computer's runner, which holds the variables alone: the
+    /// whole set as `state info` lists it, from the broker.
+    listing: Arc<RwLock<Option<Vec<Value>>>>,
+    /// In the split computer's broker: the protected keys, whose values the
+    /// key proxy uses. Listed and redacted here, never in `environment`, so
+    /// never handed to the runner or a job.
+    protected: Arc<RwLock<BTreeMap<String, Protected>>>,
+    /// The matchers `redact` uses, made once per set: (the set's version,
+    /// each value's every spelling and its mark, longest value first).
+    spellings: Arc<Mutex<Option<(u64, Spellings)>>>,
+    version: Arc<std::sync::atomic::AtomicU64>,
 }
+
+/// Each value's every spelling, matched, and the mark it is replaced by.
+type Spellings = Arc<Vec<(regex::Regex, String)>>;
+
+/// A protected key as the broker keeps it beside the proxy.
+#[derive(Clone)]
+pub struct Protected {
+    pub value: String,
+    pub origins: Vec<String>,
+}
+
+/// A set that passed every check, waiting to be taken.
+pub struct Checked(BTreeMap<String, Secret>);
 
 impl Secrets {
     /// Takes the whole set, or none of it: one entry the computer would not
     /// keep refuses the delivery and keeps the last set.
     pub fn replace(&self, set: BTreeMap<String, Delivered>) -> Result<(), String> {
+        let checked = Secrets::check(set)?;
+        self.commit(checked, BTreeMap::new());
+        Ok(())
+    }
+
+    /// Every entry checked, nothing taken yet.
+    pub fn check(set: BTreeMap<String, Delivered>) -> Result<Checked, String> {
         let mut checked = BTreeMap::new();
         for (name, delivered) in set {
             check_name(&name)?;
             let secret = Secret::from(delivered).checked(&name)?;
             checked.insert(name, secret);
         }
+        Ok(Checked(checked))
+    }
+
+    /// Takes a checked set, and the protected keys delivered with it.
+    pub fn commit(&self, checked: Checked, protected: BTreeMap<String, Protected>) {
+        let Checked(checked) = checked;
+        self.version
+            .fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+        *self
+            .protected
+            .write()
+            .unwrap_or_else(|poisoned| poisoned.into_inner()) = protected;
         let mut set = self
             .set
             .write()
@@ -384,7 +464,12 @@ impl Secrets {
                 }
             }
         }
-        Ok(())
+    }
+
+    fn protected(&self) -> RwLockReadGuard<'_, BTreeMap<String, Protected>> {
+        self.protected
+            .read()
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
     }
 
     /// The logins and passkeys that arrived lately, oldest first.
@@ -405,18 +490,82 @@ impl Secrets {
         self.read().get(name).and_then(Secret::use_)
     }
 
-    /// The names alone.
+    /// Each entry's version: a digest of what it is now, protected keys'
+    /// included. Two sets differ for a name when it was changed or revoked.
+    pub fn versions(&self) -> BTreeMap<String, Vec<u8>> {
+        use sha2::Digest;
+        let mut versions: BTreeMap<String, Vec<u8>> = self
+            .read()
+            .iter()
+            .map(|(name, secret)| {
+                let text = serde_json::to_vec(secret).unwrap_or_default();
+                (name.clone(), sha2::Sha256::digest(text).to_vec())
+            })
+            .collect();
+        for (name, key) in self.protected().iter() {
+            let text = format!("{}\0{}", key.value, key.origins.join(","));
+            versions.insert(name.clone(), sha2::Sha256::digest(text).to_vec());
+        }
+        versions
+    }
+
+    /// The names of what this computer cannot keep from its jobs, though it
+    /// holds it as protected: a login or passkey for a loopback site (a page
+    /// a job may serve), and a protected key for an "Other" service. What
+    /// `/capabilities` reports so the desk can label them readable.
+    pub fn readable_equivalent(&self) -> Vec<String> {
+        self.catalog()
+            .into_iter()
+            .filter(|entry| entry["readable"] == true)
+            .filter_map(|entry| entry["name"].as_str().map(str::to_owned))
+            .collect()
+    }
+
+    /// The names alone, protected keys' included.
     pub fn names(&self) -> Vec<String> {
-        self.read().keys().cloned().collect()
+        let mut names: Vec<String> = self.read().keys().cloned().collect();
+        names.extend(self.protected().keys().cloned());
+        names.sort();
+        names
     }
 
     /// What `state info` lists: name, kind, and for a login its sites and
     /// username, for a passkey its site. Never a value.
     pub fn catalog(&self) -> Vec<Value> {
-        self.read()
+        if let Some(listing) = self
+            .listing
+            .read()
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
+            .clone()
+        {
+            return listing;
+        }
+        let mut listed: Vec<(String, Value)> = self
+            .read()
             .iter()
-            .map(|(name, secret)| secret.describe(name))
-            .collect()
+            .map(|(name, secret)| (name.clone(), secret.describe(name)))
+            .collect();
+        listed.extend(self.protected().iter().map(|(name, key)| {
+            let mut described =
+                json!({"name": name, "kind": "variable", "protected": true, "origins": key.origins});
+            // An "Other" service: replies the proxy cannot know may carry the
+            // key, or a new one, back in a shape no scrubbing finds.
+            if is_other(&key.origins) {
+                described["other"] = json!(true);
+                described["readable"] = json!(true);
+            }
+            (name.clone(), described)
+        }));
+        listed.sort_by(|a, b| a.0.cmp(&b.0));
+        listed.into_iter().map(|(_, described)| described).collect()
+    }
+
+    /// What `catalog` answers from now on, in place of this set's own.
+    pub fn list_as(&self, listing: Vec<Value>) {
+        *self
+            .listing
+            .write()
+            .unwrap_or_else(|poisoned| poisoned.into_inner()) = Some(listing);
     }
 
     /// What a job offered the set starts with: the variables.
@@ -459,7 +608,7 @@ impl Secrets {
                         .sites
                         .iter()
                         .filter_map(|site| Origin::site(site).ok())
-                        .any(|site| site.allows(&page)) =>
+                        .any(|site| site.is_exactly(&page)) =>
                 {
                     Some((name.clone(), login.username.clone(), login.totp.is_some()))
                 }
@@ -477,6 +626,11 @@ impl Secrets {
             Some((name, field)) => (name, Some(field)),
             None => (reference, None),
         };
+        if self.protected().contains_key(name) {
+            return Err(format!(
+                "{name} is a protected key: every shell job has a stand-in for it as ${name}, which the computer swaps for the key only on the way to its service, and the browser never types one"
+            ));
+        }
         let set = self.read();
         let Some(secret) = set.get(name) else {
             return Err(format!(
@@ -484,11 +638,12 @@ impl Secrets {
             ));
         };
         match (secret, field) {
-            (Secret::Variable(Variable { value }), None) => Ok(Filled {
-                label: name.to_owned(),
-                value: value.clone(),
-                sites: None,
-            }),
+            // A variable has no site, so no page it belongs on: typed into
+            // one, that page's script could read it and send it anywhere.
+            // It is in every shell job's environment instead.
+            (Secret::Variable(_), None) => Err(format!(
+                "{name} is a variable: it is in the environment of every shell job as ${name}, and the browser never types one"
+            )),
             (Secret::Variable(_), Some(field)) => Err(format!(
                 "{name} is a variable and has no {field}; fill secret:{name:?}"
             )),
@@ -522,6 +677,7 @@ impl Secrets {
                     label: format!("{name}.{field}"),
                     value,
                     sites: Some(sites),
+                    readable: login.readable,
                 })
             }
             (Secret::Login(_), None) => Err(format!(
@@ -545,46 +701,45 @@ impl Secrets {
     /// whole; and a value with a quote, a backslash or a line break is also
     /// taken in the spelling JSON gives it, since most tools answer JSON.
     pub fn redact<'a>(&self, text: &'a str) -> Cow<'a, str> {
-        let set = self.read();
-        if set.is_empty() {
+        self.redact_at(text, unix_now())
+    }
+
+    fn redact_at<'a>(&self, text: &'a str, now: u64) -> Cow<'a, str> {
+        let codes: Vec<(String, String)> = self
+            .read()
+            .iter()
+            .filter_map(|(name, secret)| match secret {
+                Secret::Login(Login {
+                    totp: Some(seed), ..
+                }) => Some((seed.clone(), format!("[redacted {name}.code]"))),
+                _ => None,
+            })
+            .collect();
+        let spellings = self.spellings();
+        if spellings.is_empty() {
             return Cow::Borrowed(text);
         }
-        let mut needles = Vec::with_capacity(set.len() * 2);
-        for (name, secret) in set.iter() {
-            let values: Vec<(&str, String)> = match secret {
-                Secret::Variable(Variable { value }) => vec![(value, format!("[redacted {name}]"))],
-                Secret::Login(login) => {
-                    let mut values = vec![(
-                        login.password.as_str(),
-                        format!("[redacted {name}.password]"),
-                    )];
-                    if let Some(seed) = &login.totp {
-                        values.push((seed, format!("[redacted {name}.totp]")));
-                    }
-                    values
-                }
-                Secret::Passkey(passkey) => vec![(
-                    passkey.private_key.as_str(),
-                    format!("[redacted {name}.privateKey]"),
-                )],
-            };
-            for (value, mark) in values {
-                let escaped = serde_json::to_string(value)
-                    .ok()
-                    .and_then(|quoted| quoted.get(1..quoted.len() - 1).map(str::to_owned));
-                if let Some(escaped) = escaped
-                    && escaped != value
-                {
-                    needles.push((escaped, mark.clone()));
-                }
-                needles.push((value.to_owned(), mark));
+        let mut text = Cow::Borrowed(text);
+        for (spelled, mark) in spellings.iter() {
+            if spelled.is_match(&text) {
+                text = Cow::Owned(
+                    spelled
+                        .replace_all(&text, regex::NoExpand(mark.as_str()))
+                        .into_owned(),
+                );
             }
         }
-        needles.sort_by_key(|(needle, _)| std::cmp::Reverse(needle.len()));
-        let mut text = Cow::Borrowed(text);
-        for (needle, mark) in &needles {
-            if text.contains(needle.as_str()) {
-                text = Cow::Owned(text.replace(needle.as_str(), mark));
+        // A login's six digits are a password for a minute: the ones a page
+        // or a job could be showing now, from the step before last to the
+        // next, are taken out wherever they stand as a number of their own.
+        for (seed, mark) in codes {
+            for step in [-2_i64, -1, 0, 1] {
+                let at = now.saturating_add_signed(step * TOTP_STEP_SECONDS as i64);
+                if let Ok(code) = totp(&seed, at)
+                    && let Cow::Owned(redacted) = without_number(&text, &code, &mark)
+                {
+                    text = Cow::Owned(redacted);
+                }
             }
         }
         text
@@ -608,6 +763,211 @@ impl Secrets {
             Err(error) => Err(self.redact(&error).into_owned()),
         }
     }
+}
+
+impl Secrets {
+    /// Each value's matcher and mark, made again only when the set changed.
+    fn spellings(&self) -> Spellings {
+        let version = self.version.load(std::sync::atomic::Ordering::SeqCst);
+        let mut cached = self
+            .spellings
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
+        if let Some((made, spellings)) = cached.as_ref()
+            && *made == version
+        {
+            return Arc::clone(spellings);
+        }
+        let mut values: Vec<(String, String)> = Vec::new();
+        for (name, key) in self.protected().iter() {
+            values.push((key.value.clone(), format!("[redacted {name}]")));
+        }
+        for (name, secret) in self.read().iter() {
+            match secret {
+                Secret::Variable(Variable { value }) => {
+                    values.push((value.clone(), format!("[redacted {name}]")));
+                }
+                Secret::Login(login) => {
+                    values.push((
+                        login.password.clone(),
+                        format!("[redacted {name}.password]"),
+                    ));
+                    if let Some(seed) = &login.totp {
+                        values.push((seed.clone(), format!("[redacted {name}.totp]")));
+                    }
+                }
+                Secret::Passkey(passkey) => values.push((
+                    passkey.private_key.clone(),
+                    format!("[redacted {name}.privateKey]"),
+                )),
+            }
+        }
+        values.sort_by_key(|(value, _)| std::cmp::Reverse(value.len()));
+        let spellings: Spellings = Arc::new(
+            values
+                .into_iter()
+                .filter_map(|(value, mark)| spelling(&value).map(|spelled| (spelled, mark)))
+                .collect(),
+        );
+        *cached = Some((version, Arc::clone(&spellings)));
+        spellings
+    }
+}
+
+/// Longer values are matched in their plain, JSON and base64 spellings
+/// alone: a pattern of every character's every spelling grows past what a
+/// matcher should hold, and such values are keys, not typed words.
+const SPELLED_CHARS: usize = 512;
+
+/// One matcher for `value` as text carries it: plain; percent-encoded
+/// (either case) or form-encoded (`+` for a space); with HTML entities,
+/// named or numeric; with JSON's escapes; any mix of these character by
+/// character; and base64 (standard or URL-safe) at each of the three
+/// alignments a value can have inside a longer base64 text.
+fn spelling(value: &str) -> Option<regex::Regex> {
+    if value.is_empty() {
+        return None;
+    }
+    let mut alternatives = Vec::new();
+    if value.chars().count() <= SPELLED_CHARS {
+        let mut each = String::new();
+        for c in value.chars() {
+            each.push_str("(?:");
+            each.push_str(&char_spellings(c).join("|"));
+            each.push(')');
+        }
+        alternatives.push(each);
+    } else {
+        alternatives.push(regex::escape(value));
+        if let Ok(quoted) = serde_json::to_string(value)
+            && let Some(escaped) = quoted.get(1..quoted.len() - 1)
+        {
+            alternatives.push(regex::escape(escaped));
+        }
+    }
+    for core in base64_cores(value.as_bytes()) {
+        alternatives.push(regex::escape(&core));
+    }
+    regex::RegexBuilder::new(&alternatives.join("|"))
+        .size_limit(64 << 20)
+        .build()
+        .ok()
+}
+
+/// The spellings of one character, longest first: the matcher takes the
+/// first that fits, so an escape is never read as its first character.
+fn char_spellings(c: char) -> Vec<String> {
+    let mut spellings = Vec::new();
+    let mut bytes = [0; 4];
+    let percent: String = c
+        .encode_utf8(&mut bytes)
+        .bytes()
+        .map(|byte| format!("%(?i:{byte:02x})"))
+        .collect();
+    spellings.push(percent);
+    let code = u32::from(c);
+    spellings.push(format!("&#0*{code};?"));
+    spellings.push(format!("&#(?i:x)0*(?i:{code:x});?"));
+    let named = match c {
+        '&' => Some("amp"),
+        '<' => Some("lt"),
+        '>' => Some("gt"),
+        '"' => Some("quot"),
+        '\'' => Some("apos"),
+        ' ' => Some("nbsp"),
+        _ => None,
+    };
+    if let Some(named) = named {
+        spellings.push(format!("&(?i:{named});"));
+    }
+    match c {
+        ' ' => spellings.push(r"\+".to_owned()),
+        '"' => spellings.push(r#"\\""#.to_owned()),
+        '\\' => spellings.push(r"\\\\".to_owned()),
+        '/' => spellings.push(r"\\/".to_owned()),
+        '\n' => spellings.push(r"\\n".to_owned()),
+        '\r' => spellings.push(r"\\r".to_owned()),
+        '\t' => spellings.push(r"\\t".to_owned()),
+        _ => {}
+    }
+    if code <= 0xffff {
+        spellings.push(format!(r"\\(?i:u{code:04x})"));
+    }
+    spellings.push(regex::escape(c.encode_utf8(&mut [0; 4])));
+    spellings
+}
+
+/// The base64 characters that depend on `value` alone, at each alignment
+/// it may start at inside a longer text, in the standard and URL-safe
+/// alphabets.
+fn base64_cores(value: &[u8]) -> Vec<String> {
+    use base64::engine::general_purpose::STANDARD_NO_PAD;
+    let mut cores = Vec::new();
+    for offset in 0..3usize {
+        let mut padded = vec![0u8; offset];
+        padded.extend_from_slice(value);
+        let encoded = STANDARD_NO_PAD.encode(&padded);
+        let start = (8 * offset).div_ceil(6);
+        let end = (8 * (offset + value.len())) / 6;
+        if end <= start || end - start < 8 {
+            continue;
+        }
+        let core = encoded[start..end.min(encoded.len())].to_owned();
+        let safe = core.replace('+', "-").replace('/', "_");
+        if safe != core {
+            cores.push(safe);
+        }
+        cores.push(core);
+    }
+    cores
+}
+
+/// Whether `text` carries `value` in any spelling `redact` takes out.
+pub fn spelled(text: &str, value: &str) -> bool {
+    spelling(value).is_some_and(|spelled| spelled.is_match(text))
+}
+
+/// Whether `text` carries `value` as typed: a number (a code) only
+/// standalone, as `redact` takes one out, so a longer number that holds its
+/// digits is not it; anything else in any spelling.
+pub fn carries(text: &str, value: &str) -> bool {
+    if !value.is_empty() && value.bytes().all(|byte| byte.is_ascii_digit()) {
+        return matches!(without_number(text, value, ""), Cow::Owned(_));
+    }
+    text.contains(value) || spelled(text, value)
+}
+
+/// `text` with each standalone `number` (no digit right before or after it)
+/// replaced by `mark`: a code inside a longer number is that number's, not
+/// the code.
+fn without_number<'a>(text: &'a str, number: &str, mark: &str) -> Cow<'a, str> {
+    if !text.contains(number) {
+        return Cow::Borrowed(text);
+    }
+    let bytes = text.as_bytes();
+    let mut out = String::with_capacity(text.len());
+    let mut last = 0;
+    let mut changed = false;
+    for (at, _) in text.match_indices(number) {
+        if at < last {
+            continue;
+        }
+        let end = at + number.len();
+        let before = at > 0 && bytes[at - 1].is_ascii_digit();
+        let after = end < bytes.len() && bytes[end].is_ascii_digit();
+        if before || after {
+            continue;
+        }
+        out.push_str(&text[last..at]);
+        out.push_str(mark);
+        last = end;
+        changed = true;
+    }
+    if !changed {
+        return Cow::Borrowed(text);
+    }
+    out.push_str(&text[last..]);
+    Cow::Owned(out)
 }
 
 /// A name is the environment variable it becomes: capital letters, digits
@@ -660,6 +1020,8 @@ pub struct Origin {
     scheme: String,
     host: String,
     port: u16,
+    /// A passkey's site, which WebAuthn scopes by host alone: any port.
+    any_port: bool,
 }
 
 impl Origin {
@@ -721,27 +1083,159 @@ impl Origin {
         if !(named || bracketed) {
             return Err(format!("{text:?} has no host"));
         }
-        Ok((Origin { scheme, host, port }, rest))
+        Ok((
+            Origin {
+                scheme,
+                host,
+                port,
+                any_port: false,
+            },
+            rest,
+        ))
     }
 
-    /// Whether a login for this site may be typed on `page`: same scheme and
-    /// port, and the page's host is the site's or lies under it.
+    /// The sites a passkey for `rp_id` signs in on, as WebAuthn scopes them:
+    /// the host and those under it, over https on any port, and over http
+    /// too on localhost. Empty for an RP id that is not a host.
+    pub fn relying_party(rp_id: &str) -> Vec<Origin> {
+        let Ok(https) = Origin::site(&format!("https://{rp_id}")) else {
+            return Vec::new();
+        };
+        let mut sites = vec![Origin {
+            any_port: true,
+            ..https.clone()
+        }];
+        if is_local(&https.host) {
+            sites.push(Origin {
+                scheme: "http".into(),
+                ..sites[0].clone()
+            });
+        }
+        sites
+    }
+
+    /// The site's host.
+    pub fn host(&self) -> &str {
+        &self.host
+    }
+
+    /// Whether the site is this computer itself (`is_loopback_host`).
+    pub fn is_loopback(&self) -> bool {
+        is_loopback_host(&self.host)
+    }
+
+    /// Whether `page` is exactly this origin: scheme, host and port. A
+    /// login's field is typed only there: a subdomain may be delegated to
+    /// someone else, so it gets the password only if the grant names it.
+    pub fn is_exactly(&self, page: &Origin) -> bool {
+        self.scheme == page.scheme
+            && self.host == page.host
+            && (self.any_port || self.port == page.port)
+    }
+
+    /// Whether a page of `page` belongs to this site: same scheme and port,
+    /// and the page's host is the site's or lies under it. What opens in
+    /// the signed-in browser; a login is typed only on `is_exactly`.
     pub fn allows(&self, page: &Origin) -> bool {
         self.scheme == page.scheme
-            && self.port == page.port
+            && (self.any_port || self.port == page.port)
             && (self.host == page.host || page.host.ends_with(&format!(".{}", self.host)))
     }
 }
 
 fn is_local(host: &str) -> bool {
-    host == "localhost" || host.ends_with(".localhost") || host == "127.0.0.1" || host == "[::1]"
+    is_loopback_host(host)
+}
+
+/// The services Hotline names, by the origins a key for each is used on
+/// (the desk's `services.json`). A key bound anywhere else is "Other".
+const SERVICES: [&[&str]; 3] = [
+    &[
+        "https://api.github.com",
+        "https://github.com",
+        "https://uploads.github.com",
+    ],
+    &["https://api.openai.com"],
+    &["https://api.anthropic.com"],
+];
+
+/// Whether a protected key's origins are not all one named service's: the
+/// proxy can neither know its replies nor which routes mint a new key, so
+/// it is reported readable-equivalent (still used through the proxy).
+pub fn is_other(origins: &[String]) -> bool {
+    origins.is_empty()
+        || !SERVICES.iter().any(|service| {
+            origins
+                .iter()
+                .all(|origin| service.contains(&origin.as_str()))
+        })
+}
+
+/// Whether `host` names this computer itself, however it is spelled:
+/// `localhost` and any name under it, 127.0.0.0/8 in any of the IPv4
+/// spellings a URL parser accepts (`127.1`, `0x7f.1`, `2130706433`),
+/// `0.0.0.0`, `::1`, `::` and an IPv4-mapped loopback. A page there may be
+/// one a job serves, so nothing typed or signed there is protected.
+pub fn is_loopback_host(host: &str) -> bool {
+    let host = host.trim_end_matches('.').to_ascii_lowercase();
+    if host == "localhost" || host.ends_with(".localhost") {
+        return true;
+    }
+    if let Some(inner) = host.strip_prefix('[').and_then(|h| h.strip_suffix(']')) {
+        return inner.parse::<std::net::Ipv6Addr>().is_ok_and(|ip| {
+            ip.is_loopback()
+                || ip.is_unspecified()
+                || ip
+                    .to_ipv4_mapped()
+                    .is_some_and(|v4| v4.is_loopback() || v4.is_unspecified())
+        });
+    }
+    ipv4_of(&host).is_some_and(|ip| ip >> 24 == 127 || ip == 0)
+}
+
+/// A host as the WHATWG URL parser reads an IPv4 address: one to four
+/// parts, each decimal, `0x` hex or `0` octal, the last filling the rest.
+fn ipv4_of(host: &str) -> Option<u32> {
+    let parts: Vec<&str> = host.split('.').collect();
+    if parts.is_empty() || parts.len() > 4 {
+        return None;
+    }
+    let mut numbers = Vec::with_capacity(parts.len());
+    for part in &parts {
+        let (digits, radix) = if let Some(hex) = part.strip_prefix("0x") {
+            (hex, 16)
+        } else if part.len() > 1 && part.starts_with('0') {
+            (&part[1..], 8)
+        } else {
+            (*part, 10)
+        };
+        let number = if digits.is_empty() {
+            0
+        } else {
+            u64::from_str_radix(digits, radix).ok()?
+        };
+        numbers.push(number);
+    }
+    let last = numbers.pop()?;
+    let mut ip: u64 = 0;
+    for (index, number) in numbers.iter().enumerate() {
+        if *number > 255 {
+            return None;
+        }
+        ip |= number << (8 * (3 - index));
+    }
+    let room = 8 * (4 - numbers.len()) as u32;
+    if last >= 1u64 << room {
+        return None;
+    }
+    u32::try_from(ip | last).ok()
 }
 
 impl fmt::Display for Origin {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "{}://{}", self.scheme, self.host)?;
         let default = if self.scheme == "https" { 443 } else { 80 };
-        if self.port != default {
+        if !self.any_port && self.port != default {
             write!(f, ":{}", self.port)?;
         }
         Ok(())
@@ -794,21 +1288,179 @@ fn unix_now() -> u64 {
         .unwrap_or_default()
 }
 
-/// `PUT /secrets`: the whole set, as a JSON object of name to entry. It
+/// The media type of a v2 delivery.
+pub const V2: &str = "application/vnd.hotline.secrets.v2+json";
+
+/// A delivery as the door read it: the entries every computer keeps as
+/// before, and the protected keys only the split computer's proxy takes.
+pub struct Delivery {
+    /// v2 only; a v1 body has none.
+    pub generation: Option<u64>,
+    pub kept: BTreeMap<String, Delivered>,
+    pub protected: Vec<crate::keyproxy::Binding>,
+}
+
+impl Delivery {
+    /// A v1 body is an object of name to entry, as a desk before 0.50 sends
+    /// it. A v2 body (`Content-Type` `V2`) is `{v: 2, generation, secrets}`,
+    /// where a variable is `readable: true` (today's variable) or carries a
+    /// `use` (a protected key); logins and passkeys are as in v1.
+    pub fn read(content_type: Option<&str>, body: Value) -> Result<Delivery, String> {
+        let essence = content_type
+            .and_then(|value| value.split(';').next())
+            .map(str::trim)
+            .unwrap_or_default();
+        if essence.eq_ignore_ascii_case(V2) {
+            return Delivery::v2(body);
+        }
+        let Value::Object(entries) = body else {
+            return Err("a delivery is an object of name to secret".to_owned());
+        };
+        for (name, entry) in &entries {
+            if entry["kind"] == "variable" && entry.get("use").is_some() {
+                return Err(format!(
+                    "{name} is bound to a service, which only a v2 delivery ({V2}) can say"
+                ));
+            }
+        }
+        let mut kept: BTreeMap<String, Delivered> =
+            serde_json::from_value(Value::Object(entries)).map_err(|e| e.to_string())?;
+        // A desk that sends v1 holds nothing back as protected: it labels
+        // this computer unprotected, and every login and passkey it sends
+        // is as readable as 0.12 kept them.
+        for delivered in kept.values_mut() {
+            match delivered {
+                Delivered::Secret(Secret::Login(login)) => login.readable = true,
+                Delivered::Secret(Secret::Passkey(passkey)) => passkey.readable = true,
+                _ => {}
+            }
+        }
+        Ok(Delivery {
+            generation: None,
+            kept,
+            protected: Vec::new(),
+        })
+    }
+
+    fn v2(body: Value) -> Result<Delivery, String> {
+        if body["v"] != 2 {
+            return Err(format!("a {V2} body says v: 2"));
+        }
+        let generation = body["generation"]
+            .as_u64()
+            .ok_or("a v2 delivery carries its generation, a whole number")?;
+        let Some(entries) = body["secrets"].as_object() else {
+            return Err("a v2 delivery carries secrets, an object of name to secret".to_owned());
+        };
+        let mut kept = BTreeMap::new();
+        let mut protected = Vec::new();
+        for (name, entry) in entries {
+            if entry["kind"] != "variable" {
+                let delivered: Delivered =
+                    serde_json::from_value(entry.clone()).map_err(|e| format!("{name}: {e}"))?;
+                kept.insert(name.clone(), delivered);
+                continue;
+            }
+            let Some(value) = entry["value"].as_str() else {
+                return Err(format!("{name} is a variable with no value"));
+            };
+            let readable = entry["readable"].as_bool() == Some(true);
+            match (entry.get("use"), readable) {
+                (None, true) => {
+                    kept.insert(name.clone(), Delivered::Value(value.to_owned()));
+                }
+                (Some(use_), false) => {
+                    check_name(name)?;
+                    if crate::split::keys::JOB_VARIABLES.contains(&name.as_str()) {
+                        return Err(format!(
+                            "{name} is set by the computer for a job that uses a protected key, so a protected key cannot take that name"
+                        ));
+                    }
+                    let use_ = serde_json::from_value(use_.clone())
+                        .map_err(|e| format!("{name}.use: {e}"))?;
+                    protected.push(crate::keyproxy::Binding {
+                        name: name.clone(),
+                        value: value.to_owned(),
+                        use_,
+                    });
+                }
+                (Some(_), true) => {
+                    return Err(format!(
+                        "{name} is both readable and bound to a service; it is one or the other"
+                    ));
+                }
+                (None, false) => {
+                    return Err(format!(
+                        "{name} is neither readable nor bound to a service (use)"
+                    ));
+                }
+            }
+        }
+        Ok(Delivery {
+            generation: Some(generation),
+            kept,
+            protected,
+        })
+    }
+
+    /// Takes the delivery whole or not at all. A protected key goes to the
+    /// key proxy alone; a computer without one (legacy mode) refuses it.
+    pub fn apply(self, app: &App) -> Result<(), String> {
+        let checked = Secrets::check(self.kept)?;
+        let listed: BTreeMap<String, Protected> = self
+            .protected
+            .iter()
+            .map(|binding| {
+                (
+                    binding.name.clone(),
+                    Protected {
+                        value: binding.value.clone(),
+                        origins: binding.use_.origins.clone(),
+                    },
+                )
+            })
+            .collect();
+        match &app.keys {
+            Some(keys) => keys.deliver(self.generation, self.protected)?,
+            None => {
+                if let Some(binding) = self.protected.first() {
+                    return Err(format!(
+                        "{} is bound to a service, and this computer keeps no protected key: it runs as one user (legacy mode), so every program in it could read one. Send it as a readable variable, or update the computer.",
+                        binding.name
+                    ));
+                }
+            }
+        }
+        app.secrets.commit(checked, listed);
+        Ok(())
+    }
+}
+
+/// `PUT /secrets`: the whole set, as a v1 or v2 body (`Delivery`). It
 /// answers 204 with nothing, 400 naming the entry it refused, and never a
 /// value. A running browser learns of the passkeys at once, so a revoked
 /// one is gone from its authenticators before the answer.
 pub async fn replace(
     State(app): State<App>,
-    Json(set): Json<BTreeMap<String, Delivered>>,
+    headers: axum::http::HeaderMap,
+    Json(body): Json<Value>,
 ) -> Response {
-    match app.secrets.replace(set) {
+    let content_type = headers
+        .get(axum::http::header::CONTENT_TYPE)
+        .and_then(|value| value.to_str().ok());
+    let before = app.secrets.versions();
+    match Delivery::read(content_type, body).and_then(|delivery| delivery.apply(&app)) {
         Ok(()) => {
-            let _ =
-                crate::x11::publish_sealed(&app.config.display, app.secrets.names().len() as u32);
-            if let Err(error) = app.browser.sync_passkeys(false).await {
-                eprintln!("secrets: the browser did not take the passkeys: {error}");
-            }
+            // An approval or allowance is for the key as it was: one that
+            // changed or went takes its answers with it.
+            let after = app.secrets.versions();
+            let changed: Vec<String> = before
+                .iter()
+                .filter(|(name, version)| after.get(*name) != Some(*version))
+                .map(|(name, _)| name.clone())
+                .collect();
+            app.holds.forget(&changed);
+            crate::split::delivered(&app).await;
             StatusCode::NO_CONTENT.into_response()
         }
         Err(error) => (StatusCode::BAD_REQUEST, Json(json!({"error": error}))).into_response(),
@@ -1022,7 +1674,10 @@ mod tests {
             secrets.logins_for("https://github.com"),
             [("GITHUB".to_owned(), "george".to_owned(), true)]
         );
-        assert_eq!(named("https://gist.github.com"), ["GITHUB"]);
+        assert!(
+            named("https://gist.github.com").is_empty(),
+            "a subdomain is not the login's origin"
+        );
         assert!(named("https://github.com.evil.test").is_empty());
         assert!(named("http://github.com").is_empty());
         assert!(named("https://github.com:8443").is_empty());
@@ -1054,7 +1709,10 @@ mod tests {
         assert_eq!(
             catalog,
             vec![
-                json!({"name": "GITHUB", "kind": "login", "sites": ["https://github.com", "http://localhost:8123"], "username": "george", "totp": true}),
+                // A loopback site is labelled readable, and not typed on
+                // unless the login was granted so.
+                json!({"name": "GITHUB", "kind": "login", "sites": ["https://github.com", "http://localhost:8123"], "username": "george", "totp": true,
+                       "loopback": true, "readable": true, "typed": "not on its loopback site: not granted readable"}),
                 json!({"name": "GITHUB_PASSKEY", "kind": "passkey", "rpId": "github.com", "userName": "george"}),
                 json!({"name": "GITHUB_TOKEN", "kind": "variable"}),
             ]
@@ -1143,12 +1801,6 @@ mod tests {
                 "GITHUB_PASSKEY": {"kind": "passkey", "rpId": "github.com", "credentialId": "AQID", "privateKey": KEY_BASE64},
             })))
             .unwrap();
-        let token = secrets.resolve("GITHUB_TOKEN").ok().unwrap();
-        assert_eq!(
-            (token.label.as_str(), token.value.as_str()),
-            ("GITHUB_TOKEN", "ghp_notarealtoken0001")
-        );
-        assert!(token.sites.is_none(), "a variable has no site to check");
         let user = secrets.resolve("GITHUB.username").ok().unwrap();
         assert_eq!(
             (user.label.as_str(), user.value.as_str()),
@@ -1179,6 +1831,7 @@ mod tests {
             ("GITHUB", "username"),
             ("GITHUB.token", "not token"),
             ("GITHUB_TOKEN.value", "is a variable"),
+            ("GITHUB_TOKEN", "the browser never types one"),
             ("PLAIN.code", "no TOTP seed"),
             ("GITHUB_PASSKEY", "signs in by itself"),
             ("GITHUB_PASSKEY.password", "signs in by itself"),
@@ -1187,7 +1840,147 @@ mod tests {
             let error = secrets.resolve(reference).err().unwrap_or_default();
             assert!(error.contains(expect), "{reference}: {error}");
             assert!(!error.contains("battery"), "{reference}: {error}");
+            assert!(!error.contains("notarealtoken"), "{reference}: {error}");
         }
+    }
+
+    #[test]
+    fn the_codes_a_login_could_show_now_are_redacted() {
+        let secrets = Secrets::default();
+        secrets
+            .replace(typed(json!({
+                "GITHUB": {"kind": "login", "sites": ["https://github.com"], "username": "george",
+                           "password": "correct horse battery", "totp": RFC_SEED},
+            })))
+            .unwrap();
+        // RFC 6238, appendix B: 287082 at T = 59, the step before is 755224.
+        let shown = "code 287082, before it 755224, in a longer number 12870823";
+        assert_eq!(
+            secrets.redact_at(shown, 59),
+            "code [redacted GITHUB.code], before it [redacted GITHUB.code], in a longer number 12870823"
+        );
+        assert_eq!(secrets.redact_at("287082", 59), "[redacted GITHUB.code]");
+        // Long after, those digits are just a number.
+        assert_eq!(secrets.redact_at(shown, 59 + 3600), shown);
+    }
+
+    #[test]
+    fn a_passkeys_site_is_its_rp_id_on_any_port() {
+        let pages = |rp_id: &str, page: &str| {
+            let page = Origin::of_page(page).unwrap();
+            Origin::relying_party(rp_id)
+                .iter()
+                .any(|site| site.allows(&page))
+        };
+        for page in [
+            "https://github.com/login",
+            "https://github.com:8443/",
+            "https://login.github.com/sso",
+        ] {
+            assert!(pages("github.com", page), "{page}");
+        }
+        for page in [
+            "http://github.com/",
+            "https://github.com.evil.example/",
+            "https://evilgithub.com/",
+        ] {
+            assert!(!pages("github.com", page), "{page}");
+        }
+        assert!(pages("localhost", "http://localhost:8600/passkey"));
+        assert!(pages("localhost", "https://localhost/"));
+        assert!(!pages("localhost", "http://127.0.0.1:8600/"));
+        assert_eq!(
+            Origin::relying_party("github.com")[0].to_string(),
+            "https://github.com"
+        );
+        assert!(Origin::relying_party("not a host").is_empty());
+    }
+
+    #[test]
+    fn loopback_in_any_spelling_and_other_keys_are_readable() {
+        for host in [
+            "localhost",
+            "app.localhost",
+            "127.0.0.1",
+            "127.1",
+            "0x7f.1",
+            "2130706433",
+            "0177.0.0.1",
+            "127.255.1.2",
+            "0.0.0.0",
+            "[::1]",
+            "[::ffff:127.0.0.1]",
+            "[::]",
+        ] {
+            assert!(is_loopback_host(host), "{host}");
+        }
+        for host in [
+            "example.com",
+            "128.0.0.1",
+            "10.0.0.1",
+            "localhost.example",
+            "[2001:db8::1]",
+            "1.2.3.4.5",
+        ] {
+            assert!(!is_loopback_host(host), "{host}");
+        }
+        assert!(
+            Origin::site("http://0x7f000001:8000")
+                .unwrap()
+                .is_loopback()
+        );
+        assert!(!is_other(&[
+            "https://api.github.com".to_owned(),
+            "https://github.com".to_owned()
+        ]));
+        assert!(!is_other(&["https://api.anthropic.com".to_owned()]));
+        assert!(is_other(&[
+            "https://api.github.com".to_owned(),
+            "https://api.openai.com".to_owned()
+        ]));
+        assert!(is_other(&["https://example.com".to_owned()]));
+        let secrets = Secrets::default();
+        secrets
+            .replace(typed(json!({
+                "LOOP": {"kind": "login", "sites": ["http://127.1:9000"], "username": "u", "password": "p4ssw0rd-long"},
+                "PK": {"kind": "passkey", "rpId": "localhost", "credentialId": "AQID",
+                       "privateKey": "MIGHAgEAMBMGByqGSM49AgEGCCqGSM49AwEHBG0wawIBAQQgB9aEvdD1k7n55Wu+sDtf5cUbUumdw/XyKmgddnpO1eihRANCAASw/VbAXHGTIuqCMysLtvnlfwqu+ZFr7EQiwzWmLuynjO5Z/X+o4fuRzcMX916P1LxoWt4Ywc5KEVBuTzUzjBVI"},
+                "GH": {"kind": "login", "sites": ["https://github.com"], "username": "u", "password": "p4ssw0rd-long"},
+            })))
+            .unwrap();
+        assert_eq!(
+            secrets.readable_equivalent(),
+            vec!["LOOP".to_owned(), "PK".to_owned()]
+        );
+    }
+
+    #[test]
+    fn a_login_is_typed_on_exactly_its_origins() {
+        let site = Origin::site("https://github.com").unwrap();
+        for (page, exact) in [
+            ("https://github.com/login", true),
+            ("https://GITHUB.com:443/settings", true),
+            ("https://login.github.com/sso", false),
+            ("https://github.com:8443/", false),
+            ("http://github.com/", false),
+        ] {
+            assert_eq!(
+                site.is_exactly(&Origin::of_page(page).unwrap()),
+                exact,
+                "{page}"
+            );
+        }
+        let secrets = Secrets::default();
+        secrets
+            .replace(typed(json!({
+                "GH": {"kind": "login", "sites": ["https://github.com"], "username": "u", "password": "p4ssw0rd-long"},
+            })))
+            .unwrap();
+        assert_eq!(secrets.logins_for("https://github.com").len(), 1);
+        assert!(
+            secrets.logins_for("https://gist.github.com").is_empty(),
+            "a subdomain is not offered it"
+        );
     }
 
     #[test]
@@ -1239,6 +2032,78 @@ mod tests {
         ] {
             assert!(Origin::site(site).is_err(), "{site}");
         }
+    }
+
+    #[test]
+    fn a_value_is_taken_out_in_every_spelling_a_url_a_form_or_html_gives_it() {
+        let secrets = Secrets::default();
+        let password = "hl canary/enc+5&k=9%<\"x";
+        secrets
+            .replace(typed(json!({
+                "LOCAL": {"kind": "login", "sites": ["http://localhost:8000"], "username": "u", "password": password},
+            })))
+            .unwrap();
+        let mark = "[redacted LOCAL.password]";
+        let pct = |upper: bool| -> String {
+            password
+                .bytes()
+                .map(|b| {
+                    if b.is_ascii_alphanumeric() || b"-._~".contains(&b) {
+                        (b as char).to_string()
+                    } else if upper {
+                        format!("%{b:02X}")
+                    } else {
+                        format!("%{b:02x}")
+                    }
+                })
+                .collect()
+        };
+        let form = pct(true).replace("%20", "+");
+        let entities = password
+            .replace('&', "&amp;")
+            .replace('<', "&lt;")
+            .replace('"', "&quot;");
+        let numeric: String = password
+            .chars()
+            .map(|c| format!("&#{};", c as u32))
+            .collect();
+        let hex: String = password
+            .chars()
+            .map(|c| format!("&#x{:X};", c as u32))
+            .collect();
+        let b64 = base64::engine::general_purpose::STANDARD.encode(password);
+        let url_safe = base64::engine::general_purpose::URL_SAFE_NO_PAD.encode(password);
+        let inside = base64::engine::general_purpose::STANDARD.encode(format!("user:{password}:x"));
+        for spelled in [
+            pct(true),
+            pct(false),
+            form,
+            entities,
+            numeric,
+            hex,
+            b64,
+            url_safe,
+        ] {
+            let text = format!("http://localhost:8000/f1-done?q={spelled}&next=1");
+            let out = secrets.redact(&text);
+            assert!(out.contains(mark), "{spelled} -> {out}");
+            assert!(!spelled_in(&out, password), "{out}");
+        }
+        assert!(
+            secrets.redact(&inside).contains(mark),
+            "inside a longer base64 text too"
+        );
+        assert!(spelled("a%20b", "a b") && !spelled("a-b", "a b"));
+        assert_eq!(
+            secrets.redact("q=hl+canary"),
+            "q=hl+canary",
+            "a part of it is not it"
+        );
+    }
+
+    /// The probes' own check: any decoding of `text` holds `value`.
+    fn spelled_in(text: &str, value: &str) -> bool {
+        text.contains(value) || spelled(text, value)
     }
 
     #[test]
@@ -1423,5 +2288,26 @@ mod tests {
         assert_eq!(cleared.status(), 204);
         assert!(secrets.names().is_empty());
         serving.abort();
+    }
+
+    #[test]
+    fn a_typed_code_is_carried_only_as_a_number_of_its_own() {
+        // A code inside a longer number is that number's: a page after the
+        // sign-in may well have one.
+        assert!(!carries("https://example.org/items/1234567", "123456"));
+        assert!(!carries(
+            "https://example.org/pull/9123456?tab=files",
+            "123456"
+        ));
+        assert!(carries("https://example.org/verify?otp=123456", "123456"));
+        assert!(carries(
+            "https://example.org/verify?otp=123456&x=1",
+            "123456"
+        ));
+        assert!(carries("123456", "123456"));
+        // A password is carried in any spelling.
+        assert!(carries("https://example.org/?p=hunter%202", "hunter 2"));
+        assert!(carries("https://example.org/?p=hunter+2", "hunter 2"));
+        assert!(!carries("https://example.org/?p=hunter", "hunter 2"));
     }
 }

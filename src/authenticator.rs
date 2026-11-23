@@ -321,6 +321,7 @@ pub fn mint(creation: &Creation) -> Result<(Passkey, Value), Refusal> {
         user_name: creation.user_name.clone(),
         user_display_name: creation.user_display_name.clone(),
         use_: crate::secrets::Use::Auto,
+        readable: false,
     };
     let response = json!({
         "id": b64url(&credential),

@@ -1,0 +1,10 @@
+# TEST ONLY: the crate's unit tests built from the src/ in this context on
+# the relcheck checks image (same cache, same flags), on the relcheck
+# release image, for the signed-in browser's passkey tests.
+FROM hotline-computer:0.13.0-rc.3-relcheck-checks AS tests
+COPY src ./src
+RUN --mount=type=cache,target=/usr/local/cargo/registry --mount=type=cache,target=/src/target CARGO_PROFILE_TEST_DEBUG=0 CARGO_INCREMENTAL=0 cargo test --locked --lib --no-run --message-format=json > /tmp/b.jsonl \
+    && bin="$(jq -r 'select(.reason == "compiler-artifact" and .target.kind == ["lib"] and .profile.test == true and .executable != null) | .executable' /tmp/b.jsonl)" \
+    && test -x "$bin" && install -Dm755 "$bin" /libtest
+FROM hotline-computer:0.13.0-rc.3-relcheck
+COPY --from=tests /libtest /usr/local/bin/hotline-libtest

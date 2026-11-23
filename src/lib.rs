@@ -14,6 +14,7 @@ pub mod files_ui;
 pub mod guide;
 pub mod holds;
 pub mod jobs;
+pub mod keyproxy;
 pub mod lease;
 pub mod limits;
 pub mod links;
@@ -27,6 +28,8 @@ pub mod ready;
 pub mod screen;
 pub mod secrets;
 pub mod serve;
+pub mod signin;
+pub mod split;
 pub mod tools;
 pub mod viewer;
 pub mod workspace;
@@ -67,6 +70,25 @@ impl Config {
     }
 }
 
+impl Config {
+    /// A computer with no token answers anyone who can reach its address:
+    /// the tools, the screen and the files alike. It does not start that
+    /// way by accident. `HOTLINE_COMPUTER_ALLOW_NO_TOKEN=1` says it is meant.
+    pub fn door(&self) -> Result<(), String> {
+        if self.token.is_some() {
+            return Ok(());
+        }
+        if std::env::var("HOTLINE_COMPUTER_ALLOW_NO_TOKEN").as_deref() == Ok("1") {
+            eprintln!(
+                "hotline-computer: WARNING: serving {} with no token; every route is open to whoever can reach it",
+                self.addr
+            );
+            return Ok(());
+        }
+        Err("no token: set HOTLINE_COMPUTER_TOKEN or pass --token. Without one every route would be open to whoever can reach this address. To run that way on purpose, set HOTLINE_COMPUTER_ALLOW_NO_TOKEN=1.".to_owned())
+    }
+}
+
 #[derive(Clone)]
 pub struct App {
     pub config: Arc<Config>,
@@ -88,6 +110,16 @@ pub struct App {
     pub a11y: Arc<tokio::sync::OnceCell<atspi::zbus::Connection>>,
     /// The screen stream, the hands, and the clipboard; `None` until a display is up.
     pub display: Option<Arc<display::Display>>,
+    /// In the split computer's broker: the runner, which does the work. The
+    /// broker's own jobs, browser, files and desktop are never used.
+    pub runner: Option<split::Runner>,
+    /// The browser for signed-in sites, which only this process drives;
+    /// `None` keeps today's one browser (see `signin`).
+    pub signin: Option<signin::Signin>,
+    /// In the split computer's broker: the key proxy, which alone holds a
+    /// protected key's value. `None` in the runner, in legacy mode, and if
+    /// the proxy could not start; then no protected key is taken.
+    pub keys: Option<split::keys::Keys>,
 }
 
 impl App {
@@ -95,11 +127,18 @@ impl App {
         let config = Arc::new(config);
         let secrets = secrets::Secrets::default();
         let passkeys = passkeys::Passkeys::default();
+        let browser = BrowserManager::new(Arc::clone(&config), secrets.clone(), passkeys.clone());
+        // The split computer's broker sets its own (see `signin::split`).
+        let signin = signin::trial()
+            .then(|| signin::Signin::direct(browser.clone(), secrets.clone(), &config.home));
+        if let Some(signin) = &signin {
+            signin.arming_from(passkeys.clone());
+        }
         Self {
             access: MachineAccess::new().on_display(&config.display),
             a11y: Arc::new(tokio::sync::OnceCell::new()),
             jobs: jobs::Jobs::new(&config.home, &config.display, secrets.clone()),
-            browser: BrowserManager::new(Arc::clone(&config), secrets.clone(), passkeys.clone()),
+            browser,
             activity: activity::Log::new(&config.home, secrets.clone()),
             badges: badge::Badges::default(),
             files: files_ui::Files::default(),
@@ -109,6 +148,9 @@ impl App {
             observer: observer::Observer::new(&config.home, &config.display),
             config,
             display: None,
+            runner: None,
+            signin,
+            keys: None,
         }
     }
 

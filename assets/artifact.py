@@ -36,13 +36,18 @@ def source_url(spec):
     version = spec.get('version') or 'latest'
     if not re.fullmatch(r'[A-Za-z0-9_.-]+', version):
         raise ValueError('invalid release version')
-    endpoint = 'latest' if version == 'latest' else 'tags/' + version
-    with request(f'https://api.github.com/repos/{repo}/releases/{endpoint}') as response:
-        release = json.load(response)
     architecture = {'aarch64': 'arm64', 'x86_64': 'amd64'}.get(platform.machine(), platform.machine())
     pattern = (spec.get('asset') or '').replace('{arch}', architecture).replace('{os}', 'linux')
     if not pattern:
         raise ValueError('asset filename/pattern is required; {arch} and {os} are supported')
+    # An exact asset on a tagged release has a known URL: skip the API, whose
+    # unauthenticated limit (60 an hour per IP) runs out on shared addresses.
+    if version != 'latest' and re.fullmatch(r'[A-Za-z0-9_.+-]+', pattern):
+        print(json.dumps({'release': version, 'asset': pattern, 'architecture': architecture}), flush=True)
+        return f'https://github.com/{repo}/releases/download/{version}/{pattern}'
+    endpoint = 'latest' if version == 'latest' else 'tags/' + version
+    with request(f'https://api.github.com/repos/{repo}/releases/{endpoint}') as response:
+        release = json.load(response)
     matches = [asset for asset in release['assets'] if fnmatch.fnmatchcase(asset['name'], pattern)]
     if len(matches) != 1:
         raise ValueError(f'asset pattern matched {len(matches)} files; choose one exact asset')

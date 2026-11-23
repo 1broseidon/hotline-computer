@@ -13,12 +13,18 @@ ENV HOTLINE_BUILD_REVISION=$HOTLINE_BUILD_REVISION HOTLINE_BUILD_CHANNEL=$HOTLIN
 RUN --mount=type=cache,target=/usr/local/cargo/registry --mount=type=cache,target=/src/target cargo build --release --locked && cp target/release/hotline-computer /usr/local/bin/hotline-computer
 
 FROM build AS checks
-RUN rustup component add rustfmt clippy
+# Chromium, so the signed-in browser's tests (src/signin/tests.rs) run here
+# instead of skipping; HOTLINE_TESTS_NEED_CHROMIUM makes a missing one fail.
+RUN rustup component add rustfmt clippy && apt-get update && apt-get install -y --no-install-recommends jq chromium fonts-dejavu-core && rm -rf /var/lib/apt/lists/*
+ENV HOTLINE_TESTS_NEED_CHROMIUM=1
 COPY tests ./tests
-RUN --mount=type=cache,target=/usr/local/cargo/registry --mount=type=cache,target=/src/target rm -f target/debug/deps/contract-* && cargo fmt --check && CARGO_PROFILE_TEST_DEBUG=0 CARGO_INCREMENTAL=0 cargo test --locked && CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 cargo clippy --all-targets --locked -- -D warnings \
-    && mkdir -p /acceptance \
-    && for binary in target/debug/deps/contract-*; do if [ -f "$binary" ] && [ -x "$binary" ]; then cp "$binary" /acceptance/contract; fi; done \
-    && test -x /acceptance/contract
+RUN --mount=type=cache,target=/usr/local/cargo/registry --mount=type=cache,target=/src/target cargo fmt --check && CARGO_PROFILE_TEST_DEBUG=0 CARGO_INCREMENTAL=0 cargo test --locked && CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 cargo clippy --all-targets --locked -- -D warnings \
+    && CARGO_PROFILE_TEST_DEBUG=0 CARGO_INCREMENTAL=0 cargo test --locked --test contract --no-run --message-format=json > /tmp/contract-build.jsonl \
+    && binary="$(jq -ser '[.[] | select(.reason == "compiler-artifact" and .target.name == "contract" and .target.kind == ["test"] and .executable != null) | .executable] | if length == 1 then first else error("expected one contract test executable") end' /tmp/contract-build.jsonl)" \
+    && test -x "$binary" && install -Dm755 "$binary" /acceptance/contract && rm /tmp/contract-build.jsonl \
+    && CARGO_PROFILE_TEST_DEBUG=0 CARGO_INCREMENTAL=0 cargo test --locked --test split --no-run --message-format=json > /tmp/split-build.jsonl \
+    && binary="$(jq -ser '[.[] | select(.reason == "compiler-artifact" and .target.name == "split" and .target.kind == ["test"] and .executable != null) | .executable] | if length == 1 then first else error("expected one split test executable") end' /tmp/split-build.jsonl)" \
+    && test -x "$binary" && install -Dm755 "$binary" /acceptance/split && rm /tmp/split-build.jsonl
 
 FROM debian:trixie-slim@sha256:d7e12182ce18b85b93007c1dedf31f2d29e01ccf3182cc4017c709b6259bc132 AS runtime
 RUN apt-get update && apt-get install -y --no-install-recommends \
@@ -48,6 +54,17 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
              /usr/share/dbus-1/services/org.freedesktop.impl.portal.Secret.service \
     && useradd --uid 1000 --create-home --shell /bin/bash agent \
     && rm -f /home/agent/.bashrc /home/agent/.profile /home/agent/.bash_logout \
+    # Booted as root (0.13's split computer), boot keeps SETUID and SETGID
+    # alone and runs the broker as hotline and the signed-in browser as
+    # signin; everything the agent runs stays agent. Booted as agent, the
+    # default, it is the single-user computer. See src/split.
+    && groupadd --gid 1001 hotline && useradd --uid 1001 --gid 1001 --no-create-home --home-dir /run/hotline-computer/broker --shell /usr/sbin/nologin hotline \
+    && groupadd --gid 1002 signin && useradd --uid 1002 --gid 1002 --no-create-home --home-dir /var/lib/hotline-computer/signin --shell /usr/sbin/nologin signin \
+    && install -d -m 0755 /run/hotline-computer /var/lib/hotline-computer \
+    && install -d -o hotline -g hotline -m 0700 /run/hotline-computer/broker /var/lib/hotline-computer/broker \
+    && install -d -o hotline -g signin -m 2750 /run/hotline-computer/bridge \
+    && install -d -o hotline -g hotline -m 0755 /run/hotline-computer/public \
+    && install -d -o signin -g signin -m 0700 /var/lib/hotline-computer/signin /var/lib/hotline-computer/signin/profile \
     && install -d /etc/nix \
     && install -d -m 1777 /tmp/.X11-unix \
     && install -d -o agent -g agent /nix /nix/store /nix/var/nix \
@@ -77,6 +94,11 @@ COPY assets/portals.conf /etc/xdg/xdg-desktop-portal/portals.conf
 # The browser extension that answers passkey requests, and its line to the
 # service; see src/bridge.rs.
 COPY assets/extension /usr/share/hotline-computer/extension
+# The fill rule the broker's own fills use too: one gate for both.
+COPY assets/fill-policy.js /usr/share/hotline-computer/extension/fill-policy.js
+# On the split computer the visible browser loads this instead: it refuses
+# every passkey request at once (passkeys sign in in the signed-in browser).
+COPY assets/no-passkeys /usr/share/hotline-computer/no-passkeys
 COPY assets/native-host.json /etc/chromium/native-messaging-hosts/dev.hotline.computer.json
 COPY --from=build /usr/local/bin/hotline-computer /usr/bin/hotline-computer
 USER agent
@@ -121,4 +143,9 @@ RUN rev=$(jq -r .nixpkgs /etc/hotline-computer/base.json) \
     && rm -f /tmp/base.key /tmp/base-paths \
     && nix-collect-garbage -d >/dev/null
 EXPOSE 8787
+# The runtime enters the working directory as the user the computer is
+# created with. Created as root for the split computer, root has no
+# capability to enter the agent's 0700 home, so the computer starts at /;
+# boot enters the home itself (the runner, or the single-user computer).
+WORKDIR /
 ENTRYPOINT ["/usr/bin/hotline-computer", "boot"]

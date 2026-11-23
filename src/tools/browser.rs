@@ -3,7 +3,7 @@ use serde_json::Value;
 
 use crate::App;
 use crate::holds::Pass;
-use crate::secrets::{Origin, Use};
+use crate::secrets::{Filled, Origin, Use};
 
 use super::{ToolResult, action_error, text};
 
@@ -30,7 +30,18 @@ struct Input {
     path: String,
 }
 
-pub async fn call(app: &App, arguments: Value, holder: &str) -> ToolResult {
+pub async fn call(
+    app: &App,
+    arguments: Value,
+    holder: &str,
+    prepared: Option<Filled>,
+) -> ToolResult {
+    // Signed-in sites, and a login's fields, are the signed-in browser's.
+    if let Some(signin) = &app.signin
+        && let Some(result) = signin.route(app, &arguments, holder).await
+    {
+        return result;
+    }
     let input: Input = serde_json::from_value(arguments).map_err(|error| error.to_string())?;
     let mutating = !matches!(
         input.action.as_str(),
@@ -95,55 +106,25 @@ pub async fn call(app: &App, arguments: Value, holder: &str) -> ToolResult {
         "fill" => match resolve_fill(input.secret.as_deref(), input.text.as_deref())? {
             FillWith::Secret(reference) => {
                 // The value is looked up here and typed by the browser; the
-                // answer names it and never carries it.
-                let filled = app.secrets.resolve(reference)?;
+                // answer names it and never carries it. In the split
+                // computer's runner it arrives looked up and approved.
+                let (filled, cleared) = match prepared {
+                    Some(filled) => (filled, None),
+                    None => {
+                        let cleared = clear_secret(app, reference).await?;
+                        (cleared.filled.clone(), Some(cleared))
+                    }
+                };
                 let origin_matched = filled.sites.is_some();
                 let label = app.secrets.redact(&filled.label).into_owned();
-                let (name, field) = reference.split_once('.').unwrap_or((reference, ""));
-                let login = filled.sites.clone();
-                let mut site = String::new();
-                let mut how = None;
-                if let Some(sites) = &login {
-                    let url = app.browser.current_url().await.unwrap_or_default();
-                    site = crate::bridge::host_of(&url);
-                    let on_site = Origin::of_page(&url)
-                        .is_ok_and(|page| sites.iter().any(|site| site.allows(&page)));
-                    // A username is who, not a secret: only what signs in waits.
-                    if on_site
-                        && field != "username"
-                        && app.secrets.use_of(name) == Some(Use::Ask)
-                        && !crate::bridge::person_has_it(app).await
-                    {
-                        let who = crate::bridge::who(app).await;
-                        let path = crate::bridge::path_on(&url, &site);
-                        match app.holds.fill(name, &site, &path, &who, crate::jobs::now()) {
-                            Pass::Within => how = Some("within the 10 min"),
-                            Pass::Answered(outcome) => how = Some(outcome.how()),
-                            Pass::Held { id, lapsed } => {
-                                return Err(waiting(name, &site, &id, lapsed));
-                            }
-                            Pass::Denied => {
-                                return Err(format!(
-                                    "The person denied this use of {name} on {site}. Nothing was typed; do not try another way, and ask them in the chat if it is still needed."
-                                ));
-                            }
-                        }
-                    }
-                }
                 let result = app.browser.fill_secret(&input.r#ref, filled).await;
-                // Each use leaves a line in the card's record and a note on
-                // the page, as the extension's own fills do.
-                if login.is_some() {
-                    match &result {
-                        Ok(_) if field != "username" => {
-                            crate::bridge::record(app, &site, "filled a login", true, how).await;
-                        }
-                        Err(error) if error.contains(" is typed only on ") => {
-                            crate::bridge::record(app, &site, "was refused a login", false, None)
-                                .await;
-                        }
-                        _ => {}
-                    }
+                if let Some(cleared) = &cleared {
+                    after_secret(
+                        app,
+                        cleared,
+                        result.as_ref().map(|_| ()).map_err(String::as_str),
+                    )
+                    .await;
                 }
                 if result.is_ok()
                     && let Ok(Some((_, bounds))) = tokio::time::timeout(
@@ -179,7 +160,10 @@ pub async fn call(app: &App, arguments: Value, holder: &str) -> ToolResult {
         }
         "check" => app.browser.check(&input.r#ref, !input.uncheck).await,
         "hover" => app.browser.hover(&input.r#ref).await,
-        "tabs" => app.browser.tabs().await,
+        "tabs" => match &app.signin {
+            Some(signin) => with_signed_in_tabs(app.browser.tabs().await, signin),
+            None => app.browser.tabs().await,
+        },
         "tab_new" => app.browser.tab_new(&input.url).await,
         "tab_select" => {
             app.browser
@@ -230,6 +214,124 @@ pub async fn call(app: &App, arguments: Value, holder: &str) -> ToolResult {
         )),
     }?;
     Ok(text(result))
+}
+
+/// Whether a call is a `fill` of a stored secret: the one the split
+/// computer's broker looks up before the runner types it.
+pub(crate) fn fills_a_secret(arguments: &Value) -> bool {
+    arguments["action"].as_str() == Some("fill")
+        && matches!(
+            resolve_fill(arguments["secret"].as_str(), arguments["text"].as_str()),
+            Ok(FillWith::Secret(_))
+        )
+}
+
+/// A stored secret's field, looked up and cleared to be typed: on its own
+/// site, and approved by the person when it is an ask-me login's.
+pub(crate) struct Cleared {
+    filled: Filled,
+    login: bool,
+    field: String,
+    site: String,
+    how: Option<&'static str>,
+}
+
+async fn clear_secret(app: &App, reference: &str) -> Result<Cleared, String> {
+    let filled = app.secrets.resolve(reference)?;
+    let label = app.secrets.redact(&filled.label).into_owned();
+    let (name, field) = reference.split_once('.').unwrap_or((reference, ""));
+    let login = filled.sites.clone();
+    let mut site = String::new();
+    let mut how = None;
+    if let Some(sites) = &login {
+        let url = crate::split::current_url(app).await.unwrap_or_default();
+        site = crate::bridge::host_of(&url);
+        let page = Origin::of_page(&url);
+        let on_site = page
+            .as_ref()
+            .is_ok_and(|page| sites.iter().any(|site| site.is_exactly(page)));
+        // Refused here, not left to the typing's own check a
+        // moment later: a page that is off the site now and back
+        // on it by then would otherwise pass an ask-me key
+        // without the ask.
+        if !on_site {
+            let allowed = sites
+                .iter()
+                .map(ToString::to_string)
+                .collect::<Vec<_>>()
+                .join(", ");
+            crate::bridge::record(app, &site, "was refused a login", false, None).await;
+            return Err(match page {
+                Ok(page) => {
+                    format!("{label} is typed only on {allowed}; this page is {page}")
+                }
+                Err(_) => format!("{label} is typed only on {allowed}, and this page has no site"),
+            });
+        }
+        // A username is who, not a secret: only what signs in waits.
+        if field != "username" && app.secrets.use_of(name) == Some(Use::Ask) {
+            let who = crate::bridge::who(app).await;
+            let path = crate::bridge::path_on(&url, &site);
+            match app.holds.fill(name, &site, &path, &who, crate::jobs::now()) {
+                Pass::Within => how = Some("within the 10 min"),
+                Pass::Answered(outcome) => how = Some(outcome.how()),
+                Pass::Held { id, lapsed } => {
+                    return Err(waiting(name, &site, &id, lapsed));
+                }
+                Pass::Denied => {
+                    return Err(format!(
+                        "The person denied this use of {name} on {site}. Nothing was typed; do not try another way, and ask them in the chat if it is still needed."
+                    ));
+                }
+            }
+        }
+    }
+    Ok(Cleared {
+        filled,
+        login: login.is_some(),
+        field: field.to_owned(),
+        site,
+        how,
+    })
+}
+
+/// Each use leaves a line in the card's record and a note on the page, as
+/// the extension's own fills do.
+async fn after_secret(app: &App, cleared: &Cleared, typed: Result<(), &str>) {
+    if !cleared.login {
+        return;
+    }
+    match typed {
+        Ok(()) if cleared.field != "username" => {
+            crate::bridge::record(app, &cleared.site, "filled a login", true, cleared.how).await;
+        }
+        Err(error) if error.contains(" is typed only on ") => {
+            crate::bridge::record(app, &cleared.site, "was refused a login", false, None).await;
+        }
+        _ => {}
+    }
+}
+
+/// The general browser's tabs, then the signed-in browser's, numbered from
+/// `SIGNED_IN_TABS`. Only one of the two is current.
+pub(crate) fn with_signed_in_tabs(
+    general: Result<String, String>,
+    signin: &crate::signin::Signin,
+) -> Result<String, String> {
+    let signed_in = signin.tab_list();
+    // A general browser that cannot start still leaves the signed-in tabs.
+    let general = match general {
+        Err(_) if !signed_in.is_empty() => "[]".to_owned(),
+        general => general?,
+    };
+    let mut tabs: Vec<Value> = serde_json::from_str(&general).unwrap_or_default();
+    if signin.focused() {
+        for tab in &mut tabs {
+            tab["current"] = Value::Bool(false);
+        }
+    }
+    tabs.extend(signed_in);
+    serde_json::to_string(&tabs).map_err(|error| error.to_string())
 }
 
 /// What a fill of an ask-me login answers while the person is asked: at

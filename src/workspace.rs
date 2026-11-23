@@ -563,6 +563,10 @@ pub async fn prepare(
     let home = app.config.home.canonicalize().map_err(|e| e.to_string())?;
     let workspace = resolve_workspace(&home, workspace)?;
     let definition = definition(&home, &workspace, request)?;
+    // What would fail after the build is said before it.
+    if let Definition::Manifest(composed) = &definition {
+        crate::manifest::check_hooks(&workspace, composed)?;
+    }
     let directory = cache(&home, &workspace, &definition)?;
     write_json(
         &workspace.join(".hotline/environment-request.json"),
@@ -572,7 +576,24 @@ pub async fn prepare(
         attach(&workspace, &directory, &environment)?;
         drop(guard);
         let mut result = json!({"ready":true,"cached":true,"workspace":workspace,"definition":summary(&definition)});
-        activate(app, &workspace, &definition, holder, None, &mut result);
+        // The environment is ready at once; the workspace is ready when its
+        // hooks and services are too, which this waits a while to say.
+        if let Some(activation) = activate(app, &workspace, &definition, holder, None, &mut result)
+            && let Definition::Manifest(composed) = &definition
+        {
+            let _ = tokio::time::timeout(SETTING_UP, activation).await;
+            let report = crate::manifest::readiness(app, &workspace, composed).await;
+            result["ready"] = report["ready"].clone();
+            result["next"] = report["next"].clone();
+            // Not ready yet: the hook to follow, as an uncached answer names
+            // the job that builds the environment.
+            if let Some(id) = crate::manifest::hook_to_follow(&report)
+                && let Ok(record) = app.jobs.status(&id).await
+            {
+                result["job"] = json!(record);
+            }
+            result["readiness"] = report;
+        }
         return Ok(result);
     }
     let executable = std::env::current_exe().map_err(|e| e.to_string())?;
@@ -604,7 +625,7 @@ pub async fn prepare(
         None
     };
     let mut result = json!({"ready":false,"cached":false,"workspace":workspace,"definition":summary(&definition),"job":job,"observer_error":observer_error});
-    activate(
+    let _ = activate(
         app,
         &workspace,
         &definition,
@@ -614,6 +635,11 @@ pub async fn prepare(
     );
     Ok(result)
 }
+
+/// How long a prepare that found its environment cached waits for the
+/// workspace's hooks and services, so its answer can say how they went. It
+/// leaves the rest of the call's budget for the answer.
+const SETTING_UP: std::time::Duration = std::time::Duration::from_secs(40);
 
 /// A manifest answer says what was composed and what happens next, not the
 /// whole image base it was composed against.
@@ -631,6 +657,8 @@ fn summary(definition: &Definition) -> Value {
     }
 }
 
+/// Starts a manifest workspace's hooks and services after its environment,
+/// on a task of their own; what is returned ends when they have run.
 fn activate(
     app: &App,
     workspace: &Path,
@@ -638,24 +666,22 @@ fn activate(
     holder: &str,
     preparation: Option<String>,
     result: &mut Value,
-) {
+) -> Option<tokio::task::JoinHandle<()>> {
     let Definition::Manifest(composed) = definition else {
-        return;
+        return None;
     };
     crate::manifest::remember(&app.config.home, workspace);
     result["then"] = crate::manifest::plan(composed);
-    result["next"] = json!(if preparation.is_some() {
-        "wait for the job; then shell run NAME in this workspace. state manifest shows hooks and services as they start"
-    } else {
-        "shell run NAME in this workspace. state manifest shows hooks and services as they start"
-    });
-    tokio::spawn(crate::manifest::activate(
+    result["next"] = json!(
+        "the job builds the environment, and the workspace is not ready when it ends: create hooks run then, and services and start hooks start. Follow the job with shell wait; then state manifest with this workspace says whether each hook ran and each service is up, and ready:true only when all of it is"
+    );
+    Some(tokio::spawn(crate::manifest::activate(
         app.clone(),
         workspace.to_path_buf(),
         (**composed).clone(),
         holder.to_owned(),
         preparation,
-    ));
+    )))
 }
 
 pub async fn build(home: &Path, specification: &str, workspace: &Path) -> Result<(), String> {
@@ -683,7 +709,7 @@ pub async fn build(home: &Path, specification: &str, workspace: &Path) -> Result
     }
     if let Some(environment) = cached(&directory, &definition) {
         attach(&workspace, &directory, &environment)?;
-        println!("Ready: {} (cached)", workspace.display());
+        println!("Environment ready: {} (cached)", workspace.display());
         return Ok(());
     }
     println!(
@@ -812,7 +838,7 @@ pub async fn build(home: &Path, specification: &str, workspace: &Path) -> Result
     write_json(&directory.join("environment.json"), &environment)?;
     attach(&workspace, &directory, &environment)?;
     println!(
-        "Ready: {}. Shell commands in this directory now inherit the environment.",
+        "Environment ready: {}. Shell commands in this directory now inherit it. A manifest's create hooks, services and start hooks start after this job; state manifest says when the workspace is ready.",
         workspace.display()
     );
     Ok(())

@@ -37,6 +37,18 @@ cached. Once it succeeds, jobs whose `cwd` is inside the workspace get the
 exported environment, and a job's own `env` wins. A failed preparation keeps
 the previous environment.
 
+With a manifest, the job builds only the environment. Its create hooks run
+after it, once each, then its services and start hooks start, and the
+workspace is ready only when all of them are. `state manifest` answers with
+`readiness`: the environment, each hook (`ran`, `done before`, `running`, or
+`failed` with its job and the end of its output), each service (`up` or not)
+and `ready`. A cached preparation waits up to 40 seconds for the hooks and
+services and answers the same way. Before building, preparation checks that
+each script a hook runs is in the workspace, and refuses with the hook's name
+when one is not; it looks only inside the workspace and follows no link out
+of it. A create hook that failed runs again on the next preparation, and one
+that succeeded never does.
+
 ## Storage
 
 The workspace owns `.hotline/environment-spec.json`, and `.hotline/nix/`

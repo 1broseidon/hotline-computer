@@ -85,6 +85,7 @@ fn run(command: Vec<String>, cwd: &str, kind: Kind) -> Run {
         kind,
         env: BTreeMap::new(),
         label: None,
+        ready_title: None,
     }
 }
 

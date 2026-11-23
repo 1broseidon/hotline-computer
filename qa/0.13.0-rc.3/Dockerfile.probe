@@ -1,0 +1,20 @@
+# TEST ONLY: hotline-computer:0.13.0-rc.3 with its one binary rebuilt from the
+# same tree with --features probe-roots, so the key proxy also trusts the
+# protected-probes fixture CA (HOTLINE_KEYPROXY_PROBE_ROOT) upstream.
+# Every other layer is the release candidate's, unchanged. Never a release.
+# Build from the repo root: container build -f <this> -t hotline-computer:0.13.0-rc.3-probe .
+ARG BASE=hotline-computer:0.13.0-rc.3
+FROM rust:1-trixie AS build
+RUN apt-get update && apt-get install -y --no-install-recommends cmake perl pkg-config && rm -rf /var/lib/apt/lists/*
+WORKDIR /src
+COPY Cargo.toml Cargo.lock ./
+COPY src ./src
+COPY assets ./assets
+COPY skills ./skills
+ARG HOTLINE_BUILD_REVISION=unknown
+ARG HOTLINE_BUILD_CHANNEL=development
+ENV HOTLINE_BUILD_REVISION=$HOTLINE_BUILD_REVISION HOTLINE_BUILD_CHANNEL=$HOTLINE_BUILD_CHANNEL
+RUN --mount=type=cache,target=/usr/local/cargo/registry --mount=type=cache,target=/src/target-probe CARGO_TARGET_DIR=/src/target-probe cargo build --release --locked --features probe-roots && cp /src/target-probe/release/hotline-computer /usr/local/bin/hotline-computer
+
+FROM ${BASE}
+COPY --from=build /usr/local/bin/hotline-computer /usr/bin/hotline-computer

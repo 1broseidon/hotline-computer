@@ -41,3 +41,21 @@ acceptance:
 	docker build --target checks -t hotline-computer:checks .
 	docker build -t $(IMAGE) .
 	tests/run-image-acceptance.sh $(IMAGE) hotline-computer:checks qa/latest
+
+# The protected-secrets probes (tests/protected/): a throwaway container from
+# IMAGE, made-up secrets only, one line per probe, exit 1 if any result
+# differs from EXPECT. RUNTIME is docker, podman or container.
+#   make protected-probes RUNTIME=container IMAGE=hotline-computer:0.12.0-rc.3 EXPECT=leak
+# SPLIT=1 (or MODE=split) creates it as the 0.50 desk does, else as 0.49 does;
+# DELIVERY=readable|protected sends a v2 body (protected needs a probe build:
+# --features probe-roots, test only).
+#   make protected-probes RUNTIME=container IMAGE=<probe build> SPLIT=1 DELIVERY=protected EXPECT=blocked
+# N3 upgrades a home a single-user computer used (N3_FROM, default IMAGE as
+# 0.49 creates it); J7 brings Node 24 into the probe's home when the image
+# has none. tests/protected/two_condition.py is the end-to-end run.
+.PHONY: protected-probes
+protected-probes:
+	@test -n "$(RUNTIME)" -a -n "$(IMAGE)" -a -n "$(EXPECT)" || { echo "usage: make protected-probes RUNTIME=docker|podman|container IMAGE=<ref> EXPECT=leak|blocked [SPLIT=1|MODE=split] [DELIVERY=v1|readable|protected] [ONLY=id,id] [EXCEPT=id,id] [PREFIX=hl-secrets-w5] [N3_FROM=<0.12 image>]"; exit 2; }
+	python3 tests/protected/run.py --runtime $(RUNTIME) --image $(IMAGE) --expect $(EXPECT) \
+	  $(if $(or $(SPLIT),$(filter split,$(MODE))),--split) $(if $(DELIVERY),--delivery $(DELIVERY)) $(if $(PREFIX),--prefix $(PREFIX)) \
+	  $(if $(ONLY),--only $(ONLY)) $(if $(EXCEPT),--except $(EXCEPT)) $(if $(N3_FROM),--n3-from $(N3_FROM))

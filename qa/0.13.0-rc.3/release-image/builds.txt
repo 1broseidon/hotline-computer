@@ -1,0 +1,5 @@
+2026-11-22T08:36:57Z start, commit ea45bfa4cc3cc2f3861f4579d8978520c94f8d45, context /Users/george/Projects/scratch/rc3-release/src-ea45bfa4cc3cc2f3861f4579d8978520c94f8d45 (git archive of the commit)
+2026-11-22T08:38:21Z checks exit 0
+2026-11-22T08:38:55Z release exit 0
+2026-11-22T08:39:26Z probe exit 0
+2026-11-22T08:39:26Z all built

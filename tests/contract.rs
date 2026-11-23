@@ -264,6 +264,17 @@ async fn image_honors_the_computer_contract() {
     // file saved as an attachment, nothing above the home, and no listing
     // without the token.
     let http = reqwest::Client::new();
+    // Created as a 0.50 desk creates it, or as before (a 404 is an image
+    // older than the split computer).
+    let split = http
+        .get(format!("{base}/capabilities?nonce=contract"))
+        .bearer_auth(&token)
+        .send()
+        .await
+        .expect("capabilities")
+        .json::<serde_json::Value>()
+        .await
+        .is_ok_and(|caps| caps["protected"]["mode"] == "split");
     let listed = http
         .get(format!("{base}/files?token={token}"))
         .send()
@@ -445,8 +456,8 @@ async fn image_honors_the_computer_contract() {
     );
     let after = call(
         &client,
-        "files",
-        json!({"action":"get","path":"/home/agent/.hotline/logins/contract-after-forget.json"}),
+        "shell",
+        json!({"action":"exec","command":"cat","args":["/home/agent/.hotline/logins/contract-after-forget.json"]}),
     )
     .await;
     let after_text = text(&after);
@@ -460,8 +471,8 @@ async fn image_honors_the_computer_contract() {
     );
     let document = call(
         &client,
-        "files",
-        json!({"action":"get","path":"/home/agent/.hotline/logins/import-contract-Default.json"}),
+        "shell",
+        json!({"action":"exec","command":"cat","args":["/home/agent/.hotline/logins/import-contract-Default.json"]}),
     )
     .await;
     assert!(
@@ -479,15 +490,37 @@ async fn image_honors_the_computer_contract() {
     assert_eq!(the_rest.status(), 200);
     let gone = call(
         &client,
-        "files",
-        json!({"action":"get","path":"/home/agent/.hotline/logins/import-contract-Default.json"}),
+        "shell",
+        json!({"action":"exec","command":"cat","args":["/home/agent/.hotline/logins/import-contract-Default.json"]}),
     )
     .await;
     assert!(
-        gone.is_error.unwrap_or(false),
+        text(&gone).contains("No such file"),
         "a login with nothing left is removed: {}",
         text(&gone)
     );
+    // The computer's own records are not fetched through files, nor by the
+    // desk's download, even by a link from elsewhere in the home.
+    let records = call(
+        &client,
+        "files",
+        json!({"action":"get","path":"/home/agent/.hotline/logins/contract-after-forget.json"}),
+    )
+    .await;
+    assert!(
+        records.is_error.unwrap_or(false) && text(&records).contains("computer's own records"),
+        "{}",
+        text(&records)
+    );
+    let download = http
+        .get(format!(
+            "{base}/files/download?path=/home/agent/.hotline/logins/contract-after-forget.json"
+        ))
+        .header(AUTHORIZATION, format!("Bearer {token}"))
+        .send()
+        .await
+        .expect("download a record");
+    assert_eq!(download.status(), 400, "the desk's download refuses it too");
     let nothing = http
         .delete(format!("{base}/logins/import-contract-Default"))
         .header(AUTHORIZATION, format!("Bearer {token}"))
@@ -799,63 +832,207 @@ async fn image_honors_the_computer_contract() {
         .await
         .expect("registration JSON");
     assert_eq!(idle, json!({"state": "idle"}));
-    // Armed for another site, this one may not make a passkey.
-    let elsewhere = http
-        .put(&registration)
-        .bearer_auth(&token)
-        .json(&json!({"rpId": "example.com"}))
-        .send()
-        .await
-        .expect("arm for another site");
-    assert_eq!(
-        elsewhere.status(),
-        200,
-        "{}",
-        elsewhere.text().await.unwrap_or_default()
-    );
-    let refused = text(&call(&client, "browser", json!({"action":"eval","js":"make()"})).await);
-    assert!(
-        refused.contains("refused NotAllowedError") && refused.contains("not armed"),
-        "a passkey for a site that is not armed is refused: {refused}"
-    );
-    let armed = http
-        .put(&registration)
-        .bearer_auth(&token)
-        .json(&json!({"rpId": "localhost"}))
-        .send()
-        .await
-        .expect("arm for the proof site")
-        .json::<serde_json::Value>()
-        .await
-        .expect("arming JSON");
-    assert_eq!(armed["state"], "armed", "{armed}");
-    assert_eq!(armed["rpId"], "localhost");
-    assert!(armed["expiresAt"].as_i64().unwrap_or_default() > 0);
-    // Under the arming, the site's request waits for the person: nothing
-    // is made until the desk carries their answer back, and the door says
-    // what the site asked for meanwhile.
-    let parked = text(
-        &call(
-            &client,
-            "browser",
-            json!({"action":"eval","js":"window.making = make(); 'parked'"}),
-        )
-        .await,
-    );
-    assert!(parked.contains("parked"), "{parked}");
-    let again = text(&call(&client, "browser", json!({"action":"eval","js":"make()"})).await);
-    // The extension's authenticator: Chromium refuses a second request
-    // while one is pending. The virtual one: the guard refuses it.
-    assert!(
-        again.contains("A request is already pending")
-            || (again.contains("refused NotAllowedError") && again.contains("waiting")),
-        "one request before the person at a time: {again}"
-    );
-    // The request reaches the service a beat after the page makes it, as
-    // the desk's own polling expects.
-    let mut asked = serde_json::Value::Null;
-    for _ in 0..50 {
-        asked = http
+    // On the split computer passkeys sign in only in the signed-in browser,
+    // where the agent runs no script: the visible browser refuses them at
+    // once, and the rest is the single-user computer's.
+    if split {
+        split_passkeys(&client, &http, &door, &registration, &token).await;
+    } else {
+        // Armed for another site, this one may not make a passkey.
+        let elsewhere = http
+            .put(&registration)
+            .bearer_auth(&token)
+            .json(&json!({"rpId": "example.com"}))
+            .send()
+            .await
+            .expect("arm for another site");
+        assert_eq!(
+            elsewhere.status(),
+            200,
+            "{}",
+            elsewhere.text().await.unwrap_or_default()
+        );
+        let refused = text(&call(&client, "browser", json!({"action":"eval","js":"make()"})).await);
+        assert!(
+            refused.contains("refused NotAllowedError") && refused.contains("not armed"),
+            "a passkey for a site that is not armed is refused: {refused}"
+        );
+        let armed = http
+            .put(&registration)
+            .bearer_auth(&token)
+            .json(&json!({"rpId": "localhost"}))
+            .send()
+            .await
+            .expect("arm for the proof site")
+            .json::<serde_json::Value>()
+            .await
+            .expect("arming JSON");
+        assert_eq!(armed["state"], "armed", "{armed}");
+        assert_eq!(armed["rpId"], "localhost");
+        assert!(armed["expiresAt"].as_i64().unwrap_or_default() > 0);
+        // Under the arming, the site's request waits for the person: nothing
+        // is made until the desk carries their answer back, and the door says
+        // what the site asked for meanwhile.
+        let parked = text(
+            &call(
+                &client,
+                "browser",
+                json!({"action":"eval","js":"window.making = make(); 'parked'"}),
+            )
+            .await,
+        );
+        assert!(parked.contains("parked"), "{parked}");
+        let again = text(&call(&client, "browser", json!({"action":"eval","js":"make()"})).await);
+        // The extension's authenticator: Chromium refuses a second request
+        // while one is pending. The virtual one: the guard refuses it.
+        assert!(
+            again.contains("A request is already pending")
+                || (again.contains("refused NotAllowedError") && again.contains("waiting")),
+            "one request before the person at a time: {again}"
+        );
+        // The request reaches the service a beat after the page makes it, as
+        // the desk's own polling expects.
+        let mut asked = serde_json::Value::Null;
+        for _ in 0..50 {
+            asked = http
+                .get(&registration)
+                .bearer_auth(&token)
+                .send()
+                .await
+                .expect("registration state")
+                .json::<serde_json::Value>()
+                .await
+                .expect("registration JSON");
+            if asked["state"] == "asked" {
+                break;
+            }
+            tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+        }
+        assert_eq!(asked["state"], "asked", "{asked}");
+        assert_eq!(asked["rpId"], "localhost");
+        assert_eq!(asked["ask"]["rpId"], "localhost");
+        assert_eq!(asked["ask"]["origin"], "http://localhost:8123");
+        assert_eq!(asked["ask"]["rpName"], "Passkey proof");
+        assert_eq!(asked["ask"]["userName"], "teammate");
+        assert_eq!(asked["ask"]["userDisplayName"], "The teammate");
+        assert!(asked["ask"]["askedAt"].as_i64().unwrap_or_default() > 0);
+        assert!(asked.get("credential").is_none(), "{asked}");
+        let ask_id = asked["ask"]["id"].as_str().expect("ask id").to_owned();
+        let answer = format!("{registration}/answer");
+        // An answer to a request that is not waiting is refused.
+        let stale = http
+            .post(&answer)
+            .bearer_auth(&token)
+            .json(&json!({"id": "nope", "approved": true}))
+            .send()
+            .await
+            .expect("answer a request that is not waiting");
+        assert_eq!(
+            stale.status(),
+            409,
+            "{}",
+            stale.text().await.unwrap_or_default()
+        );
+        // Denied, the site hears no, nothing was made, and the arming is over.
+        let denied = http
+            .post(&answer)
+            .bearer_auth(&token)
+            .json(&json!({"id": ask_id, "approved": false}))
+            .send()
+            .await
+            .expect("deny the request")
+            .json::<serde_json::Value>()
+            .await
+            .expect("denial JSON");
+        assert_eq!(denied, json!({"state": "idle"}), "{denied}");
+        let refused = text(
+            &call(
+                &client,
+                "browser",
+                json!({"action":"eval","js":"window.making"}),
+            )
+            .await,
+        );
+        assert!(
+            refused.contains("refused NotAllowedError") && refused.contains("did not approve"),
+            "a denied request is refused to the site: {refused}"
+        );
+        let refused = text(&call(&client, "browser", json!({"action":"eval","js":"make()"})).await);
+        assert!(
+            refused.contains("not armed"),
+            "a denial ends the arming: {refused}"
+        );
+        // Armed again and approved, the browser makes it.
+        let armed = http
+            .put(&registration)
+            .bearer_auth(&token)
+            .json(&json!({"rpId": "localhost"}))
+            .send()
+            .await
+            .expect("arm for the proof site again")
+            .json::<serde_json::Value>()
+            .await
+            .expect("arming JSON");
+        assert_eq!(armed["state"], "armed", "{armed}");
+        let parked = text(
+            &call(
+                &client,
+                "browser",
+                json!({"action":"eval","js":"window.making = make(); 'parked'"}),
+            )
+            .await,
+        );
+        assert!(parked.contains("parked"), "{parked}");
+        let mut asked = serde_json::Value::Null;
+        for _ in 0..50 {
+            asked = http
+                .get(&registration)
+                .bearer_auth(&token)
+                .send()
+                .await
+                .expect("registration state")
+                .json::<serde_json::Value>()
+                .await
+                .expect("registration JSON");
+            if asked["state"] == "asked" {
+                break;
+            }
+            tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+        }
+        assert_eq!(asked["state"], "asked", "{asked}");
+        let ask_id = asked["ask"]["id"].as_str().expect("ask id").to_owned();
+        assert!(
+            asked["ask"]["askedAt"].as_i64().unwrap_or_default() > 0,
+            "{asked}"
+        );
+        let approved = http
+            .post(&answer)
+            .bearer_auth(&token)
+            .json(&json!({"id": ask_id, "approved": true}))
+            .send()
+            .await
+            .expect("approve the request")
+            .json::<serde_json::Value>()
+            .await
+            .expect("approval JSON");
+        assert!(
+            approved["state"] == "approved" || approved["state"] == "registered",
+            "{approved}"
+        );
+        assert_eq!(approved["ask"]["id"], ask_id);
+        let made = text(
+            &call(
+                &client,
+                "browser",
+                json!({"action":"eval","js":"window.making"}),
+            )
+            .await,
+        );
+        assert!(
+            made.starts_with("\"made "),
+            "the approved request makes a passkey: {made}"
+        );
+        let registered = http
             .get(&registration)
             .bearer_auth(&token)
             .send()
@@ -864,658 +1041,525 @@ async fn image_honors_the_computer_contract() {
             .json::<serde_json::Value>()
             .await
             .expect("registration JSON");
-        if asked["state"] == "asked" {
-            break;
-        }
-        tokio::time::sleep(std::time::Duration::from_millis(100)).await;
-    }
-    assert_eq!(asked["state"], "asked", "{asked}");
-    assert_eq!(asked["rpId"], "localhost");
-    assert_eq!(asked["ask"]["rpId"], "localhost");
-    assert_eq!(asked["ask"]["origin"], "http://localhost:8123");
-    assert_eq!(asked["ask"]["rpName"], "Passkey proof");
-    assert_eq!(asked["ask"]["userName"], "teammate");
-    assert_eq!(asked["ask"]["userDisplayName"], "The teammate");
-    assert!(asked["ask"]["askedAt"].as_i64().unwrap_or_default() > 0);
-    assert!(asked.get("credential").is_none(), "{asked}");
-    let ask_id = asked["ask"]["id"].as_str().expect("ask id").to_owned();
-    let answer = format!("{registration}/answer");
-    // An answer to a request that is not waiting is refused.
-    let stale = http
-        .post(&answer)
-        .bearer_auth(&token)
-        .json(&json!({"id": "nope", "approved": true}))
-        .send()
-        .await
-        .expect("answer a request that is not waiting");
-    assert_eq!(
-        stale.status(),
-        409,
-        "{}",
-        stale.text().await.unwrap_or_default()
-    );
-    // Denied, the site hears no, nothing was made, and the arming is over.
-    let denied = http
-        .post(&answer)
-        .bearer_auth(&token)
-        .json(&json!({"id": ask_id, "approved": false}))
-        .send()
-        .await
-        .expect("deny the request")
-        .json::<serde_json::Value>()
-        .await
-        .expect("denial JSON");
-    assert_eq!(denied, json!({"state": "idle"}), "{denied}");
-    let refused = text(
-        &call(
-            &client,
-            "browser",
-            json!({"action":"eval","js":"window.making"}),
-        )
-        .await,
-    );
-    assert!(
-        refused.contains("refused NotAllowedError") && refused.contains("did not approve"),
-        "a denied request is refused to the site: {refused}"
-    );
-    let refused = text(&call(&client, "browser", json!({"action":"eval","js":"make()"})).await);
-    assert!(
-        refused.contains("not armed"),
-        "a denial ends the arming: {refused}"
-    );
-    // Armed again and approved, the browser makes it.
-    let armed = http
-        .put(&registration)
-        .bearer_auth(&token)
-        .json(&json!({"rpId": "localhost"}))
-        .send()
-        .await
-        .expect("arm for the proof site again")
-        .json::<serde_json::Value>()
-        .await
-        .expect("arming JSON");
-    assert_eq!(armed["state"], "armed", "{armed}");
-    let parked = text(
-        &call(
-            &client,
-            "browser",
-            json!({"action":"eval","js":"window.making = make(); 'parked'"}),
-        )
-        .await,
-    );
-    assert!(parked.contains("parked"), "{parked}");
-    let mut asked = serde_json::Value::Null;
-    for _ in 0..50 {
-        asked = http
-            .get(&registration)
-            .bearer_auth(&token)
-            .send()
-            .await
-            .expect("registration state")
-            .json::<serde_json::Value>()
-            .await
-            .expect("registration JSON");
-        if asked["state"] == "asked" {
-            break;
-        }
-        tokio::time::sleep(std::time::Duration::from_millis(100)).await;
-    }
-    assert_eq!(asked["state"], "asked", "{asked}");
-    let ask_id = asked["ask"]["id"].as_str().expect("ask id").to_owned();
-    assert!(
-        asked["ask"]["askedAt"].as_i64().unwrap_or_default() > 0,
-        "{asked}"
-    );
-    let approved = http
-        .post(&answer)
-        .bearer_auth(&token)
-        .json(&json!({"id": ask_id, "approved": true}))
-        .send()
-        .await
-        .expect("approve the request")
-        .json::<serde_json::Value>()
-        .await
-        .expect("approval JSON");
-    assert!(
-        approved["state"] == "approved" || approved["state"] == "registered",
-        "{approved}"
-    );
-    assert_eq!(approved["ask"]["id"], ask_id);
-    let made = text(
-        &call(
-            &client,
-            "browser",
-            json!({"action":"eval","js":"window.making"}),
-        )
-        .await,
-    );
-    assert!(
-        made.starts_with("\"made "),
-        "the approved request makes a passkey: {made}"
-    );
-    let registered = http
-        .get(&registration)
-        .bearer_auth(&token)
-        .send()
-        .await
-        .expect("registration state")
-        .json::<serde_json::Value>()
-        .await
-        .expect("registration JSON");
-    assert_eq!(registered["state"], "registered", "{registered}");
-    assert_eq!(registered["ask"]["id"], ask_id);
-    let credential = registered["credential"].clone();
-    assert_eq!(credential["rpId"], "localhost");
-    assert_eq!(credential["userName"], "teammate");
-    assert!(
-        credential["privateKey"]
+        assert_eq!(registered["state"], "registered", "{registered}");
+        assert_eq!(registered["ask"]["id"], ask_id);
+        let credential = registered["credential"].clone();
+        assert_eq!(credential["rpId"], "localhost");
+        assert_eq!(credential["userName"], "teammate");
+        assert!(
+            credential["privateKey"]
+                .as_str()
+                .is_some_and(|key| key.len() > 40)
+        );
+        let credential_id = credential["credentialId"]
             .as_str()
-            .is_some_and(|key| key.len() > 40)
-    );
-    let credential_id = credential["credentialId"]
-        .as_str()
-        .expect("credential id")
-        .to_owned();
-    let ended = http
-        .delete(&registration)
-        .bearer_auth(&token)
-        .send()
-        .await
-        .expect("end the arming");
-    assert_eq!(ended.status(), 204);
-    // Disarmed, the page may not make another, and what it made is gone
-    // until the desk delivers it back as a stored passkey.
-    let refused = text(&call(&client, "browser", json!({"action":"eval","js":"make()"})).await);
-    assert!(refused.contains("not armed"), "{refused}");
-    let unsigned = text(&call(&client, "browser", json!({"action":"eval","js":"sign()"})).await);
-    assert!(
-        unsigned.contains("refused"),
-        "a passkey nobody stored does not sign: {unsigned}"
-    );
-    let stored = http
-        .put(&door)
-        .bearer_auth(&token)
-        .json(&json!({
-            "PROOF_PASSKEY": credential.clone(),
-            "PROOF": {"kind": "login", "sites": ["http://localhost:8123"], "username": "teammate",
-                      "password": "correct horse battery staple", "totp": "GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQ"},
-            "PROOF_TOKEN": "contract-token-value-0002",
-        }))
-        .send()
-        .await
-        .expect("store the passkey and a login");
-    assert_eq!(
-        stored.status(),
-        204,
-        "{}",
-        stored.text().await.unwrap_or_default()
-    );
-    let signed = text(&call(&client, "browser", json!({"action":"eval","js":"sign()"})).await);
-    assert!(
-        signed.contains("signed "),
-        "the stored passkey signs in: {signed}"
-    );
-    // Nothing picks from autofill, so a conditional request is never answered
-    // behind a site's back: it would race the button the agent then clicks.
-    let conditional = text(
-        &call(
+            .expect("credential id")
+            .to_owned();
+        let ended = http
+            .delete(&registration)
+            .bearer_auth(&token)
+            .send()
+            .await
+            .expect("end the arming");
+        assert_eq!(ended.status(), 204);
+        // Disarmed, the page may not make another, and what it made is gone
+        // until the desk delivers it back as a stored passkey.
+        let refused = text(&call(&client, "browser", json!({"action":"eval","js":"make()"})).await);
+        assert!(refused.contains("not armed"), "{refused}");
+        let unsigned =
+            text(&call(&client, "browser", json!({"action":"eval","js":"sign()"})).await);
+        assert!(
+            unsigned.contains("refused"),
+            "a passkey nobody stored does not sign: {unsigned}"
+        );
+        let stored = http
+            .put(&door)
+            .bearer_auth(&token)
+            .json(&json!({
+                "PROOF_PASSKEY": credential.clone(),
+                "PROOF": {"kind": "login", "sites": ["http://localhost:8123"], "username": "teammate",
+                          "password": "correct horse battery staple", "totp": "GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQ"},
+                "PROOF_TOKEN": "contract-token-value-0002",
+            }))
+            .send()
+            .await
+            .expect("store the passkey and a login");
+        assert_eq!(
+            stored.status(),
+            204,
+            "{}",
+            stored.text().await.unwrap_or_default()
+        );
+        let signed = text(&call(&client, "browser", json!({"action":"eval","js":"sign()"})).await);
+        assert!(
+            signed.contains("signed "),
+            "the stored passkey signs in: {signed}"
+        );
+        // Nothing picks from autofill, so a conditional request is never answered
+        // behind a site's back: it would race the button the agent then clicks.
+        let conditional = text(
+            &call(
+                &client,
+                "browser",
+                json!({"action":"eval","js":"conditional()"}),
+            )
+            .await,
+        );
+        // The virtual authenticator's guard leaves it waiting; with the extension
+        // as WebAuthn proxy, Chromium itself says there is no autofill and
+        // refuses the request. Either way it is never answered.
+        assert!(
+            conditional.starts_with("\"available false, ") && !conditional.contains("answered"),
+            "a conditional sign-in is never answered: {conditional}"
+        );
+        let info = call(&client, "state", json!({"action":"info"})).await;
+        let report: serde_json::Value = serde_json::from_str(&text(&info)).expect("info is JSON");
+        assert_eq!(
+            report["secrets"],
+            json!([
+                {"name": "PROOF", "kind": "login", "sites": ["http://localhost:8123"], "username": "teammate", "totp": true, "loopback": true, "readable": true},
+                {"name": "PROOF_PASSKEY", "kind": "passkey", "rpId": "localhost", "userName": "teammate", "loopback": true, "readable": true},
+                {"name": "PROOF_TOKEN", "kind": "variable"},
+            ])
+        );
+        assert!(!text(&info).contains("battery"), "info names, never values");
+        let snapshot = text(&call(&client, "browser", json!({"action":"text"})).await);
+        let field = |label: &str| {
+            snapshot
+                .lines()
+                .find(|line| line.starts_with("[e") && line.contains(label))
+                .and_then(|line| line.split(']').next())
+                .map(|reference| reference.trim_start_matches('[').to_owned())
+                .unwrap_or_else(|| panic!("no {label} field in {snapshot}"))
+        };
+        let (user, pass, code) = (field("User"), field("Password"), field("Code"));
+        let filled = call(
             &client,
             "browser",
-            json!({"action":"eval","js":"conditional()"}),
+            json!({"action":"fill","ref":user,"secret":"PROOF.username"}),
         )
-        .await,
-    );
-    // The virtual authenticator's guard leaves it waiting; with the extension
-    // as WebAuthn proxy, Chromium itself says there is no autofill and
-    // refuses the request. Either way it is never answered.
-    assert!(
-        conditional.starts_with("\"available false, ") && !conditional.contains("answered"),
-        "a conditional sign-in is never answered: {conditional}"
-    );
-    let info = call(&client, "state", json!({"action":"info"})).await;
-    let report: serde_json::Value = serde_json::from_str(&text(&info)).expect("info is JSON");
-    assert_eq!(
-        report["secrets"],
-        json!([
-            {"name": "PROOF", "kind": "login", "sites": ["http://localhost:8123"], "username": "teammate", "totp": true},
-            {"name": "PROOF_PASSKEY", "kind": "passkey", "rpId": "localhost", "userName": "teammate"},
-            {"name": "PROOF_TOKEN", "kind": "variable"},
-        ])
-    );
-    assert!(!text(&info).contains("battery"), "info names, never values");
-    let snapshot = text(&call(&client, "browser", json!({"action":"text"})).await);
-    let field = |label: &str| {
-        snapshot
+        .await;
+        assert_eq!(text(&filled), format!("filled {user} with PROOF.username"));
+        let filled = call(
+            &client,
+            "browser",
+            json!({"action":"fill","ref":pass,"secret":"PROOF.password"}),
+        )
+        .await;
+        assert_eq!(text(&filled), format!("filled {pass} with PROOF.password"));
+        let filled = call(
+            &client,
+            "browser",
+            json!({"action":"fill","ref":code,"secret":"PROOF.code"}),
+        )
+        .await;
+        assert_eq!(text(&filled), format!("filled {code} with PROOF.code"));
+        let typed = text(
+            &call(
+                &client,
+                "browser",
+                json!({"action":"eval","js":"[user.value, pass.value, code.value]"}),
+            )
+            .await,
+        );
+        let typed: Vec<String> = serde_json::from_str(&typed).unwrap_or_else(|_| panic!("{typed}"));
+        assert_eq!(typed[0], "teammate");
+        assert_eq!(
+            typed[1], "[redacted PROOF.password]",
+            "a value read back is redacted"
+        );
+        // The six digits are a password for a minute: read back, they are
+        // redacted like one.
+        assert_eq!(
+            typed[2], "[redacted PROOF.code]",
+            "a code read back is redacted"
+        );
+        let digits = text(
+            &call(
+                &client,
+                "browser",
+                json!({"action":"eval","js":"/^[0-9]{6}$/.test(code.value)"}),
+            )
+            .await,
+        );
+        assert_eq!(digits, "true", "the field holds six digits");
+        let both = call(
+            &client,
+            "browser",
+            json!({"action":"fill","ref":user,"secret":"PROOF.username","text":"x"}),
+        )
+        .await;
+        assert!(both.is_error.unwrap_or(false), "{}", text(&both));
+        let unknown = call(
+            &client,
+            "browser",
+            json!({"action":"fill","ref":user,"secret":"PROOF.token"}),
+        )
+        .await;
+        assert!(text(&unknown).contains("not token"), "{}", text(&unknown));
+        let passkey = call(
+            &client,
+            "browser",
+            json!({"action":"fill","ref":user,"secret":"PROOF_PASSKEY"}),
+        )
+        .await;
+        assert!(
+            text(&passkey).contains("signs in by itself"),
+            "{}",
+            text(&passkey)
+        );
+        // The same page by another name is another site.
+        let elsewhere = call(
+            &client,
+            "browser",
+            json!({"action":"navigate","url":"http://127.0.0.1:8123/passkey.html"}),
+        )
+        .await;
+        assert!(!elsewhere.is_error.unwrap_or(false), "{}", text(&elsewhere));
+        let snapshot = text(&call(&client, "browser", json!({"action":"text"})).await);
+        let pass = snapshot
             .lines()
-            .find(|line| line.starts_with("[e") && line.contains(label))
+            .find(|line| line.starts_with("[e") && line.contains("Password"))
             .and_then(|line| line.split(']').next())
             .map(|reference| reference.trim_start_matches('[').to_owned())
-            .unwrap_or_else(|| panic!("no {label} field in {snapshot}"))
-    };
-    let (user, pass, code) = (field("User"), field("Password"), field("Code"));
-    let filled = call(
-        &client,
-        "browser",
-        json!({"action":"fill","ref":user,"secret":"PROOF.username"}),
-    )
-    .await;
-    assert_eq!(text(&filled), format!("filled {user} with PROOF.username"));
-    let filled = call(
-        &client,
-        "browser",
-        json!({"action":"fill","ref":pass,"secret":"PROOF.password"}),
-    )
-    .await;
-    assert_eq!(text(&filled), format!("filled {pass} with PROOF.password"));
-    let filled = call(
-        &client,
-        "browser",
-        json!({"action":"fill","ref":code,"secret":"PROOF.code"}),
-    )
-    .await;
-    assert_eq!(text(&filled), format!("filled {code} with PROOF.code"));
-    let typed = text(
-        &call(
+            .expect("password field");
+        let refused = call(
             &client,
             "browser",
-            json!({"action":"eval","js":"[user.value, pass.value, code.value]"}),
+            json!({"action":"fill","ref":pass,"secret":"PROOF.password"}),
         )
-        .await,
-    );
-    let typed: Vec<String> = serde_json::from_str(&typed).unwrap_or_else(|_| panic!("{typed}"));
-    assert_eq!(typed[0], "teammate");
-    assert_eq!(
-        typed[1], "[redacted PROOF.password]",
-        "a value read back is redacted"
-    );
-    assert!(
-        typed[2].len() == 6 && typed[2].chars().all(|c| c.is_ascii_digit()),
-        "a code is six digits: {}",
-        typed[2]
-    );
-    let both = call(
-        &client,
-        "browser",
-        json!({"action":"fill","ref":user,"secret":"PROOF.username","text":"x"}),
-    )
-    .await;
-    assert!(both.is_error.unwrap_or(false), "{}", text(&both));
-    let unknown = call(
-        &client,
-        "browser",
-        json!({"action":"fill","ref":user,"secret":"PROOF.token"}),
-    )
-    .await;
-    assert!(text(&unknown).contains("not token"), "{}", text(&unknown));
-    let passkey = call(
-        &client,
-        "browser",
-        json!({"action":"fill","ref":user,"secret":"PROOF_PASSKEY"}),
-    )
-    .await;
-    assert!(
-        text(&passkey).contains("signs in by itself"),
-        "{}",
-        text(&passkey)
-    );
-    // The same page by another name is another site.
-    let elsewhere = call(
-        &client,
-        "browser",
-        json!({"action":"navigate","url":"http://127.0.0.1:8123/passkey.html"}),
-    )
-    .await;
-    assert!(!elsewhere.is_error.unwrap_or(false), "{}", text(&elsewhere));
-    let snapshot = text(&call(&client, "browser", json!({"action":"text"})).await);
-    let pass = snapshot
-        .lines()
-        .find(|line| line.starts_with("[e") && line.contains("Password"))
-        .and_then(|line| line.split(']').next())
-        .map(|reference| reference.trim_start_matches('[').to_owned())
-        .expect("password field");
-    let refused = call(
-        &client,
-        "browser",
-        json!({"action":"fill","ref":pass,"secret":"PROOF.password"}),
-    )
-    .await;
-    assert!(refused.is_error.unwrap_or(false), "{}", text(&refused));
-    assert!(
-        text(&refused).contains("typed only on http://localhost:8123")
-            && text(&refused).contains("http://127.0.0.1:8123"),
-        "{}",
-        text(&refused)
-    );
-    let variable = call(
-        &client,
-        "browser",
-        json!({"action":"fill","ref":pass,"secret":"PROOF_TOKEN"}),
-    )
-    .await;
-    assert_eq!(
-        text(&variable),
-        format!("filled {pass} with PROOF_TOKEN"),
-        "a variable has no site to keep to"
-    );
-    let nothing_leaked = text(
-        &call(
+        .await;
+        assert!(refused.is_error.unwrap_or(false), "{}", text(&refused));
+        assert!(
+            text(&refused).contains("typed only on http://localhost:8123")
+                && text(&refused).contains("http://127.0.0.1:8123"),
+            "{}",
+            text(&refused)
+        );
+        let variable = call(
             &client,
             "browser",
-            json!({"action":"eval","js":"pass.value"}),
+            json!({"action":"fill","ref":pass,"secret":"PROOF_TOKEN"}),
         )
-        .await,
-    );
-    assert_eq!(nothing_leaked, "\"[redacted PROOF_TOKEN]\"");
-    // An ask-me key is used only once the person approves that use. The
-    // setting rides with the set, and a change applies from the next use.
-    let mut asking = credential.clone();
-    asking["use"] = json!("ask");
-    let proof_login = |use_: &str| {
-        json!({"kind": "login", "sites": ["http://localhost:8123"], "username": "teammate",
-               "password": "correct horse battery staple", "use": use_})
-    };
-    let stored = http
-        .put(&door)
-        .bearer_auth(&token)
-        .json(&json!({"PROOF_PASSKEY": asking, "PROOF": proof_login("ask")}))
-        .send()
-        .await
-        .expect("store ask-me keys");
-    assert_eq!(stored.status(), 204);
-    let navigated = call(
-        &client,
-        "browser",
-        json!({"action":"navigate","url":"http://localhost:8123/passkey.html"}),
-    )
-    .await;
-    assert!(!navigated.is_error.unwrap_or(false), "{}", text(&navigated));
-    let uses_door = format!("{base}/secrets/uses");
-    let answer_door = format!("{base}/secrets/uses/answer");
-    if !token.is_empty() {
-        let naked = http.get(&uses_door).send().await.expect("uses, naked");
-        assert_eq!(naked.status(), 401, "the uses door wants the bearer");
-    }
-    let held_now = || async {
-        http.get(&uses_door)
+        .await;
+        assert!(
+            variable.is_error.unwrap_or(false)
+                && text(&variable).contains("the browser never types one"),
+            "a variable has no site to keep to, so no page gets it: {}",
+            text(&variable)
+        );
+        // An ask-me key is used only once the person approves that use. The
+        // setting rides with the set, and a change applies from the next use.
+        let mut asking = credential.clone();
+        asking["use"] = json!("ask");
+        let proof_login = |use_: &str| {
+            json!({"kind": "login", "sites": ["http://localhost:8123"], "username": "teammate",
+                   "password": "correct horse battery staple", "use": use_})
+        };
+        let stored = http
+            .put(&door)
             .bearer_auth(&token)
+            .json(&json!({"PROOF_PASSKEY": asking, "PROOF": proof_login("ask")}))
             .send()
             .await
-            .expect("held uses")
-            .json::<serde_json::Value>()
+            .expect("store ask-me keys");
+        assert_eq!(stored.status(), 204);
+        let navigated = call(
+            &client,
+            "browser",
+            json!({"action":"navigate","url":"http://localhost:8123/passkey.html"}),
+        )
+        .await;
+        assert!(!navigated.is_error.unwrap_or(false), "{}", text(&navigated));
+        let uses_door = format!("{base}/secrets/uses");
+        let answer_door = format!("{base}/secrets/uses/answer");
+        if !token.is_empty() {
+            let naked = http.get(&uses_door).send().await.expect("uses, naked");
+            assert_eq!(naked.status(), 401, "the uses door wants the bearer");
+        }
+        let held_now = || async {
+            http.get(&uses_door)
+                .bearer_auth(&token)
+                .send()
+                .await
+                .expect("held uses")
+                .json::<serde_json::Value>()
+                .await
+                .expect("held uses JSON")
+        };
+        assert_eq!(held_now().await, json!({"uses": []}));
+        let held_one = || async {
+            for _ in 0..50 {
+                let held = held_now().await;
+                if held["uses"].as_array().is_some_and(|uses| !uses.is_empty()) {
+                    return held["uses"][0].clone();
+                }
+                tokio::time::sleep(Duration::from_millis(100)).await;
+            }
+            panic!("no use was held");
+        };
+        let answer = |id: String, answer: &'static str| {
+            let http = http.clone();
+            let answer_door = answer_door.clone();
+            let token = token.clone();
+            async move {
+                http.post(&answer_door)
+                    .bearer_auth(&token)
+                    .json(&json!({"id": id, "answer": answer}))
+                    .send()
+                    .await
+                    .expect("answer a held use")
+            }
+        };
+        // A held passkey sign-in completes after approval...
+        let parked = text(
+            &call(
+                &client,
+                "browser",
+                json!({"action":"eval","js":"window.signing = sign(); 'parked'"}),
+            )
+            .await,
+        );
+        assert!(parked.contains("parked"), "{parked}");
+        let held = held_one().await;
+        assert_eq!(held["secret"], "PROOF_PASSKEY", "{held}");
+        assert_eq!(held["kind"], "passkey", "{held}");
+        assert_eq!(held["site"], "localhost", "{held}");
+        assert!(
+            held["path"] == "/passkey.html" || held["path"] == "/",
+            "{held}"
+        );
+        let asked_at = held["askedAt"].as_u64().expect("askedAt");
+        let expires_at = held["expiresAt"].as_u64().expect("expiresAt");
+        // Chromium hands the extension the request's time limit as it adjusted
+        // it (it raises a short one); the hold keeps to that, at most 5 minutes.
+        assert!(
+            expires_at > asked_at && expires_at - asked_at <= 300_000,
+            "held within the page's own time, capped: {held}"
+        );
+        let id = held["id"].as_str().expect("use id").to_owned();
+        let approved = answer(id.clone(), "approve").await;
+        assert_eq!(approved.status(), 200);
+        assert_eq!(
+            approved.json::<serde_json::Value>().await.unwrap(),
+            json!({"state": "approved"})
+        );
+        let signed = text(
+            &call(
+                &client,
+                "browser",
+                json!({"action":"eval","js":"window.signing"}),
+            )
+            .await,
+        );
+        assert!(
+            signed.contains("signed "),
+            "the approved use signs in: {signed}"
+        );
+        let stale = answer(id, "approve").await;
+        assert_eq!(stale.status(), 409, "an answered use is not held");
+        let stale = answer("not-a-use".to_owned(), "deny").await;
+        assert_eq!(stale.status(), 409, "an unknown use is not held");
+        let bad = http
+            .post(&answer_door)
+            .bearer_auth(&token)
+            .json(&json!({"id": "x", "answer": "perhaps"}))
+            .send()
             .await
-            .expect("held uses JSON")
-    };
-    assert_eq!(held_now().await, json!({"uses": []}));
-    let held_one = || async {
-        for _ in 0..50 {
-            let held = held_now().await;
-            if held["uses"].as_array().is_some_and(|uses| !uses.is_empty()) {
-                return held["uses"][0].clone();
+            .expect("a bad answer");
+        assert_eq!(bad.status(), 400);
+        // ...and is refused after a denial.
+        text(
+            &call(
+                &client,
+                "browser",
+                json!({"action":"eval","js":"window.signing = sign(); 'parked'"}),
+            )
+            .await,
+        );
+        let held = held_one().await;
+        let denied = answer(held["id"].as_str().unwrap().to_owned(), "deny").await;
+        assert_eq!(
+            denied.json::<serde_json::Value>().await.unwrap(),
+            json!({"state": "denied"})
+        );
+        let refused = text(
+            &call(
+                &client,
+                "browser",
+                json!({"action":"eval","js":"window.signing"}),
+            )
+            .await,
+        );
+        assert!(
+            refused.contains("refused NotAllowedError") && refused.contains("denied"),
+            "a denied use is refused at the page: {refused}"
+        );
+        // A page that stops waiting ends the use: it is no longer held, and an
+        // answer to it is refused.
+        text(
+            &call(
+                &client,
+                "browser",
+                json!({"action":"eval","js":"window.stop = new AbortController(); window.signing = navigator.credentials.get({signal: stop.signal, publicKey: {challenge: crypto.getRandomValues(new Uint8Array(32)), rpId: 'localhost'}}).then(() => 'answered', (error) => 'ended ' + error.name); 'parked'"}),
+            )
+            .await,
+        );
+        let held = held_one().await;
+        let gave_up = text(
+            &call(
+                &client,
+                "browser",
+                json!({"action":"eval","js":"stop.abort(); window.signing"}),
+            )
+            .await,
+        );
+        assert!(gave_up.contains("ended AbortError"), "{gave_up}");
+        let mut gone = json!(null);
+        for _ in 0..30 {
+            gone = held_now().await;
+            if gone == json!({"uses": []}) {
+                break;
             }
             tokio::time::sleep(Duration::from_millis(100)).await;
         }
-        panic!("no use was held");
-    };
-    let answer = |id: String, answer: &'static str| {
-        let http = http.clone();
-        let answer_door = answer_door.clone();
-        let token = token.clone();
-        async move {
-            http.post(&answer_door)
-                .bearer_auth(&token)
-                .json(&json!({"id": id, "answer": answer}))
-                .send()
-                .await
-                .expect("answer a held use")
-        }
-    };
-    // A held passkey sign-in completes after approval...
-    let parked = text(
-        &call(
+        assert_eq!(gone, json!({"uses": []}), "a use the page gave up is gone");
+        let late = answer(held["id"].as_str().unwrap().to_owned(), "approve").await;
+        assert_eq!(late.status(), 409, "and cannot be answered");
+        // A fill of an ask-me login answers at once that it waits, with an id.
+        let snapshot = text(&call(&client, "browser", json!({"action":"text"})).await);
+        let pass = snapshot
+            .lines()
+            .find(|line| line.starts_with("[e") && line.contains("Password"))
+            .and_then(|line| line.split(']').next())
+            .map(|reference| reference.trim_start_matches('[').to_owned())
+            .expect("password field");
+        let started = std::time::Instant::now();
+        let waiting = call(
             &client,
             "browser",
-            json!({"action":"eval","js":"window.signing = sign(); 'parked'"}),
+            json!({"action":"fill","ref":pass,"secret":"PROOF.password"}),
         )
-        .await,
-    );
-    assert!(parked.contains("parked"), "{parked}");
-    let held = held_one().await;
-    assert_eq!(held["secret"], "PROOF_PASSKEY", "{held}");
-    assert_eq!(held["kind"], "passkey", "{held}");
-    assert_eq!(held["site"], "localhost", "{held}");
-    assert!(
-        held["path"] == "/passkey.html" || held["path"] == "/",
-        "{held}"
-    );
-    let asked_at = held["askedAt"].as_u64().expect("askedAt");
-    let expires_at = held["expiresAt"].as_u64().expect("expiresAt");
-    // Chromium hands the extension the request's time limit as it adjusted
-    // it (it raises a short one); the hold keeps to that, at most 5 minutes.
-    assert!(
-        expires_at > asked_at && expires_at - asked_at <= 300_000,
-        "held within the page's own time, capped: {held}"
-    );
-    let id = held["id"].as_str().expect("use id").to_owned();
-    let approved = answer(id.clone(), "approve").await;
-    assert_eq!(approved.status(), 200);
-    assert_eq!(
-        approved.json::<serde_json::Value>().await.unwrap(),
-        json!({"state": "approved"})
-    );
-    let signed = text(
-        &call(
+        .await;
+        assert!(
+            started.elapsed() < Duration::from_secs(10),
+            "a fill never waits for the person"
+        );
+        assert!(waiting.is_error.unwrap_or(false), "{}", text(&waiting));
+        assert!(
+            text(&waiting).contains("Waiting for the person to approve PROOF on localhost (use "),
+            "{}",
+            text(&waiting)
+        );
+        let held = held_one().await;
+        assert_eq!(held["kind"], "login", "{held}");
+        assert_eq!(held["secret"], "PROOF", "{held}");
+        let id = held["id"].as_str().unwrap().to_owned();
+        assert!(text(&waiting).contains(&id), "{}", text(&waiting));
+        let empty = text(
+            &call(
+                &client,
+                "browser",
+                json!({"action":"eval","js":"pass.value"}),
+            )
+            .await,
+        );
+        assert_eq!(empty, "\"\"", "nothing was typed while it waits");
+        let again = call(
             &client,
             "browser",
-            json!({"action":"eval","js":"window.signing"}),
+            json!({"action":"fill","ref":pass,"secret":"PROOF.password"}),
         )
-        .await,
-    );
-    assert!(
-        signed.contains("signed "),
-        "the approved use signs in: {signed}"
-    );
-    let stale = answer(id, "approve").await;
-    assert_eq!(stale.status(), 409, "an answered use is not held");
-    let stale = answer("not-a-use".to_owned(), "deny").await;
-    assert_eq!(stale.status(), 409, "an unknown use is not held");
-    let bad = http
-        .post(&answer_door)
-        .bearer_auth(&token)
-        .json(&json!({"id": "x", "answer": "perhaps"}))
-        .send()
-        .await
-        .expect("a bad answer");
-    assert_eq!(bad.status(), 400);
-    // ...and is refused after a denial.
-    text(
-        &call(
+        .await;
+        assert!(
+            text(&again).contains(&id),
+            "a retry before the answer is the same ask: {}",
+            text(&again)
+        );
+        assert_eq!(answer(id, "approve").await.status(), 200);
+        let filled = call(
             &client,
             "browser",
-            json!({"action":"eval","js":"window.signing = sign(); 'parked'"}),
+            json!({"action":"fill","ref":pass,"secret":"PROOF.password"}),
         )
-        .await,
-    );
-    let held = held_one().await;
-    let denied = answer(held["id"].as_str().unwrap().to_owned(), "deny").await;
-    assert_eq!(
-        denied.json::<serde_json::Value>().await.unwrap(),
-        json!({"state": "denied"})
-    );
-    let refused = text(
-        &call(
+        .await;
+        assert_eq!(
+            text(&filled),
+            format!("filled {pass} with PROOF.password"),
+            "the retry after approval fills"
+        );
+        // Allow lets a later use of the same key on the same site through.
+        text(
+            &call(
+                &client,
+                "browser",
+                json!({"action":"eval","js":"window.signing = sign(); 'parked'"}),
+            )
+            .await,
+        );
+        let held = held_one().await;
+        let allowed = answer(held["id"].as_str().unwrap().to_owned(), "allow").await;
+        assert_eq!(
+            allowed.json::<serde_json::Value>().await.unwrap(),
+            json!({"state": "approved"})
+        );
+        let signed = text(
+            &call(
+                &client,
+                "browser",
+                json!({"action":"eval","js":"window.signing"}),
+            )
+            .await,
+        );
+        assert!(signed.contains("signed "), "{signed}");
+        let signed = text(&call(&client, "browser", json!({"action":"eval","js":"sign()"})).await);
+        assert!(
+            signed.contains("signed "),
+            "a second use within the allowance goes through: {signed}"
+        );
+        assert_eq!(held_now().await, json!({"uses": []}), "and is not held");
+        // Back to automatic, the next use is not held.
+        let stored = http
+            .put(&door)
+            .bearer_auth(&token)
+            .json(&json!({"PROOF_PASSKEY": credential.clone(), "PROOF": proof_login("auto")}))
+            .send()
+            .await
+            .expect("store the keys as automatic");
+        assert_eq!(stored.status(), 204);
+        let filled = call(
             &client,
             "browser",
-            json!({"action":"eval","js":"window.signing"}),
+            json!({"action":"fill","ref":pass,"secret":"PROOF.password"}),
         )
-        .await,
-    );
-    assert!(
-        refused.contains("refused NotAllowedError") && refused.contains("denied"),
-        "a denied use is refused at the page: {refused}"
-    );
-    // A page that stops waiting ends the use: it is no longer held, and an
-    // answer to it is refused.
-    text(
-        &call(
-            &client,
-            "browser",
-            json!({"action":"eval","js":"window.stop = new AbortController(); window.signing = navigator.credentials.get({signal: stop.signal, publicKey: {challenge: crypto.getRandomValues(new Uint8Array(32)), rpId: 'localhost'}}).then(() => 'answered', (error) => 'ended ' + error.name); 'parked'"}),
-        )
-        .await,
-    );
-    let held = held_one().await;
-    let gave_up = text(
-        &call(
-            &client,
-            "browser",
-            json!({"action":"eval","js":"stop.abort(); window.signing"}),
-        )
-        .await,
-    );
-    assert!(gave_up.contains("ended AbortError"), "{gave_up}");
-    let mut gone = json!(null);
-    for _ in 0..30 {
-        gone = held_now().await;
-        if gone == json!({"uses": []}) {
-            break;
-        }
-        tokio::time::sleep(Duration::from_millis(100)).await;
-    }
-    assert_eq!(gone, json!({"uses": []}), "a use the page gave up is gone");
-    let late = answer(held["id"].as_str().unwrap().to_owned(), "approve").await;
-    assert_eq!(late.status(), 409, "and cannot be answered");
-    // A fill of an ask-me login answers at once that it waits, with an id.
-    let snapshot = text(&call(&client, "browser", json!({"action":"text"})).await);
-    let pass = snapshot
-        .lines()
-        .find(|line| line.starts_with("[e") && line.contains("Password"))
-        .and_then(|line| line.split(']').next())
-        .map(|reference| reference.trim_start_matches('[').to_owned())
-        .expect("password field");
-    let started = std::time::Instant::now();
-    let waiting = call(
-        &client,
-        "browser",
-        json!({"action":"fill","ref":pass,"secret":"PROOF.password"}),
-    )
-    .await;
-    assert!(
-        started.elapsed() < Duration::from_secs(10),
-        "a fill never waits for the person"
-    );
-    assert!(waiting.is_error.unwrap_or(false), "{}", text(&waiting));
-    assert!(
-        text(&waiting).contains("Waiting for the person to approve PROOF on localhost (use "),
-        "{}",
-        text(&waiting)
-    );
-    let held = held_one().await;
-    assert_eq!(held["kind"], "login", "{held}");
-    assert_eq!(held["secret"], "PROOF", "{held}");
-    let id = held["id"].as_str().unwrap().to_owned();
-    assert!(text(&waiting).contains(&id), "{}", text(&waiting));
-    let empty = text(
-        &call(
-            &client,
-            "browser",
-            json!({"action":"eval","js":"pass.value"}),
-        )
-        .await,
-    );
-    assert_eq!(empty, "\"\"", "nothing was typed while it waits");
-    let again = call(
-        &client,
-        "browser",
-        json!({"action":"fill","ref":pass,"secret":"PROOF.password"}),
-    )
-    .await;
-    assert!(
-        text(&again).contains(&id),
-        "a retry before the answer is the same ask: {}",
-        text(&again)
-    );
-    assert_eq!(answer(id, "approve").await.status(), 200);
-    let filled = call(
-        &client,
-        "browser",
-        json!({"action":"fill","ref":pass,"secret":"PROOF.password"}),
-    )
-    .await;
-    assert_eq!(
-        text(&filled),
-        format!("filled {pass} with PROOF.password"),
-        "the retry after approval fills"
-    );
-    // Allow lets a later use of the same key on the same site through.
-    text(
-        &call(
-            &client,
-            "browser",
-            json!({"action":"eval","js":"window.signing = sign(); 'parked'"}),
-        )
-        .await,
-    );
-    let held = held_one().await;
-    let allowed = answer(held["id"].as_str().unwrap().to_owned(), "allow").await;
-    assert_eq!(
-        allowed.json::<serde_json::Value>().await.unwrap(),
-        json!({"state": "approved"})
-    );
-    let signed = text(
-        &call(
-            &client,
-            "browser",
-            json!({"action":"eval","js":"window.signing"}),
-        )
-        .await,
-    );
-    assert!(signed.contains("signed "), "{signed}");
-    let signed = text(&call(&client, "browser", json!({"action":"eval","js":"sign()"})).await);
-    assert!(
-        signed.contains("signed "),
-        "a second use within the allowance goes through: {signed}"
-    );
-    assert_eq!(held_now().await, json!({"uses": []}), "and is not held");
-    // Back to automatic, the next use is not held.
-    let stored = http
-        .put(&door)
-        .bearer_auth(&token)
-        .json(&json!({"PROOF_PASSKEY": credential.clone(), "PROOF": proof_login("auto")}))
-        .send()
-        .await
-        .expect("store the keys as automatic");
-    assert_eq!(stored.status(), 204);
-    let filled = call(
-        &client,
-        "browser",
-        json!({"action":"fill","ref":pass,"secret":"PROOF.password"}),
-    )
-    .await;
-    assert_eq!(text(&filled), format!("filled {pass} with PROOF.password"));
-    assert_eq!(held_now().await, json!({"uses": []}));
+        .await;
+        assert_eq!(text(&filled), format!("filled {pass} with PROOF.password"));
+        assert_eq!(held_now().await, json!({"uses": []}));
 
-    // Revoked, the passkey is gone from the browser at once.
-    let revoked = http
-        .put(&door)
-        .bearer_auth(&token)
-        .json(&json!({}))
-        .send()
-        .await
-        .expect("revoke everything");
-    assert_eq!(revoked.status(), 204);
-    let navigated = call(
-        &client,
-        "browser",
-        json!({"action":"navigate","url":"http://localhost:8123/passkey.html"}),
-    )
-    .await;
-    assert!(!navigated.is_error.unwrap_or(false), "{}", text(&navigated));
-    let unsigned = text(&call(&client, "browser", json!({"action":"eval","js":"sign()"})).await);
-    assert!(
-        unsigned.contains("refused"),
-        "a revoked passkey no longer signs: {unsigned}"
-    );
-    assert!(!unsigned.contains(&credential_id), "{unsigned}");
+        // Revoked, the passkey is gone from the browser at once.
+        let revoked = http
+            .put(&door)
+            .bearer_auth(&token)
+            .json(&json!({}))
+            .send()
+            .await
+            .expect("revoke everything");
+        assert_eq!(revoked.status(), 204);
+        let navigated = call(
+            &client,
+            "browser",
+            json!({"action":"navigate","url":"http://localhost:8123/passkey.html"}),
+        )
+        .await;
+        assert!(!navigated.is_error.unwrap_or(false), "{}", text(&navigated));
+        let unsigned =
+            text(&call(&client, "browser", json!({"action":"eval","js":"sign()"})).await);
+        assert!(
+            unsigned.contains("refused"),
+            "a revoked passkey no longer signs: {unsigned}"
+        );
+        assert!(!unsigned.contains(&credential_id), "{unsigned}");
+    }
     let stopped = call(
         &client,
         "shell",
@@ -1895,6 +1939,94 @@ async fn viewer_reply(
     })
     .await
     .expect("viewer reply within five seconds")
+}
+
+/// The passkey section on the split computer: the visible browser, which
+/// holds no passkey, refuses a request at once with a plain reason; a
+/// granted passkey's site opens in the signed-in browser instead, where
+/// `eval` is refused; and the arming door answers as on any computer.
+async fn split_passkeys(
+    client: &Client,
+    http: &reqwest::Client,
+    door: &str,
+    registration: &str,
+    token: &str,
+) {
+    let elsewhere = http
+        .put(registration)
+        .bearer_auth(token)
+        .json(&json!({"rpId": "example.com"}))
+        .send()
+        .await
+        .expect("arm for another site");
+    assert_eq!(elsewhere.status(), 200);
+    for (js, what) in [("make()", "create"), ("sign()", "get")] {
+        let started = std::time::Instant::now();
+        let refused = text(&call(client, "browser", json!({"action":"eval","js":js})).await);
+        assert!(
+            started.elapsed() < Duration::from_secs(5),
+            "a passkey {what} in the visible browser is refused at once, not after {:?}: {refused}",
+            started.elapsed()
+        );
+        assert!(
+            refused.contains("refused NotAllowedError") && refused.contains("signed-in browser"),
+            "a passkey {what} in the visible browser is refused with its reason: {refused}"
+        );
+    }
+    let ended = http
+        .delete(registration)
+        .bearer_auth(token)
+        .send()
+        .await
+        .expect("end the arming");
+    assert_eq!(ended.status(), 204);
+    // A passkey alone: its site opens in the signed-in browser.
+    let stored = http
+        .put(door)
+        .bearer_auth(token)
+        .json(&json!({"PROOF_PASSKEY": {"kind": "passkey", "rpId": "localhost", "credentialId": "Y29udHJhY3QtcGFzc2tleQ==",
+            "privateKey": "MIGHAgEAMBMGByqGSM49AgEGCCqGSM49AwEHBG0wawIBAQQgB9aEvdD1k7n55Wu+sDtf5cUbUumdw/XyKmgddnpO1eihRANCAASw/VbAXHGTIuqCMysLtvnlfwqu+ZFr7EQiwzWmLuynjO5Z/X+o4fuRzcMX916P1LxoWt4Ywc5KEVBuTzUzjBVI",
+            "userName": "teammate"}}))
+        .send()
+        .await
+        .expect("store a passkey");
+    assert_eq!(
+        stored.status(),
+        204,
+        "{}",
+        stored.text().await.unwrap_or_default()
+    );
+    let opened = text(
+        &call(
+            client,
+            "browser",
+            json!({"action":"navigate","url":"http://localhost:8123/passkey.html"}),
+        )
+        .await,
+    );
+    assert!(
+        opened.contains("signed-in browser"),
+        "a granted passkey's site opens in the signed-in browser: {opened}"
+    );
+    let eval = call(
+        client,
+        "browser",
+        json!({"action":"eval","js":"document.title"}),
+    )
+    .await;
+    assert!(
+        eval.is_error.unwrap_or(false),
+        "eval is refused there: {}",
+        text(&eval)
+    );
+    let revoked = http
+        .put(door)
+        .bearer_auth(token)
+        .json(&json!({}))
+        .send()
+        .await
+        .expect("revoke everything");
+    assert_eq!(revoked.status(), 204);
 }
 
 async fn connect(base: &str, token: &str, holder: &str) -> Client {

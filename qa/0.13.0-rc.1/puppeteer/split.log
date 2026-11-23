@@ -1,0 +1,10 @@
+# containers before (none touched):
+PUT /secrets 204
+capabilities {"attest":"u9kM9k9h9CKZNoeYYAujSD5cr/+l6WgjwX0JTFnAxJ8=","boot":"5b569994fb7b87e9e5f2a6bfc0df71fb","protected":{"mode":"split","v":1},"version":"0.13.0"}
+signed-in tab: navigated to http://localhost:8000/ (signed-in browser)
+9222 before any general-browser call: 000
+general tab: navigated to http://localhost:8001/
+9222 after: 200
+puppeteer: {"version":"Chrome/156.0.8078.79","title":"Puppeteer fixture","h1":"Hello from 8001","typed":"typed by puppeteer","shotBytes":15796,"signedInTabVisible":false,"targets":5}
+RESULT PASS split
+# removed hl-secrets-rc-pptr-3646f1

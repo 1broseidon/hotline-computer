@@ -326,9 +326,12 @@ impl BrowserManager {
             }
             // A courtesy on a fresh browser: the person is about to sign in
             // there. A site that does not answer is the site's business, not
-            // a reason to refuse the arming.
+            // a reason to refuse the arming. A site on the computer itself
+            // has no port in its RP id, so there is nothing to guess at: the
+            // agent opens its page (`Signin::open_armed`).
             if fresh
                 && let Some((rp_id, _)) = session.passkeys.armed()
+                && !crate::secrets::is_loopback_host(&rp_id)
                 && let Some(page) = pages.first()
             {
                 page.bring_to_front().await.map_err(browser_error)?;
@@ -468,14 +471,20 @@ impl BrowserManager {
                             filled.label
                         )
                     })?;
-                    if !sites.iter().any(|site| site.allows(&origin)) {
+                    if !sites.iter().any(|site| site.is_exactly(&origin)) {
                         return Err(format!(
                             "{} is typed only on {allowed}; this page is {origin}",
                             filled.label
                         ));
                     }
                 }
-                form_action_on(&page, &selector, "fill", json!(filled.value)).await?;
+                // A fill the page did not keep answers with what the field
+                // holds instead. For a secret that is the value, or a page
+                // script's rewriting of it that no redaction would know, so
+                // it never leaves.
+                form_action_on(&page, &selector, "fill", json!(filled.value))
+                    .await
+                    .map_err(|error| without_value(&error))?;
                 Ok(format!("filled {reference} with {}", filled.label))
             })
         })
@@ -841,12 +850,26 @@ async fn reap(mut session: BrowserSession) {
 /// The extension that answers passkey requests itself, keys staying in the
 /// service (see `crate::bridge`), when the image carries it.
 fn extensions() -> Vec<String> {
-    if crate::bridge::extension_answers() {
+    // With a signed-in browser the extension is loaded there and only there.
+    // This one holds no passkey, and refuses a request at once rather than
+    // leave it to Chromium's own dialog, which waits out the page's time
+    // for a security key nobody can touch.
+    if crate::signin::enabled() {
+        if std::path::Path::new(NO_PASSKEYS_DIR).is_dir() {
+            vec![NO_PASSKEYS_DIR.to_owned()]
+        } else {
+            Vec::new()
+        }
+    } else if crate::bridge::extension_answers() {
         vec![crate::bridge::EXTENSION_DIR.to_owned()]
     } else {
         Vec::new()
     }
 }
+
+/// A WebAuthn proxy that refuses every request, with no page script and no
+/// line to the service: the visible browser's beside a signed-in browser.
+const NO_PASSKEYS_DIR: &str = "/usr/share/hotline-computer/no-passkeys";
 
 /// The tabs a person sees. Chromium's own new-tab page hosts internal
 /// documents (`chrome://newtab-footer/` since 141) that DevTools lists as
@@ -931,7 +954,9 @@ async fn current_page(session: &mut BrowserSession) -> Result<Page, String> {
 async fn passkey_sync(session: &mut BrowserSession, page: &Page) -> Result<Option<String>, String> {
     // With the extension answering, Chromium's virtual authenticator and its
     // guard stay out of the way: two authenticators would race for a page.
-    if crate::bridge::extension_answers() {
+    // With a signed-in browser, no passkey is ever in this one: a page here
+    // asking for one finds none.
+    if crate::bridge::extension_answers() || crate::signin::enabled() {
         return Ok(None);
     }
     // Chromium's own authenticator signs without asking anyone, so a passkey
@@ -1139,6 +1164,7 @@ fn passkey_from(credential: Credential, armed: Option<&str>) -> Passkey {
         user_name: credential.user_name,
         user_display_name: credential.user_display_name,
         use_: crate::secrets::Use::Auto,
+        readable: false,
     }
 }
 
@@ -1174,6 +1200,17 @@ async fn form_action_on(
         return Err(value.to_string());
     }
     Ok(value)
+}
+
+/// A form action's refusal, less what the field held.
+fn without_value(error: &str) -> String {
+    match serde_json::from_str::<Value>(error) {
+        Ok(Value::Object(mut refusal)) => {
+            refusal.remove("value");
+            Value::Object(refusal).to_string()
+        }
+        _ => error.to_owned(),
+    }
 }
 
 async fn evaluate_value(page: &Page, script: &str) -> Result<Value, String> {

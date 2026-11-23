@@ -81,7 +81,7 @@ pub async fn call(app: &App, arguments: Value, holder: &str) -> ToolResult {
             json_text(crate::manifest::describe(app, &workspace).await?)
         }
         "info" => json_text(
-            json!({"version":env!("CARGO_PKG_VERSION"),"build":crate::guide::identity(),"architecture":std::env::consts::ARCH,"home":app.config.home,"display":app.config.display,"nixpkgs":crate::workspace::NIXPKGS,"base":crate::manifest::base().map(|b| b.version).ok(),"parallelism":crate::limits::environment(),"catalog":crate::workspace::catalog(),"executables":executables(),"capabilities":crate::tools::NAMES,"secrets":app.secrets.catalog(),"skill_sha256":crate::guide::manifest()["sha256"],"jobs":app.jobs.list().await?,"terminal":"Alacritty","graphics":"Mesa software rendering"}),
+            json!({"version":env!("CARGO_PKG_VERSION"),"build":crate::guide::identity(),"architecture":std::env::consts::ARCH,"home":app.config.home,"display":app.config.display,"nixpkgs":crate::workspace::NIXPKGS,"base":crate::manifest::base().map(|b| b.version).ok(),"parallelism":crate::limits::environment(),"catalog":crate::workspace::catalog(),"executables":executables(),"capabilities":crate::tools::NAMES,"secrets":app.secrets.catalog(),"skill_sha256":crate::guide::manifest()["sha256"],"jobs":app.jobs.list().await?,"terminal":"Alacritty","graphics":"Mesa software rendering","resources":crate::limits::resources(&app.config.home)}),
         ),
         "control" => control(app, holder, input.duration).await,
         "release" => release(app, holder).await,
@@ -261,34 +261,99 @@ fn snapshot_path(app: &App, name: &str) -> PathBuf {
         .join(format!("{name}.tar.gz"))
 }
 
+/// The most a snapshot may weigh, compressed.
+const SNAPSHOT_LIMIT: u64 = 500 * 1024 * 1024;
+
 async fn snapshot_save(app: &App, name: &str) -> ToolResult {
     let path = snapshot_path(app, name);
-    tokio::fs::create_dir_all(path.parent().expect("snapshot has parent"))
-        .await
-        .map_err(|error| error.to_string())?;
-    tar(&[
-        "czf",
-        path_str(&path)?,
-        "--exclude=.hotline/snapshots",
-        "-C",
-        path_str(&app.config.home)?,
-        ".",
-    ])
-    .await?;
-    let size = tokio::fs::metadata(&path)
-        .await
-        .map_err(|error| error.to_string())?
-        .len();
-    if size > 500 * 1024 * 1024 {
-        tokio::fs::remove_file(&path).await.ok();
-        return Err(format!(
-            "snapshot too large: {:.1} MB (max 500 MB)",
-            size as f64 / 1_048_576.0
-        ));
-    }
+    let size = archive(&app.config.home, &path, SNAPSHOT_LIMIT).await?;
+    crate::split::migration::release(&app.config.home, name).await;
     json_text(
         json!({"saved":true,"name":name,"size_mb":format!("{:.1}",size as f64/1_048_576.0),"browser_state":true}),
     )
+}
+
+/// The home as a compressed archive at `path`, or nothing: the archive is
+/// counted as tar writes it, so one over `limit` stops there instead of
+/// filling the disk first, and it is staged beside its place, so a refused
+/// or failed save leaves an earlier snapshot of that name as it was.
+async fn archive(home: &Path, path: &Path, limit: u64) -> Result<u64, String> {
+    use tokio::io::AsyncReadExt;
+    let directory = path.parent().expect("snapshot has parent");
+    tokio::fs::create_dir_all(directory)
+        .await
+        .map_err(|error| error.to_string())?;
+    let staged = {
+        let directory = directory.to_owned();
+        tokio::task::spawn_blocking(move || {
+            tempfile::Builder::new()
+                .prefix(".saving-")
+                .tempfile_in(directory)
+        })
+        .await
+        .map_err(|error| error.to_string())?
+        .map_err(|error| format!("staging snapshot: {error}"))?
+    };
+    let (file, staged) = staged.into_parts();
+    let mut file = tokio::fs::File::from_std(file);
+    let mut child = tokio::process::Command::new("tar")
+        .args([
+            "czf",
+            "-",
+            "--exclude=.hotline/snapshots",
+            // A volume's own, root's and unreadable (see `desktop_fresh`).
+            "--exclude=./lost+found",
+            "-C",
+            path_str(home)?,
+            ".",
+        ])
+        .stdin(Stdio::null())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .kill_on_drop(true)
+        .spawn()
+        .map_err(|error| format!("tar: {error}"))?;
+    let stdout = child.stdout.take().expect("piped above");
+    let mut stderr = child.stderr.take().expect("piped above");
+    // Read beside the archive, so a tar with much to complain about never
+    // stalls on a full pipe; what it said is kept short.
+    let complaints = tokio::spawn(async move {
+        let mut said = Vec::new();
+        let _ = (&mut stderr).take(64 * 1024).read_to_end(&mut said).await;
+        let _ = tokio::io::copy(&mut stderr, &mut tokio::io::sink()).await;
+        said
+    });
+    // One byte past the limit is enough to know, and all that is written.
+    let mut counted = stdout.take(limit.saturating_add(1));
+    let size = tokio::io::copy(&mut counted, &mut file)
+        .await
+        .map_err(|error| format!("writing snapshot: {error}"))?;
+    if size > limit {
+        let _ = child.kill().await;
+        return Err(format!(
+            "snapshot too large: over {:.0} MB compressed (max {:.0} MB)",
+            limit as f64 / 1_048_576.0,
+            limit as f64 / 1_048_576.0
+        ));
+    }
+    let status = child
+        .wait()
+        .await
+        .map_err(|error| format!("tar: {error}"))?;
+    if !status.success() {
+        let said = complaints.await.unwrap_or_default();
+        return Err(format!("tar: {}", String::from_utf8_lossy(&said).trim()));
+    }
+    file.sync_all()
+        .await
+        .map_err(|error| format!("writing snapshot: {error}"))?;
+    drop(file);
+    let destination = path.to_owned();
+    tokio::task::spawn_blocking(move || staged.persist(destination))
+        .await
+        .map_err(|error| error.to_string())?
+        .map_err(|error| format!("saving snapshot: {}", error.error))?;
+    Ok(size)
 }
 
 async fn snapshot_load(app: &App, name: &str) -> ToolResult {
@@ -302,15 +367,25 @@ async fn snapshot_load(app: &App, name: &str) -> ToolResult {
     if !path.is_file() {
         return Err(format!("snapshot {name:?} not found"));
     }
+    if let Some(refusal) = crate::split::migration::refusal(&app.config.home, name).await {
+        return Err(refusal);
+    }
     tar(&[
         "xzf",
         path_str(&path)?,
         "-C",
         path_str(&app.config.home)?,
         "--overwrite",
+        // Every member but the archive's root, `./`: the home keeps its own
+        // mode and times, which a home that is root's, the agent let in by
+        // its ACL (see `split::init`), could not take from the snapshot.
+        "--wildcards",
+        "./?*",
     ])
     .await?;
-    json_text(json!({"loaded":true,"name":name,"browser_restored":true}))
+    // A snapshot cleaned of the old browser profile restores none.
+    let browser = app.config.home.join(".hotline/browser").is_dir();
+    json_text(json!({"loaded":true,"name":name,"browser_restored":browser}))
 }
 
 async fn snapshot_list(app: &App) -> ToolResult {
@@ -350,6 +425,7 @@ async fn snapshot_delete(app: &App, name: &str) -> ToolResult {
     tokio::fs::remove_file(snapshot_path(app, name))
         .await
         .map_err(|_| format!("snapshot {name:?} not found"))?;
+    crate::split::migration::release(&app.config.home, name).await;
     json_text(json!({"deleted":true,"name":name}))
 }
 
@@ -379,7 +455,9 @@ async fn desktop_fresh(home: &Path) -> Result<bool, String> {
         .await
         .map_err(|error| error.to_string())?
     {
-        if !entry.file_name().to_string_lossy().starts_with('.') {
+        let name = entry.file_name();
+        // A fresh volume's lost+found is the filesystem's, not a user file.
+        if !name.to_string_lossy().starts_with('.') && name != "lost+found" {
             return Ok(false);
         }
     }
@@ -415,6 +493,57 @@ fn now() -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[tokio::test]
+    async fn a_snapshot_over_the_limit_stops_there_and_keeps_the_one_before() {
+        let home = tempfile::tempdir().unwrap();
+        std::fs::write(home.path().join("notes.txt"), "kept").unwrap();
+        let path = home.path().join(".hotline/snapshots/work.tar.gz");
+        let size = archive(home.path(), &path, SNAPSHOT_LIMIT).await.unwrap();
+        assert_eq!(size, std::fs::metadata(&path).unwrap().len());
+        let before = std::fs::read(&path).unwrap();
+        // The same home no longer fits: nothing replaces the earlier
+        // snapshot and nothing half-written is left beside it.
+        let refusal = archive(home.path(), &path, 8).await.unwrap_err();
+        assert!(refusal.contains("snapshot too large"), "{refusal}");
+        assert_eq!(std::fs::read(&path).unwrap(), before);
+        let left: Vec<_> = std::fs::read_dir(path.parent().unwrap())
+            .unwrap()
+            .map(|entry| entry.unwrap().file_name())
+            .collect();
+        assert_eq!(left, ["work.tar.gz"]);
+        // A snapshot is not part of the next one.
+        let listed = std::process::Command::new("tar")
+            .args(["tzf", path.to_str().unwrap()])
+            .output()
+            .unwrap();
+        let listed = String::from_utf8_lossy(&listed.stdout).into_owned();
+        assert!(listed.contains("notes.txt"), "{listed}");
+        assert!(!listed.contains("snapshots"), "{listed}");
+    }
+
+    /// A fresh volume's lost+found, root's and unreadable to the agent, is
+    /// in no snapshot and does not make a desktop look used.
+    #[tokio::test]
+    async fn lost_and_found_is_in_no_snapshot_and_no_user_file() {
+        let home = tempfile::tempdir().unwrap();
+        let found = home.path().join("lost+found");
+        std::fs::create_dir(&found).unwrap();
+        std::fs::write(found.join("#1234"), "the filesystem's").unwrap();
+        std::fs::write(home.path().join(".profile"), "kept").unwrap();
+        assert!(desktop_fresh(home.path()).await.unwrap());
+        let path = home.path().join(".hotline/snapshots/fresh.tar.gz");
+        archive(home.path(), &path, SNAPSHOT_LIMIT).await.unwrap();
+        let listed = std::process::Command::new("tar")
+            .args(["tzf", path.to_str().unwrap()])
+            .output()
+            .unwrap();
+        let listed = String::from_utf8_lossy(&listed.stdout).into_owned();
+        assert!(listed.contains(".profile"), "{listed}");
+        assert!(!listed.contains("lost+found"), "{listed}");
+        std::fs::write(home.path().join("notes.txt"), "a user file").unwrap();
+        assert!(!desktop_fresh(home.path()).await.unwrap());
+    }
 
     #[test]
     fn names_cannot_escape_the_state_directories() {

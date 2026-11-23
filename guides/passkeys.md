@@ -3,7 +3,7 @@ title: Passkeys
 description: Passkey registration, approval, storage and sign-in.
 cluster: Security
 section: security
-reviewed: 2026-11-02
+reviewed: 2026-11-18
 ---
 
 **Creating a passkey requires registration to be enabled for the site and your
@@ -18,12 +18,28 @@ the request and the page's origin to the service, which signs for that origin.
 Passkey autofill is unavailable while the extension acts as Chromium's WebAuthn
 proxy.
 
+On the split computer the extension is loaded only in the signed-in browser,
+and a passkey answers only for the origin of a signed-in tab: one of a login's
+sites, a granted passkey's own site (its `rpId`), a shared site, or the site
+armed for registration. The visible browser
+has no passkey: a request there is refused at once ("passkeys sign in only in
+the signed-in browser"). You see the signed-in browser through Open
+Browser in the desk.
+
 ## Registration
 
 1. The client arms the computer for one site:
    `PUT /passkeys/registration {"rpId":"github.com"}`. Arming lasts ten
    minutes, covers one site, answers `{"state":"armed","rpId":…,"expiresAt":…}`,
-   and starts the browser on that site if none is open.
+   and starts the browser on that site if none is open. On the split computer
+   that is the signed-in browser. A site on the computer itself
+   (`"rpId":"localhost"`) is not loaded, since its port is not in the
+   `rpId`: the agent opens the site's page, on any port, and it opens in the
+   signed-in browser while armed. Any job can serve a page on another
+   loopback port and ask for the passkey too, and the request carries the
+   same `rpId`. Check the port in the request's `origin` on the approval
+   card: it is the only thing that tells your site apart from a page a job
+   serves. An IP address is refused with a 400 that says to use `localhost`.
 2. While armed, a `navigator.credentials.create()` for that site waits. The
    service records what the site asked for: the site, the origin, and the
    account's name and display name.
@@ -47,9 +63,15 @@ a site that gives up withdraws its request.
 ## Limits
 
 During registration, the service returns the credential, including its private
-key, to the client over the authenticated loopback route. The extension connects
-to the service through a Unix socket restricted to the container's user. Jobs
-run as that same user and can access the socket.
+key, to the client over the authenticated loopback route.
 
-`HOTLINE_COMPUTER_PASSKEYS=virtual` keeps the older arrangement, Chromium's
-virtual authenticator filled over DevTools on port 9222.
+On the single-user computer, the extension connects to the service through a
+Unix socket restricted to the container's user. Jobs run as that same user and
+can access the socket. On the split computer the socket is
+`/run/hotline-computer/bridge/bridge.sock`, and it answers only the signed-in
+browser's user, `signin`; the private key is held by the broker's user. A job
+reaches neither.
+
+On the single-user computer, `HOTLINE_COMPUTER_PASSKEYS=virtual` keeps the
+older arrangement, Chromium's virtual authenticator filled over DevTools on
+port 9222.

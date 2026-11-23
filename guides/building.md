@@ -17,6 +17,8 @@ make run                  # a hardened container on 127.0.0.1:8787, token in .to
 make contract             # the contract test against it, through a real MCP client
 make check                # fmt, clippy -D warnings, unit tests
 make acceptance           # fresh image, real MCP and viewer tests, repository builds
+make protected-probes RUNTIME=… IMAGE=… EXPECT=leak|blocked   # the protected-secrets probes
+python3 tests/protected/two_condition.py --image <probe build>  # the agent signs in and calls an API; then nothing leaks
 ```
 
 `make run`, spelled out:

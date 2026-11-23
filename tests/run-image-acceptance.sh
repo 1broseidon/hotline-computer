@@ -34,7 +34,15 @@ store=$(docker volume create)
 printf '%s\n' "$scratch" > "$output/scratch-volume.txt"
 printf '%s\n' "$home" > "$output/home-volume.txt"
 printf '%s\n' "$store" > "$output/store-volume.txt"
-container=$(docker run -d --cap-drop=ALL --security-opt no-new-privileges --pids-limit 1024 --memory 4g --shm-size 1g -p "127.0.0.1:${HOTLINE_ACCEPTANCE_PORT:-}:8787" --env-file "$credentials" --mount "type=volume,source=$home,target=/home/agent" --mount "type=volume,source=$scratch,target=/home/agent/src" --mount "type=volume,source=$store,target=/nix" "$image")
+# HOTLINE_ACCEPTANCE_SPLIT=1 creates the computer the way a 0.50 desk does:
+# booted as root with SETUID and SETGID alone, so it splits into its users.
+mode=legacy
+split_flags=()
+if [ "${HOTLINE_ACCEPTANCE_SPLIT:-0}" = 1 ]; then
+  mode=split
+  split_flags=(--user 0 --cap-add SETUID --cap-add SETGID)
+fi
+container=$(docker run -d --cap-drop=ALL "${split_flags[@]}" --security-opt no-new-privileges --pids-limit 1024 --memory 4g --shm-size 1g -p "127.0.0.1:${HOTLINE_ACCEPTANCE_PORT:-}:8787" --env-file "$credentials" --mount "type=volume,source=$home,target=/home/agent" --mount "type=volume,source=$scratch,target=/home/agent/src" --mount "type=volume,source=$store,target=/nix" "$image")
 printf '%s\n' "$container" > "$output/container-id.txt"
 docker inspect --format '{{.Image}}' "$container" > "$output/image-id.txt"
 port=$(docker port "$container" 8787/tcp | sed 's/.*://')
@@ -49,6 +57,8 @@ done
 curl --silent --show-error --fail "$url/health" > "$output/health.json"
 printf 'Running MCP and viewer contract against %s\n' "$url"
 docker run --rm --network "container:$container" --env-file "$credentials" -e HOTLINE_COMPUTER_URL=http://127.0.0.1:8787 --entrypoint /acceptance/contract "$checks" --nocapture 2>&1 | tee "$output/contract.log"
+printf 'Running the %s computer'"'"'s user checks\n' "$mode"
+docker run --rm --network "container:$container" --env-file "$credentials" -e HOTLINE_COMPUTER_URL=http://127.0.0.1:8787 -e HOTLINE_COMPUTER_MODE="$mode" --entrypoint /acceptance/split "$checks" --nocapture 2>&1 | tee "$output/split.log"
 python3 -m venv "$output/venv"
 "$output/venv/bin/pip" install --disable-pip-version-check -r tests/requirements.txt
 "$output/venv/bin/python" tests/acceptance.py --url "$url" --token-file "$output/token" --output "$output" --suite full

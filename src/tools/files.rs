@@ -50,7 +50,10 @@ pub async fn call(app: &App, arguments: Value, holder: &str) -> ToolResult {
             put(app, &input.path, &input.content, &input.encoding).await
         }
         "download" | "extract" | "run" => artifact(app, input, holder).await,
-        "list" => list(app, &input.path).await,
+        "list" => {
+            refuse_private(app, &existing_path(app, &input.path).await?).await?;
+            list(app, &input.path).await
+        }
         action => Err(action_error(
             "files",
             action,
@@ -68,6 +71,7 @@ async fn artifact(app: &App, input: Input, holder: &str) -> ToolResult {
     } else {
         writable_path(app, &input.path).await?
     };
+    refuse_private(app, &path).await?;
     let destination = if input.action == "extract" {
         Some(
             writable_path(
@@ -82,6 +86,9 @@ async fn artifact(app: &App, input: Input, holder: &str) -> ToolResult {
     } else {
         None
     };
+    if let Some(destination) = &destination {
+        refuse_private(app, destination).await?;
+    }
     let spec = json!({"action":input.action,"path":path,"url":input.url,"repo":input.repo,"version":input.version,"asset":input.asset,"sha256":input.sha256,"destination":destination,"interpreter":input.interpreter,"args":input.args});
     let job = app
         .jobs
@@ -117,6 +124,7 @@ async fn artifact(app: &App, input: Input, holder: &str) -> ToolResult {
 
 async fn get(app: &App, path: &Path) -> ToolResult {
     let path = existing_path(app, path).await?;
+    refuse_private(app, &path).await?;
     let metadata = tokio::fs::metadata(&path)
         .await
         .map_err(|_| format!("file not found: {}", path.display()))?;
@@ -157,6 +165,7 @@ async fn put(app: &App, path: &Path, content: &str, encoding: &str) -> ToolResul
         ));
     }
     let path = writable_path(app, path).await?;
+    refuse_private(app, &path).await?;
     tokio::fs::write(&path, &bytes)
         .await
         .map_err(|error| error.to_string())?;
@@ -283,6 +292,24 @@ pub(crate) async fn writable_path(app: &App, requested: &Path) -> Result<PathBuf
     Ok(parent.join(file_name))
 }
 
+/// The computer's own records in the home, `~/.hotline`: the jobs' raw
+/// output, the browser's profile, saved logins and snapshots. A resolved
+/// path there is not fetched or written through `files` or the desk's
+/// download; a job that reads one does it in plain sight.
+pub(crate) async fn refuse_private(app: &App, path: &Path) -> Result<(), String> {
+    let home = tokio::fs::canonicalize(&app.config.home)
+        .await
+        .map_err(|error| format!("home: {error}"))?;
+    let private = home.join(".hotline");
+    if path == private || path.starts_with(&private) {
+        return Err(format!(
+            "{} is the computer's own records; files does not read or write there",
+            private.display()
+        ));
+    }
+    Ok(())
+}
+
 fn require_under_home(home: &Path, path: &Path) -> Result<(), String> {
     if path == home || path.starts_with(home) {
         Ok(())
@@ -295,6 +322,51 @@ fn require_under_home(home: &Path, path: &Path) -> Result<(), String> {
 mod tests {
     use super::*;
     use crate::Config;
+
+    #[tokio::test]
+    async fn the_computers_own_records_are_not_fetched_or_written() {
+        let home = tempfile::tempdir().unwrap();
+        let jobs = home.path().join(".hotline/jobs/1");
+        std::fs::create_dir_all(&jobs).unwrap();
+        std::fs::write(jobs.join("stdout.log"), "hl-canary").unwrap();
+        std::os::unix::fs::symlink(&jobs, home.path().join("innocent")).unwrap();
+        let app = App::new(Config {
+            addr: String::new(),
+            token: None,
+            home: home.path().to_owned(),
+            display: ":0".to_owned(),
+            screen: "1920x1080".to_owned(),
+        });
+        for (action, path) in [
+            ("get", jobs.join("stdout.log")),
+            ("get", home.path().join("innocent/stdout.log")),
+            ("list", home.path().join(".hotline")),
+            ("put", jobs.join("new.txt")),
+        ] {
+            let error = call(
+                &app,
+                json!({"action": action, "path": path, "content": "x"}),
+                "test",
+            )
+            .await
+            .unwrap_err();
+            assert!(
+                error.contains("computer's own records"),
+                "{action}: {error}"
+            );
+            assert!(!error.contains("hl-canary"), "{action}: {error}");
+        }
+        assert!(!jobs.join("new.txt").exists());
+        std::fs::write(home.path().join("readme.txt"), "fine").unwrap();
+        let fine = call(
+            &app,
+            json!({"action": "get", "path": home.path().join("readme.txt")}),
+            "test",
+        )
+        .await
+        .unwrap();
+        assert_eq!(fine.len(), 1);
+    }
 
     #[tokio::test]
     async fn refuses_a_symlink_that_leaves_home() {

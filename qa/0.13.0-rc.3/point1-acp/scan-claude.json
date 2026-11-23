@@ -1,0 +1,133 @@
+[
+ {
+  "place": "the desk's tapes for the session",
+  "summary": "SCANNED files=1 skipped=0 proc_entries=0 needles=117 hits=2",
+  "control": true,
+  "control_where": [
+   "/Users/george/Projects/scratch/point1-acp/run/desk/transcripts/da3830f8-afce-4436-9ef7-4f76579faa06/1.jsonl"
+  ],
+  "found": []
+ },
+ {
+  "place": "the desk's other files and its log (secret store aside)",
+  "summary": "SCANNED files=28 skipped=0 proc_entries=0 needles=117 hits=2",
+  "control": true,
+  "control_where": [
+   "/Users/george/Projects/scratch/point1-acp/run/desk/index.sqlite-wal"
+  ],
+  "found": []
+ },
+ {
+  "place": "the model request log: requests (everything Claude Code sent its model)",
+  "summary": "SCANNED files=1 skipped=0 proc_entries=0 needles=117 hits=2",
+  "control": true,
+  "control_where": [
+   "/Users/george/Projects/scratch/point1-acp/run/model/requests.jsonl"
+  ],
+  "found": []
+ },
+ {
+  "place": "the model request log: responses (raw and put back together)",
+  "summary": "SCANNED files=2 skipped=0 proc_entries=0 needles=117 hits=2",
+  "control": true,
+  "control_where": [
+   "/Users/george/Projects/scratch/point1-acp/run/collect/model-responses-decoded.jsonl"
+  ],
+  "found": []
+ },
+ {
+  "place": "Claude Code's transcript for the workspace (~/.claude/projects)",
+  "summary": "SCANNED files=1 skipped=0 proc_entries=0 needles=117 hits=2",
+  "control": true,
+  "control_where": [
+   "/Users/george/.claude/projects/-Users-george-Projects-scratch-point1-acp-run-ws/c9af6d6c-eae8-4240-8f9d-b788e124f45c.jsonl"
+  ],
+  "found": []
+ },
+ {
+  "place": "Claude Code's other config-dir files changed during the run (~/.claude, ~/.claude.json)",
+  "summary": "SCANNED files=17 skipped=0 proc_entries=0 needles=117 hits=0",
+  "control": false,
+  "control_where": [],
+  "found": []
+ },
+ {
+  "place": "Claude Code's MCP logs (~/Library/Caches/claude-cli-nodejs)",
+  "summary": "SCANNED files=4 skipped=0 proc_entries=0 needles=117 hits=0",
+  "control": false,
+  "control_where": [],
+  "found": []
+ },
+ {
+  "place": "the harness's host processes: environ and cmdline (ps -E), sampled through every task",
+  "summary": "SCANNED files=27 skipped=0 proc_entries=0 needles=117 hits=27",
+  "control": true,
+  "control_where": [
+   "/Users/george/Projects/scratch/point1-acp/run/collect/host-ps/ps-015712.txt",
+   "/Users/george/Projects/scratch/point1-acp/run/collect/host-ps/ps-015733.txt",
+   "/Users/george/Projects/scratch/point1-acp/run/collect/host-ps/ps-015815.txt",
+   "/Users/george/Projects/scratch/point1-acp/run/collect/host-ps/ps-015836.txt",
+   "/Users/george/Projects/scratch/point1-acp/run/collect/host-ps/ps-015849.txt"
+  ],
+  "found": []
+ },
+ {
+  "place": "the host workspace",
+  "summary": "SCANNED files=6 skipped=0 proc_entries=0 needles=117 hits=1",
+  "control": true,
+  "control_where": [
+   "/Users/george/Projects/scratch/point1-acp/run/ws/control.txt"
+  ],
+  "found": []
+ },
+ {
+  "place": "tool results: the teammate's (desk tape)",
+  "summary": "SCANNED files=1 skipped=0 proc_entries=0 needles=117 hits=1",
+  "control": true,
+  "control_where": [
+   "/Users/george/Projects/scratch/point1-acp/run/collect/agent-tool-results.jsonl"
+  ],
+  "found": []
+ },
+ {
+  "place": "tool results: the harness's own calls",
+  "summary": "SCANNED files=1 skipped=0 proc_entries=0 needles=117 hits=1",
+  "control": true,
+  "control_where": [
+   "/Users/george/Projects/scratch/point1-acp/run/collect/harness-tool-results.jsonl"
+  ],
+  "found": []
+ },
+ {
+  "place": "the computer: the agent's home",
+  "summary": "SCANNED files=543 skipped=0 proc_entries=43 needles=117 hits=12",
+  "control": true,
+  "control_where": [
+   "/home/agent/fixture/control.txt",
+   "/home/agent/workspace/control.txt"
+  ],
+  "found": []
+ },
+ {
+  "place": "the computer: job logs",
+  "summary": "SCANNED files=543 skipped=0 proc_entries=43 needles=117 hits=12",
+  "control": true,
+  "control_where": [
+   "/home/agent/.hotline/jobs/000001a2024ee9f1-a3457089/record.json",
+   "/home/agent/.hotline/jobs/000001a2024ee9f9-02bd856d/output.log",
+   "/home/agent/.hotline/jobs/000001a2024ee9f9-02bd856d/record.json",
+   "/home/agent/.hotline/jobs/000001a2024ee9f9-02bd856d/stdout.log",
+   "/home/agent/.hotline/jobs/000001a2024f0310-46e94fa3/output.log"
+  ],
+  "found": []
+ },
+ {
+  "place": "the computer: readable /proc environ and cmdline",
+  "summary": "SCANNED files=543 skipped=0 proc_entries=43 needles=117 hits=12",
+  "control": true,
+  "control_where": [
+   "/proc/1119/environ"
+  ],
+  "found": []
+ }
+]

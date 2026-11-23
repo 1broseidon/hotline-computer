@@ -1,0 +1,10 @@
+# containers before (none touched):
+PUT /secrets 204
+capabilities {"attest":"aq3mlXDWNPp3URKyebIwB4iNhQvBizIGQM0Dfot98MY=","boot":"e860111f9a126e7c1bddbef2b70220df","protected":{"mode":"legacy","v":1},"version":"0.13.0"}
+signed-in tab: navigated to http://localhost:8000/
+9222 before any general-browser call: 200
+general tab: navigated to http://localhost:8001/
+9222 after: 200
+puppeteer: {"version":"Chrome/156.0.8078.79","title":"Puppeteer fixture","h1":"Hello from 8001","typed":"typed by puppeteer","shotBytes":15796,"signedInTabVisible":false,"targets":5}
+RESULT PASS legacy
+# removed hl-secrets-rc-pptr-f02a6a

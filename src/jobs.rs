@@ -208,6 +208,23 @@ pub struct Jobs {
     jobs: Arc<Mutex<BTreeMap<String, Arc<Job>>>>,
     initialized: Arc<OnceCell<()>>,
     admission: Arc<tokio::sync::Mutex<()>>,
+    /// In the split computer's runner: the line to the broker, which makes
+    /// each job's stand-ins for the protected keys and kills them when the
+    /// job ends. Unset in the single-user computer, which holds none.
+    keys: Arc<std::sync::OnceLock<crate::split::wire::Peer>>,
+}
+
+/// A job's stand-ins: when this goes, with the job, the broker kills them.
+struct StandIns {
+    line: crate::split::wire::Peer,
+    job: String,
+}
+
+impl Drop for StandIns {
+    fn drop(&mut self) {
+        self.line
+            .tell("keys.end", serde_json::json!({"job": self.job}));
+    }
 }
 
 #[derive(Serialize)]
@@ -241,7 +258,14 @@ impl Jobs {
             jobs: Arc::new(Mutex::new(BTreeMap::new())),
             initialized: Arc::new(OnceCell::new()),
             admission: Arc::new(tokio::sync::Mutex::new(())),
+            keys: Arc::new(std::sync::OnceLock::new()),
         }
+    }
+
+    /// From now on, a job offered the person's secrets asks the broker on
+    /// `line` for its stand-ins.
+    pub fn use_keys(&self, line: crate::split::wire::Peer) {
+        let _ = self.keys.set(line);
     }
 
     pub async fn initialize(&self) -> Result<(), String> {
@@ -393,15 +417,34 @@ impl Jobs {
                 .unwrap_or_else(|| cwd.clone());
             environment.append(&mut crate::workspace::environment(&self.home, &place)?);
         }
+        let id = format!("{:016x}-{:08x}", now(), rand_id()?);
+        let mut stand_ins = None;
         if start.secrets {
             // After the workspace, so the person's stored value beats a
             // repository's placeholder; before the agent's own entries, so
             // an explicit one still wins.
             environment.append(&mut self.secrets.environment());
+            // A protected key is never here: the broker gives this job a
+            // stand-in for it, and the proxy and CA variables that let its
+            // programs use one.
+            if let Some(line) = self.keys.get() {
+                let answer = line
+                    .call("keys.begin", serde_json::json!({"job": id}))
+                    .await
+                    .map_err(|error| format!("the computer's key proxy did not answer: {error}"))?;
+                let mut keys: BTreeMap<String, String> =
+                    serde_json::from_value(answer["env"].clone()).map_err(|e| e.to_string())?;
+                if !keys.is_empty() {
+                    stand_ins = Some(StandIns {
+                        line: line.clone(),
+                        job: id.clone(),
+                    });
+                }
+                environment.append(&mut keys);
+            }
         }
         environment.append(&mut start.env);
         start.env = environment;
-        let id = format!("{:016x}-{:08x}", now(), rand_id()?);
         let directory = self.root.join(&id);
         std::fs::create_dir(&directory).map_err(|e| e.to_string())?;
         let artifact_staging = start
@@ -485,13 +528,20 @@ impl Jobs {
                 let running = Arc::clone(&job);
                 let manager = self.clone();
                 tokio::spawn(async move {
-                    supervise(running, child, readers, receiver, start.timeout).await;
+                    supervise(running, child, readers, receiver, start.timeout, stand_ins).await;
                     manager.publish();
                 });
             }
         }
         self.publish();
         Ok(job.record())
+    }
+
+    /// The process a running job was started as (its session's leader).
+    pub fn leader(&self, id: &str) -> Option<u32> {
+        let jobs = self.jobs.lock().unwrap();
+        let record = jobs.get(id)?.record();
+        (!record.finished()).then_some(record.pid).flatten()
     }
 
     fn publish(&self) {
@@ -843,12 +893,113 @@ fn rand_id() -> Result<u32, String> {
     Ok(u32::from_ne_bytes(bytes))
 }
 
+/// Whether this kernel has Landlock, which keeps each job of the split
+/// computer out of the others (`a_domain_of_its_own`).
+#[cfg(target_os = "linux")]
+pub fn landlock() -> bool {
+    // SAFETY: Landlock's version query: no pointers, no fd.
+    unsafe { libc::syscall(libc::SYS_landlock_create_ruleset, 0usize, 0usize, 1u32) >= 1 }
+}
+
+#[cfg(not(target_os = "linux"))]
+pub fn landlock() -> bool {
+    false
+}
+
+/// A Landlock domain for the job about to start, that restricts nothing
+/// of its own (every file may be run, the only access it names). Landlock
+/// lets a process trace only processes in its own domain or one nested in
+/// it, and the kernel asks that of `ptrace`, `/proc/<pid>/mem` and
+/// `environ`, and `pidfd_getfd`: jobs all run as the agent, and without it
+/// one job could run inside another, or take a connection it holds, and
+/// use that job's proxy authority. The runner, outside every domain, still
+/// sees its jobs. A kernel without Landlock leaves the job as it was (the
+/// broker says so as it starts); on one with it, a step that fails stops
+/// the job from starting.
+///
+/// Called between fork and exec: raw system calls only.
+fn a_domain_of_its_own() -> std::io::Result<()> {
+    a_domain_beneath(c"/")
+}
+
+#[cfg(not(target_os = "linux"))]
+fn a_domain_beneath(_: &std::ffi::CStr) -> std::io::Result<()> {
+    Ok(())
+}
+
+/// `a_domain_of_its_own` with every file beneath `root` allowed to run.
+#[cfg(target_os = "linux")]
+fn a_domain_beneath(root: &std::ffi::CStr) -> std::io::Result<()> {
+    #[repr(C)]
+    struct Ruleset {
+        handled_access_fs: u64,
+    }
+    #[repr(C, packed)]
+    struct Beneath {
+        allowed_access: u64,
+        parent_fd: i32,
+    }
+    const EXECUTE: u64 = 1;
+    const PATH_BENEATH: libc::c_long = 1;
+    if !landlock() {
+        return Ok(());
+    }
+    let failed = std::io::Error::last_os_error;
+    let ruleset = Ruleset {
+        handled_access_fs: EXECUTE,
+    };
+    // SAFETY: Landlock's system calls with the structures it defines (the
+    // ABI 1 ruleset size), and fds this child owns and closes. Landlock
+    // wants no_new_privs, which a job of the split computer has already.
+    unsafe {
+        if libc::prctl(libc::PR_SET_NO_NEW_PRIVS, 1, 0, 0, 0) != 0 {
+            return Err(failed());
+        }
+        let fd = libc::syscall(
+            libc::SYS_landlock_create_ruleset,
+            &ruleset as *const Ruleset,
+            std::mem::size_of::<Ruleset>(),
+            0,
+        );
+        if fd < 0 {
+            return Err(failed());
+        }
+        let fd = fd as i32;
+        let beneath = libc::open(root.as_ptr(), libc::O_PATH | libc::O_CLOEXEC);
+        if beneath < 0 {
+            let error = failed();
+            libc::close(fd);
+            return Err(error);
+        }
+        let everywhere = Beneath {
+            allowed_access: EXECUTE,
+            parent_fd: beneath,
+        };
+        let added = libc::syscall(
+            libc::SYS_landlock_add_rule,
+            fd,
+            PATH_BENEATH,
+            &everywhere as *const Beneath,
+            0,
+        );
+        let result = if added != 0 || libc::syscall(libc::SYS_landlock_restrict_self, fd, 0) != 0 {
+            Err(failed())
+        } else {
+            Ok(())
+        };
+        libc::close(beneath);
+        libc::close(fd);
+        result
+    }
+}
+
 enum Reader {
     Pipe(Box<dyn AsyncRead + Send + Unpin>),
     Pty(Arc<AsyncFd<OwnedFd>>),
 }
 type Spawned = (tokio::process::Child, Input, Vec<(&'static str, Reader)>);
 fn spawn(start: &Start, cwd: &Path, display: &str) -> Result<Spawned, String> {
+    let confined = crate::split::mode() == crate::split::Mode::Split;
     let mut command = tokio::process::Command::new(&start.command);
     command
         .args(&start.args)
@@ -899,9 +1050,12 @@ fn spawn(start: &Start, cwd: &Path, display: &str) -> Result<Spawned, String> {
         // A PTY child owns a new session and controlling terminal; it remains
         // independent of whichever terminal happens to observe the job.
         unsafe {
-            command.pre_exec(|| {
+            command.pre_exec(move || {
                 if libc::setsid() < 0 || libc::ioctl(0, libc::TIOCSCTTY as _, 0) < 0 {
                     return Err(std::io::Error::last_os_error());
+                }
+                if confined {
+                    a_domain_of_its_own()?;
                 }
                 Ok(())
             });
@@ -916,8 +1070,21 @@ fn spawn(start: &Start, cwd: &Path, display: &str) -> Result<Spawned, String> {
             vec![("stdout", Reader::Pty(fd))],
         ))
     } else {
+        // A session of its own, not only a group: a process left over from
+        // another job cannot join a group across sessions, so the key proxy
+        // can tell this job's processes by their session (`belongs`).
+        unsafe {
+            command.pre_exec(move || {
+                if libc::setsid() < 0 {
+                    return Err(std::io::Error::last_os_error());
+                }
+                if confined {
+                    a_domain_of_its_own()?;
+                }
+                Ok(())
+            });
+        }
         command
-            .process_group(0)
             .stdin(Stdio::piped())
             .stdout(Stdio::piped())
             .stderr(Stdio::piped());
@@ -936,6 +1103,122 @@ fn spawn(start: &Start, cwd: &Path, display: &str) -> Result<Spawned, String> {
             ],
         ))
     }
+}
+
+/// Whether the connection from `peer` to the key proxy at `proxy` is held
+/// only by processes of the job that `leader` leads: in its session, or
+/// below it. Read from /proc as the agent's own user, which may read its
+/// processes' descriptors; a connection it cannot place belongs to no job.
+/// The connection is found by both of its ends: a local port alone is
+/// shared by every loopback address (127.0.0.2 may take the port another
+/// job's connection holds on 127.0.0.1).
+pub fn connection_belongs(
+    peer: std::net::SocketAddr,
+    proxy: std::net::SocketAddr,
+    leader: u32,
+) -> bool {
+    let Some(inode) = connection_inode(peer, proxy) else {
+        return false;
+    };
+    let target = format!("socket:[{inode}]");
+    let mut holders = Vec::new();
+    let Ok(processes) = std::fs::read_dir("/proc") else {
+        return false;
+    };
+    for process in processes.flatten() {
+        let Some(pid) = process
+            .file_name()
+            .to_str()
+            .and_then(|p| p.parse::<u32>().ok())
+        else {
+            continue;
+        };
+        let Ok(fds) = std::fs::read_dir(process.path().join("fd")) else {
+            continue;
+        };
+        if fds.flatten().any(|fd| {
+            std::fs::read_link(fd.path()).is_ok_and(|link| link.to_string_lossy() == target)
+        }) {
+            holders.push(pid);
+        }
+    }
+    !holders.is_empty() && holders.iter().all(|pid| in_job(*pid, leader))
+}
+
+/// The socket inode of the TCP connection from `peer` to `proxy`.
+fn connection_inode(peer: std::net::SocketAddr, proxy: std::net::SocketAddr) -> Option<String> {
+    ["/proc/net/tcp", "/proc/net/tcp6"]
+        .iter()
+        .find_map(|table| {
+            let text = std::fs::read_to_string(table).ok()?;
+            inode_in(&text, peer, proxy)
+        })
+}
+
+/// In a /proc/net/tcp(6) table, the inode of the row whose local end is
+/// `peer` and whose remote end is `proxy`.
+fn inode_in(
+    table: &str,
+    peer: std::net::SocketAddr,
+    proxy: std::net::SocketAddr,
+) -> Option<String> {
+    table.lines().skip(1).find_map(|row| {
+        let fields: Vec<&str> = row.split_whitespace().collect();
+        (fields.len() > 9
+            && table_address(fields[1]) == Some(peer)
+            && table_address(fields[2]) == Some(proxy))
+        .then(|| fields[9].to_owned())
+    })
+}
+
+/// An address as /proc/net/tcp(6) prints it: the address's words in the
+/// kernel's own byte order, in hex, then the port.
+fn table_address(text: &str) -> Option<std::net::SocketAddr> {
+    let (address, port) = text.split_once(':')?;
+    let port = u16::from_str_radix(port, 16).ok()?;
+    let word = |hex: &str| u32::from_str_radix(hex, 16).ok().map(u32::to_ne_bytes);
+    let ip: std::net::IpAddr = match address.len() {
+        8 => std::net::Ipv4Addr::from(word(address)?).into(),
+        32 => {
+            let mut bytes = [0u8; 16];
+            for (i, chunk) in bytes.chunks_mut(4).enumerate() {
+                chunk.copy_from_slice(&word(address.get(i * 8..i * 8 + 8)?)?);
+            }
+            let v6 = std::net::Ipv6Addr::from(bytes);
+            v6.to_ipv4_mapped().map_or(v6.into(), Into::into)
+        }
+        _ => return None,
+    };
+    Some(std::net::SocketAddr::new(ip, port))
+}
+
+/// `(parent, session)` of a process, from /proc/<pid>/stat.
+fn parent_and_session(pid: u32) -> Option<(u32, u32)> {
+    let stat = std::fs::read_to_string(format!("/proc/{pid}/stat")).ok()?;
+    let rest = stat.rsplit_once(')')?.1;
+    let fields: Vec<&str> = rest.split_whitespace().collect();
+    Some((fields.get(1)?.parse().ok()?, fields.get(3)?.parse().ok()?))
+}
+
+/// Whether `pid` is in the session `leader` leads, or descends from it.
+fn in_job(pid: u32, leader: u32) -> bool {
+    let mut at = pid;
+    for _ in 0..64 {
+        if at == leader {
+            return true;
+        }
+        let Some((parent, session)) = parent_and_session(at) else {
+            return false;
+        };
+        if session == leader {
+            return true;
+        }
+        if parent <= 1 {
+            return false;
+        }
+        at = parent;
+    }
+    false
 }
 
 async fn pty_write(fd: &AsyncFd<OwnedFd>, mut bytes: &[u8]) -> std::io::Result<()> {
@@ -995,6 +1278,7 @@ async fn supervise(
     readers: Vec<(&'static str, Reader)>,
     mut cancel: mpsc::Receiver<()>,
     timeout: Option<u64>,
+    stand_ins: Option<StandIns>,
 ) {
     let (failed_output, mut output_failures) = mpsc::channel(2);
     let readers: Vec<_> = readers
@@ -1029,6 +1313,8 @@ async fn supervise(
     unsafe {
         libc::kill(-(pid as i32), libc::SIGKILL);
     }
+    // Its stand-ins die with it, before anyone is told it has finished.
+    drop(stand_ins);
     *job.input.lock().await = None;
     let mut output_error = None;
     for mut reader in readers {
@@ -1076,6 +1362,115 @@ async fn supervise(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// A job in a domain of its own cannot read another process of the
+    /// same user the way a tracer does (its environment here), and still
+    /// runs what it runs; one outside a domain can.
+    #[cfg(target_os = "linux")]
+    #[test]
+    fn a_job_cannot_look_into_another_job_of_the_same_user() {
+        use std::os::unix::process::CommandExt;
+        // SAFETY: Landlock's version query, no pointers.
+        let abi = unsafe { libc::syscall(libc::SYS_landlock_create_ruleset, 0usize, 0usize, 1u32) };
+        if abi < 1 {
+            return eprintln!("skipped: this kernel has no Landlock");
+        }
+        let mut other = std::process::Command::new("sleep")
+            .arg("30")
+            .env("ANOTHER_JOB", "1")
+            .spawn()
+            .unwrap();
+        let look = |confined: bool| {
+            let mut command = std::process::Command::new("cat");
+            command.arg(format!("/proc/{}/environ", other.id()));
+            if confined {
+                // SAFETY: the same call a job's start makes before exec.
+                unsafe {
+                    command.pre_exec(super::a_domain_of_its_own);
+                }
+            }
+            let out = command.output().unwrap();
+            String::from_utf8_lossy(&out.stdout).contains("ANOTHER_JOB=1")
+        };
+        assert!(look(false), "outside a domain the environment reads");
+        assert!(!look(true), "a confined job read another's environment");
+        let _ = other.kill();
+        let _ = other.wait();
+    }
+
+    /// On a kernel with Landlock, a domain that cannot be made stops the
+    /// job from starting instead of letting it run unconfined.
+    #[cfg(target_os = "linux")]
+    #[test]
+    fn a_job_whose_domain_fails_does_not_start() {
+        use std::os::unix::process::CommandExt;
+        if !super::landlock() {
+            return eprintln!("skipped: this kernel has no Landlock");
+        }
+        let mut command = std::process::Command::new("true");
+        // SAFETY: the job's own call before exec, here with a root that
+        // does not exist, so the open fails.
+        unsafe {
+            command.pre_exec(|| super::a_domain_beneath(c"/no/such/root"));
+        }
+        let started = command.status();
+        assert!(
+            started.is_err(),
+            "the job ran without its domain: {started:?}"
+        );
+        let mut fine = std::process::Command::new("true");
+        // SAFETY: as above, with the real root.
+        unsafe {
+            fine.pre_exec(super::a_domain_of_its_own);
+        }
+        assert!(fine.status().unwrap().success(), "a job in its domain runs");
+    }
+
+    #[test]
+    fn a_connection_to_the_proxy_is_found_by_both_its_ends() {
+        // Two connections from local port 54298 to 127.0.0.1:3128: one
+        // from 127.0.0.1 (a job's), one from 127.0.0.4 (another job's,
+        // aliasing it). Each is only itself.
+        let row = |local: &str, inode: &str| {
+            let proxy = u32::from_ne_bytes([127, 0, 0, 1]);
+            format!(
+                "   0: {local}:D41A {proxy:08X}:0C38 01 00000000:00000000 00:00000000 00000000  1000        0 {inode} 1 0000000000000000 20 4 30 10 -1"
+            )
+        };
+        let ours = u32::from_ne_bytes([127, 0, 0, 1]);
+        let alias = u32::from_ne_bytes([127, 0, 0, 4]);
+        let table = format!(
+            "  sl  local_address rem_address   st tx_queue rx_queue tr tm->when retrnsmt   uid  timeout inode\n{}\n{}\n",
+            row(&format!("{ours:08X}"), "1111"),
+            row(&format!("{alias:08X}"), "2222")
+        );
+        let proxy: std::net::SocketAddr = "127.0.0.1:3128".parse().unwrap();
+        let at = |peer: &str| super::inode_in(&table, peer.parse().unwrap(), proxy);
+        assert_eq!(at("127.0.0.1:54298").as_deref(), Some("1111"));
+        assert_eq!(at("127.0.0.4:54298").as_deref(), Some("2222"));
+        assert_eq!(at("127.0.0.2:54298"), None);
+        assert_eq!(
+            super::inode_in(
+                &table,
+                "127.0.0.1:54298".parse().unwrap(),
+                "127.0.0.1:3129".parse().unwrap()
+            ),
+            None
+        );
+        let mapped = [
+            0u32,
+            0,
+            u32::from_ne_bytes([0, 0, 0xff, 0xff]),
+            u32::from_ne_bytes([127, 0, 0, 1]),
+        ]
+        .map(|word| format!("{word:08X}"))
+        .concat();
+        assert_eq!(
+            super::table_address(&format!("{mapped}:0C38")),
+            Some("127.0.0.1:3128".parse().unwrap()),
+            "a v4-mapped address in tcp6 is the v4 one"
+        );
+    }
 
     #[test]
     fn a_script_that_starts_with_cd_takes_that_folders_environment() {

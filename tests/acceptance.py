@@ -281,6 +281,34 @@ def centre(rect):
     return x+w//2, y+h//2
 
 
+def observer_view(c):
+    return json.loads(execute(c, 'cat', ['/home/agent/.hotline/observer-view.json'], label='Read the observer view'))
+
+
+def open_menu(c, layout):
+    """Click the mark and wait for the hotline menu. The desktop opens it, and
+    takes the keyboard for its letters, when it handles the click; on a busy
+    machine that comes after a letter sent straight away, which then lands in
+    the app underneath."""
+    # Popups open where the menu does; the menu is the one the click adds.
+    code = f"""import re,subprocess,sys,time
+def popups():
+    tree=subprocess.check_output(['xwininfo','-root','-children'],text=True)
+    return set(re.findall(r'(0x[0-9a-f]+) .*\\d+x\\d+\\+{layout['popup']['x']}\\+{layout['popup']['y']}\\s',tree))
+if sys.argv[1:]:
+    deadline=time.monotonic()+5
+    while not popups()-set(sys.argv[1:]):
+        assert time.monotonic()<deadline,'the hotline menu did not open'
+        time.sleep(.02)
+else:
+    print(' '.join(popups()) or '-')
+"""
+    before = execute(c, 'python3', ['-c', code], label='Popups before the menu').split()
+    x, y = centre(layout['mark'])
+    c.call('input', {'action': 'click', 'x': x, 'y': y})
+    execute(c, 'python3', ['-c', code, *before], label='Wait for the hotline menu')
+
+
 def desktop_job_menu(c):
     # The layout lookup is itself a job, so it runs before the job under test
     # to keep that one newest, and so at the top of the list.
@@ -297,14 +325,15 @@ def desktop_job_menu(c):
     c.call('input',{'action':'click','x':jobs_x,'y':jobs_y})
     c.screenshot('03c-desktop-job-menu.png')
     c.call('input',{'action':'click','x':row(1)[0],'y':row(1)[1]})
-    assert c.call('files',{'action':'get','path':'/home/agent/.hotline/observer-view.json'}) == job['id']
+    # The computer's own records are not read through files; a job reads
+    # the observer's choice.
+    assert observer_view(c) == job['id']
     c.screenshot('03d-selected-failed-job.png',settle_ms=200)
     c.call('input',{'action':'click','x':jobs_x,'y':jobs_y})
     c.call('input',{'action':'click','x':row(0)[0],'y':row(0)[1]})
-    assert c.call('files',{'action':'get','path':'/home/agent/.hotline/observer-view.json'}) is None
+    assert observer_view(c) is None
     # The hotline menu: the mark opens it, a letter picks, Escape closes.
-    mark_x, mark_y = centre(layout['mark'])
-    c.call('input',{'action':'click','x':mark_x,'y':mark_y})
+    open_menu(c, layout)
     c.screenshot('03e-hotline-menu.png')
     c.call('input',{'action':'key','combo':'a'})
     c.screenshot('03f-about-this-computer.png')
@@ -312,7 +341,7 @@ def desktop_job_menu(c):
     c.screenshot('03g-menus-closed.png')
     # T opens the person's own shell: the bottom third of the observer's
     # column, with a gutter, so the app on the left is not covered.
-    c.call('input',{'action':'click','x':mark_x,'y':mark_y})
+    open_menu(c, layout)
     c.call('input',{'action':'key','combo':'t'})
     deadline = time.monotonic()+10
     while time.monotonic()<deadline:
@@ -336,11 +365,14 @@ def clipboard_between_apps(c):
     proof = '/home/agent/qa/pasted-' + c.run_id + '.txt'
     command = 'echo pasted-from-browser > ' + proof
     c.call('browser', {'action': 'navigate', 'url': 'data:text/html,<title>Copy</title><textarea id=t autofocus>' + command + '</textarea>'})
+    # Ctrl+C goes to the window with the keyboard. Closing the previous
+    # case's shell hands that to the observer, where Ctrl+C ends the
+    # observer instead of copying.
+    page = next(w for w in c.call('windows', {'action': 'list'}) if 'chromium' in w['class'].lower())
+    c.call('windows', {'action': 'focus', 'window_id': page['id']})
     c.call('browser', {'action': 'eval', 'js': "const t=document.getElementById('t');t.focus();t.select()"})
     c.call('input', {'action': 'key', 'combo': 'ctrl+c'})
-    layout = bar_layout(c)
-    mark_x, mark_y = centre(layout['mark'])
-    c.call('input', {'action': 'click', 'x': mark_x, 'y': mark_y})
+    open_menu(c, bar_layout(c))
     c.call('input', {'action': 'key', 'combo': 't'})
     deadline = time.monotonic() + 10
     while time.monotonic() < deadline:
@@ -752,8 +784,11 @@ def native_screens(c, app):
         raise AssertionError('Accessibility changed but the native screen did not paint: ' + name)
 
     c.screenshot('06-hotline-native-screen.png', settle_ms=1000)
-    terminal = next(w for w in c.call('windows', {'action':'list'}) if 'hotlineterminal' in w['class'].lower())
+    # Show opens the observer if an earlier case left it closed.
     c.call('shell', {'action':'show','job_id':app['id']})
+    windows = c.call('windows', {'action':'list'})
+    terminal = next((w for w in windows if 'hotlineterminal' in w['class'].lower()), None)
+    assert terminal, windows
     tiled = c.call('windows', {'action':'tile','primary_id':window_id,'observer_id':terminal['id']})
     assert tiled['ok'], tiled
     tree_with('[button] New teammate')

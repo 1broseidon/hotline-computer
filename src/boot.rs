@@ -26,10 +26,31 @@ const SHUTDOWN: Duration = Duration::from_secs(2);
 
 pub fn run(config: Config) -> Result<(), String> {
     let (width, height) = parse_screen(&config.screen)?;
+    // The image starts at / (see the Dockerfile); the single-user computer
+    // has always run from its home.
+    if std::env::current_dir().is_ok_and(|directory| directory == Path::new("/")) {
+        let _ = std::env::set_current_dir(&config.home);
+    }
     if std::process::id() == 1 {
         become_init();
     }
-    machine(config, width, height)
+    machine(config, width, height, Door::Own)
+}
+
+/// The split computer's runner: the same machine, whose door is the
+/// broker's (see `crate::split`). PID 1 is the reaper there.
+pub fn run_runner(config: Config) -> Result<(), String> {
+    let (width, height) = parse_screen(&config.screen)?;
+    machine(config, width, height, Door::Broker)
+}
+
+/// Who answers the desk for this machine.
+#[derive(Clone, Copy)]
+enum Door {
+    /// This process: the single-user computer.
+    Own,
+    /// The split computer's broker, over the runner's lines.
+    Broker,
 }
 
 fn parse_screen(screen: &str) -> Result<(u16, u16), String> {
@@ -99,7 +120,7 @@ fn exit_code(status: libc::c_int) -> i32 {
     }
 }
 
-fn machine(config: Config, width: u16, height: u16) -> Result<(), String> {
+fn machine(config: Config, width: u16, height: u16, door: Door) -> Result<(), String> {
     std::fs::create_dir_all(RUNTIME_DIR)
         .map_err(|error| format!("create {RUNTIME_DIR}: {error}"))?;
     let bus_path = Path::new(RUNTIME_DIR).join("bus");
@@ -221,8 +242,14 @@ fn machine(config: Config, width: u16, height: u16) -> Result<(), String> {
             }
         };
         let links = crate::links::serve(app.clone());
+        let served = async move {
+            match door {
+                Door::Own => serve::run(app).await,
+                Door::Broker => crate::split::runner::serve(app).await,
+            }
+        };
         tokio::select! {
-            result = serve::run(app) => result,
+            result = served => result,
             result = links => result,
             status = tokio::task::spawn_blocking(move || xvfb.wait()) => {
                 Err(format!("Xvfb exited: {}", describe(status)))

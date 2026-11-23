@@ -1,0 +1,6 @@
+hotline-computer                     0.13.0-rc.3-relcheck                         b11f38e05e9f
+hotline-computer                     0.13.0-rc.3-relcheck-checks                  d4b861cd9a89
+hotline-computer                     0.13.0-rc.3-relcheck-libtest                 92786a573cbf
+hotline-computer                     0.13.0-rc.3-relcheck-probe                   9b8fd52a3fb1
+hotline-computer                     0.13.0-rc.3-relcheck-variant-fixed           bcb156cbe6f7
+hotline-computer                     0.13.0-rc.3-relcheck-variant-old             968feb306dc3

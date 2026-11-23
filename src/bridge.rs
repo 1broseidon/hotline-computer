@@ -29,24 +29,57 @@ pub fn extension_answers() -> bool {
         && std::env::var("HOTLINE_COMPUTER_PASSKEYS").as_deref() != Ok("virtual")
 }
 
-pub fn socket_path() -> PathBuf {
+/// The single-user computer's socket, in the service's own directory.
+fn single_user_socket() -> PathBuf {
     std::env::temp_dir().join("hotline-computer/bridge.sock")
 }
 
-/// Answers the extension for as long as the computer runs.
+/// Where the relay finds the service: the bridge the browser that started
+/// it names, else the split computer's signed-in bridge, else the
+/// single-user computer's.
+pub fn socket_path() -> PathBuf {
+    std::env::var_os("HOTLINE_COMPUTER_BRIDGE")
+        .map(PathBuf::from)
+        .or_else(|| {
+            let split = PathBuf::from(crate::split::BRIDGE_SOCKET);
+            split.exists().then_some(split)
+        })
+        .unwrap_or_else(single_user_socket)
+}
+
+/// Answers the extension for as long as the computer runs. With a signed-in
+/// browser the extension is there alone, and only that browser's user is
+/// answered: in the split computer `signin` on `bridge/bridge.sock`. No
+/// socket answers the general browser, or a job, at all.
 pub async fn serve(app: App) {
-    use std::os::unix::fs::PermissionsExt;
-    let path = socket_path();
-    if let Some(directory) = path.parent() {
-        let _ = std::fs::create_dir_all(directory);
+    match app.signin.as_ref().map(crate::signin::Signin::bridge) {
+        Some(bridge) => listen(app, bridge.socket, bridge.mode, Some(bridge.peer)).await,
+        None => {
+            let path = single_user_socket();
+            if let Some(directory) = path.parent() {
+                let _ = std::fs::create_dir_all(directory);
+            }
+            listen(app, path, 0o600, None).await;
+        }
     }
+}
+
+async fn listen(app: App, path: PathBuf, mode: u32, peer: Option<u32>) {
+    use std::os::unix::fs::PermissionsExt;
     let _ = std::fs::remove_file(&path);
     let listener = match tokio::net::UnixListener::bind(&path) {
         Ok(listener) => listener,
         Err(error) => return eprintln!("extension bridge: {}: {error}", path.display()),
     };
-    let _ = std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o600));
+    let _ = std::fs::set_permissions(&path, std::fs::Permissions::from_mode(mode));
     while let Ok((stream, _)) = listener.accept().await {
+        // Another user reaching the socket (a job, in the split computer)
+        // is hung up on before a byte is read.
+        if let Some(expected) = peer
+            && stream.peer_cred().map(|cred| cred.uid()).ok() != Some(expected)
+        {
+            continue;
+        }
         tokio::spawn(conversation(app.clone(), stream));
     }
 }
@@ -155,15 +188,60 @@ fn keys(app: &App) -> Vec<Passkey> {
     keys
 }
 
+/// The passkeys that may sign for a request from `origin` in the signed-in
+/// browser: on a loopback page (one a job may serve, where a script could
+/// ask for any challenge) only those granted readable.
+fn keys_for(app: &App, origin: &str) -> Vec<Passkey> {
+    let loopback = crate::secrets::Origin::of_page(origin).is_ok_and(|page| page.is_loopback());
+    keys(app)
+        .into_iter()
+        .filter(|key| !loopback || app.signin.is_none() || key.readable)
+        .collect()
+}
+
 async fn answer(app: &App, message: &Value) -> Value {
     let details = &message["details"];
     match message["kind"].as_str() {
         Some("uvpaa") => json!({"isUvpaa": true}),
         Some("get") => {
             let site = site_of_request(details);
-            let granted = keys(app);
+            // In the signed-in browser a passkey signs only for the origin a
+            // signed-in tab is on, under that tab's sign-in.
+            let flow = match &app.signin {
+                Some(signin) => {
+                    let origin = details["extensions"]["remoteDesktopClientOverride"]["origin"]
+                        .as_str()
+                        .unwrap_or_default();
+                    match signin.flow_on(origin) {
+                        Some(flow) => Some((origin.to_owned(), flow)),
+                        None => {
+                            record(app, &site, "was refused a passkey", false, None).await;
+                            return refused(authenticator_refusal(
+                                "NotAllowedError",
+                                "Hotline: a passkey signs in only on a signed-in site's own tab",
+                            ));
+                        }
+                    }
+                }
+                None => None,
+            };
+            let origin = details["extensions"]["remoteDesktopClientOverride"]["origin"]
+                .as_str()
+                .unwrap_or_default()
+                .to_owned();
+            let granted = keys_for(app, &origin);
+            if granted.len() < keys(app).len()
+                && authenticator::chosen(details, &granted).is_err()
+                && authenticator::chosen(details, &keys(app)).is_ok()
+            {
+                record(app, &site, "was refused a passkey", false, None).await;
+                return refused(authenticator_refusal(
+                    "NotAllowedError",
+                    "Hotline: this site is on the computer itself (loopback), where any program may serve the page; its passkey signs there only if the person granted it as readable",
+                ));
+            }
             let how = match authenticator::chosen(details, &granted) {
-                Ok(key) => match passkey_gate(app, details, key, &site).await {
+                Ok(key) => match passkey_gate(app, details, key, &site, flow).await {
                     Gate::Through(how) => how,
                     // Refused by the person, or by nobody answering: the
                     // record already says which.
@@ -173,7 +251,7 @@ async fn answer(app: &App, message: &Value) -> Value {
             };
             // Signed with the set as it is now: a key revoked while the
             // person was deciding no longer signs.
-            match authenticator::assert(details, &keys(app)) {
+            match authenticator::assert(details, &keys_for(app, &origin)) {
                 Ok(response) => {
                     record(app, &site, "signed in with the passkey", true, how).await;
                     json!({"response": response})
@@ -215,14 +293,12 @@ async fn answer(app: &App, message: &Value) -> Value {
         // stops saying it is their turn.
         Some("hand_back") => {
             let handed = PERSON_SINCE.lock().unwrap().take().is_some();
-            match app.access.holder().await {
-                Some((holder, _)) if holder.starts_with(crate::viewer::PERSON) => {
-                    match app.access.release(&holder).await {
-                        Ok(_) => json!({"handedBack": true}),
-                        Err(error) => refused(authenticator_refusal("NotAllowedError", &error)),
-                    }
-                }
-                _ => json!({"handedBack": handed}),
+            match crate::split::person(app).await {
+                Some(holder) => match crate::split::release(app, &holder).await {
+                    Ok(_) => json!({"handedBack": true}),
+                    Err(error) => refused(authenticator_refusal("NotAllowedError", &error)),
+                },
+                None => json!({"handedBack": handed}),
             }
         }
         // The person's logins, for the page whose origin Chromium names:
@@ -244,6 +320,23 @@ async fn answer(app: &App, message: &Value) -> Value {
                 Gate::Refused(refusal) => return refused(refusal),
             };
             let reply = fill(app, message);
+            // The page now shows what was filled: nothing of it reaches
+            // the agent until it loads its next document.
+            if reply.get("error").is_none()
+                && let Some(signin) = &app.signin
+            {
+                let typed: Vec<String> = ["password", "code"]
+                    .iter()
+                    .filter_map(|field| reply[*field].as_str().map(str::to_owned))
+                    .collect();
+                signin
+                    .withhold_origin(
+                        message["origin"].as_str().unwrap_or_default(),
+                        message["name"].as_str().unwrap_or_default(),
+                        &typed,
+                    )
+                    .await;
+            }
             if reply.get("error").is_some() {
                 record(app, &site, "was refused a login", false, None).await;
             } else {
@@ -265,10 +358,16 @@ enum Gate {
     Refused(Refusal),
 }
 
-/// A sign-in with `key`: through at once when the key is automatic, when
-/// the person has the computer, or inside an allowance; otherwise held
-/// until the person answers or the page's own time runs out.
-async fn passkey_gate(app: &App, details: &Value, key: &Passkey, site: &str) -> Gate {
+/// A sign-in with `key`: through at once when the key is automatic or
+/// inside an allowance; otherwise held until the person answers at the desk
+/// or the page's own time runs out.
+async fn passkey_gate(
+    app: &App,
+    details: &Value,
+    key: &Passkey,
+    site: &str,
+    flow: Option<(String, String)>,
+) -> Gate {
     let named = app
         .secrets
         .passkeys()
@@ -278,7 +377,11 @@ async fn passkey_gate(app: &App, details: &Value, key: &Passkey, site: &str) -> 
         // One the arming just minted, not yet delivered back: automatic.
         return Gate::Through(None);
     };
-    if granted.use_ != KeyUse::Ask || person_has_it(app).await {
+    // Asked even while the person has the computer. A job started before
+    // they took it is still running and reaches this socket as the extension
+    // does, so "the person is at the screen" says nothing about who asks;
+    // the desk's card is the one answer a job cannot give.
+    if granted.use_ != KeyUse::Ask {
         return Gate::Through(None);
     }
     // A quiet request on load is never answered behind a site's back, and
@@ -293,7 +396,18 @@ async fn passkey_gate(app: &App, details: &Value, key: &Passkey, site: &str) -> 
         .as_f64()
         .filter(|ms| *ms > 0.0)
         .map_or(holds::WAIT_CAP_MS, |ms| ms as u64);
-    held_until_answered(app, &name, Kind::Passkey, site, wait_ms).await
+    let bound = flow.map(|(origin, flow)| holds::Bound {
+        operation: holds::Operation {
+            kind: holds::OperationKind::Passkey,
+            origin,
+            account: granted.user_name.clone().unwrap_or_default(),
+            rp_id: Some(granted.rp_id.clone()),
+        },
+        // Only the signed-in browser's own user reaches this socket.
+        attested: true,
+        flow,
+    });
+    held_until_answered(app, &name, Kind::Passkey, site, wait_ms, bound).await
 }
 
 /// A fill the card on the page asked for: an ask-me login waits for the
@@ -306,19 +420,58 @@ async fn fill_gate(app: &App, message: &Value, site: &str) -> Gate {
         .logins_for(origin)
         .iter()
         .any(|(login, _, _)| login == name);
-    if !for_here || app.secrets.use_of(name) != Some(KeyUse::Ask) || person_has_it(app).await {
+    // Held whoever has the computer, for the reason `passkey_gate` gives.
+    if !for_here || app.secrets.use_of(name) != Some(KeyUse::Ask) {
         return Gate::Through(None);
     }
-    held_until_answered(app, name, Kind::Login, site, holds::FILL_WAITS_MS).await
+    let bound = match &app.signin {
+        Some(signin) => match signin.flow_on(origin) {
+            Some(flow) => Some(holds::Bound {
+                operation: holds::Operation {
+                    kind: holds::OperationKind::Signin,
+                    origin: origin.to_owned(),
+                    account: app
+                        .secrets
+                        .resolve(&format!("{name}.username"))
+                        .map(|username| username.value)
+                        .unwrap_or_default(),
+                    rp_id: None,
+                },
+                attested: true,
+                flow,
+            }),
+            None => {
+                return Gate::Refused(authenticator_refusal(
+                    "NotAllowedError",
+                    "Hotline: a login fills only on a signed-in site's own tab",
+                ));
+            }
+        },
+        None => None,
+    };
+    held_until_answered(app, name, Kind::Login, site, holds::FILL_WAITS_MS, bound).await
 }
 
-async fn held_until_answered(app: &App, name: &str, kind: Kind, site: &str, wait_ms: u64) -> Gate {
+async fn held_until_answered(
+    app: &App,
+    name: &str,
+    kind: Kind,
+    site: &str,
+    wait_ms: u64,
+    bound: Option<holds::Bound>,
+) -> Gate {
     let path = page_path(app, site).await;
     let who = who(app).await;
-    let id = match app
-        .holds
-        .ask(name, kind, site, &path, &who, wait_ms, crate::jobs::now())
-    {
+    let id = match app.holds.ask_bound(
+        name,
+        kind,
+        site,
+        &path,
+        &who,
+        wait_ms,
+        crate::jobs::now(),
+        bound,
+    ) {
         Pass::Within => return Gate::Through(Some("within the 10 min")),
         Pass::Held { id, .. } => id,
         Pass::Answered(outcome) => return Gate::Through(Some(outcome.how())),
@@ -357,21 +510,30 @@ fn declined(name: &str, site: &str) -> Refusal {
     )
 }
 
-/// Whether the person has the computer (through the viewer) right now: their
-/// own uses are never held.
+/// Whether the person has the computer (through the viewer) right now, for
+/// the record of who a use was for. It waives nothing: an ask-me key is held
+/// whoever has the computer. The lease says so itself, set where the viewer's
+/// socket took the screen; a holder's name proves nothing, since an MCP
+/// caller chooses its own.
 pub(crate) async fn person_has_it(app: &App) -> bool {
-    matches!(app.access.holder().await, Some((holder, _)) if holder.starts_with(crate::viewer::PERSON))
+    crate::split::person(app).await.is_some()
 }
 
 /// The path of the page the agent drives, when it is on `site`: what the
 /// desk's card shows under the site. `/` when it cannot tell.
 async fn page_path(app: &App, site: &str) -> String {
+    // With a signed-in browser the page that asked is one of its tabs.
+    if let Some(signin) = &app.signin {
+        return signin
+            .url_on(site)
+            .map_or_else(|| "/".to_owned(), |url| path_on(&url, site));
+    }
     // The tool call that made the page ask may still hold the browser for a
     // moment; a few short looks, never a wait on it.
     for _ in 0..6 {
         let url = tokio::time::timeout(
             std::time::Duration::from_millis(300),
-            app.browser.current_url_if_idle(),
+            crate::split::current_url_if_idle(app),
         )
         .await
         .ok()
@@ -528,11 +690,14 @@ fn request_id() -> String {
 static PERSON_SINCE: std::sync::Mutex<Option<u64>> = std::sync::Mutex::new(None);
 
 async fn wheel(app: &App) -> Value {
-    let agent = app.jobs.agent.snapshot();
-    let holder = app.access.holder().await;
+    let agent = crate::split::agent(app).await;
+    let held = match crate::split::person(app).await {
+        Some(_) => Some(true),
+        None => crate::split::holder(app).await.map(|_| false),
+    };
     let driving = turn(
         &PERSON_SINCE,
-        holder.as_ref().map(|(h, _)| h.as_str()),
+        held,
         agent.last_action_ms,
         crate::jobs::now(),
     );
@@ -543,17 +708,17 @@ async fn wheel(app: &App) -> Value {
 /// has not handed it back while the agent stayed still; else whoever holds.
 fn turn(
     since: &std::sync::Mutex<Option<u64>>,
-    holder: Option<&str>,
+    person_holds: Option<bool>,
     agent_acted_ms: u64,
     now: u64,
 ) -> &'static str {
     let mut since = since.lock().unwrap();
-    match holder {
-        Some(holder) if holder.starts_with(crate::viewer::PERSON) => {
+    match person_holds {
+        Some(true) => {
             since.get_or_insert(now);
             "person"
         }
-        Some(_) => {
+        Some(false) => {
             *since = None;
             "agent"
         }
@@ -592,7 +757,7 @@ pub(crate) async fn who(app: &App) -> String {
     if person_has_it(app).await {
         "you".to_owned()
     } else {
-        app.jobs.agent.snapshot().name
+        crate::split::agent(app).await.name
     }
 }
 
@@ -757,17 +922,17 @@ mod tests {
     fn the_turn_stays_with_the_person_until_handed_back_or_the_agent_acts() {
         let since = std::sync::Mutex::new(None);
         assert_eq!(turn(&since, None, 0, 1_000), "none");
-        assert_eq!(turn(&since, Some("person-1"), 500, 2_000), "person");
+        assert_eq!(turn(&since, Some(true), 500, 2_000), "person");
         // The viewer's hold lapsed; the agent has not moved since.
         assert_eq!(turn(&since, None, 500, 20_000), "person");
         // Renewing does not move when the turn began.
-        assert_eq!(turn(&since, Some("person-1"), 500, 21_000), "person");
+        assert_eq!(turn(&since, Some(true), 500, 21_000), "person");
         assert_eq!(turn(&since, None, 1_500, 30_000), "person");
         // The agent acting after the person took it ends the turn.
         assert_eq!(turn(&since, None, 2_500, 31_000), "none");
         assert_eq!(turn(&since, None, 2_500, 32_000), "none");
-        assert_eq!(turn(&since, Some("person-2"), 2_500, 40_000), "person");
-        assert_eq!(turn(&since, Some("agent"), 2_500, 41_000), "agent");
+        assert_eq!(turn(&since, Some(true), 2_500, 40_000), "person");
+        assert_eq!(turn(&since, Some(false), 2_500, 41_000), "agent");
         assert_eq!(turn(&since, None, 2_500, 42_000), "none");
     }
 
@@ -851,6 +1016,81 @@ mod tests {
             .cloned()
             .unwrap();
         assert_eq!(serde_json::to_value(&line).unwrap()["how"], "you denied it");
+    }
+
+    /// A job started before the person took the screen is still running
+    /// while they hold it, and reaches this socket as the extension does. If
+    /// their turn waived the ask, that job would be handed the password.
+    #[tokio::test]
+    async fn an_ask_me_login_waits_for_the_desk_even_while_the_person_has_the_screen() {
+        let app = App::new(crate::Config {
+            addr: "127.0.0.1:0".to_owned(),
+            token: Some("test-only".to_owned()),
+            home: std::env::temp_dir(),
+            display: ":0".to_owned(),
+            screen: "1920x1080".to_owned(),
+        });
+        let set = serde_json::from_value(json!({
+            "ASKME": {"kind": "login", "sites": ["https://example.org"], "username": "u",
+                      "password": "kept-for-the-desk", "use": "ask"},
+        }))
+        .unwrap();
+        app.secrets.replace(set).unwrap();
+        app.access.seize("person-1", 60).await;
+        assert!(person_has_it(&app).await);
+
+        let message = json!({"kind": "fill", "origin": "https://example.org", "name": "ASKME"});
+        let asking = app.clone();
+        let fill = tokio::spawn(async move { answer(&asking, &message).await });
+        let mut held = Vec::new();
+        for _ in 0..100 {
+            held = app.holds.held(crate::jobs::now());
+            if !held.is_empty() {
+                break;
+            }
+            tokio::time::sleep(std::time::Duration::from_millis(50)).await;
+        }
+        assert_eq!(held.len(), 1, "the use waits for the desk's answer");
+        assert!(!fill.is_finished(), "nothing was handed over meanwhile");
+        fill.abort();
+    }
+
+    /// The split computer's bridge answers the signed-in browser's user
+    /// alone; a job of any other user is hung up on unanswered.
+    #[tokio::test]
+    async fn a_bridge_peer_of_another_user_is_hung_up_on() {
+        use std::io::{Read as _, Write as _};
+        let dir = tempfile::tempdir().unwrap();
+        let app = App::new(crate::Config {
+            addr: "127.0.0.1:0".to_owned(),
+            token: Some("test-only".to_owned()),
+            home: dir.path().to_owned(),
+            display: String::new(),
+            screen: "1920x1080".to_owned(),
+        });
+        // SAFETY: getuid takes nothing and cannot fail.
+        let me = unsafe { libc::getuid() };
+        let ask = |path: std::path::PathBuf| {
+            tokio::task::spawn_blocking(move || {
+                let mut stream = std::os::unix::net::UnixStream::connect(&path).unwrap();
+                stream
+                    .set_read_timeout(Some(std::time::Duration::from_secs(5)))
+                    .unwrap();
+                let _ = stream.write_all(b"{\"kind\":\"uvpaa\"}\n");
+                let mut answer = String::new();
+                let _ = stream.read_to_string(&mut answer);
+                answer
+            })
+        };
+        for (name, peer, answered) in [("other.sock", me + 1, false), ("mine.sock", me, true)] {
+            let path = dir.path().join(name);
+            tokio::spawn(listen(app.clone(), path.clone(), 0o600, Some(peer)));
+            while !path.exists() {
+                tokio::time::sleep(std::time::Duration::from_millis(10)).await;
+            }
+            let answer = ask(path).await.unwrap();
+            assert_eq!(answer.contains("isUvpaa"), answered, "{name}: {answer}");
+        }
     }
 
     #[test]

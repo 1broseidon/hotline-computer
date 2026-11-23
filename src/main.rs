@@ -39,6 +39,51 @@ fn parse() -> Result<(Command, Config), String> {
     Ok((command, config))
 }
 
+/// Keeps this process's memory and `/proc` entries from the commands the
+/// computer runs. They run as the same user, so a process left dumpable is
+/// one a job can read with `/proc/<pid>/mem` or attach a debugger to.
+fn hide() {
+    #[cfg(target_os = "linux")]
+    // SAFETY: a flag on this process alone, taking no pointers.
+    if unsafe { libc::prctl(libc::PR_SET_DUMPABLE, 0, 0, 0, 0) } != 0 {
+        eprintln!(
+            "hotline-computer: could not hide this process from its jobs: {}",
+            std::io::Error::last_os_error()
+        );
+    }
+}
+
+/// Keeps the service's bearer, and the secrets it later holds in memory,
+/// from the commands it runs. Without this a job reads the token out of
+/// `/proc/<pid>/environ`, or the secrets out of `/proc/<pid>/mem`, and
+/// answers its own ask-me requests with it.
+///
+/// The variable leaves the environment so nothing started from here inherits
+/// it: the display, the bus, the browser. The process stops being dumpable,
+/// which hands its `/proc` entries to root and refuses a same-user ptrace;
+/// the reaper `boot` forks from here keeps both. The container's own record
+/// still carries the variable, which is where the desk reads it back from.
+///
+/// Nothing started from here can gain privileges either. The image still
+/// carries the base system's setuid programs (`su`, `mount`, `passwd`), and
+/// a flaw in one of them would make a job root over this binary and the
+/// browser's extension. A runtime that sets `no-new-privileges` already
+/// refuses that; this makes it true under the ones that do not.
+fn seal() {
+    // SAFETY: no thread has been started and nothing has been forked yet, so
+    // nothing else is reading the environment.
+    unsafe { std::env::remove_var("HOTLINE_COMPUTER_TOKEN") };
+    hide();
+    #[cfg(target_os = "linux")]
+    // SAFETY: a flag on this process and its descendants, taking no pointers.
+    if unsafe { libc::prctl(libc::PR_SET_NO_NEW_PRIVS, 1, 0, 0, 0) } != 0 {
+        eprintln!(
+            "hotline-computer: could not refuse new privileges: {}",
+            std::io::Error::last_os_error()
+        );
+    }
+}
+
 fn main() {
     let arguments: Vec<_> = std::env::args().skip(1).collect();
     // Chromium starts the extension's native messaging host with the
@@ -47,6 +92,9 @@ fn main() {
         .first()
         .is_some_and(|first| first.starts_with("chrome-extension://"))
     {
+        // The relay carries a login's password from the service to the
+        // extension, so its memory is kept from jobs as the service's is.
+        hide();
         if let Err(error) = hotline_computer::bridge::relay() {
             eprintln!("{error}");
             std::process::exit(1);
@@ -67,6 +115,10 @@ fn main() {
         arguments.first().map(String::as_str),
         Some("observe" | "activity")
     ) {
+        // These windows read the jobs' output and the activity record, and
+        // run as the jobs' own user: sealed as the service is, so no job
+        // reads their memory or `/proc` entries.
+        seal();
         let home = arguments
             .get(1)
             .map(std::path::PathBuf::from)
@@ -179,6 +231,38 @@ fn main() {
         }
         return;
     }
+    // The split computer's two halves, which PID 1 starts as their users
+    // with their lines at fixed descriptors (see `split`).
+    if let Some(half @ ("__broker" | "__runner")) = arguments.first().map(String::as_str) {
+        let config = Config::from_env();
+        let expected = if half == "__broker" {
+            hotline_computer::split::BROKER_UID
+        } else {
+            hotline_computer::split::AGENT_UID
+        };
+        // SAFETY: geteuid takes nothing and cannot fail.
+        if unsafe { libc::geteuid() } != expected {
+            eprintln!("hotline-computer: {half} is started by the computer's PID 1");
+            std::process::exit(2);
+        }
+        if half == "__broker"
+            && let Err(message) = config.door()
+        {
+            eprintln!("hotline-computer: {message}");
+            std::process::exit(2);
+        }
+        seal();
+        let result = if half == "__broker" {
+            hotline_computer::split::broker::run(config)
+        } else {
+            hotline_computer::split::runner::run(config)
+        };
+        if let Err(error) = result {
+            eprintln!("hotline-computer: {half}: {error}");
+            std::process::exit(1);
+        }
+        return;
+    }
     let (command, config) = match parse() {
         Ok(parsed) => parsed,
         Err(message) => {
@@ -186,7 +270,18 @@ fn main() {
             std::process::exit(2);
         }
     };
+    if let Err(message) = config.door() {
+        eprintln!("hotline-computer: {message}");
+        std::process::exit(2);
+    }
+    seal();
     let result = match command {
+        // Started as root, the computer splits into its users; started as
+        // anyone else, it is the single-user computer it always was.
+        #[cfg(target_os = "linux")]
+        Command::Boot if hotline_computer::split::booted_as_root() => {
+            hotline_computer::split::init::run(config)
+        }
         Command::Boot => boot::run(config),
         Command::Serve => Display::open(&config.display).and_then(|display| {
             tokio::runtime::Builder::new_multi_thread()

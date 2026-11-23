@@ -1,0 +1,42 @@
+# 2026-11-22T08:39:45Z hotline-computer:0.13.0-rc.3-relcheck (commit ea45bfa4cc3cc2f3861f4579d8978520c94f8d45)
+{"id":"b11f38e05e9f1b4b19f70285147c95227b149ba0d49ad075ecd4469fcaa76dca","created":null,"env":["PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin","HOTLINE_COMPUTER_ADDR=0.0.0.0:8787","HOTLINE_COMPUTER_HOME=/home/agent","HOTLINE_COMPUTER_SCREEN=1920x1080","DISPLAY=:0","ACCESSIBILITY_ENABLED=1","LANG=C.UTF-8","NIX_REMOTE=local","NIX_SSL_CERT_FILE=/etc/ssl/certs/ca-certificates.crt","LIBGL_ALWAYS_SOFTWARE=1","ELECTRON_DISABLE_SANDBOX=1","GDK_BACKEND=x11","APPIMAGE_EXTRACT_AND_RUN=1","GTK_USE_PORTAL=1","BROWSER=hotline-computer open","SHELL=/bin/bash"]}
+image env naming PROBE: 0
+[0/6] [0s]
+[1/6] Fetching image [0s]
+[2/6] Unpacking image [0s]
+[3/6] Fetching kernel [0s]
+[4/6] Fetching init image [0s]
+[5/6] Unpacking init image [0s]
+[6/6] Starting container [0s]
+[6/6] Starting container [0s]
+binary sha256: db72497bc5234b86ef00d2bbbfc6e565704b30ac009fb15b170f124cf9eaab1e
+revision ea45bfa4cc3cc2f3861f4579d8978520c94f8d45 in the binary: 1 line(s)
+string "HOTLINE_KEYPROXY_PROBE_ROOT" in the binary: 0 line(s)
+string "TEST BUILD: trusting" in the binary: 0 line(s)
+string "probe root(s) upstream" in the binary: 0 line(s)
+--- /etc/chromium/policies (every file):
+/etc/chromium.d/README: keys (not json)
+/etc/chromium.d/apikeys: keys (not json)
+/etc/chromium.d/default-flags: keys (not json)
+/etc/chromium.d/dev-shm: keys (not json)
+/etc/chromium.d/extensions: keys (not json)
+/etc/chromium/policies/managed/hotline.json: keys ["AutofillAddressEnabled","AutofillCreditCardEnabled","BrowserSignin","BrowserThemeColor","DefaultBrowserSettingEnabled","ExtensionSettings","NativeMessagingUserLevelHosts","NewTabPageLocation","PasswordLeakDetectionEnabled","PasswordManagerEnabled","PromotionalTabsEnabled","RestoreOnStartup","_comment"]
+policy files naming CACertificates or CAHint: 0
+--- system trust store:
+/usr/local/share/ca-certificates: 0 file(s)
+certificates in /etc/ssl/certs/ca-certificates.crt: 148
+test or fixture CAs in the bundle: 0
+NSS databases on the image: 0
+managed/recommended policy dirs:
+ls: cannot access '/etc/chromium/policies/recommended': No such file or directory
+/etc/chromium/policies/managed:
+total 12
+drwxr-xr-x 2 root root 4096 Nov 22 08:00 .
+drwxr-xr-x 3 root root 4096 Nov 22 08:00 ..
+-rw-r--r-- 1 root root 1132 Nov 22 07:59 hotline.json
+# exit 2
+# 2026-11-22T08:39:46Z supplement, hotline-computer:0.13.0-rc.3-relcheck
+assets/chromium-policy.json sha256 at the commit: d78be9a33190fcc7d842b73c0fa2e7e3dbb59387ffe1c502a1c5236f7f6fbb08
+image hotline.json sha256: d78be9a33190fcc7d842b73c0fa2e7e3dbb59387ffe1c502a1c5236f7f6fbb08
+openssl: OpenSSL 3.5.9 29 Sep 2026 (Library: OpenSSL 3.5.9 29 Sep 2026)
+subjects parsed from the bundle: 148

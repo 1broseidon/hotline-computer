@@ -1,0 +1,28 @@
+# containers already running (container); none of them is touched:
+ID                                                     IMAGE                                                OS     ARCH   STATE    IP                 CPUS  MEMORY    STARTED
+hotline-computer-99374fd0-52fd-4def-a6cc-37f25131a3a5  hotline-computer:0.12.0-rc.2                         linux  arm64  running  192.168.65.17/24   4     16384 MB  2026-11-22T01:14:34Z
+buildkit                                               ghcr.io/apple/container-builder-shim/builder:0.13.1  linux  arm64  running  192.168.65.134/24  8     16384 MB  2026-11-22T07:56:50Z
+hotline-computer-claude-ziggy                          ghcr.io/1broseidon/hotline-computer:0.11.0           linux  arm64  stopped                     4     4096 MB   
+hotline-computer-46e16b18-7a5b-468a-9209-4e75d1b16bb4  ghcr.io/1broseidon/hotline-computer:0.11.0           linux  arm64  stopped                     4     16384 MB  2026-11-19T02:33:26Z
+hotline-computer-79d12f56-5211-4030-b864-a47306200461  hotline-computer:0.13.0-rc.2                         linux  arm64  stopped                     4     8192 MB   2026-11-21T13:18:25Z
+hl-p1acp-passkeysite                                   hotline-computer:0.13.0-rc.3-rc3probes-final         linux  arm64  running  192.168.65.133/24  1     1024 MB   2026-11-22T07:58:09Z
+hl-p1acp-cookiesite                                    hotline-computer:0.13.0-rc.3-rc3probes-final         linux  arm64  running  192.168.65.131/24  1     1024 MB   2026-11-22T07:56:16Z
+hotline-computer-c9397b69-9084-4b3b-a325-715134487a53  ghcr.io/1broseidon/hotline-computer:0.11.0           linux  arm64  running  192.168.65.86/24   4     16384 MB  2026-11-13T17:41:23Z
+hotline-computer-bef618e7-9144-45f8-ad40-bfb8fc3010a2  ghcr.io/1broseidon/hotline-computer:0.11.0           linux  arm64  running  192.168.65.5/24    4     4096 MB   2026-11-20T20:54:34Z
+hotline-computer-da3830f8-afce-4436-9ef7-4f76579faa06  hotline-computer:0.13.0-rc.3-point1acp               linux  arm64  running  192.168.65.130/24  4     4096 MB   2026-11-22T07:56:45Z
+# /capabilities: {"attest":"BWaf4G7oSCQdclyeN5HVu1ZS2UMMKa7vNbp751FjlpA=","boot":"82918393f73ebc80ba70b8fef13ac8c0","protected":{"loopback":"readable","mode":"split","other":"readable","readable":["CANARY_VAR","GH_TOK
+# POST /capabilities/key: 200 (taken)
+# image hotline-computer:0.13.0-rc.3-relcheck-probe as hl-relcheck-env-probe-6d210b (split, delivery protected); listener on 192.168.65.1:51112; HTTPS fixture https://192.168.65.1:51113 (bound), :51114 (unbound); expecting BLOCKED
+ID         RESULT      WHAT
+J1         BLOCKED  ok curl with GH_TOKEN: listener receives the real key: the service received the key through the proxy; the job held only its stand-in
+J2         BLOCKED  ok python urllib 'token' scheme: listener receives the real key: the service received the key through the proxy; the job held only its stand-in
+J3         BLOCKED  ok git Basic credential helper: listener receives the real key: the service received the key through the proxy; the job held only its stand-in
+J4         BLOCKED  ok reflecting endpoint hands the real key back to the job: the bound service reflected the key it received; the job got its stand-in
+J7         BLOCKED  ok node fetch with GH_TOKEN: the service received the key through the proxy; the job held only its stand-in
+# 0 leaked, 5 blocked, 0 skipped, 0 broken; 0 differ from EXPECT=blocked
+# kept hl-relcheck-env-probe-6d210b (port 51101, token e2ecc266ae104b49833e973400c6dad586c871e0041f365d)
+EXIT 0
+# container logs of hl-relcheck-env-probe-6d210b (kept for this, removed below), lines about the key proxy or roots:
+hotline-computer: key proxy: TEST BUILD: trusting 1 probe root(s) upstream besides the web roots
+# (end of matching lines)
+# removed hl-relcheck-env-probe-6d210b

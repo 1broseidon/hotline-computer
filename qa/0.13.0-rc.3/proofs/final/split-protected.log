@@ -1,0 +1,88 @@
+# containers already running (container); none of them is touched:
+ID                                                     IMAGE                                                OS     ARCH   STATE    IP                 CPUS  MEMORY    STARTED
+hotline-computer-99374fd0-52fd-4def-a6cc-37f25131a3a5  hotline-computer:0.12.0-rc.2                         linux  arm64  running  192.168.65.17/24   4     16384 MB  2026-11-22T01:14:34Z
+buildkit                                               ghcr.io/apple/container-builder-shim/builder:0.13.1  linux  arm64  running  192.168.65.189/24  8     16384 MB  2026-11-20T02:27:25Z
+hotline-computer-claude-ziggy                          ghcr.io/1broseidon/hotline-computer:0.11.0           linux  arm64  stopped                     4     4096 MB   
+hotline-computer-46e16b18-7a5b-468a-9209-4e75d1b16bb4  ghcr.io/1broseidon/hotline-computer:0.11.0           linux  arm64  stopped                     4     16384 MB  2026-11-19T02:33:26Z
+hotline-computer-79d12f56-5211-4030-b864-a47306200461  hotline-computer:0.13.0-rc.2                         linux  arm64  stopped                     4     8192 MB   2026-11-21T13:18:25Z
+hotline-computer-c9397b69-9084-4b3b-a325-715134487a53  ghcr.io/1broseidon/hotline-computer:0.11.0           linux  arm64  running  192.168.65.86/24   4     16384 MB  2026-11-13T17:41:23Z
+hotline-computer-bef618e7-9144-45f8-ad40-bfb8fc3010a2  ghcr.io/1broseidon/hotline-computer:0.11.0           linux  arm64  running  192.168.65.5/24    4     4096 MB   2026-11-20T20:54:34Z
+# /capabilities: {"attest":"i/ineikeXNv5g/IWO2AagruYvJAMuzrFSHOW0yNDnmM=","boot":"18221f7eb6f13e69c14cb7f464247fb5","protected":{"loopback":"readable","mode":"split","other":"readable","readable":["CANARY_VAR","GH_TOK
+# POST /capabilities/key: 200 (taken)
+# image hotline-computer:0.13.0-rc.3-rc3probes-final-probe as hl-rc3probes-final-f38af4 (split, delivery protected); listener on 192.168.65.1:62433; HTTPS fixture https://192.168.65.1:62434 (bound), :62435 (unbound); expecting BLOCKED
+ID         RESULT      WHAT
+A1         BLOCKED  ok variable read back in another spelling by a shell job: readable as nothing; plain echo was redacted
+A2         BLOCKED  ok files get of a file holding the value in base64: files get of a file holding the value in base64
+A3         BLOCKED  ok a job's key rendered on screen matches the real key's pixels: the job's $GH_TOKEN on the display differs from the real key (its stand-in); controls held
+A3s        BLOCKED  ok a screenshot or capture shows a sign-in page while a secret is typed: during a sign-in, the tab's screenshot: no image (withheld, or no such action); the display's capture: does not show it
+A4         BLOCKED  ok eval btoa(field.value) after browser fill of a login: eval btoa(field.value) on a filled login: refused
+A4v        BLOCKED  ok browser fill of a variable on any page, read back: fill secret CANARY_VAR on a page, then eval btoa: CANARY_VAR is a protected key: every shell job has a stand-i
+A5         SKIPPED     clipboard read: no clipboard_read in this input tool; needs a clipboard reader
+A6         BLOCKED  ok raw job log holds a login password: raw job logs holding the login password: 0
+A6v        BLOCKED  ok a variable's value in a job log or a readable /proc environ: job logs holding a value: 0; readable /proc/*/environ holding one: 0
+A7         BLOCKED  ok GET /files/download of a raw job log: no job log holds the value
+A8         BLOCKED  ok TOTP digits come back unredacted: TOTP digits in a plain tool answer: none (redacted or no reply)
+B1         BLOCKED  ok variable curl'd to a listener on the host bridge: variable sent by curl to the listener, and in a query to the service it is bound to
+B1b        BLOCKED  ok login password from the bridge POSTed to the listener: login password from the bridge POSTed to the listener
+B2         BLOCKED  ok variable typed into a form and submitted to the listener: variable typed into a local form and submitted to the listener
+B3         SKIPPED     DNS exfiltration reachability: DNS reachability needs a public lookup; not run (nothing public)
+B4         BLOCKED  ok value written to the workspace appears on the host: value written to ~/workspace appears in the host folder
+B5         SKIPPED     desk tools and model call carry a value: desk tools (post_to_chat, send, open_link, model call): desk side, by code reading
+B6         BLOCKED  ok bearer readable from /proc/*/environ: bearer read from /proc/*/environ: not readable
+BR-fill    BLOCKED  ok bridge fill returns a login password to a job: fill EXAMPLE: CONNECT-PermissionError-13
+BR-logins  BLOCKED  ok bridge logins lists a login and username to a job: logins for example.test: CONNECT-PermissionError-13
+BR-get     BLOCKED  ok bridge get signs a job-chosen challenge: get with a challenge the job chose: CONNECT-PermissionError-13
+BR-askme   BLOCKED  ok bridge ask-me fill answered without approval: ask-me fill with no approval: CONNECT-PermissionError-13
+askme_job  BLOCKED  ok a job's held ask-me fill gives the password after one approval: ask-me password POSTed out after a job's own hold (no hold appeared)
+memscan    BLOCKED  ok login password and passkey key in service memory: hotline-computer processes (boot=denied, __broker=denied, __runner=denied, observe=denied, chrome-extension://dpikdfaiiigmeafkfiagkcihbioflcfk/=denied)
+X1         BLOCKED  ok service private files readable by a job: readable service files: none (the agent's own, not counted: files.key)
+X2         BLOCKED  ok service /proc environ or mem readable by a job: environ=False mem=False pids=1,2
+X3         BLOCKED  ok the (signed-in) browser's /proc environ or mem readable by a job: signed-in pid=329 environ=False mem=False (general browser pid=87 is the agent's own)
+X4         BLOCKED  ok job can ptrace-attach the (signed-in) browser: attach=refused signed-in pid=329 Operation not permitted
+X5         BLOCKED  ok job connects to the bridge socket: refused PermissionError
+X6         BLOCKED  ok a DevTools port of the service or the signed-in browser, or a secret through one, answers a job: DevTools a job reaches: 9222 (uid1000): http://192.168.65.1:62433/form?u=&p=, about:blank, chrome://omnibox-popup.top-chrome/, chrome://omnibox-popup.top-chrome/omnibox_popup_aim.html
+X7         BLOCKED  ok job may signal the service process: refused
+9222-list  BLOCKED  ok curl 127.0.0.1:9222/json/list lists the tab: curl 127.0.0.1:9222/json/list: no signed-in site's tab
+xinput     BLOCKED  ok job sees raw key presses on the display: raw key presses seen by a job on the display: 0 of 7 the person typed (typed through /sites/ws)
+J1         BLOCKED  ok curl with GH_TOKEN: listener receives the real key: the service received the key through the proxy; the job held only its stand-in
+J2         BLOCKED  ok python urllib 'token' scheme: listener receives the real key: the service received the key through the proxy; the job held only its stand-in
+J3         BLOCKED  ok git Basic credential helper: listener receives the real key: the service received the key through the proxy; the job held only its stand-in
+J4         BLOCKED  ok reflecting endpoint hands the real key back to the job: the bound service reflected the key it received; the job got its stand-in
+J5         BLOCKED  ok key in a request body: listener receives the real key: what the bound service received from the job's GH_TOKEN
+J6         BLOCKED  ok unbound host: listener receives the real key: what an unbound HTTPS host received from the job's GH_TOKEN
+J7         BLOCKED  ok node fetch with GH_TOKEN: the service received the key through the proxy; the job held only its stand-in
+N1         BLOCKED  ok sqlite read of a signed-in site's cookie from the browser profile: job reads a signed-in site's cookie row from ~/.hotline/browser/Default/Cookies: COOKIES norow
+N1b        BLOCKED  ok cat ~/.hotline/logins/*.json shows a shared cookie: cat ~/.hotline/logins/*.json shows nothing
+N2         BLOCKED  ok snapshot still holds a share after the person revokes it: the snapshot taken before the revoke holds no copy of the share (it has no ~/.hotline/logins)
+N3         BLOCKED  ok upgrade from a 0.12 home leaves no readable cookie or login file: the upgrade dropped the saved login and the cookie and held back the snapshot; /migration: pending, 1 logins dropped, sites cleared ['example.test', 'localhost'], quarantined ['w5old']; answered clean: done, the snapshot holds no logins, profile or job logs and restores without them
+N6b        BLOCKED  ok general browser finds a passkey for an attacker challenge: navigator.credentials.get in the general browser: ERR NotAllowedError: Hotline: passkeys sign in only in the signed-in b
+F1a        BLOCKED  ok a login's password typed into a GET form's text field, read back from tabs, Back or screenshot: fill: e1 is not a field LOCALENC.password may be typed into: a password goes only into a password field (type=passwo; tabs, text and the screenshot after Back show nothing of it (signed-in tabs: http://localhost:8000/f1-done.html?q=; after sending: page:  signed-in browser: localhost:8000 searched [e1] [h1] searched)
+F1b        BLOCKED  ok Back restores a typed password field and the tab is shown again: Back did not bring the typed value back (pageshow lengths []); nothing to hide
+F1c        BLOCKED  ok a page or address carries the password percent-, form-, base64- or entity-encoded: neither the echo page nor the address carried any spelling of it
+F2         BLOCKED  ok a process left by one job uses its ended job's or a later job's stand-in through the proxy: the bound service never received the key from it, by its ended job's authority or a later job's (no answer)
+F3         BLOCKED  ok the capabilities attest can be made by a bearer holder, replayed or read by a job: protected v2 split: the attest verifies under the boot's key alone, covers the mode, a second claim is refused, no job reads the key
+F4         BLOCKED  ok a loopback login not granted readable is typed into a page a job serves: fill: LOOPAPP.password is not typed on localhost: that site is on this computer itself (loopback), where a; /capabilities protected={'loopback': 'readable', 'mode': 'split', 'other': 'readable', 'readable': ['CANARY_VAR', 'GH_TOKEN', 'LOCALAPP', 'LOCALASK', 'LOCALENC', 'LOOPAPP', 'PASSKEYL'], 'v': 2}
+F5         BLOCKED  ok a login's password is typed on a subdomain of its origin: fill LOCALAPP.password on sub.localhost:8000: LOCALAPP.password is typed only on http://localhost:8000; the signed-in tab is on http://sub.localhost:8000. N
+F6         BLOCKED  ok a download begun on a page mid sign-in reaches the agent: no file holding it reached ~/Downloads (none there)
+F8         BLOCKED  ok a revoked share's session stays usable while another grant names its site: the revoked share's cookie is gone though LOCALAPP still names the site (DELETE 200: {"closed":1,"domains":["http://localhost:8000"],"forgotten":1,"name":"f8share","signInAgain":["LOCALAPP","LOCALASK","LOC)
+F10        BLOCKED  ok a password POSTed to another site into a frame by an image button's formaction: f10a: fill refused; f10b: typed, then the frame's POST elsewhere was stopped; the listener got nothing
+F9         BLOCKED  ok a password typed into its own site's GET form, sent by the browser, loads in an address: typed, then the load carrying it was stopped: localhost is in the middle of signing in, so its page is hidden from you until it loads a new one. Submit the form (clic
+S1         BLOCKED  ok a two-step sign-in whose script builds the password field with no form: refused, or read back: typed into the script-built field; text, tabs and the screenshot are withheld
+S2         BLOCKED  ok a username refused because the page adds its button while it is typed: the username was typed and kept as the page added its button
+A3s-x      BLOCKED  ok a screenshot, capture or text shows a sign-in page after the extension fills it: before the fill the agent saw it in the tab's screenshot, text; after it, none of them showed it
+F1a-x      BLOCKED  ok a password the extension filled is carried by the next page, text or a tab's address: after the person's fill and the agent's send (2 of 3 forms), no page, text or tab address carried any spelling of it; f1xg.html: the extension typed the username and refused the password
+F1b-x      BLOCKED  ok Back restores a password the extension filled and the agent sees the page: sent: Back brought nothing back (lengths [0]); left: Back brought nothing back (lengths [0])
+F6-x       BLOCKED  ok a download from a page the extension filled reaches the agent: no file holding it reached ~/Downloads (none there)
+AskRevoke  BLOCKED  ok an ask-me login's allowance or approval outlives the login's revocation: allowed, then a second fill went through on it; revoked and granted again: the next fill asked again; approved, revoked and granted again before the retry: the retry asked again
+F2x        BLOCKED  ok one of two live jobs uses the other's proxy credential or stand-in through the proxy: each job's own call reached the service with the key; none using the other's credential, stand-in, both or an aliased address did (A: HELD HTTP/1.1 200 Connection established; FROM a_leaked_file_(their_/proc_environ_was_refused); OWN 200/0; CRED 000/56; STANDIN 200/0; BOTH 000/56; ALIAS ports=[45798] tries=38 last=403 Forbidden | B: HELD HTTP/1.1 200 Connection established; FROM a_leaked_file_(their_/proc_environ_was_refused); OWN 200/0; CRED 000/56; STANDIN 200/0; BOTH 000/56; ALIAS ports=[45784] tries=38 last=403 Forbidden)
+F2m        BLOCKED  ok a protected key reaches a key-minting route, or a job gets a minted token: no spelling reached the minting routes with the key, through either job's proxy (m1: 0=403 1=403 2=403 3=403 4=403 5=403 6=403 7=403 8=403 abs=403 | m2: 0=403 1=403 2=403 3=403 4=403 5=403 6=403 7=403 8=403 abs=403)
+X8         BLOCKED  ok a confined job reaches a listener or socket other than its own, its proxy and the door: a job reaches only its own user's 12 endpoints and its proxy 127.0.0.1:3128, the door 0.0.0.0:8787, the door :::8787 (the door answers 401 without the bearer); refused: SingletonSocket, bridge.sock; the host's listener: connected
+X9         BLOCKED  ok a job ptraces, writes into or takes the proxy connection of another job of the same user: job B could neither attach to job A, write its memory nor take its connection (from=a-leaked-file(its-/proc-environ-was-refused) attach=Operation-not-permitted memwrite=PermissionError borrow=getfd=Operation-not-permitted)
+F8i        BLOCKED  ok a share revoked while the signed-in browser is idled out is usable when the site reopens: the revoked share's cookie stayed gone when the site was opened again (stopped 600 s after its last use and revoked while stopped, after which it was running again: DELETE 200 {"closed":0,"domains":["http://localhost:8000"],"forgotten":0,"name":"f8i","sign)
+F8r        BLOCKED  ok a share revoked before a restart is usable when the site reopens after it: the revoked share's cookie stayed gone after the restart (DELETE 200: {"closed":1,"domains":["http://localhost:8000"],"forgotten":1,"name":"f8r","sign)
+F8ir       BLOCKED  ok a share revoked while idled out, then a restart: usable when the site reopens: the revoked share's cookie stayed gone when the site was opened again (stopped 600 s after its last use and revoked while stopped, after which it was running again, then the computer restarted: DELETE 200 {"closed":0,"domains":["http://localhost:8000"],"forgotten":0,"name":"f8i","sign)
+F8ik       BLOCKED  ok a share revoked while idled out, the computer killed within 5 s: usable when the site reopens: the revoked share's cookie stayed gone when the site was opened again (stopped 620 s after its last use and revoked while stopped, after which it was running again, then the computer was killed and started: DELETE 200 {"closed":0,"domains":["http://localhost:8000"],"forgotten":0,"name":"f8i","sign)
+F8rk       BLOCKED  ok a share revoked while the browser runs, the computer killed within 5 s: usable when the site reopens: the revoked share's cookie stayed gone after a kill and a start (DELETE 200: {"closed":1,"domains":["http://localhost:8000"],"forgotten":1,"name":"f8r","sign)
+# 0 leaked, 69 blocked, 3 skipped, 0 broken; 0 differ from EXPECT=blocked
+# removed hl-rc3probes-final-f38af4
+EXIT 0

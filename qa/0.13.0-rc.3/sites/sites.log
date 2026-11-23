@@ -1,0 +1,29 @@
+# rc.3 real sign-in pages, 2026-11-21. Split computer, v2 delivery, made-up
+# logins only (no real account, nothing submitted with a password). Driven as
+# the agent: browser navigate / text / fill NAME.username|password, then text,
+# tabs and screenshot read back. rc.3 = hotline-computer:0.13.0-rc.3 rebuilt
+# from cd197d6; fix = the same tree with this branch's fill change.
+# user/password: typed (T), refused (R, with why), not reached (-).
+# read-back: whether the password showed in text, tabs or a screenshot after
+# the fill (the username stays readable by design).
+site                          rc.3 user  rc.3 pw                      fix user  fix pw   pw read back
+github.com/login              T          T                            T         T        no (withheld)
+accounts.google.com           T          - (fake account)             T         -        n/a
+  its password field          .          R no <form> at all           .         rule ok  (hiddenPassword, same form-less page)
+login.microsoftonline.com     T          - (fake account)             T         -        n/a
+  its password field          .          rule ok (POST form f1)       .         rule ok
+x.com/i/flow/login            R changed  - (fake account)             T         -        n/a
+  its password field          .          R form has no method (GET)   .         rule ok
+auth0.auth0.com (manage)      T          T (2nd document)             T         T        no (withheld)
+account.apple.com             - no ref   - no ref                     - no ref  - no ref  n/a: fields in a cross-origin idmsa.apple.com frame
+gitlab.com/users/sign_in      - bot wall (Cloudflare "Just a moment", 25 s+, both images)
+dash.cloudflare.com/login     T          T                            T         T        no (withheld)
+local plain POST form         T          T                            T         T        no
+local script-built, no form   T          R not inside a form          T         T        no
+local form with no method     T          R sends by GET               T         T        no; a native GET send is stopped, address and history clean
+local two-step, same document T          T                            T         T        no
+local open shadow root        - no ref   - no ref                     unchanged
+local same-origin iframe      - no ref   - no ref                     unchanged
+# "rule ok": the fill rule (assets/fill-policy.js) answered ok for the page's
+# own password field, evaluated in the general browser with the site not
+# granted; the password step itself needs a real account to reach.

@@ -1,0 +1,32 @@
+# containers already running (container); none of them is touched:
+ID                                                     IMAGE                                                      OS     ARCH   STATE    IP                 CPUS  MEMORY    STARTED
+hotline-computer-99374fd0-52fd-4def-a6cc-37f25131a3a5  hotline-computer:0.12.0-rc.2                               linux  arm64  running  192.168.65.17/24   4     16384 MB  2026-11-22T01:14:34Z
+buildkit                                               ghcr.io/apple/container-builder-shim/builder:0.13.1        linux  arm64  running  192.168.65.189/24  8     16384 MB  2026-11-20T02:27:25Z
+hotline-computer-claude-ziggy                          ghcr.io/1broseidon/hotline-computer:0.11.0                 linux  arm64  stopped                     4     4096 MB   
+hotline-computer-46e16b18-7a5b-468a-9209-4e75d1b16bb4  ghcr.io/1broseidon/hotline-computer:0.11.0                 linux  arm64  stopped                     4     16384 MB  2026-11-19T02:33:26Z
+hl-rc3probes-brk-09900d                                hotline-computer:0.13.0-rc.3-rc3probes-final-broken-probe  linux  arm64  running  192.168.65.79/24   4     4096 MB   2026-11-22T04:55:28Z
+hotline-computer-79d12f56-5211-4030-b864-a47306200461  hotline-computer:0.13.0-rc.2                               linux  arm64  stopped                     4     8192 MB   2026-11-21T13:18:25Z
+hotline-computer-c9397b69-9084-4b3b-a325-715134487a53  ghcr.io/1broseidon/hotline-computer:0.11.0                 linux  arm64  running  192.168.65.86/24   4     16384 MB  2026-11-13T17:41:23Z
+hotline-computer-bef618e7-9144-45f8-ad40-bfb8fc3010a2  ghcr.io/1broseidon/hotline-computer:0.11.0                 linux  arm64  running  192.168.65.5/24    4     4096 MB   2026-11-20T20:54:34Z
+# /capabilities: {"attest":"RRK+VHNVh+1SYPMqDeJTNh/q/OnrlPgvlDGd/JvjsrI=","boot":"b2d0a299b3343909010fbb440cbe0db6","protected":{"loopback":"readable","mode":"legacy","other":"readable","readable":["LOCALAPP","LOCALAS
+# POST /capabilities/key: 200 (taken)
+# image hotline-computer:0.13.0-rc.3-rc3probes-final as hl-rc3probes-single-6e3350 (legacy, delivery v1); listener on 192.168.65.1:55527; expecting LEAK
+ID         RESULT      WHAT
+F6         LEAKED   ok a download begun on a page mid sign-in reaches the agent: the file with the typed password reached ~/Downloads
+A3s-x      LEAKED   ok a screenshot, capture or text shows a sign-in page after the extension fills it: after the person's fill the agent still saw the page in the display's capture, text
+F1a-x      BLOCKED  ok a password the extension filled is carried by the next page, text or a tab's address: after the person's fill and the agent's send (2 of 3 forms), no page, text or tab address carried any spelling of it; f1xg.html: the extension typed the username and refused the password (excepted)
+F1b-x      LEAKED   ok Back restores a password the extension filled and the agent sees the page: sent: Back brought the password back and the agent saw the page (the form in text); left: Back brought the password back and the agent saw the page (the form in text)
+F6-x       LEAKED   ok a download from a page the extension filled reaches the agent: the file holding the filled password reached ~/Downloads
+AskRevoke  BLOCKED  ok an ask-me login's allowance or approval outlives the login's revocation: allowed, then a second fill went through on it; revoked and granted again: the next fill asked again; approved, revoked and granted again before the retry: the retry asked again (excepted)
+F2x        SKIPPED     one of two live jobs uses the other's proxy credential or stand-in through the proxy: needs a protected key (--delivery protected)
+F2m        SKIPPED     a protected key reaches a key-minting route, or a job gets a minted token: needs a protected key (--delivery protected)
+X8         SKIPPED     a confined job reaches a listener or socket other than its own, its proxy and the door: the single-user computer confines no job: the service and every socket are the job's own user (X1-X7)
+X9         SKIPPED     a job ptraces, writes into or takes the proxy connection of another job of the same user: needs a protected key (--delivery protected)
+F8i        SKIPPED     a share revoked while the signed-in browser is idled out is usable when the site reopens: PUT /sessions answered 404: no signed-in browser shares here
+F8r        SKIPPED     a share revoked before a restart is usable when the site reopens after it: PUT /sessions answered 404: no signed-in browser shares here
+F8ir       SKIPPED     a share revoked while idled out, then a restart: usable when the site reopens: PUT /sessions answered 404: no signed-in browser shares here
+F8ik       SKIPPED     a share revoked while idled out, the computer killed within 5 s: usable when the site reopens: PUT /sessions answered 404: no signed-in browser shares here
+F8rk       SKIPPED     a share revoked while the browser runs, the computer killed within 5 s: usable when the site reopens: PUT /sessions answered 404: no signed-in browser shares here
+# 4 leaked, 2 blocked, 9 skipped, 0 broken; 0 differ from EXPECT=leak
+# removed hl-rc3probes-single-6e3350
+EXIT 0

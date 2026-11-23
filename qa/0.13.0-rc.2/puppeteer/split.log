@@ -1,0 +1,23 @@
+# containers before (none touched):
+ID                                                     IMAGE                                                OS     ARCH   STATE    IP                 CPUS  MEMORY    STARTED
+hotline-computer-99374fd0-52fd-4def-a6cc-37f25131a3a5  hotline-computer:0.12.0-rc.2                         linux  arm64  running  192.168.65.120/24  4     16384 MB  2026-11-18T03:05:12Z
+buildkit                                               ghcr.io/apple/container-builder-shim/builder:0.13.1  linux  arm64  running  192.168.65.237/24  8     16384 MB  2026-11-19T05:33:51Z
+hotline-computer-claude-ziggy                          ghcr.io/1broseidon/hotline-computer:0.11.0           linux  arm64  stopped                     4     4096 MB   
+hotline-computer-46e16b18-7a5b-468a-9209-4e75d1b16bb4  ghcr.io/1broseidon/hotline-computer:0.11.0           linux  arm64  running  192.168.65.165/24  4     16384 MB  2026-11-19T02:33:26Z
+hotline-computer-79d12f56-5211-4030-b864-a47306200461  hotline-computer:0.12.0-rc.3                         linux  arm64  stopped                     4     8192 MB   2026-11-18T17:25:14Z
+hotline-computer-c9397b69-9084-4b3b-a325-715134487a53  ghcr.io/1broseidon/hotline-computer:0.11.0           linux  arm64  running  192.168.65.86/24   4     16384 MB  2026-11-13T17:41:23Z
+hotline-computer-bef618e7-9144-45f8-ad40-bfb8fc3010a2  ghcr.io/1broseidon/hotline-computer:0.11.0           linux  arm64  running  192.168.65.89/24   4     4096 MB   2026-11-13T21:28:16Z
+
+PUT /secrets 204
+capabilities {"attest":"p7LTh+7y14inbJTnCSlS3C26LlyAhiZNuF2xfRNIQDI=","boot":"915fae08f945f9f658cd20461f79e340","protected":{"mode":"split","v":1},"version":"0.13.0-rc.2"}
+signed-in tab: navigated to http://localhost:8000/ (signed-in browser)
+9222 before any general-browser call: 000
+general tab: navigated to http://localhost:8001/
+9222 after: 200
+npm: npm notice Changelog: https://github.com/npm/cli/releases/tag/v12.2.3
+npm notice To update run: npm install -g npm@12.2.3
+npm notice
+puppeteer: {"version":"Chrome/156.0.8078.79","title":"Puppeteer fixture","h1":"Hello from 8001","typed":"typed by puppeteer","shotBytes":15796,"signedInTabVisible":false,"targets":5,"passkey":"NotAllowedError: Hotline: passkeys sign in only in the signed-in browser on this computer, not in this one","passkeyMs":2}
+RESULT PASS split
+# removed hl-secrets-rc2-pptr-7fb801
+EXIT 0

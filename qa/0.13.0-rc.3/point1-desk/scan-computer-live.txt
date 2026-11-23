@@ -1,0 +1,10 @@
+HIT /home/agent/workspace/control.txt canary#20 plain
+HIT /home/agent/.hotline/jobs/000001a202116878-db1abf76/record.json canary#20 plain
+HIT /home/agent/.hotline/jobs/000001a202116885-1b228687/output.log canary#21 plain
+HIT /home/agent/.hotline/jobs/000001a202116885-1b228687/record.json canary#21 plain
+HIT /home/agent/.hotline/jobs/000001a202116885-1b228687/stdout.log canary#21 plain
+HIT /home/agent/.hotline/jobs/000001a20211740d-84f69080/output.log canary#20 plain
+HIT /home/agent/.hotline/jobs/000001a20211740d-84f69080/stdout.log canary#20 plain
+HIT /home/agent/fixture/control.txt canary#20 plain
+HIT /proc/1293/environ canary#22 plain
+SCANNED files=606 skipped=0 proc_entries=46 needles=150 hits=9
