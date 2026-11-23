@@ -342,6 +342,11 @@ def clipboard_between_apps(c):
     proof = '/home/agent/qa/pasted-' + c.run_id + '.txt'
     command = 'echo pasted-from-browser > ' + proof
     c.call('browser', {'action': 'navigate', 'url': 'data:text/html,<title>Copy</title><textarea id=t autofocus>' + command + '</textarea>'})
+    # Ctrl+C goes to the window with the keyboard. Closing the previous
+    # case's shell hands that to the observer, where Ctrl+C ends the
+    # observer instead of copying.
+    page = next(w for w in c.call('windows', {'action': 'list'}) if 'chromium' in w['class'].lower())
+    c.call('windows', {'action': 'focus', 'window_id': page['id']})
     c.call('browser', {'action': 'eval', 'js': "const t=document.getElementById('t');t.focus();t.select()"})
     c.call('input', {'action': 'key', 'combo': 'ctrl+c'})
     layout = bar_layout(c)
@@ -758,8 +763,11 @@ def native_screens(c, app):
         raise AssertionError('Accessibility changed but the native screen did not paint: ' + name)
 
     c.screenshot('06-hotline-native-screen.png', settle_ms=1000)
-    terminal = next(w for w in c.call('windows', {'action':'list'}) if 'hotlineterminal' in w['class'].lower())
+    # Show opens the observer if an earlier case left it closed.
     c.call('shell', {'action':'show','job_id':app['id']})
+    windows = c.call('windows', {'action':'list'})
+    terminal = next((w for w in windows if 'hotlineterminal' in w['class'].lower()), None)
+    assert terminal, windows
     tiled = c.call('windows', {'action':'tile','primary_id':window_id,'observer_id':terminal['id']})
     assert tiled['ok'], tiled
     tree_with('[button] New teammate')
