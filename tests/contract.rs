@@ -1117,8 +1117,8 @@ async fn image_honors_the_computer_contract() {
         assert_eq!(
             report["secrets"],
             json!([
-                {"name": "PROOF", "kind": "login", "sites": ["http://localhost:8123"], "username": "teammate", "totp": true},
-                {"name": "PROOF_PASSKEY", "kind": "passkey", "rpId": "localhost", "userName": "teammate"},
+                {"name": "PROOF", "kind": "login", "sites": ["http://localhost:8123"], "username": "teammate", "totp": true, "loopback": true, "readable": true},
+                {"name": "PROOF_PASSKEY", "kind": "passkey", "rpId": "localhost", "userName": "teammate", "loopback": true, "readable": true},
                 {"name": "PROOF_TOKEN", "kind": "variable"},
             ])
         );
