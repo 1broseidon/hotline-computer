@@ -846,6 +846,48 @@ fn a_granted_passkeys_site_opens_here_unless_a_login_names_its_host() {
     assert!(!signin.routes("http://localhost:8600/passkey"));
 }
 
+/// A site opens here with its subdomains, but DevTools clears data one
+/// origin at a time: signing a site out names every origin under it that
+/// loaded here or took a share's storage, on the same scheme and port, and
+/// none beside it. With the browser stopped they wait on disk together.
+#[tokio::test]
+async fn signing_a_site_out_covers_the_origins_under_it() {
+    let root = tempfile::tempdir().unwrap();
+    let signin = Signin::new(
+        Box::new(spawn::Direct::new(root.path().join("signin"))),
+        Box::new(Recorder::default()),
+        crate::secrets::Secrets::default(),
+        None,
+    );
+    for url in [
+        "https://example.com/",
+        "https://app.example.com/inbox",
+        "https://deep.app.example.com/x?y=1",
+        "https://app.example.com:8443/",
+        "http://app.example.com/",
+        "https://notexample.com/",
+        "https://example.com.elsewhere.test/",
+        "about:blank",
+    ] {
+        signin.loaded(url);
+    }
+    let site = Origin::site("https://example.com").unwrap();
+    signin.forget(&[site]).await.unwrap();
+    let mut revoked: Vec<String> = read_revoked(&root.path().join("signin").join("revoked.json"))
+        .iter()
+        .map(ToString::to_string)
+        .collect();
+    revoked.sort();
+    assert_eq!(
+        revoked,
+        [
+            "https://app.example.com",
+            "https://deep.app.example.com",
+            "https://example.com"
+        ]
+    );
+}
+
 /// A revocation is a login or a passkey taken away, or a site it no longer
 /// names: not a grant that only changes how a host's site is spelled. In
 /// the rc.3 ACP run, granting a login on a host whose passkey was granted

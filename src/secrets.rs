@@ -381,7 +381,14 @@ pub struct Secrets {
     /// each value's every spelling and its mark, longest value first).
     spellings: Arc<Mutex<Option<(u64, Spellings)>>>,
     version: Arc<std::sync::atomic::AtomicU64>,
+    /// Tests: called inside `commit`, while the set is being replaced.
+    #[cfg(test)]
+    inside_commit: Arc<Mutex<Option<CommitHook>>>,
 }
+
+/// Tests: what `commit` calls while it replaces the set.
+#[cfg(test)]
+type CommitHook = Box<dyn Fn() + Send>;
 
 /// Each value's every spelling, matched, and the mark it is replaced by.
 type Spellings = Arc<Vec<(regex::Regex, String)>>;
@@ -419,8 +426,23 @@ impl Secrets {
     /// Takes a checked set, and the protected keys delivered with it.
     pub fn commit(&self, checked: Checked, protected: BTreeMap<String, Protected>) {
         let Checked(checked) = checked;
-        self.version
-            .fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+        // Held until the new set and its version are both in place: a
+        // `redact` meanwhile waits, so it never makes matchers from the old
+        // set and keeps them under the new version.
+        let mut cached = self
+            .spellings
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
+        *cached = None;
+        #[cfg(test)]
+        if let Some(hook) = self
+            .inside_commit
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
+            .as_ref()
+        {
+            hook();
+        }
         *self
             .protected
             .write()
@@ -443,6 +465,9 @@ impl Secrets {
             .collect();
         *set = checked;
         drop(set);
+        self.version
+            .fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+        drop(cached);
         if !new.is_empty() {
             let at = crate::jobs::now();
             let mut arrivals = self
@@ -743,6 +768,14 @@ impl Secrets {
             }
         }
         text
+    }
+
+    /// Whether a file's `bytes` carry a value in any spelling `redact` takes
+    /// out. Read as text even where some bytes are not UTF-8: a value beside
+    /// a stray byte is still there, and a file is no safer for holding one.
+    pub fn in_bytes(&self, bytes: &[u8]) -> bool {
+        let text = String::from_utf8_lossy(bytes);
+        self.redact(&text) != text
     }
 
     /// A tool's answer, or its refusal, with every value taken out of the text.
@@ -1561,6 +1594,59 @@ mod tests {
         secrets.replace(BTreeMap::new()).unwrap();
         assert!(secrets.names().is_empty());
         assert!(secrets.environment().is_empty());
+    }
+
+    /// A `redact` that runs while a delivery replaces the set waits for it,
+    /// so it never makes matchers from the old set and keeps them as the
+    /// new set's: the value just delivered is redacted from the next answer.
+    #[test]
+    fn a_redaction_during_a_delivery_never_keeps_the_old_set_as_the_new() {
+        let secrets = Secrets::default();
+        secrets
+            .replace(typed(json!({"OLD_TOKEN": "npm_notarealtoken0001"})))
+            .unwrap();
+        assert_eq!(secrets.redact("nothing here"), "nothing here");
+        let racer = secrets.clone();
+        *secrets.inside_commit.lock().unwrap() = Some(Box::new(move || {
+            let racer = racer.clone();
+            let (done, finished) = std::sync::mpsc::channel();
+            std::thread::spawn(move || {
+                let _ = racer.redact("an answer while the set changes");
+                let _ = done.send(());
+            });
+            // Long enough for a `redact` that does not wait to finish.
+            let _ = finished.recv_timeout(std::time::Duration::from_millis(300));
+        }));
+        secrets
+            .replace(typed(json!({"NEW_TOKEN": "npm_notarealtoken0002"})))
+            .unwrap();
+        *secrets.inside_commit.lock().unwrap() = None;
+        let answer = secrets.redact("the key is npm_notarealtoken0002");
+        assert_eq!(answer, "the key is [redacted NEW_TOKEN]");
+    }
+
+    /// A download is checked whole, whether or not it is text: a value
+    /// beside one byte that is not UTF-8 is found as it is in a text file.
+    #[test]
+    fn a_value_in_a_file_that_is_not_text_is_still_found() {
+        let secrets = Secrets::default();
+        secrets
+            .replace(typed(json!({"NPM_TOKEN": "npm_notarealtoken0002"})))
+            .unwrap();
+        let mut file = b"PK\x03\x04 token=npm_notarealtoken0002\n".to_vec();
+        file.extend([0xff, 0xfe, 0x00]);
+        assert!(std::str::from_utf8(&file).is_err());
+        assert!(secrets.in_bytes(&file));
+        let mut base64 = b"\x89PNG ".to_vec();
+        base64.extend(
+            base64::engine::general_purpose::STANDARD
+                .encode("npm_notarealtoken0002")
+                .as_bytes(),
+        );
+        base64.push(0xc3);
+        assert!(secrets.in_bytes(&base64), "in any spelling");
+        assert!(!secrets.in_bytes(&[0x89, b'P', b'N', b'G', 0xff, 0x00]));
+        assert!(!secrets.in_bytes(b"plain text, no value"));
     }
 
     #[test]

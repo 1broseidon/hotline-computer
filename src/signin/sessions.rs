@@ -174,6 +174,11 @@ impl Signin {
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner)
             .insert(name.to_owned(), sites.clone());
+        for origin in storage.keys() {
+            if super::lock::signed_in(origin, &sites) {
+                self.loaded(origin);
+            }
+        }
         let running = self.browser().await?;
         let cookies: Vec<Value> = cookies
             .iter()
