@@ -44,10 +44,7 @@ impl Signin {
                     format!("{name} was not kept: it is larger than 50 MB")
                 }
                 Ok(_) => match tokio::fs::read(&staged).await {
-                    Ok(bytes)
-                        if std::str::from_utf8(&bytes)
-                            .is_ok_and(|text| self.0.secrets.redact(text) != text) =>
-                    {
+                    Ok(bytes) if self.0.secrets.in_bytes(&bytes) => {
                         format!("{name} was not handed to you: it carries a secret's value")
                     }
                     Ok(bytes) => match self.0.general.deliver(name.clone(), bytes).await {

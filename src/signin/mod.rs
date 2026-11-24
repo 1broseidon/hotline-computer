@@ -32,7 +32,7 @@ pub mod spawn;
 pub mod split;
 mod wait;
 
-use std::collections::{BTreeMap, HashMap};
+use std::collections::{BTreeMap, BTreeSet, HashMap};
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicBool, AtomicU64, AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex};
@@ -153,6 +153,10 @@ struct Inner {
     /// Sites signed out while the browser was stopped: their cookies and
     /// data in its profile go when it next starts, before anything loads.
     revoked: Mutex<Vec<Origin>>,
+    /// Every origin a page or frame loaded from here, or a share's storage
+    /// went into: a site's data is kept by origin, so signing a site out
+    /// clears the ones under it by name too (`covered`).
+    origins: Mutex<BTreeSet<String>>,
     /// Whether the agent's browser calls go here.
     focused: AtomicBool,
     last_used: AtomicU64,
@@ -276,6 +280,7 @@ impl Signin {
             logins: Mutex::default(),
             kept: Mutex::default(),
             revoked: Mutex::default(),
+            origins: Mutex::default(),
             arming: Mutex::default(),
             focused: AtomicBool::new(false),
             last_used: AtomicU64::new(0),
@@ -1053,6 +1058,7 @@ impl Signin {
         }
         let note = match hop {
             Hop::Stay => {
+                self.loaded(&url);
                 let _ = cdp
                     .on(
                         session,
@@ -2199,12 +2205,47 @@ impl Signin {
 
     // ---- revocation ------------------------------------------------------
 
-    /// Signs `sites` out: their cookies and site data go, and their tabs
-    /// close. Answers how many cookies and tabs went.
+    /// Notes the origin of `url`, a page or frame that loaded here or a
+    /// share's storage: it may hold data a revocation has to clear.
+    pub(super) fn loaded(&self, url: &str) {
+        if let Ok(origin) = Origin::of_page(url) {
+            self.0
+                .origins
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner)
+                .insert(origin.to_string());
+        }
+    }
+
+    /// `sites` and every origin under them that loaded here or took a
+    /// share's storage. A site opens here with its subdomains
+    /// (`Origin::allows`), but DevTools clears site data one origin at a
+    /// time, so `https://example.com` alone would leave
+    /// `https://app.example.com`'s storage signed in.
+    fn covered(&self, sites: &[Origin]) -> Vec<Origin> {
+        let mut covered = sites.to_vec();
+        let origins = self
+            .0
+            .origins
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        for origin in origins.iter().filter_map(|url| Origin::of_page(url).ok()) {
+            if sites.iter().any(|site| site.allows(&origin)) && !covered.contains(&origin) {
+                covered.push(origin);
+            }
+        }
+        covered
+    }
+
+    /// Signs `sites` out: their cookies and site data go, their
+    /// subdomains' with them, and their tabs close. Answers how many
+    /// cookies and tabs went.
     pub async fn forget(&self, sites: &[Origin]) -> Result<(usize, usize), String> {
         if sites.is_empty() {
             return Ok((0, 0));
         }
+        let covered = self.covered(sites);
+        let sites = covered.as_slice();
         {
             let mut kept = self
                 .0
